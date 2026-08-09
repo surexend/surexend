@@ -1,14 +1,15 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, User, TrendingUp, TrendingDown, Coins, Activity, Building2, PlusCircle, CreditCard, Landmark, X, ChevronRight, Copy, Tag, UserCheck, Sparkles, Trophy } from 'lucide-react'
+import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, TrendingUp, TrendingDown, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { walletAPI, transactionAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
+import toast from 'react-hot-toast'
 
 // Market data for USDT and USDC
 const cryptoMarketData = {
@@ -80,11 +81,14 @@ const cashFlowData = [
 export default function DashboardPage() {
   const { variant, colors } = useTheme()
   const [showBalance, setShowBalance] = useState(true)
-  const [currency, setCurrency] = useState<'USDC' | 'NGN'>('USDC')
+  // 'USD' = crypto wallet (USDC/USDT), 'LOCAL' = local currency wallet (NGN/GHS/etc)
+  const [walletView, setWalletView] = useState<'USD' | 'LOCAL'>('USD')
   const [selectedCrypto, setSelectedCrypto] = useState<'USDT' | 'USDC'>('USDC')
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
   const [showSendModal, setShowSendModal] = useState(false)
   const [showFundModal, setShowFundModal] = useState(false)
+  const [showVBAModal, setShowVBAModal] = useState(false)
+  const [copiedVBA, setCopiedVBA] = useState(false)
   const [avatar, setAvatar] = useState<string | null>(null)
 
   useEffect(() => {
@@ -97,8 +101,16 @@ export default function DashboardPage() {
   const { data: balanceData, isLoading: isLoadingBalance } = useQuery({
     queryKey: ['balance'],
     queryFn: walletAPI.getBalance,
-    initialData: { usdtBalance: 2450.75, usdcBalance: 2450.75, lockedBalance: 0 }
+    // USD wallet & NGN wallet are SEPARATE — NGN only grows from local deposits, never auto-converts
+    initialData: { usdBalance: 2450.75, ngnBalance: 185000.00, lockedBalance: 0 }
   })
+
+  const copyVBA = () => {
+    navigator.clipboard.writeText('9824018420')
+    setCopiedVBA(true)
+    toast.success('Account number copied!')
+    setTimeout(() => setCopiedVBA(false), 2000)
+  }
 
   const { data: txData, isLoading: isLoadingTx } = useQuery({
     queryKey: ['recentTransactions'],
@@ -175,47 +187,58 @@ export default function DashboardPage() {
       >
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-white/5 to-transparent rounded-full blur-3xl -z-10 pointer-events-none" />
 
+        {/* ── Dual Wallet Balance Card ── */}
         <div className="flex justify-between items-start mb-4">
-          <div>
-            <p className="text-xs sm:text-sm font-medium text-[#94A3B8] flex items-center gap-2">
-              Total Wallet Balance
-              <button 
-                onClick={() => setShowBalance(!showBalance)}
-                className="hover:text-white transition-colors"
-                title={showBalance ? "Hide Balance" : "Show Balance"}
+          <div className="flex-1 min-w-0">
+            {/* Wallet toggle tabs */}
+            <div className="flex items-center gap-1.5 mb-3">
+              <button
+                onClick={() => setWalletView('USD')}
+                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                  walletView === 'USD'
+                    ? 'text-white bg-white/10 border-white/20'
+                    : 'text-[#64748B] bg-transparent border-white/5 hover:text-white'
+                }`}
               >
-                {showBalance ? <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                💵 USD Wallet
+              </button>
+              <button
+                onClick={() => setWalletView('LOCAL')}
+                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                  walletView === 'LOCAL'
+                    ? 'text-white bg-white/10 border-white/20'
+                    : 'text-[#64748B] bg-transparent border-white/5 hover:text-white'
+                }`}
+              >
+                🏦 Local Wallet
+              </button>
+            </div>
+
+            <p className="text-xs font-medium text-[#64748B] flex items-center gap-2">
+              {walletView === 'USD' ? 'USD Crypto Balance (USDC / USDT)' : 'Local Currency Balance (NGN)'}
+              <button onClick={() => setShowBalance(!showBalance)} className="hover:text-white transition-colors">
+                {showBalance ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </p>
-            <div className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight mt-1">
+
+            <div className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mt-1">
               {isLoadingBalance ? (
-                <div className="h-8 sm:h-10 w-36 sm:w-48 skeleton rounded-lg"></div>
+                <div className="h-9 w-40 skeleton rounded-lg" />
               ) : showBalance ? (
-                currency === 'USDC' ? (
-                  `$${balanceData?.usdt?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '2,450.75'}`
-                ) : (
-                  `₦${balanceData?.fiat?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '3,676,125.00'}`
-                )
-              ) : (
-                '••••••••'
-              )}
+                walletView === 'USD'
+                  ? `$${(balanceData?.usdBalance ?? 2450.75).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : `₦${(balanceData?.ngnBalance ?? 185000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              ) : '••••••••'}
             </div>
+
             {showBalance && (
-              <p className="text-xs text-[#64748B] mt-1 font-medium">
-                {currency === 'USDC'
-                  ? `≈ ₦${balanceData?.fiat?.toLocaleString() || '3,676,125.00'} NGN`
-                  : `≈ $${balanceData?.usdt?.toLocaleString() || '2,450.75'} USD`}
+              <p className="text-[11px] text-[#475569] mt-1 font-medium">
+                {walletView === 'USD'
+                  ? 'Deposited via crypto (USDC/USDT). Convert on Convert tab to get local currency.'
+                  : 'Deposited via local bank transfer. Convert on Convert tab to get USD.'}
               </p>
             )}
           </div>
-
-          <button 
-            onClick={() => setCurrency(currency === 'USDC' ? 'NGN' : 'USDC')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all btn-outline-${variant}`}
-          >
-            <Repeat className="w-3 h-3" />
-            {currency === 'USDC' ? 'Show NGN' : 'Show USD'}
-          </button>
         </div>
 
         {/* Action Buttons: 4 Primary Actions in Order (Fund, Send, Receive, Bills) */}
@@ -709,7 +732,7 @@ export default function DashboardPage() {
                         Send to Local Bank Account
                       </h4>
                       <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
-                        Withdraw stablecoins to Naira, Cedi, Shillings, or Rand instantly
+                        Send funds directly to any local bank account (NGN, GHS, KES, ZAR and more)
                       </p>
                     </div>
                   </div>
@@ -721,7 +744,7 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ── FUND CHOICE GLASS MORPH MODAL ──────────────────────────────── */}
+      {/* FUND CHOICE MODAL */}
       <AnimatePresence>
         {showFundModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md">
@@ -729,11 +752,9 @@ export default function DashboardPage() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="glass-card w-[94vw] max-w-md max-h-[85vh] overflow-y-auto p-5 sm:p-6 relative rounded-3xl shadow-2xl border"
-              style={{
-                borderColor: variant === 'gold' ? 'rgba(212, 160, 23, 0.4)' : 'rgba(181, 226, 61, 0.4)',
-              }}
+              style={{ borderColor: variant === "gold" ? "rgba(212, 160, 23, 0.4)" : "rgba(181, 226, 61, 0.4)" }}
             >
               {/* Header */}
               <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/10">
@@ -764,29 +785,7 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 {/* PRIMARY OPTION 1: Deposit Local Currency (Virtual Bank Transfer) */}
                 <div
-                  onClick={() => {
-                    setShowFundModal(false)
-                    toast((t) => (
-                      <div className="text-left space-y-2 p-1">
-                        <div className="flex justify-between items-center">
-                          <h4 className="font-bold text-white text-sm">🏦 Your Dedicated Funding Account</h4>
-                        </div>
-                        <p className="text-xs text-gray-300">Bank: <strong className="text-emerald-400">Wema Bank / Moniepoint</strong></p>
-                        <p className="text-xs text-gray-300">Account: <strong className="text-white font-mono text-sm">9824018420</strong></p>
-                        <p className="text-xs text-gray-300">Name: <strong className="text-white">SureXend / Alex Johnson</strong></p>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText('9824018420')
-                            toast.dismiss(t.id)
-                            toast.success('Account Number Copied!')
-                          }}
-                          className="w-full py-2 bg-emerald-500 text-black font-bold text-xs rounded-xl mt-2"
-                        >
-                          Copy Account Number
-                        </button>
-                      </div>
-                    ), { duration: 8000, style: { background: '#0F1629', border: '1px solid rgba(16,185,129,0.3)', padding: '16px' } })
-                  }}
+                  onClick={() => { setShowFundModal(false); setShowVBAModal(true) }}
                   className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.08] transition-all duration-300 relative cursor-pointer"
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
@@ -796,7 +795,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="font-bold text-white text-sm sm:text-base text-emerald-400 transition-colors">
-                          Deposit Local Currency (Virtual Bank Transfer)
+                          Deposit Local Currency (Bank Transfer)
                         </h4>
                       </div>
                       <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
@@ -829,6 +828,81 @@ export default function DashboardPage() {
                   <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all flex-shrink-0" />
                 </Link>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── VIRTUAL BANK ACCOUNT MODAL (Local Currency Deposit) ── */}
+      <AnimatePresence>
+        {showVBAModal && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, y: 60 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 60 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="glass-card w-full sm:w-[420px] rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 border border-emerald-500/30 shadow-2xl space-y-4"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                    <Landmark className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-base">Fund via Bank Transfer</h3>
+                    <p className="text-xs text-[#64748B]">Transfer to your dedicated account</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowVBAModal(false)} className="p-2 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Account Details */}
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/8 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Bank</span>
+                  <span className="text-sm font-bold text-emerald-400">Wema Bank / Moniepoint</span>
+                </div>
+                <div className="h-px bg-white/5" />
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Account Number</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-black text-white font-mono tracking-widest">9824018420</span>
+                    <button
+                      onClick={copyVBA}
+                      className="p-1.5 rounded-lg bg-white/8 hover:bg-white/15 text-[#94A3B8] hover:text-white transition-colors"
+                    >
+                      {copiedVBA
+                        ? <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="h-px bg-white/5" />
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Account Name</span>
+                  <span className="text-sm font-bold text-white">SureXend / Alex Johnson</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-500/8 border border-amber-500/20 flex items-start gap-2">
+                <span className="text-amber-400 text-base flex-shrink-0">⚡</span>
+                <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+                  Transfer any amount in <strong className="text-white">Naira (NGN)</strong> to this account. Funds will credit your <strong className="text-white">Local Wallet</strong> within minutes. <em className="text-amber-400">These funds stay in NGN — use the Convert tab to move to USD.</em>
+                </p>
+              </div>
+
+              <button
+                onClick={copyVBA}
+                className="w-full py-3.5 rounded-2xl font-bold text-black flex items-center justify-center gap-2 shadow-xl transition-all active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}
+              >
+                <Copy className="w-4 h-4" />
+                {copiedVBA ? 'Account Number Copied!' : 'Copy Account Number'}
+              </button>
             </motion.div>
           </div>
         )}

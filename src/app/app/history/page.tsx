@@ -516,40 +516,51 @@ export default function HistoryPage() {
             )}
           </motion.div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-5">
             {Object.entries(grouped).map(([date, txs], groupIdx) => (
               <div key={date}>
-                <p className="text-[#64748B] text-xs font-medium mb-3 uppercase tracking-wider">{date}</p>
-                <div className="space-y-2">
-                  {txs.map((tx: any, idx: number) => {
+                {/* Date header */}
+                <div className="flex items-center gap-3 mb-2.5">
+                  <p className="text-[#475569] text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">{date}</p>
+                  <div className="flex-1 h-px bg-white/5" />
+                </div>
+
+                {/* Transaction rows — matches home page Recent Transactions card style */}
+                <div className="glass-card rounded-2xl overflow-hidden">
+                  {(txs as any[]).map((tx: any, idx: number) => {
                     const isCredit = tx.type === 'RECEIVE' || tx.type === 'REFERRAL_EARNING'
+                    const isSend = tx.type === 'SEND'
                     return (
                       <motion.div
                         key={tx.id}
-                        className="bg-[#0F1629] rounded-xl p-4 flex items-center gap-4 border border-white/5 hover:border-white/10 transition-colors cursor-pointer group"
-                        initial={{ opacity: 0, y: 20 }}
+                        className={`flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.03] transition-colors cursor-pointer ${idx !== 0 ? 'border-t border-white/[0.04]' : ''}`}
+                        initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: (groupIdx * 5 + idx) * 0.04 }}
-                        whileHover={{ x: 4 }}
+                        transition={{ delay: (groupIdx * 5 + idx) * 0.035 }}
+                        whileHover={{ x: 2 }}
                       >
-                        <TxIcon type={tx.type} accentHex={accentHex} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-white font-medium text-sm truncate">
+                        <div className="flex items-center gap-3">
+                          <TxIcon type={tx.type} accentHex={accentHex} />
+                          <div>
+                            <p className="text-white font-semibold text-sm leading-tight">
                               {txTypeLabel[tx.type] || tx.type}
                             </p>
-                            <p className={`font-inter font-bold text-sm ${isCredit ? 'text-[#10B981]' : 'text-white'}`}>
-                              {isCredit ? '+' : '-'}${tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
+                            <p className="text-[#64748B] text-xs mt-0.5">
+                              {tx.metadata?.recipient || tx.metadata?.description
+                                ? (tx.metadata?.recipient || tx.metadata?.description)?.slice(0, 24)
+                                : new Date(tx.createdAt || tx.date || Date.now()).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                             </p>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <p className="text-[#64748B] text-xs truncate">
-                              {tx.metadata?.recipient || tx.metadata?.description || tx.reference?.slice(0, 16) + '...'}
-                            </p>
-                            <StatusBadge status={tx.status} />
                           </div>
                         </div>
-                        <ChevronDown size={14} className="text-[#64748B] -rotate-90 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+
+                        <div className="text-right flex-shrink-0 ml-3">
+                          <p className={`font-bold text-sm ${isCredit ? 'text-emerald-400' : isSend ? 'text-red-400' : 'text-amber-400'}`}>
+                            {isCredit ? '+' : isSend ? '-' : ''}
+                            {tx.currency === 'NGN' || tx.currency === 'GHS' ? '' : '$'}
+                            {tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
+                          </p>
+                          <StatusBadge status={tx.status} />
+                        </div>
                       </motion.div>
                     )
                   })}
@@ -559,31 +570,20 @@ export default function HistoryPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-3 py-6">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-4 py-2 rounded-xl text-sm disabled:opacity-30 transition-opacity"
-                  style={{ background: 'rgba(255,255,255,0.05)', color: '#94A3B8' }}
-                >
-                  Previous
-                </button>
-                <span className="text-[#64748B] text-sm">
-                  Page {page} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-4 py-2 rounded-xl text-sm disabled:opacity-30 transition-opacity"
-                  style={{ background: `rgba(${accentRgb}, 0.12)`, color: accentHex }}
-                >
-                  Next
-                </button>
+              <div className="flex items-center justify-center gap-3 py-4">
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                  className="px-4 py-2 rounded-xl text-sm disabled:opacity-30"
+                  style={{ background: 'rgba(255,255,255,0.05)', color: '#94A3B8' }}>Previous</button>
+                <span className="text-[#64748B] text-xs">Page {page} of {totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                  className="px-4 py-2 rounded-xl text-sm disabled:opacity-30"
+                  style={{ background: `rgba(${accentRgb}, 0.12)`, color: accentHex }}>Next</button>
               </div>
             )}
           </div>
         )}
       </div>
+
 
       {/* Statement download modal */}
       <StatementModal

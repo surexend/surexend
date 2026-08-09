@@ -1,4 +1,4 @@
-const CACHE_NAME = 'surexend-v50'
+const CACHE_NAME = 'surexend-v51'
 const OFFLINE_URL = '/offline.html'
 
 // Assets to cache immediately on install
@@ -107,3 +107,4 @@ self.addEventListener('notificationclick', (event) => {
     })
   )
 })
+
