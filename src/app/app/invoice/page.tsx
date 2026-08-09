@@ -5,57 +5,36 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { 
   FileSpreadsheet, Globe, Copy, Check, Download, Share2, 
-  Building2, ArrowRight, ShieldCheck, Zap, Sparkles, User, RefreshCw, Send
+  Building2, ArrowRight, ShieldCheck, Zap, Sparkles, User, RefreshCw, Send, CheckCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+// Complete European & Global Currencies Catalog
+const EUROPEAN_CURRENCIES = [
+  { code: 'EUR', symbol: '€', flag: '🇪🇺', country: 'Eurozone (SEPA Instant)', bankName: 'BNP Paribas / Banking Circle Europe', iban: 'BE76 3631 0423 9812 4019', bic: 'TRWIBEBBXXX' },
+  { code: 'GBP', symbol: '£', flag: '🇬🇧', country: 'United Kingdom (FPS)', bankName: 'ClearBank UK', iban: 'GB29 NWBK 6016 1331 9268 19', bic: 'NWBKGB2L' },
+  { code: 'USD', symbol: '$', flag: '🇺🇸', country: 'United States (FedWire/ACH)', bankName: 'Evolve Bank & Trust USA', iban: 'US08 EVLB 0910 0001 8293 401', bic: 'EVLBUS33' },
+  { code: 'CHF', symbol: 'CHF', flag: '🇨🇭', country: 'Switzerland (SIC)', bankName: 'UBS Switzerland AG', iban: 'CH93 0023 5235 1042 9819 0', bic: 'UBSWCHZH' },
+  { code: 'PLN', symbol: 'zł', flag: '🇵🇱', country: 'Poland (Elixir)', bankName: 'mBank S.A. Poland', iban: 'PL10 1140 2004 0000 3002 8192', bic: 'BREXPLPW' },
+  { code: 'SEK', symbol: 'kr', flag: '🇸🇪', country: 'Sweden (Bankgirot)', bankName: 'Handelsbanken Sweden', iban: 'SE45 5000 0000 0583 9102 4819', bic: 'HANDSESS' },
+  { code: 'DKK', symbol: 'kr.', flag: '🇩🇰', country: 'Denmark (Intradagclearing)', bankName: 'Danske Bank A/S', iban: 'DK84 3000 0010 4910 2819', bic: 'DABADKKK' },
+  { code: 'NOK', symbol: 'kr', flag: '🇳🇴', country: 'Norway (NIX)', bankName: 'DNB Bank ASA Norway', iban: 'NO93 1205 2039 1049 2819', bic: 'DNBNNOKK' },
+  { code: 'CZK', symbol: 'Kč', flag: '🇨🇿', country: 'Czechia (CERTIS)', bankName: 'Česká spořitelna A.S.', iban: 'CZ68 0800 0000 0019 8240 1842', bic: 'GIBACZPX' },
+  { code: 'HUF', symbol: 'Ft', flag: '🇭🇺', country: 'Hungary (VIBER)', bankName: 'OTP Bank Nyrt Hungary', iban: 'HU48 1177 3016 1111 2222 3333', bic: 'OTPVHUHB' },
+  { code: 'BGN', symbol: 'лв', flag: '🇧🇬', country: 'Bulgaria (BISERA)', bankName: 'UniCredit Bulbank', iban: 'BG18 UNCR 7000 1523 9102 4819', bic: 'UNCRBGSF' },
+  { code: 'RON', symbol: 'lei', flag: '🇷🇴', country: 'Romania (ReGIS)', bankName: 'Banca Transilvania', iban: 'RO49 BTRL EURC RT01 2345 6789', bic: 'BTRLRO22' }
+]
+
 export default function InvoicePage() {
   const { variant, colors } = useTheme()
-  const [selectedCurrency, setSelectedCurrency] = useState<'EUR' | 'GBP' | 'USD'>('EUR')
+  const [selectedCurrencyCode, setSelectedCurrencyCode] = useState('EUR')
   const [payerName, setPayerName] = useState('')
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [isGenerated, setIsGenerated] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
-  // European / Global Account details mapping
-  const accountDetails = {
-    EUR: {
-      symbol: '€',
-      country: 'European Union (SEPA Instant)',
-      flag: '🇪🇺',
-      bankName: 'BNP Paribas / Banking Circle Europe',
-      accountName: 'SureXend EU Pay Ltd / Alex Johnson',
-      iban: 'BE76 3631 0423 9812 4019',
-      bic: 'TRWIBEBBXXX',
-      routing: 'N/A',
-      estimatedDelivery: 'Instant (SEPA Credit Transfer)',
-    },
-    GBP: {
-      symbol: '£',
-      country: 'United Kingdom (FPS)',
-      flag: '🇬🇧',
-      bankName: 'ClearBank UK',
-      accountName: 'SureXend UK Services / Alex Johnson',
-      iban: 'GB29 NWBK 6016 1331 9268 19',
-      bic: 'NWBKGB2L',
-      routing: 'Sort Code: 60-16-13 | Acc: 31926819',
-      estimatedDelivery: 'Instant (Faster Payments)',
-    },
-    USD: {
-      symbol: '$',
-      country: 'United States (FEDWIRE / ACH)',
-      flag: '🇺🇸',
-      bankName: 'Evolve Bank & Trust USA',
-      accountName: 'SureXend Global Inc / Alex Johnson',
-      iban: 'US08 EVLB 0910 0001 8293 401',
-      bic: 'EVLBUS33',
-      routing: 'Routing: 091000019 | Acc: 8293401',
-      estimatedDelivery: '1 - 4 hours (ACH / FedWire)',
-    }
-  }
-
-  const currentAcc = accountDetails[selectedCurrency]
+  const currentAcc = EUROPEAN_CURRENCIES.find(c => c.code === selectedCurrencyCode) || EUROPEAN_CURRENCIES[0]
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
@@ -112,25 +91,24 @@ export default function InvoicePage() {
           <form onSubmit={handleGenerate} className="space-y-4">
             {/* Currency Selector */}
             <div>
-              <label className="block text-xs font-medium text-[#94A3B8] mb-2">Target European / Global Currency</label>
-              <div className="grid grid-cols-3 gap-2">
-                {(['EUR', 'GBP', 'USD'] as const).map((curr) => {
-                  const isSel = selectedCurrency === curr
-                  const info = accountDetails[curr]
+              <label className="block text-xs font-medium text-[#94A3B8] mb-2">Select European / Global Billing Currency</label>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-44 overflow-y-auto pr-1 no-scrollbar">
+                {EUROPEAN_CURRENCIES.map((curr) => {
+                  const isSel = selectedCurrencyCode === curr.code
                   return (
                     <button
-                      key={curr}
+                      key={curr.code}
                       type="button"
-                      onClick={() => { setSelectedCurrency(curr); setIsGenerated(false) }}
-                      className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                      onClick={() => { setSelectedCurrencyCode(curr.code); setIsGenerated(false) }}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition-all ${
                         isSel 
-                          ? 'bg-white/10 text-white font-bold border-emerald-500/50 shadow-lg' 
+                          ? 'bg-white/10 text-white font-bold border-emerald-500/50 shadow-lg scale-105' 
                           : 'bg-white/[0.02] text-[#94A3B8] border-white/5 hover:bg-white/[0.05]'
                       }`}
                       style={isSel ? { borderColor: colors.primary, color: colors.primary } : {}}
                     >
-                      <span className="text-xl">{info.flag}</span>
-                      <span className="text-xs font-bold">{curr} ({info.symbol})</span>
+                      <span className="text-lg">{curr.flag}</span>
+                      <span className="text-[11px] font-extrabold">{curr.code}</span>
                     </button>
                   )
                 })}

@@ -110,25 +110,24 @@ function StatementModal({
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose} />
           <motion.div
-            className="fixed inset-x-4 bottom-0 z-50 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[420px]"
+            className="fixed inset-x-3 bottom-20 z-[70] sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[420px] max-h-[80vh] overflow-y-auto"
             initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }}
             transition={{ type: 'spring', damping: 24, stiffness: 300 }}
           >
-            <div className="bg-[#0F1629] rounded-t-3xl sm:rounded-2xl p-6 border border-white/8"
-              style={{ boxShadow: '0 -20px 60px rgba(0,0,0,0.5)' }}>
-              <div className="flex items-center justify-between mb-6">
+            <div className="bg-[#0F1629] rounded-3xl p-5 sm:p-6 border border-white/10 shadow-2xl">
+              <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{ background: `rgba(${accentRgb}, 0.12)` }}>
                     <FileText size={18} style={{ color: accentHex }} />
                   </div>
                   <div>
-                    <h3 className="text-white font-semibold">Download Statement</h3>
-                    <p className="text-[#64748B] text-xs">PDF export of your transactions</p>
+                    <h3 className="text-white font-bold text-sm sm:text-base">Download Statement</h3>
+                    <p className="text-[#94A3B8] text-xs">PDF export of your transactions</p>
                   </div>
                 </div>
-                <button onClick={onClose} className="text-[#64748B] hover:text-white transition-colors">
-                  <X size={20} />
+                <button onClick={onClose} className="p-1.5 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white transition-colors">
+                  <X size={18} />
                 </button>
               </div>
 
@@ -393,31 +392,31 @@ export default function HistoryPage() {
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 py-4 sm:p-6 md:p-8 max-w-2xl mx-auto space-y-4 pb-28 sm:pb-32">
       {/* Header */}
-      <div className="border-b border-white/5 pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-white font-extrabold text-xl sm:text-2xl tracking-tight">Transaction History</h1>
-            <p className="text-[#94A3B8] text-xs sm:text-sm mt-0.5">
-              Filter by Day, Week, Month, or Year
-            </p>
-          </div>
-          <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-md"
-            style={{ background: `rgba(${accentRgb}, 0.15)`, color: accentHex, border: `1px solid rgba(${accentRgb}, 0.3)` }}
-            onClick={() => setShowStatement(true)}
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Download Statement</span>
-          </button>
+      <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-3">
+        <div className="truncate">
+          <h1 className="text-white font-extrabold text-base sm:text-lg tracking-tight truncate">
+            Transaction History
+          </h1>
+          <p className="text-[#94A3B8] text-[11px] sm:text-xs truncate">
+            Filter by Day, Week, Month, or Year
+          </p>
         </div>
+        <button
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex-shrink-0"
+          style={{ background: `rgba(${accentRgb}, 0.15)`, color: accentHex, border: `1px solid rgba(${accentRgb}, 0.3)` }}
+          onClick={() => setShowStatement(true)}
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>Download Statement</span>
+        </button>
       </div>
 
       {/* Search + Filter row */}
       <div className="flex gap-2">
         <div className="flex-1 relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#64748B] pointer-events-none z-10" />
           <input
-            className="input-field pl-9 py-3 text-sm"
+            className="w-full py-2.5 pl-10 pr-4 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-500 transition-colors"
             placeholder="Search transactions..."
             value={search}
             onChange={e => setSearch(e.target.value)}

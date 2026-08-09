@@ -15,7 +15,8 @@ const SUPPORTED_CURRENCIES = [
   { code: 'ZAR', name: 'South African Rand', symbol: 'R', flag: '🇿🇦', rate: 18.2 },
   { code: 'UGX', name: 'Ugandan Shilling', symbol: 'USh', flag: '🇺🇬', rate: 3680 },
   { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TSh', flag: '🇹🇿', rate: 2650 },
-  { code: 'XOF', name: 'West African CFA', symbol: 'CFA', flag: '🇨🇲', rate: 610 }
+  { code: 'XAF', name: 'Central African CFA (Cameroon)', symbol: 'FCFA', flag: '🇨🇲', rate: 610 },
+  { code: 'XOF', name: 'West African CFA', symbol: 'CFA', flag: '🇸🇳', rate: 605 }
 ]
 
 export default function ConvertPage() {
@@ -27,6 +28,8 @@ export default function ConvertPage() {
   const [selectedBank, setSelectedBank] = useState<string>('')
   const [pin, setPin] = useState(['', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
+  const [userBalance, setUserBalance] = useState(2450.75)
+  const [swapDirection, setSwapDirection] = useState<'cryptoToFiat' | 'fiatToCrypto'>('cryptoToFiat')
 
   const selectedCurrInfo = SUPPORTED_CURRENCIES.find(c => c.code === fiatCurrency) || SUPPORTED_CURRENCIES[0]
 
@@ -46,9 +49,19 @@ export default function ConvertPage() {
   })
 
   const rate = ratesData?.rate || selectedCurrInfo.rate
-  const fee = 1.5 // USDT
+  const fee = 1.5 // USD
   const numAmount = parseFloat(amount) || 0
   const receiveAmount = Math.max(0, (numAmount - fee) * rate)
+
+  const handlePresetPercentage = (pct: number) => {
+    const calculated = (userBalance * (pct / 100)).toFixed(2)
+    setAmount(calculated)
+  }
+
+  const toggleDirection = () => {
+    setSwapDirection(prev => prev === 'cryptoToFiat' ? 'fiatToCrypto' : 'cryptoToFiat')
+    toast.success('Swap direction flipped')
+  }
 
   const handleNext = () => {
     if (numAmount <= fee) {
@@ -88,10 +101,10 @@ export default function ConvertPage() {
         bankAccountId: selectedBank,
         pin: finalPin
       })
-      setStep(4) // Success
+      setStep(4)
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Conversion failed')
-      setPin(['', '', '', '', '', ''])
+      setPin(['', '', '', ''])
       setStep(2)
     } finally {
       setIsLoading(false)
@@ -108,90 +121,110 @@ export default function ConvertPage() {
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }} 
             exit={{ opacity: 0, x: -20 }} 
-            className="glass-card p-6 space-y-6"
+            className="glass-card p-5 sm:p-6 space-y-5 rounded-3xl border border-white/10 shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
-                <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-                  <Repeat className="w-5 h-5" style={{ color: colors.primary }} /> Convert USD to Fiat
+                <h2 className="text-lg sm:text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                  <Repeat className="w-5 h-5" style={{ color: colors.primary }} /> Convert Currency
                 </h2>
-                <p className="text-xs text-[#94A3B8] mt-0.5">Instant payout to your local bank account</p>
+                <p className="text-xs text-[#94A3B8] mt-0.5">Live rates • Instant bank settlement</p>
               </div>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                0.13% 1h • Live Rates
+              </span>
             </div>
             
-            <div className="space-y-5">
-              {/* You Send */}
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 focus-within:border-emerald-500/50 transition-all">
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-semibold text-[#94A3B8]">You Send (USD)</label>
-                  <button 
-                    type="button" 
-                    onClick={() => setAmount('100')} 
-                    className="text-[11px] font-bold text-emerald-400 hover:underline"
-                  >
-                    Use $100
-                  </button>
+            <div className="space-y-4">
+              {/* TOP PAY CARD (Uniswap / Rainbow style) */}
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 focus-within:border-emerald-500/50 transition-all space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 shadow-sm">
+                    <img src="/usd-coin-logo.png" alt="USD" className="w-5 h-5 rounded-full object-contain" />
+                    <span className="font-extrabold text-sm text-white">USD</span>
+                    <span className="text-[10px] text-emerald-400 font-bold">✓</span>
+                  </div>
+                  
+                  {/* Balance + Quick Percentage Buttons */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[#94A3B8] text-[11px] font-medium">Bal: ${userBalance.toLocaleString()}</span>
+                    {[25, 50, 75, 100].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => handlePresetPercentage(pct)}
+                        className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/15 text-[10px] font-bold text-gray-300 transition-colors"
+                      >
+                        {pct === 100 ? 'Max' : `${pct}%`}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
+
+                <div className="flex justify-between items-baseline pt-1">
                   <input 
                     type="number"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="bg-transparent text-3xl font-extrabold text-white w-[60%] focus:outline-none appearance-none"
+                    placeholder="0"
+                    className="bg-transparent text-3xl sm:text-4xl font-extrabold text-white w-full focus:outline-none placeholder:text-gray-600"
                   />
-                  <div className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-xl border border-white/10">
-                    <img src="/usd-coin-logo.png" alt="USD Coin" className="w-6 h-6 rounded-full object-contain shadow-md" />
-                    <span className="font-bold text-sm text-white">USD</span>
-                  </div>
                 </div>
               </div>
 
-              {/* Exchange Arrow */}
-              <div className="flex justify-center -my-2 relative z-10">
-                <div className="w-10 h-10 rounded-full bg-[#0A0F1E] border border-white/10 flex items-center justify-center shadow-lg">
-                  <ArrowDown className="w-5 h-5 text-emerald-400" />
-                </div>
+              {/* FLIP DIRECTION BUTTON (Interactive Arrow Switcher) */}
+              <div className="flex justify-center -my-3 relative z-10">
+                <button
+                  type="button"
+                  onClick={toggleDirection}
+                  className="w-10 h-10 rounded-full bg-[#0A0F1E] border-2 border-emerald-500/40 hover:border-emerald-400 flex items-center justify-center shadow-2xl transition-all active:scale-95 group"
+                  title="Swap direction"
+                >
+                  <Repeat className="w-5 h-5 text-emerald-400 group-hover:rotate-180 transition-transform duration-300" />
+                </button>
               </div>
 
-              {/* You Receive (Est.) with Custom Glassmorphism Currency Selector Button */}
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10">
-                <label className="text-xs font-semibold text-[#94A3B8] mb-1 block">You Receive (Est. Fiat)</label>
-                <div className="flex justify-between items-center gap-3">
-                  <div className="text-2xl sm:text-3xl font-black text-white truncate max-w-[55%]">
-                    {selectedCurrInfo.symbol} {receiveAmount > 0 ? receiveAmount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0.00'}
-                  </div>
-
-                  {/* Sleek Custom Currency Trigger Button (Replaces ugly HTML select!) */}
+              {/* BOTTOM RECEIVE CARD */}
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                <div className="flex justify-between items-center">
+                  {/* Currency Selector Button */}
                   <button
                     type="button"
                     onClick={() => setShowCurrencyModal(true)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 hover:bg-white/20 text-white font-bold text-sm transition-all shadow-md active:scale-95"
-                    style={{ borderColor: colors.cardBorder }}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 hover:bg-white/20 text-white font-bold text-sm transition-all shadow-md active:scale-95"
                   >
-                    <span className="text-lg">{selectedCurrInfo.flag}</span>
+                    <span className="text-xl">{selectedCurrInfo.flag}</span>
                     <span className="font-extrabold text-white">{selectedCurrInfo.code}</span>
                     <ChevronDown className="w-4 h-4 text-gray-400" />
                   </button>
+
+                  <span className="text-xs text-[#94A3B8] font-medium">Recipient Bank Account</span>
+                </div>
+
+                <div className="flex justify-between items-baseline pt-1">
+                  <div className="text-2xl sm:text-3xl font-black text-white truncate">
+                    {selectedCurrInfo.symbol} {receiveAmount > 0 ? receiveAmount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0.00'}
+                  </div>
+                  <span className="text-xs text-[#94A3B8]">$0.00</span>
                 </div>
               </div>
 
               {/* Rate & Fee breakdown */}
-              <div className="text-xs space-y-2 py-3 px-4 rounded-xl bg-white/[0.02] border border-white/5">
-                <div className="flex justify-between items-center text-[#94A3B8] gap-2">
-                  <span className="truncate">Exchange Rate</span>
-                  <span className="text-white font-extrabold whitespace-nowrap flex-shrink-0">1 USD = {selectedCurrInfo.symbol}{rate.toLocaleString()} {fiatCurrency}</span>
+              <div className="text-xs space-y-2 py-3 px-4 rounded-2xl bg-white/[0.02] border border-white/5">
+                <div className="flex justify-between items-center text-[#94A3B8]">
+                  <span>Exchange Rate</span>
+                  <span className="text-white font-extrabold">1 USD = {selectedCurrInfo.symbol}{rate.toLocaleString()} {fiatCurrency}</span>
                 </div>
-                <div className="flex justify-between items-center text-[#94A3B8] gap-2">
-                  <span>Network Processing Fee</span>
-                  <span className="text-white font-extrabold whitespace-nowrap flex-shrink-0">{fee} USD</span>
+                <div className="flex justify-between items-center text-[#94A3B8]">
+                  <span>Processing Fee</span>
+                  <span className="text-white font-extrabold">{fee} USD</span>
                 </div>
               </div>
 
               <button 
                 onClick={handleNext}
                 disabled={!numAmount || numAmount <= fee}
-                className="w-full py-4 rounded-xl text-center font-bold text-black shadow-lg transition-transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-4 rounded-2xl text-center font-extrabold text-black shadow-xl transition-transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: colors.gradientBg }}
               >
                 Continue to Bank Selection
@@ -288,32 +321,32 @@ export default function ConvertPage() {
               <h2 className="text-2xl font-black text-white">Conversion Submitted!</h2>
               <p className="text-xs text-[#94A3B8] mt-1">Your local bank account will receive {selectedCurrInfo.symbol}{receiveAmount.toLocaleString()} within 5 minutes.</p>
             </div>
-            <button onClick={() => { setStep(1); setAmount(''); setPin(['','','','','','']) }} className="w-full py-3.5 rounded-xl font-bold text-black shadow-lg" style={{ background: colors.gradientBg }}>
+            <button onClick={() => { setStep(1); setAmount(''); setPin(['','','','']) }} className="w-full py-3.5 rounded-xl font-bold text-black shadow-lg" style={{ background: colors.gradientBg }}>
               Done / Convert Again
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── PREMIUM GLASSMORPHISM CURRENCY SELECTOR MODAL / BOTTOM SHEET ── */}
+      {/* ── FIAT CURRENCY SELECTOR MODAL (FIXED CAMEROON BOTTOM SCROLL) ── */}
       <AnimatePresence>
         {showCurrencyModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, y: 100 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 100 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="glass-card w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border border-white/15 space-y-5 shadow-2xl relative max-h-[85vh] overflow-y-auto"
+              className="glass-card w-full max-w-md p-5 pb-28 sm:pb-6 rounded-t-3xl sm:rounded-3xl border border-white/15 space-y-4 shadow-2xl relative max-h-[80vh] overflow-y-auto mb-16 sm:mb-0"
               style={{ borderColor: variant === 'gold' ? 'rgba(212,160,23,0.4)' : 'rgba(181,226,61,0.4)' }}
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div className="flex items-center gap-2">
                   <Globe className="w-5 h-5 text-emerald-400" />
-                  <h3 className="font-extrabold text-white text-lg">Select Fiat Currency</h3>
+                  <h3 className="font-extrabold text-white text-base sm:text-lg">Select Fiat Currency</h3>
                 </div>
-                <button onClick={() => setShowCurrencyModal(false)} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white">
+                <button onClick={() => setShowCurrencyModal(false)} className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -330,32 +363,32 @@ export default function ConvertPage() {
                         setShowCurrencyModal(false)
                         toast.success(`Selected ${curr.name} (${curr.code})`)
                       }}
-                      className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all duration-200 ${
+                      className={`w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all duration-200 ${
                         isSelected 
                           ? 'bg-white/10 border-emerald-500/60 shadow-lg' 
                           : 'bg-white/[0.02] border-white/10 hover:bg-white/[0.06] hover:border-white/20'
                       }`}
                       style={isSelected ? { borderColor: colors.primary } : {}}
                     >
-                      <div className="flex items-center gap-3.5">
-                        <span className="text-3xl">{curr.flag}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{curr.flag}</span>
                         <div className="text-left">
                           <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-white text-base">{curr.code}</span>
+                            <span className="font-extrabold text-white text-sm">{curr.code}</span>
                             <span className="text-xs text-[#94A3B8]">({curr.symbol})</span>
                           </div>
-                          <p className="text-xs text-[#94A3B8] font-medium">{curr.name}</p>
+                          <p className="text-[11px] text-[#94A3B8] font-medium">{curr.name}</p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <div className="text-right">
-                          <p className="text-xs font-bold text-emerald-400">1 USDT = {curr.symbol}{curr.rate.toLocaleString()}</p>
-                          <p className="text-[10px] text-[#64748B]">Instant Payout</p>
+                          <p className="text-xs font-bold text-emerald-400">1 USD = {curr.symbol}{curr.rate.toLocaleString()}</p>
+                          <p className="text-[9px] text-[#64748B]">Instant Settlement</p>
                         </div>
                         {isSelected && (
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center text-black" style={{ background: colors.primary }}>
-                            <Check className="w-4 h-4 stroke-[3]" />
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center text-black" style={{ background: colors.primary }}>
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
                           </div>
                         )}
                       </div>

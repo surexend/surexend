@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { getInitials } from '@/lib/utils'
 import toast from 'react-hot-toast'
+import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 
 function MenuSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -147,22 +148,14 @@ export default function ProfilePage() {
       {/* Sleek Single-Line Profile Header with Custom Avatar Upload */}
       <div className="glass-card p-3.5 sm:p-5 rounded-2xl border border-white/10 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 truncate">
-          {/* Avatar Container with Upload Camera Button */}
-          <div className="relative group flex-shrink-0">
-            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-lg bg-[#1E2738] flex items-center justify-center">
-              {avatar ? (
-                <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" alt="Avatar" className="w-full h-full object-cover" />
-              )}
-            </div>
-            <label 
-              className="absolute -bottom-1 -right-1 p-1 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black cursor-pointer shadow-md transition-all active:scale-95"
-              title="Upload Custom Profile Picture"
-            >
-              <Camera className="w-3 h-3" />
-              <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-            </label>
+        <div className="flex items-center gap-3 truncate">
+          {/* Clean Avatar Display */}
+          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-lg bg-[#1E2738] flex-shrink-0">
+            {avatar ? (
+              <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" alt="Avatar" className="w-full h-full object-cover" />
+            )}
           </div>
 
           <div className="truncate">
@@ -170,23 +163,18 @@ export default function ProfilePage() {
               <h2 className="text-white font-extrabold text-sm sm:text-base truncate">
                 {fullName || 'Alex Johnson'}
               </h2>
-              {/* Twitter / X style Gold/Lemon Verified Tick */}
-              <span 
-                className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black text-black flex-shrink-0 shadow-sm ring-1 ring-white/20"
-                style={{ background: colors.gradientBg }}
-                title="Verified User"
-              >
-                ✓
-              </span>
+              {/* Twitter / X style Scalloped Gold/Lemon Verified Rosette */}
+              <VerifiedCheckmark size={18} variant={variant} />
               <KYCBadge tier={kycTier} />
             </div>
             <p className="text-[#94A3B8] text-xs font-medium truncate">@alex_xend • alex@example.com</p>
           </div>
         </div>
 
+        {/* Single Sleek Upload Photo Button */}
         <label 
-          className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 flex-shrink-0 cursor-pointer flex items-center gap-1 text-xs font-semibold"
-          title="Upload Photo"
+          className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 flex-shrink-0 cursor-pointer flex items-center gap-1.5 text-xs font-semibold transition-all active:scale-95 shadow-sm"
+          title="Upload Custom Profile Picture"
         >
           <Camera className="w-4 h-4 text-emerald-400" />
           <span className="hidden sm:inline">Upload Photo</span>

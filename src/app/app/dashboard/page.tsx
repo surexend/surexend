@@ -8,6 +8,7 @@ import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDow
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { walletAPI, transactionAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
+import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 
 // Market data for USDT and USDC
 const cryptoMarketData = {
@@ -127,13 +128,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-1 truncate">
             <span className="font-extrabold text-white truncate text-xs sm:text-sm">Welcome back, Alex</span>
-            <span 
-              className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black text-black flex-shrink-0 shadow-sm"
-              style={{ background: colors.gradientBg }}
-              title="Verified User"
-            >
-              ✓
-            </span>
+            <VerifiedCheckmark size={16} variant={variant} />
           </div>
           <span className="hidden sm:inline text-[#64748B]">•</span>
           <span className="hidden sm:inline text-[#94A3B8] font-mono font-bold">@alex_xend</span>
@@ -767,29 +762,50 @@ export default function DashboardPage() {
 
               {/* Options */}
               <div className="space-y-3">
-                {/* PRIMARY OPTION 1: Deposit Local Currency (Bank Transfer / Card) */}
-                <Link
-                  href="/app/convert"
-                  onClick={() => setShowFundModal(false)}
-                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.08] transition-all duration-300 relative"
+                {/* PRIMARY OPTION 1: Deposit Local Currency (Virtual Bank Transfer) */}
+                <div
+                  onClick={() => {
+                    setShowFundModal(false)
+                    toast((t) => (
+                      <div className="text-left space-y-2 p-1">
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-bold text-white text-sm">🏦 Your Dedicated Funding Account</h4>
+                        </div>
+                        <p className="text-xs text-gray-300">Bank: <strong className="text-emerald-400">Wema Bank / Moniepoint</strong></p>
+                        <p className="text-xs text-gray-300">Account: <strong className="text-white font-mono text-sm">9824018420</strong></p>
+                        <p className="text-xs text-gray-300">Name: <strong className="text-white">SureXend / Alex Johnson</strong></p>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText('9824018420')
+                            toast.dismiss(t.id)
+                            toast.success('Account Number Copied!')
+                          }}
+                          className="w-full py-2 bg-emerald-500 text-black font-bold text-xs rounded-xl mt-2"
+                        >
+                          Copy Account Number
+                        </button>
+                      </div>
+                    ), { duration: 8000, style: { background: '#0F1629', border: '1px solid rgba(16,185,129,0.3)', padding: '16px' } })
+                  }}
+                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.08] transition-all duration-300 relative cursor-pointer"
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform flex-shrink-0">
-                      <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
+                      <Landmark className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="font-bold text-white text-sm sm:text-base text-emerald-400 transition-colors">
-                          Deposit Local Currency (Bank Transfer / Card)
+                          Deposit Local Currency (Virtual Bank Transfer)
                         </h4>
                       </div>
                       <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
-                        Deposit NGN, GHS, KES, or ZAR to buy airtime/data, pay bills & get stablecoins
+                        Get your dedicated NGN Virtual Account details for instant bank transfers
                       </p>
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-all flex-shrink-0" />
-                </Link>
+                </div>
 
                 {/* OPTION 2: Deposit Crypto (USDT / USDC) */}
                 <Link

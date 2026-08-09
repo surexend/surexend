@@ -83,16 +83,24 @@ export default function ReceivePage() {
           ))}
         </div>
 
-        {/* QR Code */}
-        <div className="flex justify-center mb-8">
-          <div className="p-3 bg-white rounded-2xl shadow-xl relative group">
+        {/* QR Code Container with Network Chain Badge Centered */}
+        <div className="flex justify-center mb-6">
+          <div className="p-3.5 bg-white rounded-3xl shadow-2xl relative group">
             {isLoading ? (
-              <div className="w-[200px] h-[200px] bg-gray-200 animate-pulse rounded-xl"></div>
+              <div className="w-[210px] h-[210px] bg-gray-200 animate-pulse rounded-2xl"></div>
             ) : qrCodeDataUrl ? (
-              <img src={qrCodeDataUrl} alt="QR Code" className="w-[200px] h-[200px] rounded-xl" />
+              <div className="relative flex items-center justify-center">
+                <img src={qrCodeDataUrl} alt="QR Code" className="w-[210px] h-[210px] rounded-2xl" />
+                {/* Embedded Network Chain Badge in Center of QR Barcode */}
+                <div className="absolute w-11 h-11 rounded-2xl bg-[#0A0F1E] border-2 border-emerald-400 p-1 flex items-center justify-center shadow-2xl ring-4 ring-white/90">
+                  {network === 'TRC20' && <span className="text-lg font-black text-red-500">TRX</span>}
+                  {network === 'BEP20' && <span className="text-lg font-black text-amber-400">BNB</span>}
+                  {network === 'POLYGON' && <span className="text-lg font-black text-purple-400">MATIC</span>}
+                </div>
+              </div>
             ) : null}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl flex items-center justify-center">
-              <span className="text-white text-sm font-medium">Scan to receive</span>
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl flex items-center justify-center">
+              <span className="text-white text-xs font-bold bg-black/80 px-3 py-1.5 rounded-full border border-white/20">Scan to Receive USDT</span>
             </div>
           </div>
         </div>

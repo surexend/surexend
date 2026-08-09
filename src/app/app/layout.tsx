@@ -12,6 +12,7 @@ import {
   Smartphone, Building2, FileSpreadsheet, X, Check, ShieldCheck, Zap, Clock
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import AISupportWidget from '@/components/AISupportWidget'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -270,6 +271,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           )}
         </AnimatePresence>
+        <AISupportWidget />
       </div>
     </QueryClientProvider>
   )

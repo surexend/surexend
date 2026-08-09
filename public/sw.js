@@ -1,4 +1,4 @@
-const CACHE_NAME = 'surexend-v48'
+const CACHE_NAME = 'surexend-v49'
 const OFFLINE_URL = '/offline.html'
 
 // Assets to cache immediately on install

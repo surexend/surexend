@@ -266,11 +266,21 @@ export default function BillsPage() {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => { setSelectedProvider(provider); setStep('form') }}
                     >
-                      <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl flex-shrink-0">
+                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-black text-sm flex-shrink-0 shadow-md">
                         {provider.image ? (
                           <img src={provider.image} alt={provider.name} className="w-10 h-10 object-contain rounded-lg" />
                         ) : (
-                          provider.name?.[0]
+                          (() => {
+                            const name = (provider.name || '').toLowerCase()
+                            if (name.includes('mtn')) return <span className="px-2 py-1 rounded bg-yellow-400 text-black font-black text-xs">MTN</span>
+                            if (name.includes('airtel')) return <span className="px-2 py-1 rounded bg-red-600 text-white font-black text-xs">airtel</span>
+                            if (name.includes('glo')) return <span className="px-2 py-1 rounded bg-emerald-600 text-white font-black text-xs">glo</span>
+                            if (name.includes('9mobile') || name.includes('etisalat')) return <span className="px-2 py-1 rounded bg-lime-500 text-black font-black text-xs">9mob</span>
+                            if (name.includes('dstv')) return <span className="px-2 py-1 rounded bg-blue-600 text-white font-black text-xs">DSTV</span>
+                            if (name.includes('gotv')) return <span className="px-2 py-1 rounded bg-amber-500 text-black font-black text-xs">GOtv</span>
+                            if (name.includes('startimes')) return <span className="px-2 py-1 rounded bg-orange-600 text-white font-black text-xs">ST</span>
+                            return <span className="text-white font-extrabold">{provider.name?.[0]}</span>
+                          })()
                         )}
                       </div>
                       <div className="flex-1">
