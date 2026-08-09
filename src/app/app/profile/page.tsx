@@ -148,7 +148,6 @@ export default function ProfilePage() {
       {/* Sleek Single-Line Profile Header with Custom Avatar Upload */}
       <div className="glass-card p-3.5 sm:p-5 rounded-2xl border border-white/10 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 truncate">
-        <div className="flex items-center gap-3 truncate">
           {/* Clean Avatar Display */}
           <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-lg bg-[#1E2738] flex-shrink-0">
             {avatar ? (
