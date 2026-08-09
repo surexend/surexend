@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import * as dns from 'dns';
 
 // Set DNS servers to prevent local network resolution timeouts
+// Trigger deployment with auto-deploy active
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 import helmet from 'helmet';
 import * as compression from 'compression';
