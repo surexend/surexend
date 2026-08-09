@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  phone            String    @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  pin              String?
+  kycTier          Int       @default(0)
+  kycStatus        KycStatus @default(UNVERIFIED)
+  referralCode     String    @unique
+  referredById     String?
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  isActive         Boolean   @default(true)
+  isBanned         Boolean   @default(false)
+
+  wallet          Wallet?
+  bankAccounts    BankAccount[]
+  transactions    Transaction[]
+  conversions     Conversion[]
+  billPayments    BillPayment[]
+  kycDocuments    KycDocument[]
+  supportTickets  SupportTicket[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  referredUsers   Referral[]      @relation("ReferredUser")
+  referralsMade   Referral[]      @relation("Referrer")
+
+  @@index([email, phone])
+}
+
+model Wallet {
+  id            String          @id @default(uuid())
+  userId        String          @unique
+  usdtBalance   Float           @default(0.0)
+  usdcBalance   Float           @default(0.0)
+  lockedBalance Float           @default(0.0)
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses     WalletAddress[]
+}
+
+model WalletAddress {
+  id        String   @id @default(uuid())
+  walletId  String
+  network   String
+  address   String   @unique
+  createdAt DateTime @default(now())
+  wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+}
+
+enum TransactionType {
+  SEND
+  RECEIVE
+  CONVERT
+  BILL_PAYMENT
+  REFERRAL_EARNING
+  WITHDRAWAL
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Transaction {
+  id        String            @id @default(uuid())
+  userId    String
+  type      TransactionType
+  status    TransactionStatus @default(PENDING)
+  amount    Float
+  fee       Float             @default(0.0)
+  currency  String
+  reference String            @unique
+  metadata  Json?
+  createdAt DateTime          @default(now())
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum ConversionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Conversion {
+  id              String           @id @default(uuid())
+  userId          String
+  usdtAmount      Float
+  fiatAmount      Float
+  fiatCurrency    String
+  rate            Float
+  fee             Float
+  status          ConversionStatus @default(PENDING)
+  flutterwaveRef  String?
+  bankAccountId   String
+  createdAt       DateTime         @default(now())
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BankAccount {
+  id            String   @id @default(uuid())
+  userId        String
+  bankName      String
+  bankCode      String
+  accountNumber String
+  accountName   String
+  country       String
+  currency      String
+  isVerified    Boolean  @default(false)
+  isDefault     Boolean  @default(false)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BillPayment {
+  id         String            @id @default(uuid())
+  userId     String
+  type       String
+  provider   String
+  recipient  String
+  amount     Float
+  usdtAmount Float
+  reference  String            @unique
+  status     TransactionStatus @default(PENDING)
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Referral {
+  id         String   @id @default(uuid())
+  referrerId String
+  referredId String   @unique
+  earnings   Float    @default(0.0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  referrer   User     @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred   User     @relation("ReferredUser", fields: [referredId], references: [id], onDelete: Cascade)
+}
+
+enum KycStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model KycDocument {
+  id              String    @id @default(uuid())
+  userId          String
+  tier            Int
+  type            String
+  documentUrl     String
+  selfieUrl       String?
+  status          KycStatus @default(PENDING)
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SupportTicket {
+  id        String           @id @default(uuid())
+  userId    String
+  subject   String
+  category  String
+  status    String           @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  SupportMessage[]
+}
+
+enum RoleType {
+  USER
+  AI
+  HUMAN
+}
+
+model SupportMessage {
+  id        String        @id @default(uuid())
+  ticketId  String
+  role      RoleType      @default(USER)
+  content   String
+  createdAt DateTime      @default(now())
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  type      String
+  isRead    Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OtpCode {
+  id         String   @id @default(uuid())
+  identifier String   // email or phone
+  code       String
+  type       String   // REGISTER, LOGIN, PASSWORD_RESET
+  expiresAt  DateTime
+  used       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model RateCache {
+  id        String   @id @default(uuid())
+  currency  String   @unique
+  rate      Float
+  updatedAt DateTime @updatedAt
+}
+
+model FeeConfig {
+  id         String @id @default(uuid())
+  type       String @unique
+  percentage Float  @default(0.0)
+  flatAmount Float  @default(0.0)
+  minAmount  Float  @default(0.0)
+  maxAmount  Float?
+}
