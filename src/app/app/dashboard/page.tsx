@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -629,10 +629,9 @@ export default function DashboardPage() {
         )}
       </motion.div>
 
-      {/* ── SEND CHOICE GLASS MORPH MODAL ──────────────────────────────── */}
       <AnimatePresence>
         {showSendModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -747,7 +746,7 @@ export default function DashboardPage() {
       {/* FUND CHOICE MODAL */}
       <AnimatePresence>
         {showFundModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -836,13 +835,13 @@ export default function DashboardPage() {
       {/* ── VIRTUAL BANK ACCOUNT MODAL (Local Currency Deposit) ── */}
       <AnimatePresence>
         {showVBAModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, y: 60 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 60 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="glass-card w-full sm:w-[420px] rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 border border-emerald-500/30 shadow-2xl space-y-4"
+              className="glass-card w-full sm:w-[420px] rounded-t-3xl sm:rounded-3xl p-5 pb-8 sm:p-6 border border-emerald-500/30 shadow-2xl space-y-4"
             >
               {/* Header */}
               <div className="flex items-center justify-between">

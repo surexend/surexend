@@ -31,11 +31,12 @@ function TxIcon({ type, accentHex }: { type: string; accentHex: string }) {
   const map: Record<string, { icon: any; bg: string; color: string }> = {
     SEND: { icon: ArrowUpRight, bg: 'rgba(239,68,68,0.12)', color: '#EF4444' },
     RECEIVE: { icon: ArrowDownLeft, bg: 'rgba(16,185,129,0.12)', color: '#10B981' },
-    CONVERT: { icon: RefreshCw, bg: 'rgba(99,102,241,0.12)', color: '#6366F1' },
+    CONVERT: { icon: RefreshCw, bg: 'rgba(245,158,11,0.12)', color: '#F59E0B' },
     BILL_PAYMENT: { icon: Zap, bg: `rgba(${accentHex},0.12)`, color: accentHex },
     REFERRAL_EARNING: { icon: Gift, bg: 'rgba(16,185,129,0.12)', color: '#10B981' },
   }
-  const config = map[type] || map.SEND
+  const typeUpper = (type || '').toUpperCase()
+  const config = map[typeUpper] || map.SEND
   const Icon = config.icon
   return (
     <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -47,16 +48,17 @@ function TxIcon({ type, accentHex }: { type: string; accentHex: string }) {
 
 // ── Status badge ───────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
+  const statusUpper = (status || '').toUpperCase()
   const map: Record<string, { icon: any; cls: string; label: string }> = {
-    COMPLETED: { icon: CheckCircle, cls: 'badge-success', label: 'Completed' },
-    PENDING: { icon: Clock, cls: 'badge-pending', label: 'Pending' },
-    FAILED: { icon: XCircle, cls: 'badge-failed', label: 'Failed' },
+    COMPLETED: { icon: CheckCircle, cls: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20', label: 'Completed' },
+    PENDING: { icon: Clock, cls: 'bg-amber-500/10 text-amber-400 border border-amber-500/20', label: 'Pending' },
+    FAILED: { icon: XCircle, cls: 'bg-red-500/10 text-red-400 border border-red-500/20', label: 'Failed' },
   }
-  const cfg = map[status] || map.PENDING
+  const cfg = map[statusUpper] || map.PENDING
   const Icon = cfg.icon
   return (
-    <span className={`${cfg.cls} inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium`}>
-      <Icon size={11} />
+    <span className={`${cfg.cls} border inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold mt-1`}>
+      <Icon size={10} />
       {cfg.label}
     </span>
   )
@@ -376,17 +378,24 @@ export default function HistoryPage() {
   // Group transactions by date
   const grouped: Record<string, typeof transactions> = {}
   transactions.forEach((tx: any) => {
-    const key = new Date(tx.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    const dateVal = tx.createdAt || tx.date
+    let key = 'Other'
+    if (dateVal) {
+      const d = new Date(dateVal)
+      if (!isNaN(d.getTime())) {
+        key = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      }
+    }
     if (!grouped[key]) grouped[key] = []
     grouped[key].push(tx)
   })
 
   const txTypeLabel: Record<string, string> = {
-    SEND: 'Sent USD',
-    RECEIVE: 'Received USD',
-    CONVERT: 'Converted Currency',
+    SEND: 'Send',
+    RECEIVE: 'Receive',
+    CONVERT: 'Convert',
     BILL_PAYMENT: 'Bill Payment',
-    REFERRAL_EARNING: 'Referral Cashback',
+    REFERRAL_EARNING: 'Referral Rewards',
   }
 
   return (
@@ -528,8 +537,14 @@ export default function HistoryPage() {
                 {/* Transaction rows — matches home page Recent Transactions card style */}
                 <div className="glass-card rounded-2xl overflow-hidden">
                   {(txs as any[]).map((tx: any, idx: number) => {
-                    const isCredit = tx.type === 'RECEIVE' || tx.type === 'REFERRAL_EARNING'
-                    const isSend = tx.type === 'SEND'
+                    const typeUpper = (tx.type || '').toUpperCase()
+                    const isCredit = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING' || typeUpper === 'CONVERT'
+                    const isDebit = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
+                    const sign = isCredit ? '+' : isDebit ? '-' : ''
+                    const amtColor = isCredit ? 'text-emerald-400' : isDebit ? 'text-red-400' : 'text-[#64748B]'
+                    
+                    const symbol = tx.currency === 'NGN' ? '₦' : tx.currency === 'GHS' ? 'GH₵' : tx.currency === 'KES' ? 'KSh' : '$'
+
                     return (
                       <motion.div
                         key={tx.id}
@@ -543,21 +558,17 @@ export default function HistoryPage() {
                           <TxIcon type={tx.type} accentHex={accentHex} />
                           <div>
                             <p className="text-white font-semibold text-sm leading-tight">
-                              {txTypeLabel[tx.type] || tx.type}
+                              {txTypeLabel[typeUpper] || tx.type}
                             </p>
-                            <p className="text-[#64748B] text-xs mt-0.5">
-                              {tx.metadata?.recipient || tx.metadata?.description
-                                ? (tx.metadata?.recipient || tx.metadata?.description)?.slice(0, 24)
-                                : new Date(tx.createdAt || tx.date || Date.now()).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            <p className="text-[#64748B] text-xs mt-1 font-medium">
+                              {new Date(tx.createdAt || tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </p>
                           </div>
                         </div>
 
                         <div className="text-right flex-shrink-0 ml-3">
-                          <p className={`font-bold text-sm ${isCredit ? 'text-emerald-400' : isSend ? 'text-red-400' : 'text-amber-400'}`}>
-                            {isCredit ? '+' : isSend ? '-' : ''}
-                            {tx.currency === 'NGN' || tx.currency === 'GHS' ? '' : '$'}
-                            {tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
+                          <p className={`font-bold text-sm ${amtColor}`}>
+                            {sign}{symbol}{tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
                           </p>
                           <StatusBadge status={tx.status} />
                         </div>
