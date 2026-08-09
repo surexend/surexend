@@ -455,7 +455,7 @@ export const supportAPI = {
   chat: (payload: { message: string; sessionId: string }) =>
     tryWithMock(
       () => apiClient.post('/support/chat', payload).then(r => r.data),
-      () => ({ reply: "Hello! I am your SureXend AI Assistant. I can help you guide through instant USDT transfers, bank withdrawals, or bill payments!" })
+      () => ({ response: "Hello! I am your SureXend AI Assistant. I can help you guide through instant USDT transfers, bank withdrawals, or bill payments!", escalate: false })
     ),
 
   createTicket: (payload: { subject: string; message: string; category: string }) =>
