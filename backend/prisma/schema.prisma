@@ -44,13 +44,15 @@ model User {
 }
 
 model Wallet {
-  id            String          @id @default(uuid())
-  userId        String          @unique
-  usdtBalance   Float           @default(0.0)
-  usdcBalance   Float           @default(0.0)
-  lockedBalance Float           @default(0.0)
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  addresses     WalletAddress[]
+  id             String          @id @default(uuid())
+  userId         String          @unique
+  usdtBalance    Float           @default(0.0)
+  usdcBalance    Float           @default(0.0)
+  lockedBalance  Float           @default(0.0)
+  localBalance   Float           @default(0.0) // NGN/GHS/KES balance
+  pendingBalance Float           @default(0.0) // Incoming deposits not yet confirmed
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses      WalletAddress[]
 }
 
 model WalletAddress {

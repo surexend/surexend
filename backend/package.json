@@ -6,7 +6,9 @@
     "build": "nest build",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
-    "start:prod": "node dist/main"
+    "start:prod": "node dist/main",
+    "prestart": "prisma db push",
+    "prestart:prod": "prisma db push"
   },
   "dependencies": {
     "@google/generative-ai": "^0.14.0",
