@@ -33,13 +33,13 @@ apiClient.interceptors.response.use(
       message
     })
     
-    // Show user-friendly error toast (only for critical operations)
+    // Show user-friendly error toast (only for critical operations, using unique IDs to prevent duplicate spam)
     if (error.response?.status === 401) {
-      toast.error('Session expired. Please login again.')
+      toast.error('Session expired. Please login again.', { id: 'auth-error' })
     } else if (error.response?.status >= 500) {
-      toast.error('Server error. Please try again later.')
+      toast.error('Server error. Please try again later.', { id: 'server-error' })
     } else if (!error.response) {
-      toast.error('Cannot connect to server. Please check your connection.')
+      toast.error('Cannot connect to server. Please check your connection.', { id: 'network-error' })
     }
     
     return Promise.reject(error)
