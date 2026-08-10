@@ -37,6 +37,11 @@ export class UsersController {
     return this.usersService.verify2FA(user.id, code);
   }
 
+  @Get('kyc')
+  async getKyc(@CurrentUser() user: any) {
+    return this.usersService.getKycStatus(user.id);
+  }
+
   @Post('kyc')
   async submitKyc(
     @CurrentUser() user: any,

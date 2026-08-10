@@ -114,7 +114,7 @@ export default function DashboardPage() {
 
   const { data: txData, isLoading: isLoadingTx } = useQuery({
     queryKey: ['recentTransactions'],
-    queryFn: () => transactionAPI.list({ limit: 5 }),
+    queryFn: () => transactionAPI.getHistory({ limit: 5 }),
     initialData: {
       transactions: [
         { id: '1', type: 'receive', amount: 128.50, currency: 'USD', status: 'completed', date: new Date().toISOString() },

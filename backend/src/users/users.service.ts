@@ -118,6 +118,30 @@ export class UsersService {
     return { message: '2FA enabled successfully' };
   }
 
+  async getKycStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        kycTier: true,
+        kycStatus: true,
+        kycDocuments: {
+          select: { id: true, tier: true, status: true, type: true, rejectionReason: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    return {
+      tier: user?.kycTier ?? 0,
+      status: user?.kycStatus ?? 'UNVERIFIED',
+      limits: {
+        dailyWithdrawal: user?.kycTier === 0 ? '1,000 USDT' : user?.kycTier === 1 ? '5,000 USDT' : '50,000 USDT',
+      },
+      latestDocument: user?.kycDocuments?.[0] ?? null,
+    };
+  }
+
   async submitKyc(userId: string, tier: number, documentUrl: string, type: string) {
     // In a real implementation, we'd call Smile Identity here
     const kycDoc = await this.prisma.kycDocument.create({

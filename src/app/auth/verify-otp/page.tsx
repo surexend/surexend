@@ -66,7 +66,7 @@ function VerifyOTPForm() {
   const verify = async (code: string) => {
     setIsLoading(true)
     try {
-      const res = await authAPI.verifyOTP({ identifier, otp: code, type })
+      const res = await authAPI.verifyOTP({ identifier, code })
       const token = res.data?.accessToken || 'demo_token_' + Date.now()
       localStorage.setItem('surexend_access_token', token)
       document.cookie = `surexend_access_token=${token}; path=/; max-age=86400; SameSite=Lax;`

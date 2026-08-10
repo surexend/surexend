@@ -63,6 +63,8 @@ export default function RegisterPage() {
     setIsLoading(true)
     try {
       await authAPI.register({
+        firstName: data.firstName,
+        lastName: data.lastName,
         email: data.email,
         phone: '+234' + data.phone.replace(/^0+/, ''),
         password: data.password,

@@ -143,6 +143,91 @@ export class AuthService {
     await this.notificationsService.sendOTPEmail(identifier, code);
   }
 
+  async resendOtp(identifier: string, type: string) {
+    if (!identifier) {
+      throw new BadRequestException('Identifier is required');
+    }
+    await this.generateAndSendOtp(identifier, type || 'REGISTER');
+    return { message: 'OTP resent successfully' };
+  }
+
+  async refreshTokens(refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token is required');
+    }
+
+    try {
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: this.configService.get('app.jwt.refreshSecret'),
+      });
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+      });
+
+      if (!user || !user.isActive) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      return this.generateTokens(user);
+    } catch (err) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // Do not leak whether the email exists
+      return { message: 'If the email exists, a reset OTP has been sent' };
+    }
+
+    await this.generateAndSendOtp(user.email, 'PASSWORD_RESET');
+    return { message: 'If the email exists, a reset OTP has been sent' };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    if (!token || !newPassword) {
+      throw new BadRequestException('Token and new password are required');
+    }
+
+    // The token here is an OTP code used to authorize the password reset
+    const otpRecord = await this.prisma.otpCode.findFirst({
+      where: {
+        code: token,
+        type: 'PASSWORD_RESET',
+        used: false,
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!otpRecord) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: { OR: [{ email: otpRecord.identifier }, { phone: otpRecord.identifier }] }
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash }
+    });
+
+    await this.prisma.otpCode.update({
+      where: { id: otpRecord.id },
+      data: { used: true }
+    });
+
+    return { message: 'Password reset successfully' };
+  }
+
   async verifyOtp(dto: VerifyOtpDto) {
     const otpRecord = await this.prisma.otpCode.findFirst({
       where: {
@@ -163,6 +248,24 @@ export class AuthService {
       data: { used: true }
     });
 
-    return { message: 'OTP verified successfully' };
+    // Sign the user in after successful verification
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: dto.identifier },
+          { phone: dto.identifier },
+        ]
+      }
+    });
+
+    if (!user) {
+      return { message: 'OTP verified successfully' };
+    }
+
+    const tokens = await this.generateTokens(user);
+    return {
+      message: 'OTP verified successfully',
+      ...tokens,
+    };
   }
 }

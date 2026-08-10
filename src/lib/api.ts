@@ -2,11 +2,11 @@ import axios, { AxiosError } from 'axios'
 import { withRetry } from './utils'
 import toast from 'react-hot-toast'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'
-
 // ── Axios instance with auth interceptor ─────────────────────────────────
+// Base URL defaults to a relative /api/v1 path which Next.js rewrites to the backend
+// (see next.config.ts rewrites). Override with NEXT_PUBLIC_API_URL for a full URL.
 export const apiClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: process.env.NEXT_PUBLIC_API_URL || '/api/v1',
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000, // 15 second timeout for real backend calls
 })
@@ -60,7 +60,7 @@ const tryWithMock = async <T>(apiCall: () => Promise<T>, mockFallback: () => T |
 
 // ── Auth API ──────────────────────────────────────────────────────────────
 export const authAPI = {
-  register: (payload: { email: string; phone: string; password: string; referralCode?: string }) =>
+  register: (payload: { email: string; phone: string; password: string; firstName: string; lastName: string; referralCode?: string }) =>
     apiClient.post('/auth/register', payload),
 
   login: async (payload: { email: string; password: string }) => {
@@ -72,7 +72,7 @@ export const authAPI = {
     return response
   },
 
-  verifyOTP: async (payload: { identifier: string; otp: string; type: 'email' | 'phone' }) => {
+  verifyOTP: async (payload: { identifier: string; code: string }) => {
     const response = await apiClient.post('/auth/verify-otp', payload)
     if (typeof window !== 'undefined' && response.data?.accessToken) {
       localStorage.setItem('surexend_access_token', response.data.accessToken)
@@ -130,7 +130,12 @@ export const walletAPI = {
 
   send: (payload: { address: string; amount: number; network: string; pin: string }) =>
     tryWithMock(
-      () => apiClient.post('/wallets/send', payload).then(r => r.data),
+      () => apiClient.post('/wallets/send', {
+        toAddress: payload.address,
+        amount: payload.amount,
+        network: payload.network,
+        pin: payload.pin,
+      }).then(r => r.data),
       () => ({
         success: true,
         reference: 'TX-' + Math.random().toString(36).substring(2, 9).toUpperCase(),
@@ -222,7 +227,7 @@ export const conversionAPI = {
 
   preview: (payload: { amount: number; currency: string }) =>
     tryWithMock(
-      () => apiClient.post('/conversions/preview', payload).then(r => r.data),
+      () => apiClient.post('/conversions/preview', { usdtAmount: payload.amount, fiatCurrency: payload.currency }).then(r => r.data),
       () => {
         const rateMap: Record<string, number> = { NGN: 1500, GHS: 14.5, KES: 132, ZAR: 18.5 }
         const rate = rateMap[payload.currency] || 1500
@@ -241,7 +246,12 @@ export const conversionAPI = {
 
   execute: (payload: { amount: number; currency: string; bankAccountId: string; pin: string }) =>
     tryWithMock(
-      () => apiClient.post('/conversions/execute', payload).then(r => r.data),
+      () => apiClient.post('/conversions/execute', {
+        usdtAmount: payload.amount,
+        fiatCurrency: payload.currency,
+        bankAccountId: payload.bankAccountId,
+        pin: payload.pin,
+      }).then(r => r.data),
       () => ({
         success: true,
         reference: 'CNV-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
@@ -428,7 +438,7 @@ export const userAPI = {
 
   verify2FA: (token: string) =>
     tryWithMock(
-      () => apiClient.post('/users/2fa/verify', { token }).then(r => r.data),
+      () => apiClient.post('/users/2fa/verify', { code: token }).then(r => r.data),
       () => ({ success: true, message: '2FA enabled successfully' })
     ),
 
@@ -447,9 +457,9 @@ export const userAPI = {
 
 // ── Support API ───────────────────────────────────────────────────────────
 export const supportAPI = {
-  chat: (payload: { message: string; sessionId: string }) =>
+  chat: (payload: { message: string; sessionId?: string; history?: any[] }) =>
     tryWithMock(
-      () => apiClient.post('/support/chat', payload).then(r => r.data),
+      () => apiClient.post('/support/chat', { message: payload.message, history: payload.history || [] }).then(r => r.data),
       () => ({ response: "Hello! I am your SureXend AI Assistant. I can help you guide through instant USDT transfers, bank withdrawals, or bill payments!", escalate: false })
     ),
 

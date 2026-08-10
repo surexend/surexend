@@ -1,7 +1,23 @@
 import type { NextConfig } from 'next'
 
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001'
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+
+  // Reverse proxy: forward API requests to the backend so the frontend and
+  // backend are served from a single origin (no CORS issues).
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${BACKEND_URL}/api/:path*`,
+      },
+    ]
+  },
+
+  // Allow preview deployments on the monkeycode preview domain
+  allowedDevOrigins: ['.monkeycode-ai.live'],
 
   // Required for Netlify: allow Next.js Image Optimization
   images: {
