@@ -18,10 +18,13 @@ export class WalletsService {
     private configService: ConfigService,
     private transactionsService: TransactionsService,
   ) {
-    this.apiKey = this.configService.get('app.circle.apiKey');
-    this.entitySecret = this.configService.get('app.circle.entitySecret');
-    this.walletSetId = this.configService.get('app.circle.walletSetId');
-    this.baseUrl = 'https://api.circle.com';
+    this.apiKey = this.configService.get<string>('app.circle.apiKey') || '';
+    this.entitySecret = this.configService.get<string>('app.circle.entitySecret');
+    this.walletSetId = this.configService.get<string>('app.circle.walletSetId');
+    this.baseUrl = this.apiKey.startsWith('TEST_')
+      ? 'https://api-sandbox.circle.com'
+      : 'https://api.circle.com';
+    this.logger.log(`Circle API initialized: ${this.baseUrl}`);
   }
 
   private encryptSecret(secretHex: string, publicKeyPem: string): string {
@@ -102,10 +105,21 @@ export class WalletsService {
       this.logger.error('Error syncing balance with Circle:', err.response?.data || err.message);
     }
 
+    const rate = 1500;
+    const usdVal = wallet.usdtBalance + wallet.usdcBalance;
+    const lockedVal = wallet.lockedBalance || 0;
+    const pendingVal = wallet.pendingBalance || 0;
+    const localVal = wallet.localBalance || 0;
+
     return {
-      usdtBalance: wallet.usdtBalance,
-      usdcBalance: wallet.usdcBalance,
-      lockedBalance: wallet.lockedBalance,
+      usdBalance: usdVal,
+      ngnBalance: (usdVal + localVal) * rate,
+      lockedBalance: lockedVal,
+      usdt: usdVal,
+      fiat: localVal * rate,
+      rate,
+      locked: lockedVal,
+      pending: pendingVal
     };
   }
 

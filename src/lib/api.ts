@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios'
 import { withRetry } from './utils'
+import toast from 'react-hot-toast'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'
 
@@ -7,7 +8,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v
 export const apiClient = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 4000, // Quick timeout for seamless mock fallback if no backend server
+  timeout: 15000, // 15 second timeout for real backend calls
 })
 
 // Attach JWT from storage on every request
@@ -19,93 +20,87 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
-// Mock fallback helper when backend server is offline
+// Global error handler - fail loudly, never silently return fake data
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    const message = (error.response?.data as any)?.message || error.message || 'Network error'
+    
+    // Log the error for debugging
+    console.error('[SureXend API Error]:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      message
+    })
+    
+    // Show user-friendly error toast (only for critical operations)
+    if (error.response?.status === 401) {
+      toast.error('Session expired. Please login again.')
+    } else if (error.response?.status >= 500) {
+      toast.error('Server error. Please try again later.')
+    } else if (!error.response) {
+      toast.error('Cannot connect to server. Please check your connection.')
+    }
+    
+    return Promise.reject(error)
+  }
+)
+
+// Helper to handle API calls with explicit error propagation and commented-out local mocks
 const tryWithMock = async <T>(apiCall: () => Promise<T>, mockFallback: () => T | Promise<T>): Promise<T> => {
   try {
     return await apiCall()
-  } catch (error) {
-    console.log('[SureXend Demo Mode] Backend server offline or unreachable. Using mock data response.')
-    // Simulate slight natural network delay in demo mode (200ms)
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    return await mockFallback()
+  } catch (error: any) {
+    console.error('[SureXend API Error]:', error.message || error)
+    // To test locally offline, comment out the line below and uncomment the mock fallback:
+    // return await mockFallback()
+    throw error
   }
 }
 
 // ── Auth API ──────────────────────────────────────────────────────────────
 export const authAPI = {
   register: (payload: { email: string; phone: string; password: string; referralCode?: string }) =>
-    tryWithMock(
-      () => apiClient.post('/auth/register', payload),
-      () => ({ data: { message: 'Registration successful! Verification code sent.', userId: 'demo_user_1' } })
-    ),
+    apiClient.post('/auth/register', payload),
 
-  login: (payload: { email: string; password: string }) =>
-    tryWithMock(
-      () => apiClient.post('/auth/login', payload),
-      () => {
-        const demoToken = 'demo_access_token_' + Date.now()
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('surexend_access_token', demoToken)
-          document.cookie = `surexend_access_token=${demoToken}; path=/; max-age=86400;`
-        }
-        return {
-          data: {
-            accessToken: demoToken,
-            refreshToken: 'demo_refresh_token_123',
-            user: { id: 'demo_u1', email: payload.email, firstName: 'Demo', lastName: 'User' }
-          }
-        }
-      }
-    ),
+  login: async (payload: { email: string; password: string }) => {
+    const response = await apiClient.post('/auth/login', payload)
+    if (typeof window !== 'undefined' && response.data?.accessToken) {
+      localStorage.setItem('surexend_access_token', response.data.accessToken)
+      document.cookie = `surexend_access_token=${response.data.accessToken}; path=/; max-age=86400;`
+    }
+    return response
+  },
 
-  verifyOTP: (payload: { identifier: string; otp: string; type: 'email' | 'phone' }) =>
-    tryWithMock(
-      () => apiClient.post('/auth/verify-otp', payload),
-      () => {
-        const demoToken = 'demo_access_token_' + Date.now()
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('surexend_access_token', demoToken)
-          document.cookie = `surexend_access_token=${demoToken}; path=/; max-age=86400;`
-        }
-        return { data: { message: 'OTP verified successfully', accessToken: demoToken } }
-      }
-    ),
+  verifyOTP: async (payload: { identifier: string; otp: string; type: 'email' | 'phone' }) => {
+    const response = await apiClient.post('/auth/verify-otp', payload)
+    if (typeof window !== 'undefined' && response.data?.accessToken) {
+      localStorage.setItem('surexend_access_token', response.data.accessToken)
+      document.cookie = `surexend_access_token=${response.data.accessToken}; path=/; max-age=86400;`
+    }
+    return response
+  },
 
   resendOTP: (payload: { identifier: string; type: 'email' | 'phone' }) =>
-    tryWithMock(
-      () => apiClient.post('/auth/resend-otp', payload),
-      () => ({ data: { message: 'Verification code resent successfully' } })
-    ),
+    apiClient.post('/auth/resend-otp', payload),
 
   refreshToken: (refreshToken: string) =>
-    tryWithMock(
-      () => apiClient.post('/auth/refresh', { refreshToken }),
-      () => ({ data: { accessToken: 'demo_refreshed_token_' + Date.now() } })
-    ),
+    apiClient.post('/auth/refresh', { refreshToken }),
 
-  logout: () =>
-    tryWithMock(
-      () => apiClient.post('/auth/logout'),
-      () => {
-        if (typeof window !== 'undefined') {
-          localStorage.clear()
-          document.cookie = 'surexend_access_token=; path=/; max-age=0;'
-        }
-        return { data: { message: 'Logged out successfully' } }
-      }
-    ),
+  logout: async () => {
+    const response = await apiClient.post('/auth/logout')
+    if (typeof window !== 'undefined') {
+      localStorage.clear()
+      document.cookie = 'surexend_access_token=; path=/; max-age=0;'
+    }
+    return response
+  },
 
   forgotPassword: (email: string) =>
-    tryWithMock(
-      () => apiClient.post('/auth/forgot-password', { email }),
-      () => ({ data: { message: 'Password reset link sent to ' + email } })
-    ),
+    apiClient.post('/auth/forgot-password', { email }),
 
   resetPassword: (payload: { token: string; newPassword: string }) =>
-    tryWithMock(
-      () => apiClient.post('/auth/reset-password', payload),
-      () => ({ data: { message: 'Password reset successful. Please login.' } })
-    ),
+    apiClient.post('/auth/reset-password', payload),
 }
 
 // ── Wallet API ────────────────────────────────────────────────────────────
