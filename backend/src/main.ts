@@ -17,8 +17,22 @@ async function bootstrap() {
   app.use(helmet());
   app.use(compression());
   
+  const allowedOrigins = [
+    'https://surexend.com',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://localhost:3003',
+  ];
+
   app.enableCors({
-    origin: ['https://surexend.com', 'http://localhost:3000'],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || origin.startsWith('http://localhost:')) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   });
 
