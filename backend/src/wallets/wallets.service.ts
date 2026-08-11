@@ -179,7 +179,7 @@ export class WalletsService {
             walletSetId: this.walletSetId,
             metadata: [
               {
-                name: `User ${userId} - ${network}`,
+                name: `User ${userId.substring(0, 8)} - ${network}`,
                 refId: userId
               }
             ]
