@@ -21,9 +21,7 @@ export class WalletsService {
     this.apiKey = this.configService.get<string>('app.circle.apiKey') || '';
     this.entitySecret = this.configService.get<string>('app.circle.entitySecret');
     this.walletSetId = this.configService.get<string>('app.circle.walletSetId');
-    this.baseUrl = this.apiKey.startsWith('TEST_')
-      ? 'https://api-sandbox.circle.com'
-      : 'https://api.circle.com';
+    this.baseUrl = 'https://api.circle.com';
     this.logger.log(`Circle API initialized: ${this.baseUrl}`);
   }
 
