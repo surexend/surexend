@@ -49,10 +49,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [router])
 
-  // Service worker registration
+  // Service worker registration + forced update check so stale bundles don't stick
   useEffect(() => {
     if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
-      navigator.serviceWorker.register('/sw.js').catch(console.error)
+      const register = () =>
+        navigator.serviceWorker.register('/sw.js').then((reg) => {
+          reg.update().catch(() => {})
+        }).catch((err) => {
+          // Retry once after a short delay (transient network failures)
+          console.warn('[SureXend] SW register failed, retrying:', err)
+          setTimeout(() => navigator.serviceWorker.register('/sw.js').catch(() => {}), 5000)
+        })
+      register()
     }
   }, [])
 
