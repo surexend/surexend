@@ -69,46 +69,54 @@ export class WalletsService {
       wallet = await this.prisma.wallet.create({ data: { userId } });
     }
 
-    // Try to sync with Circle balances in real-time
+    // Try to sync with Circle balances in real-time across all generated addresses
     try {
-      const addressRecord = await this.prisma.walletAddress.findFirst({
+      const addressRecords = await this.prisma.walletAddress.findMany({
         where: { walletId: wallet.id }
       });
-      if (addressRecord) {
-        const circleWallet = await this.getCircleWalletByAddress(addressRecord.address);
-        if (circleWallet) {
-          const balancesResponse = await axios.get(
-            `${this.baseUrl}/v1/w3s/wallets/${circleWallet.id}/balances`,
-            {
-              headers: {
-                Authorization: `Bearer ${this.apiKey}`,
-                accept: 'application/json',
+      
+      let usdtBalance = 0;
+      let usdcBalance = 0;
+      const seenWalletIds = new Set<string>();
+
+      for (const addressRecord of addressRecords) {
+        try {
+          const circleWallet = await this.getCircleWalletByAddress(addressRecord.address);
+          if (circleWallet && !seenWalletIds.has(circleWallet.id)) {
+            seenWalletIds.add(circleWallet.id);
+            
+            const balancesResponse = await axios.get(
+              `${this.baseUrl}/v1/w3s/wallets/${circleWallet.id}/balances`,
+              {
+                headers: {
+                  Authorization: `Bearer ${this.apiKey}`,
+                  accept: 'application/json',
+                }
+              }
+            );
+            
+            const tokenBalances = balancesResponse.data.data.tokenBalances || [];
+            for (const bal of tokenBalances) {
+              const symbol = bal.token.symbol.toUpperCase();
+              if (symbol === 'USDT') {
+                usdtBalance += parseFloat(bal.amount);
+              } else if (symbol === 'USDC') {
+                usdcBalance += parseFloat(bal.amount);
               }
             }
-          );
-          
-          let usdtBalance = 0;
-          let usdcBalance = 0;
-          
-          const tokenBalances = balancesResponse.data.data.tokenBalances || [];
-          for (const bal of tokenBalances) {
-            const symbol = bal.token.symbol.toUpperCase();
-            if (symbol === 'USDT') {
-              usdtBalance += parseFloat(bal.amount);
-            } else if (symbol === 'USDC') {
-              usdcBalance += parseFloat(bal.amount);
-            }
           }
-
-          // Update local DB to stay in sync
-          wallet = await this.prisma.wallet.update({
-            where: { id: wallet.id },
-            data: { usdtBalance, usdcBalance }
-          });
+        } catch (err: any) {
+          this.logger.error(`Error syncing balance for address ${addressRecord.address}:`, err.message);
         }
       }
-    } catch (err) {
-      this.logger.error('Error syncing balance with Circle:', err.response?.data || err.message);
+
+      // Update local DB to stay in sync
+      wallet = await this.prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { usdtBalance, usdcBalance }
+      });
+    } catch (err: any) {
+      this.logger.error('Error syncing balance with Circle:', err.message);
     }
 
     const rate = 1500;
