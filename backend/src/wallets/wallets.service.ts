@@ -39,9 +39,9 @@ export class WalletsService {
   }
 
   private getBlockchainName(network: string): string {
-    const isSandbox = this.baseUrl.includes('sandbox');
+    const isTestKey = this.apiKey.startsWith('TEST_');
     const net = network.toUpperCase();
-    if (isSandbox) {
+    if (isTestKey) {
       if (net === 'POLYGON') return 'MATIC-AMOY';
       if (net === 'AVALANCHE') return 'AVAX-FUJI';
       if (net === 'ARBITRUM') return 'ARB-SEPOLIA';
