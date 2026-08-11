@@ -34,8 +34,9 @@ export class WalletsController {
     @Body('toAddress') toAddress: string,
     @Body('amount') amount: number,
     @Body('network') network: string,
-    @Body('pin') pin: string, // PIN is validated by PinGuard
+    @Body('destinationNetwork') destinationNetwork?: string,
+    @Body('pin') pin?: string, // PIN is validated by PinGuard
   ) {
-    return this.walletsService.sendCrypto(user.id, toAddress, amount, network);
+    return this.walletsService.sendCrypto(user.id, toAddress, amount, network, destinationNetwork);
   }
 }

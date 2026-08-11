@@ -196,14 +196,15 @@ export const walletAPI = {
       }
     ),
 
-  send: (payload: { address: string; amount: number; network: string; pin: string }) =>
+  send: (payload: { address: string; amount: number; network: string; pin: string; destinationNetwork?: string }) =>
     tryWithMock(
       () => apiClient.post('/wallets/send', {
         toAddress: payload.address,
         amount: payload.amount,
         network: payload.network,
+        destinationNetwork: payload.destinationNetwork,
         pin: payload.pin,
-      }).then(r => r.data),
+      }, { timeout: 180000 }).then(r => r.data),
       () => ({
         success: true,
         reference: 'TX-' + Math.random().toString(36).substring(2, 9).toUpperCase(),

@@ -15,10 +15,13 @@ import { useSearchParams } from 'next/navigation'
 const sendSchema = z.object({
   address: z.string().min(3, 'Invalid recipient handle or address'),
   network: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'SUREX_TAG']),
+  destinationNetwork: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA']).optional(),
   amount: z.number().positive('Amount must be positive')
 })
 
 type SendFormValues = z.infer<typeof sendSchema>
+
+const CCTP_DESTINATION_NETWORKS = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA'] as const
 
 export default function SendPage() {
   const { variant, colors } = useTheme()
@@ -41,12 +44,12 @@ export default function SendPage() {
 
   const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<SendFormValues>({
     resolver: zodResolver(sendSchema),
-    defaultValues: { network: sendMode === 'TAG' ? 'SUREX_TAG' : 'POLYGON' }
+    defaultValues: { network: sendMode === 'TAG' ? 'SUREX_TAG' : 'POLYGON', destinationNetwork: 'POLYGON' }
   })
 
   const networkFee = sendMode === 'TAG' ? 0.0 : 1.0
 
-  const onSubmitStep1 = (data: { address: string; network: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA'|'BSC'|'BEP20'|'SUREX_TAG' }) => {
+  const onSubmitStep1 = (data: { address: string; network: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA'|'BSC'|'BEP20'|'SUREX_TAG'; destinationNetwork?: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA' }) => {
     setFormData(prev => ({ ...prev, ...data }))
     setStep(2)
   }
@@ -84,6 +87,7 @@ export default function SendPage() {
         address: formData.address!,
         amount: formData.amount!,
         network: formData.network === 'SUREX_TAG' ? 'TRC20' : formData.network!,
+        destinationNetwork: formData.destinationNetwork || undefined,
         pin: finalPin
       })
       setIsSuccess(true)
@@ -169,7 +173,12 @@ export default function SendPage() {
                         <button
                           key={net}
                           type="button"
-                          onClick={() => setValue('network', net)}
+                          onClick={() => {
+                            setValue('network', net)
+                            if (net === 'ARC' && !watch('destinationNetwork')) {
+                              setValue('destinationNetwork', 'POLYGON')
+                            }
+                          }}
                           className={`p-3 rounded-xl border text-xs font-bold transition-all ${
                             watch('network') === net 
                               ? 'bg-white/10 text-white border-blue-500/50 shadow-md' 
@@ -181,6 +190,33 @@ export default function SendPage() {
                       ))}
                     </div>
                   </div>
+
+                  {watch('network') === 'ARC' && (
+                    <div>
+                      <label className="block text-xs font-semibold text-[#94A3B8] mb-2">
+                        Destination Network (CCTP)
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {CCTP_DESTINATION_NETWORKS.map((net) => (
+                          <button
+                            key={net}
+                            type="button"
+                            onClick={() => setValue('destinationNetwork', net)}
+                            className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                              watch('destinationNetwork') === net 
+                                ? 'bg-white/10 text-white border-emerald-500/50 shadow-md' 
+                                : 'bg-white/[0.02] border-white/10 text-[#94A3B8] hover:bg-white/5'
+                            }`}
+                          >
+                            {net}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-[#64748B] mt-1.5">
+                        USDC on Arc is burned and minted natively on the destination chain via Circle CCTP.
+                      </p>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-[#94A3B8] mb-2">Recipient Wallet Address</label>
@@ -270,6 +306,12 @@ export default function SendPage() {
                 <span className="text-[#94A3B8]">Destination Type</span>
                 <span className="text-white font-bold">{sendMode === 'TAG' ? 'SureX Tag' : formData.network}</span>
               </div>
+              {formData.network === 'ARC' && (
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-[#94A3B8]">Destination Chain</span>
+                  <span className="text-white font-bold">{formData.destinationNetwork} (CCTP)</span>
+                </div>
+              )}
               <div className="flex justify-between py-1 border-b border-white/5">
                 <span className="text-[#94A3B8]">Recipient</span>
                 <span className="text-white font-mono font-bold truncate max-w-[180px]">{sendMode === 'TAG' ? `@${formData.address}` : formData.address}</span>

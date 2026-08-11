@@ -11,6 +11,8 @@
     "prestart:prod": "prisma db push"
   },
   "dependencies": {
+    "@circle-fin/adapter-circle-wallets": "^1.6.0",
+    "@circle-fin/bridge-kit": "^1.13.0",
     "@google/generative-ai": "^0.14.0",
     "@nestjs/bull": "^10.1.1",
     "@nestjs/common": "^10.0.0",

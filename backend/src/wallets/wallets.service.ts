@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
+import { CctpService } from './cctp.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
@@ -17,6 +18,7 @@ export class WalletsService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private transactionsService: TransactionsService,
+    private cctpService: CctpService,
   ) {
     this.apiKey = this.configService.get<string>('app.circle.apiKey') || '';
     this.entitySecret = this.configService.get<string>('app.circle.entitySecret');
@@ -260,21 +262,29 @@ export class WalletsService {
     return { network: walletAddress.network, address: walletAddress.address };
   }
 
-  async sendCrypto(userId: string, toAddress: string, amount: number, network: string) {
+  async sendCrypto(userId: string, toAddress: string, amount: number, network: string, destinationNetwork?: string) {
     if (amount <= 0) throw new BadRequestException('Amount must be greater than 0');
 
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+
+    const net = network.toUpperCase();
+
+    // Native USDC on Arc is tracked separately; cross-chain sends from Arc use CCTP
+    if (net === 'ARC') {
+      return this.sendCrossChainFromArc(userId, wallet, toAddress, amount, destinationNetwork);
+    }
+
     if (wallet.usdtBalance < amount) {
       throw new BadRequestException('Insufficient balance');
     }
 
     const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20'];
-    if (!validNetworks.includes(network.toUpperCase())) {
+    if (!validNetworks.includes(net)) {
       throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20');
     }
 
     const sourceAddressRecord = await this.prisma.walletAddress.findFirst({
-      where: { walletId: wallet.id, network: network.toUpperCase() }
+      where: { walletId: wallet.id, network: net }
     });
 
     if (!sourceAddressRecord) {
@@ -379,5 +389,72 @@ export class WalletsService {
       { id: 'ARBITRUM', name: 'Arbitrum', fee: 0.0 },
       { id: 'ETHEREUM', name: 'Ethereum', fee: 0.0 }
     ];
+  }
+
+  private async sendCrossChainFromArc(
+    userId: string,
+    wallet: any,
+    toAddress: string,
+    amount: number,
+    destinationNetwork?: string,
+  ) {
+    if (!destinationNetwork) {
+      throw new BadRequestException('Destination network is required when sending from Arc.');
+    }
+    const destNet = destinationNetwork.toUpperCase();
+    if (destNet === 'ARC') {
+      throw new BadRequestException('Same-chain Arc transfers are not supported. Choose a destination network such as POLYGON, BASE, OPTIMISM, SOLANA.');
+    }
+
+    const destChain = this.cctpService.getDestinationChain(destNet);
+
+    if (wallet.usdcBalance < amount) {
+      throw new BadRequestException('Insufficient USDC balance on Arc.');
+    }
+
+    const sourceAddressRecord = await this.prisma.walletAddress.findFirst({
+      where: { walletId: wallet.id, network: 'ARC' }
+    });
+    if (!sourceAddressRecord) {
+      throw new BadRequestException('Please generate an Arc deposit address first.');
+    }
+
+    const reference = `TX-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+
+    const result = await this.cctpService.bridgeFromArc({
+      sourceAddress: sourceAddressRecord.address,
+      destChain,
+      recipientAddress: toAddress,
+      amount,
+    });
+
+    await this.prisma.$transaction(async (prisma) => {
+      await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: {
+          usdcBalance: { decrement: amount },
+          lockedBalance: { increment: amount }
+        }
+      });
+
+      await this.transactionsService.createTransaction(prisma, {
+        userId,
+        type: 'SEND',
+        status: 'PENDING',
+        amount,
+        fee: 0,
+        currency: 'USDC',
+        reference,
+        metadata: {
+          toAddress,
+          network: 'ARC',
+          destinationNetwork: destNet,
+          cctp: true,
+          cctpState: result.state,
+        }
+      });
+    });
+
+    return { message: 'Cross-chain transfer initiated successfully via CCTP' };
   }
 }
