@@ -112,10 +112,10 @@ export default function ReceivePage() {
 
   const activeNet = NETWORKS.find(n => n.id === network)!
 
-  const { data: addressData, isLoading } = useQuery({
+  const { data: addressData, isLoading, isError, error } = useQuery({
     queryKey: ['depositAddress', network],
     queryFn: () => walletAPI.getDepositAddress(network),
-    initialData: { address: network === 'SOLANA' ? 'HN7cABviJ373u4AeeaoeeNC6YtUt1qq1C9Xf6S7vwLdi' : '0x8a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b' }
+    retry: false
   })
 
   const address = addressData?.address || ''
@@ -182,75 +182,89 @@ export default function ReceivePage() {
       </div>
 
       {/* QR Card */}
-      <motion.div
-        key={network}
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.2 }}
-        className="glass-card p-5 rounded-3xl flex flex-col items-center gap-4 border border-white/10"
-      >
-        {/* Chain info banner */}
-        <div className="flex items-center gap-3 w-full p-3 rounded-2xl bg-white/[0.03] border border-white/8">
-          <activeNet.Logo size={32} />
-          <div>
-            <p className="text-sm font-bold text-white">{activeNet.label} Network</p>
-            <p className="text-xs text-[#64748B]">{activeNet.sublabel}</p>
-          </div>
-          <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] text-emerald-400 font-bold">Active</span>
-          </div>
+      {isError ? (
+        <div className="flex flex-col items-center justify-center p-6 text-center glass-card border border-red-500/20 bg-red-500/[0.02] rounded-3xl gap-3">
+          <AlertTriangle className="w-10 h-10 text-red-500" />
+          <h3 className="text-sm font-bold text-white">Address Generation Failed</h3>
+          <p className="text-xs text-[#94A3B8] max-w-xs leading-relaxed">
+            {error instanceof Error ? error.message : 'Circle Web3 wallet creation failed for this network. Please ensure this chain is enabled in your Developer Console.'}
+          </p>
         </div>
-
-        {/* QR Code with logo center */}
-        <div className="p-3 bg-white rounded-2xl shadow-xl relative flex items-center justify-center">
-          {isLoading ? (
-            <div className="w-[200px] h-[200px] bg-gray-200 animate-pulse rounded-xl" />
-          ) : qrCodeDataUrl ? (
-            <>
-              <img src={qrCodeDataUrl} alt="QR Code" className="w-[200px] h-[200px] rounded-xl" />
-              {/* Centered chain logo overlay */}
-              <div className="absolute flex items-center justify-center w-12 h-12 rounded-xl bg-white shadow-lg border-2 border-gray-100">
-                <activeNet.Logo size={30} />
+      ) : (
+        <>
+          <motion.div
+            key={network}
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2 }}
+            className="glass-card p-5 rounded-3xl flex flex-col items-center gap-4 border border-white/10"
+          >
+            {/* Chain info banner */}
+            <div className="flex items-center gap-3 w-full p-3 rounded-2xl bg-white/[0.03] border border-white/8">
+              <activeNet.Logo size={32} />
+              <div>
+                <p className="text-sm font-bold text-white">{activeNet.label} Network</p>
+                <p className="text-xs text-[#64748B]">{activeNet.sublabel}</p>
               </div>
-            </>
-          ) : (
-            <div className="w-[200px] h-[200px] bg-gray-100 rounded-xl flex items-center justify-center">
-              <span className="text-gray-400 text-xs">Generating...</span>
+              <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[10px] text-emerald-400 font-bold">Active</span>
+              </div>
             </div>
-          )}
-        </div>
 
-        <p className="text-[11px] text-[#64748B] text-center font-medium">
-          Scan QR code or copy address below
-        </p>
-      </motion.div>
+            {/* QR Code with logo center */}
+            <div className="p-3 bg-white rounded-2xl shadow-xl relative flex items-center justify-center">
+              {isLoading ? (
+                <div className="w-[200px] h-[200px] bg-gray-200 animate-pulse rounded-xl" />
+              ) : qrCodeDataUrl ? (
+                <>
+                  <img src={qrCodeDataUrl} alt="QR Code" className="w-[200px] h-[200px] rounded-xl" />
+                  {/* Centered chain logo overlay */}
+                  <div className="absolute flex items-center justify-center w-12 h-12 rounded-xl bg-white shadow-lg border-2 border-gray-100">
+                    <activeNet.Logo size={30} />
+                  </div>
+                </>
+              ) : (
+                <div className="w-[200px] h-[200px] bg-gray-100 rounded-xl flex items-center justify-center">
+                  <span className="text-gray-400 text-xs">Generating...</span>
+                </div>
+              )}
+            </div>
 
-      {/* Address Card */}
-      <div className="glass-card p-4 rounded-2xl border border-white/10">
-        <p className="text-[10px] text-[#64748B] uppercase tracking-wider mb-2 font-bold">{network} Deposit Address</p>
-        <p className="text-xs font-mono text-white break-all leading-relaxed bg-white/[0.03] p-3 rounded-xl border border-white/8 select-all">
-          {isLoading ? 'Loading address...' : address}
-        </p>
-      </div>
+            <p className="text-[11px] text-[#64748B] text-center font-medium">
+              Scan QR code or copy address below
+            </p>
+          </motion.div>
 
-      {/* Action Buttons */}
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          onClick={copyToClipboard}
-          className="py-3.5 rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white flex items-center justify-center gap-2 text-sm font-semibold transition-all active:scale-95"
-        >
-          {isCopied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-          {isCopied ? 'Copied!' : 'Copy Address'}
-        </button>
-        <button
-          onClick={handleShare}
-          className="py-3.5 rounded-2xl text-black flex items-center justify-center gap-2 text-sm font-bold transition-all active:scale-95 shadow-lg"
-          style={{ background: colors.gradientBg }}
-        >
-          <Share2 className="w-4 h-4" /> Share Address
-        </button>
-      </div>
+          {/* Address Card */}
+          <div className="glass-card p-4 rounded-2xl border border-white/10">
+            <p className="text-[10px] text-[#64748B] uppercase tracking-wider mb-2 font-bold">{network} Deposit Address</p>
+            <p className="text-xs font-mono text-white break-all leading-relaxed bg-white/[0.03] p-3 rounded-xl border border-white/8 select-all">
+              {isLoading ? 'Loading address...' : address}
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={copyToClipboard}
+              disabled={isLoading || !address}
+              className="py-3.5 rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white flex items-center justify-center gap-2 text-sm font-semibold transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+            >
+              {isCopied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              {isCopied ? 'Copied!' : 'Copy Address'}
+            </button>
+            <button
+              onClick={handleShare}
+              disabled={isLoading || !address}
+              className="py-3.5 rounded-2xl text-black flex items-center justify-center gap-2 text-sm font-bold transition-all active:scale-95 shadow-lg disabled:opacity-50 disabled:pointer-events-none"
+              style={{ background: colors.gradientBg }}
+            >
+              <Share2 className="w-4 h-4" /> Share Address
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Warning */}
       <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-red-500/8 border border-red-500/20">

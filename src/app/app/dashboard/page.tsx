@@ -101,8 +101,7 @@ export default function DashboardPage() {
   const { data: balanceData, isLoading: isLoadingBalance } = useQuery({
     queryKey: ['balance'],
     queryFn: walletAPI.getBalance,
-    // USD wallet & NGN wallet are SEPARATE — NGN only grows from local deposits, never auto-converts
-    initialData: { usdBalance: 2450.75, ngnBalance: 185000.00, lockedBalance: 0 }
+    retry: false
   })
 
   const copyVBA = () => {
@@ -115,13 +114,7 @@ export default function DashboardPage() {
   const { data: txData, isLoading: isLoadingTx } = useQuery({
     queryKey: ['recentTransactions'],
     queryFn: () => transactionAPI.getHistory({ limit: 5 }),
-    initialData: {
-      transactions: [
-        { id: '1', type: 'receive', amount: 128.50, currency: 'USD', status: 'completed', date: new Date().toISOString() },
-        { id: '2', type: 'send', amount: 50.00, currency: 'USD', status: 'completed', date: new Date(Date.now() - 3600000).toISOString() },
-        { id: '3', type: 'convert', amount: 200.00, currency: 'USD', status: 'completed', date: new Date(Date.now() - 86400000).toISOString() }
-      ]
-    }
+    retry: false
   })
 
   const list = Array.isArray(txData) ? txData : (txData?.transactions || [])

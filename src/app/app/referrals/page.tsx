@@ -34,7 +34,7 @@ export default function ReferralsPage() {
   const { data: stats } = useQuery({
     queryKey: ['referral-stats'],
     queryFn: referralAPI.getStats,
-    initialData: { totalReferrals: 12, activeReferrals: 9, totalEarned: 128.50, thisMonthEarned: 34.20, referralCode: 'ALEX928' }
+    retry: false
   })
 
   const { data: referrals } = useQuery({
