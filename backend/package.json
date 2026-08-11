@@ -7,8 +7,8 @@
     "start": "node dist/main",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
-    "prestart": "prisma db push",
-    "prestart:prod": "prisma db push"
+    "prestart": "prisma db push || echo \"[prestart] prisma db push failed; continuing anyway\"",
+    "prestart:prod": "prisma db push || echo \"[prestart] prisma db push failed; continuing anyway\""
   },
   "dependencies": {
     "@circle-fin/adapter-circle-wallets": "^1.6.0",

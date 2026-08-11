@@ -1,0 +1,7 @@
+node_modules
+dist
+err.log
+out.log
+*.md
+.env
+.env.local
