@@ -53,5 +53,10 @@ export default registerAs('app', () => ({
     entitySecret: process.env.CIRCLE_ENTITY_SECRET,
     walletSetId: process.env.CIRCLE_WALLET_SET_ID,
     webhookSecret: process.env.CIRCLE_WEBHOOK_SECRET,
+  },
+  arc: {
+    rpcUrl: process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network',
+    chainId: parseInt(process.env.ARC_CHAIN_ID || '5042002', 10),
+    usdcContractAddress: process.env.ARC_USDC_CONTRACT_ADDRESS || '0x3600000000000000000000000000000000000000'
   }
 }));

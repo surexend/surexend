@@ -169,58 +169,91 @@ export class WalletsService {
     });
 
     if (!walletAddress) {
-      try {
-        const pubKeyResponse = await axios.get(`${this.baseUrl}/v1/w3s/config/entity/publicKey`, {
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-            accept: 'application/json',
-          },
-        });
-        const publicKeyPem = pubKeyResponse.data.data.publicKey;
-        const ciphertext = this.encryptSecret(this.entitySecret, publicKeyPem);
+      if (network.toUpperCase() === 'ARC') {
+        try {
+          // Find any existing EVM address for this wallet
+          const evmAddressRecord = await this.prisma.walletAddress.findFirst({
+            where: {
+              walletId: wallet.id,
+              network: { in: ['ETHEREUM', 'POLYGON', 'ARBITRUM', 'BASE', 'OPTIMISM', 'BSC', 'BEP20', 'AVALANCHE'] }
+            }
+          });
 
-        const blockchain = this.getBlockchainName(network);
+          let address = '';
+          if (evmAddressRecord) {
+            address = evmAddressRecord.address;
+          } else {
+            // Generate a standard EVM wallet on Circle (using ETHEREUM as the baseline)
+            const ethWalletRecord = await this.getDepositAddress(userId, 'ETHEREUM');
+            address = ethWalletRecord.address;
+          }
 
-        const createResponse = await axios.post(
-          `${this.baseUrl}/v1/w3s/developer/wallets`,
-          {
-            idempotencyKey: crypto.randomUUID(),
-            blockchains: [blockchain],
-            entitySecretCiphertext: ciphertext,
-            walletSetId: this.walletSetId,
-            metadata: [
-              {
-                name: `User ${userId.substring(0, 8)} - ${network}`,
-                refId: userId
-              }
-            ]
-          },
-          {
+          // Save Arc address record mapping to this EVM address
+          walletAddress = await this.prisma.walletAddress.create({
+            data: {
+              walletId: wallet.id,
+              network: 'ARC',
+              address
+            }
+          });
+        } catch (err: any) {
+          this.logger.error('Error generating mapped Arc wallet:', err.message);
+          throw new BadRequestException('Failed to resolve EVM address for Arc network');
+        }
+      } else {
+        try {
+          const pubKeyResponse = await axios.get(`${this.baseUrl}/v1/w3s/config/entity/publicKey`, {
             headers: {
               Authorization: `Bearer ${this.apiKey}`,
-              'Content-Type': 'application/json',
               accept: 'application/json',
-            }
-          }
-        );
+            },
+          });
+          const publicKeyPem = pubKeyResponse.data.data.publicKey;
+          const ciphertext = this.encryptSecret(this.entitySecret, publicKeyPem);
 
-        const circleWallet = createResponse.data.data.wallets[0];
-        
-        walletAddress = await this.prisma.walletAddress.create({
-          data: {
-            walletId: wallet.id,
-            network: network.toUpperCase(),
-            address: circleWallet.address,
-          }
-        });
-      } catch (err) {
-        this.logger.error('Error generating Circle wallet:', err.response?.data || err.message);
-        const details = err.response?.data?.errors
-          ? err.response.data.errors.map((e: any) => e.message || e.location).join('; ')
-          : '';
-        throw new BadRequestException(
-          `${err.response?.data?.message || 'Failed to generate deposit address via Circle'}${details ? `: ${details}` : ''}`
-        );
+          const blockchain = this.getBlockchainName(network);
+
+          const createResponse = await axios.post(
+            `${this.baseUrl}/v1/w3s/developer/wallets`,
+            {
+              idempotencyKey: crypto.randomUUID(),
+              blockchains: [blockchain],
+              entitySecretCiphertext: ciphertext,
+              walletSetId: this.walletSetId,
+              metadata: [
+                {
+                  name: `User ${userId.substring(0, 8)} - ${network}`,
+                  refId: userId
+                }
+              ]
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${this.apiKey}`,
+                'Content-Type': 'application/json',
+                accept: 'application/json',
+              }
+            }
+          );
+
+          const circleWallet = createResponse.data.data.wallets[0];
+          
+          walletAddress = await this.prisma.walletAddress.create({
+            data: {
+              walletId: wallet.id,
+              network: network.toUpperCase(),
+              address: circleWallet.address,
+            }
+          });
+        } catch (err: any) {
+          this.logger.error('Error generating Circle wallet:', err.response?.data || err.message);
+          const details = err.response?.data?.errors
+            ? err.response.data.errors.map((e: any) => e.message || e.location).join('; ')
+            : '';
+          throw new BadRequestException(
+            `${err.response?.data?.message || 'Failed to generate deposit address via Circle'}${details ? `: ${details}` : ''}`
+          );
+        }
       }
     }
 
