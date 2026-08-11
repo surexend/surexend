@@ -14,7 +14,7 @@ import { useSearchParams } from 'next/navigation'
 
 const sendSchema = z.object({
   address: z.string().min(3, 'Invalid recipient handle or address'),
-  network: z.enum(['TRC20', 'BEP20', 'POLYGON', 'SUREX_TAG']),
+  network: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'SUREX_TAG']),
   amount: z.number().positive('Amount must be positive')
 })
 
@@ -41,12 +41,12 @@ export default function SendPage() {
 
   const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<SendFormValues>({
     resolver: zodResolver(sendSchema),
-    defaultValues: { network: sendMode === 'TAG' ? 'SUREX_TAG' : 'TRC20' }
+    defaultValues: { network: sendMode === 'TAG' ? 'SUREX_TAG' : 'POLYGON' }
   })
 
   const networkFee = sendMode === 'TAG' ? 0.0 : 1.0
 
-  const onSubmitStep1 = (data: { address: string; network: 'TRC20'|'BEP20'|'POLYGON'|'SUREX_TAG' }) => {
+  const onSubmitStep1 = (data: { address: string; network: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA'|'BSC'|'BEP20'|'SUREX_TAG' }) => {
     setFormData(prev => ({ ...prev, ...data }))
     setStep(2)
   }
@@ -116,7 +116,7 @@ export default function SendPage() {
             <div className="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-white/[0.03] border border-white/10">
               <button
                 type="button"
-                onClick={() => { setSendMode('CRYPTO'); setValue('network', 'TRC20') }}
+                onClick={() => { setSendMode('CRYPTO'); setValue('network', 'POLYGON') }}
                 className={`py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                   sendMode === 'CRYPTO' ? 'bg-white/10 text-white border border-white/15 shadow-md' : 'text-[#94A3B8] hover:text-white'
                 }`}
@@ -164,8 +164,8 @@ export default function SendPage() {
                 <>
                   <div>
                     <label className="block text-xs font-semibold text-[#94A3B8] mb-2">Network Protocol</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(['TRC20', 'BEP20', 'POLYGON'] as const).map((net) => (
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['ETHEREUM', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC'] as const).map((net) => (
                         <button
                           key={net}
                           type="button"
@@ -187,7 +187,7 @@ export default function SendPage() {
                     <input 
                       {...register('address')}
                       type="text"
-                      placeholder="Paste TRC20 / BEP20 / Polygon address..."
+                      placeholder="Paste address (Ethereum, Polygon, Solana, BSC, Base...)"
                       className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.02] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-blue-500 transition-colors"
                     />
                     {errors.address && <p className="text-red-400 text-xs mt-1">{errors.address.message}</p>}

@@ -9,52 +9,80 @@ import { walletAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import { useQuery } from '@tanstack/react-query'
 
-// Real chain SVG logos as inline components
-function TronLogo({ size = 32 }: { size?: number }) {
+function EthereumLogo({ size = 32 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#FF0013" />
-      <path d="M73 36L50 20L27 36V64L50 80L73 64V36Z" fill="white" fillOpacity="0.15" />
-      <path d="M50 20L73 36L50 52L27 36L50 20Z" fill="white" />
-      <path d="M50 52V80L27 64V36L50 52Z" fill="white" fillOpacity="0.6" />
-      <path d="M50 52V80L73 64V36L50 52Z" fill="white" fillOpacity="0.8" />
+      <circle cx="50" cy="50" r="50" fill="#627EEA" />
+      <path d="M50 18v29.5l25.8-11.7L50 18z" fill="white" fillOpacity="0.8" />
+      <path d="M50 18L24.2 35.8 50 47.5V18z" fill="white" />
+      <path d="M50 79v-20L75.8 47.3 50 79z" fill="white" fillOpacity="0.8" />
+      <path d="M50 79L24.2 47.3 50 59v20z" fill="white" />
+      <path d="M50 59v-11.5l25.8-11.7L50 59z" fill="white" fillOpacity="0.5" />
+      <path d="M50 59L24.2 35.8 50 47.5V59z" fill="white" fillOpacity="0.6" />
     </svg>
   )
 }
 
-function BNBLogo({ size = 32 }: { size?: number }) {
+function ArbitrumLogo({ size = 32 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#F3BA2F" />
-      <path d="M32 50L50 32L68 50L50 68L32 50Z" fill="white" />
-      <path d="M50 20L56 26L50 32L44 26L50 20Z" fill="white" />
-      <path d="M50 68L56 74L50 80L44 74L50 68Z" fill="white" />
-      <path d="M20 50L26 44L32 50L26 56L20 50Z" fill="white" />
-      <path d="M68 50L74 44L80 50L74 56L68 50Z" fill="white" />
+      <circle cx="50" cy="50" r="50" fill="#28A0F0" />
+      <path d="M50 20L80 70H20L50 20Z" fill="white" fillOpacity="0.2" />
+      <path d="M50 35L70 68H30L50 35Z" fill="white" />
     </svg>
   )
 }
 
-function PolygonLogo({ size = 32 }: { size?: number }) {
+function AvalancheLogo({ size = 32 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#8247E5" />
-      <path d="M63 37L50 30L37 37V51L50 58L63 51V37Z" fill="white" />
-      <path d="M37 51L24 44V58L37 65V51Z" fill="white" fillOpacity="0.7" />
-      <path d="M63 51L76 44V58L63 65V51Z" fill="white" fillOpacity="0.7" />
+      <circle cx="50" cy="50" r="50" fill="#E84142" />
+      <path d="M50 22L78 72H60L50 54L40 72H22L50 22Z" fill="white" />
+    </svg>
+  )
+}
+
+function BaseLogo({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="50" fill="#0052FF" />
+      <circle cx="50" cy="50" r="22" stroke="white" strokeWidth="8" />
+    </svg>
+  )
+}
+
+function OptimismLogo({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="50" fill="#FF0420" />
+      <path d="M35 50a15 15 0 0 1 30 0v5a15 15 0 0 1-30 0v-5z" stroke="white" strokeWidth="8" />
+    </svg>
+  )
+}
+
+function SolanaLogo({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="50" fill="#14F195" />
+      <path d="M72 32H28l-8 8h44l8-8zm0 28H28l-8 8h44l8-8zM28 46h44l8 8H36l-8-8z" fill="white" />
     </svg>
   )
 }
 
 const NETWORKS = [
-  { id: 'TRC20' as const, label: 'TRC20', sublabel: 'Tron Network', color: '#FF0013', Logo: TronLogo },
-  { id: 'BEP20' as const, label: 'BEP20', sublabel: 'BNB Chain', color: '#F3BA2F', Logo: BNBLogo },
-  { id: 'POLYGON' as const, label: 'Polygon', sublabel: 'MATIC Network', color: '#8247E5', Logo: PolygonLogo },
+  { id: 'ETHEREUM' as const, label: 'Ethereum', sublabel: 'ERC20 Network', color: '#627EEA', Logo: EthereumLogo },
+  { id: 'POLYGON' as const, label: 'Polygon', sublabel: 'Amoy/POS Network', color: '#8247E5', Logo: PolygonLogo },
+  { id: 'AVALANCHE' as const, label: 'Avalanche', sublabel: 'Fuji/C-Chain', color: '#E84142', Logo: AvalancheLogo },
+  { id: 'ARBITRUM' as const, label: 'Arbitrum', sublabel: 'Sepolia/One', color: '#28A0F0', Logo: ArbitrumLogo },
+  { id: 'BASE' as const, label: 'Base', sublabel: 'Sepolia/L2', color: '#0052FF', Logo: BaseLogo },
+  { id: 'OPTIMISM' as const, label: 'Optimism', sublabel: 'Sepolia/L2', color: '#FF0420', Logo: OptimismLogo },
+  { id: 'SOLANA' as const, label: 'Solana', sublabel: 'Devnet/Mainnet', color: '#14F195', Logo: SolanaLogo },
+  { id: 'BSC' as const, label: 'BSC', sublabel: 'BNB Smart Chain', color: '#F3BA2F', Logo: BNBLogo },
 ]
 
 export default function ReceivePage() {
   const { variant, colors } = useTheme()
-  const [network, setNetwork] = useState<'TRC20' | 'BEP20' | 'POLYGON'>('TRC20')
+  const [network, setNetwork] = useState<'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC'>('POLYGON')
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
   const [isCopied, setIsCopied] = useState(false)
 
@@ -63,7 +91,7 @@ export default function ReceivePage() {
   const { data: addressData, isLoading } = useQuery({
     queryKey: ['depositAddress', network],
     queryFn: () => walletAPI.getDepositAddress(network),
-    initialData: { address: network === 'TRC20' ? 'TQn1Pz8KtqJ9mYxNFv3bR7cW2AsDe4fGH' : network === 'BEP20' ? '0x4f9a2b3c8d1e5f7a9b0c2d4e6f8a0b1c2d3e4f5a' : '0x8a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b' }
+    initialData: { address: network === 'SOLANA' ? 'HN7cABviJ373u4AeeaoeeNC6YtUt1qq1C9Xf6S7vwLdi' : '0x8a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b' }
   })
 
   const address = addressData?.address || ''
@@ -111,7 +139,7 @@ export default function ReceivePage() {
       </div>
 
       {/* Network Selector */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {NETWORKS.map((net) => (
           <button
             key={net.id}

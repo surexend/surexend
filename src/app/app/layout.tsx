@@ -34,7 +34,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const [notifications, setNotifications] = useState([
     { id: 1, title: 'KYC Tier 2 Approved! 🎉', desc: 'Your identity has been verified. Daily limits increased to $50,000.', time: '10m ago', isRead: false, type: 'kyc' },
-    { id: 2, title: 'Deposit Received', desc: 'Successfully received +128.50 USD via TRC20.', time: '1h ago', isRead: false, type: 'deposit' },
+    { id: 2, title: 'Deposit Received', desc: 'Successfully received +128.50 USD via Polygon.', time: '1h ago', isRead: false, type: 'deposit' },
     { id: 3, title: 'Security Alert', desc: 'New login detected from Mobile Safari (Lagos, Nigeria).', time: '5h ago', isRead: true, type: 'security' },
   ])
 

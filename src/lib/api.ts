@@ -173,19 +173,25 @@ export const walletAPI = {
       () => ({ usdt: 2450.75, fiat: 3676125, rate: 1500, locked: 0, pending: 0 })
     ),
 
-  getDepositAddress: (network: 'TRC20' | 'BEP20' | 'POLYGON') =>
+  getDepositAddress: (network: 'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC' | 'BEP20') =>
     tryWithMock(
       () => apiClient.get(`/wallets/deposit-address?network=${network}`).then(r => r.data),
       () => {
         const addresses: Record<string, string> = {
-          TRC20: 'TYvj6H3xKk89Nq4P5W8zM1A2bC3dE4fG5h',
-          BEP20: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
           POLYGON: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
+          AVALANCHE: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
+          ARBITRUM: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
+          ETHEREUM: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
+          BASE: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
+          OPTIMISM: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
+          SOLANA: 'HN7cABviJ373u4AeeaoeeNC6YtUt1qq1C9Xf6S7vwLdi',
+          BSC: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
+          BEP20: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
         }
         return {
-          address: addresses[network] || addresses.TRC20,
+          address: addresses[network] || addresses.POLYGON,
           network,
-          qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${addresses[network] || addresses.TRC20}`
+          qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${addresses[network] || addresses.POLYGON}`
         }
       }
     ),
@@ -213,9 +219,14 @@ export const walletAPI = {
     tryWithMock(
       () => apiClient.get('/wallets/networks').then(r => r.data),
       () => [
-        { id: 'TRC20', name: 'TRON (TRC20)', fee: '1 USDT', minDeposit: '10 USDT', speed: '~1 minute' },
-        { id: 'BEP20', name: 'BNB Smart Chain (BEP20)', fee: '0.5 USDT', minDeposit: '5 USDT', speed: '~30 seconds' },
-        { id: 'POLYGON', name: 'Polygon POS (POLYGON)', fee: '0.2 USDT', minDeposit: '2 USDT', speed: '~15 seconds' },
+        { id: 'ETHEREUM', name: 'Ethereum (ERC20)', fee: '2.5 USDT', minDeposit: '10 USDT', speed: '~1 minute' },
+        { id: 'POLYGON', name: 'Polygon (Amoy/POS)', fee: '0.1 USDT', minDeposit: '1 USDT', speed: '~10 seconds' },
+        { id: 'AVALANCHE', name: 'Avalanche C-Chain', fee: '0.2 USDT', minDeposit: '1 USDT', speed: '~5 seconds' },
+        { id: 'ARBITRUM', name: 'Arbitrum One', fee: '0.15 USDT', minDeposit: '1 USDT', speed: '~10 seconds' },
+        { id: 'BASE', name: 'Base', fee: '0.1 USDT', minDeposit: '1 USDT', speed: '~5 seconds' },
+        { id: 'OPTIMISM', name: 'Optimism', fee: '0.1 USDT', minDeposit: '1 USDT', speed: '~5 seconds' },
+        { id: 'SOLANA', name: 'Solana', fee: '0.05 USDT', minDeposit: '1 USDT', speed: '~10 seconds' },
+        { id: 'BSC', name: 'BNB Smart Chain (BEP20)', fee: '0.2 USDT', minDeposit: '1 USDT', speed: '~15 seconds' },
       ]
     ),
 }

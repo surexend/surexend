@@ -709,7 +709,7 @@ export default function DashboardPage() {
                         Send to Crypto Wallet
                       </h4>
                       <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
-                        Transfer USDT or USDC to TRC20, BEP20, or Polygon addresses
+                        Transfer stablecoins across Ethereum, Polygon, BSC, Base, and other chains
                       </p>
                     </div>
                   </div>
@@ -820,7 +820,7 @@ export default function DashboardPage() {
                         Deposit Crypto (USDT / USDC)
                       </h4>
                       <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
-                        Get your deposit wallet address & QR code for TRC20, BEP20, Polygon
+                        Get deposit addresses for Ethereum, Polygon, Solana, BSC, Base, and other chains
                       </p>
                     </div>
                   </div>
