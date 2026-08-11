@@ -204,8 +204,11 @@ export class WalletsService {
         });
       } catch (err) {
         this.logger.error('Error generating Circle wallet:', err.response?.data || err.message);
+        const details = err.response?.data?.errors
+          ? err.response.data.errors.map((e: any) => e.message || e.location).join('; ')
+          : '';
         throw new BadRequestException(
-          err.response?.data?.message || 'Failed to generate deposit address via Circle'
+          `${err.response?.data?.message || 'Failed to generate deposit address via Circle'}${details ? `: ${details}` : ''}`
         );
       }
     }
