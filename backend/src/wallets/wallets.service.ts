@@ -141,7 +141,7 @@ export class WalletsService {
 
   private async getCircleWalletByAddress(address: string) {
     const response = await axios.get(
-      `${this.baseUrl}/v1/w3s/developer/wallets?address=${address}`,
+      `${this.baseUrl}/v1/w3s/wallets?address=${address}`,
       {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
