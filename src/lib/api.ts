@@ -173,7 +173,7 @@ export const walletAPI = {
       () => ({ usdt: 2450.75, fiat: 3676125, rate: 1500, locked: 0, pending: 0 })
     ),
 
-  getDepositAddress: (network: 'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC' | 'BEP20') =>
+  getDepositAddress: (network: 'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC' | 'BEP20' | 'ARC') =>
     tryWithMock(
       () => apiClient.get(`/wallets/deposit-address?network=${network}`).then(r => r.data),
       () => {

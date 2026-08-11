@@ -93,6 +93,16 @@ function PolygonLogo({ size = 32 }: { size?: number }) {
   )
 }
 
+function ArcLogo({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="50" fill="#FF5E00" />
+      <path d="M50 25L75 68H25L50 25Z" stroke="white" strokeWidth="8" strokeLinejoin="round" fill="none" />
+      <circle cx="50" cy="54" r="8" fill="white" />
+    </svg>
+  )
+}
+
 const NETWORKS = [
   { id: 'ETHEREUM' as const, label: 'Ethereum', sublabel: 'ERC20 Network', color: '#627EEA', Logo: EthereumLogo },
   { id: 'POLYGON' as const, label: 'Polygon', sublabel: 'Amoy/POS Network', color: '#8247E5', Logo: PolygonLogo },
@@ -102,11 +112,12 @@ const NETWORKS = [
   { id: 'OPTIMISM' as const, label: 'Optimism', sublabel: 'Sepolia/L2', color: '#FF0420', Logo: OptimismLogo },
   { id: 'SOLANA' as const, label: 'Solana', sublabel: 'Devnet/Mainnet', color: '#14F195', Logo: SolanaLogo },
   { id: 'BSC' as const, label: 'BSC', sublabel: 'BNB Smart Chain', color: '#F3BA2F', Logo: BNBLogo },
+  { id: 'ARC' as const, label: 'Arc', sublabel: 'Arc L1 Network', color: '#FF5E00', Logo: ArcLogo },
 ]
 
 export default function ReceivePage() {
   const { variant, colors } = useTheme()
-  const [network, setNetwork] = useState<'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC'>('POLYGON')
+  const [network, setNetwork] = useState<'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC' | 'ARC'>('POLYGON')
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
   const [isCopied, setIsCopied] = useState(false)
 

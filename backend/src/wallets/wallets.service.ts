@@ -50,6 +50,7 @@ export class WalletsService {
       if (net === 'OPTIMISM') return 'OP-SEPOLIA';
       if (net === 'SOLANA') return 'SOL-DEVNET';
       if (net === 'BSC' || net === 'BEP20') return 'EVM-TESTNET';
+      if (net === 'ARC') return 'ARC-TESTNET';
     } else {
       if (net === 'POLYGON') return 'POLYGON';
       if (net === 'AVALANCHE') return 'AVAX';
@@ -59,6 +60,7 @@ export class WalletsService {
       if (net === 'OPTIMISM') return 'OP';
       if (net === 'SOLANA') return 'SOL';
       if (net === 'BSC' || net === 'BEP20') return 'EVM';
+      if (net === 'ARC') return 'ARC';
     }
     return net;
   }
@@ -152,9 +154,9 @@ export class WalletsService {
   }
 
   async getDepositAddress(userId: string, network: string) {
-    const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20'];
+    const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC'];
     if (!validNetworks.includes(network.toUpperCase())) {
-      throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20');
+      throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20, ARC');
     }
 
     let wallet = await this.prisma.wallet.findUnique({ where: { userId } });

@@ -14,7 +14,7 @@ import { useSearchParams } from 'next/navigation'
 
 const sendSchema = z.object({
   address: z.string().min(3, 'Invalid recipient handle or address'),
-  network: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'SUREX_TAG']),
+  network: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'SUREX_TAG']),
   amount: z.number().positive('Amount must be positive')
 })
 
@@ -165,7 +165,7 @@ export default function SendPage() {
                   <div>
                     <label className="block text-xs font-semibold text-[#94A3B8] mb-2">Network Protocol</label>
                     <div className="grid grid-cols-2 gap-2">
-                      {(['ETHEREUM', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC'] as const).map((net) => (
+                      {(['ETHEREUM', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'ARC'] as const).map((net) => (
                         <button
                           key={net}
                           type="button"
