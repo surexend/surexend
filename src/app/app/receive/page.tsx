@@ -69,6 +69,30 @@ function SolanaLogo({ size = 32 }: { size?: number }) {
   )
 }
 
+function BNBLogo({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="50" fill="#F3BA2F" />
+      <path d="M32 50L50 32L68 50L50 68L32 50Z" fill="white" />
+      <path d="M50 20L56 26L50 32L44 26L50 20Z" fill="white" />
+      <path d="M50 68L56 74L50 80L44 74L50 68Z" fill="white" />
+      <path d="M20 50L26 44L32 50L26 56L20 50Z" fill="white" />
+      <path d="M68 50L74 44L80 50L74 56L68 50Z" fill="white" />
+    </svg>
+  )
+}
+
+function PolygonLogo({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="50" fill="#8247E5" />
+      <path d="M63 37L50 30L37 37V51L50 58L63 51V37Z" fill="white" />
+      <path d="M37 51L24 44V58L37 65V51Z" fill="white" fillOpacity="0.7" />
+      <path d="M63 51L76 44V58L63 65V51Z" fill="white" fillOpacity="0.7" />
+    </svg>
+  )
+}
+
 const NETWORKS = [
   { id: 'ETHEREUM' as const, label: 'Ethereum', sublabel: 'ERC20 Network', color: '#627EEA', Logo: EthereumLogo },
   { id: 'POLYGON' as const, label: 'Polygon', sublabel: 'Amoy/POS Network', color: '#8247E5', Logo: PolygonLogo },
