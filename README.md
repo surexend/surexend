@@ -45,8 +45,11 @@ Create a file called `.env.local` in the `surexend` folder with this content:
 # Brand variant: 'gold' or 'lemon' — determines which logo theme deploys
 NEXT_PUBLIC_BRAND_VARIANT=gold
 
-# Backend API URL (change this when your backend is running)
-NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+# Backend API URL. IMPORTANT: leave this EMPTY (or set to /api/v1) so the
+# frontend calls the same origin and Next.js rewrites proxy /api to BACKEND_URL.
+# Do NOT set it to http://localhost:3001 — on a deployed site that makes the
+# visitor's browser try to reach their own machine.
+# NEXT_PUBLIC_API_URL=/api/v1
 
 # These are set by your backend developer:
 # NEXT_PUBLIC_FIREBASE_CONFIG=...
@@ -90,6 +93,26 @@ public/
     apple-touch-icon.png ← 180x180px for iOS
 ```
 
+
+---
+
+## Deploying (Vercel)
+
+The frontend uses a reverse proxy so the browser only ever talks to the same
+origin (no CORS, no `localhost` issues).
+
+1. Push the repo to GitHub and import it in Vercel.
+2. In Vercel project settings add these environment variables:
+   - `BACKEND_URL` → your deployed backend URL, e.g. `https://surexend-backend.up.railway.app` (no trailing slash)
+   - `NEXT_PUBLIC_BRAND_VARIANT` → `gold` or `lemon`
+   - **Do NOT set `NEXT_PUBLIC_API_URL`.** If it is set to `http://localhost:3001`,
+     the browser will try to reach the visitor's own machine and every API call fails.
+3. Redeploy. Requests to `/api/*` on the frontend are proxied server-side to `BACKEND_URL`.
+
+The backend (NestJS in `backend/`) deploys separately (Railway/Render/Docker)
+and must expose its API at `BACKEND_URL/api/v1`. The backend needs `DATABASE_URL`,
+`DIRECT_URL`, `REDIS_URL`, `JWT_SECRET`, and a `CIRCLE_API_KEY` (prefix `TEST_` for
+sandbox) to enable USDT send/receive.
 
 ---
 

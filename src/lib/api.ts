@@ -2,6 +2,42 @@ import axios, { AxiosError } from 'axios'
 import { withRetry } from './utils'
 import toast from 'react-hot-toast'
 
+// Store access + refresh tokens in localStorage and the access token as a cookie
+function storeTokens(accessToken: string, refreshToken?: string) {
+  localStorage.setItem('surexend_access_token', accessToken)
+  document.cookie = `surexend_access_token=${accessToken}; path=/; max-age=86400;`
+  if (refreshToken) {
+    localStorage.setItem('surexend_refresh_token', refreshToken)
+  }
+}
+
+function clearTokens() {
+  localStorage.removeItem('surexend_access_token')
+  localStorage.removeItem('surexend_refresh_token')
+  document.cookie = 'surexend_access_token=; path=/; max-age=0;'
+}
+
+// Single in-flight refresh promise so concurrent 401s share one refresh call
+let refreshPromise: Promise<string | null> | null = null
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (typeof window === 'undefined') return null
+  const refreshToken = localStorage.getItem('surexend_refresh_token')
+  if (!refreshToken) return null
+
+  try {
+    const response = await apiClient.post('/auth/refresh', { refreshToken })
+    const newAccess = response.data?.accessToken
+    const newRefresh = response.data?.refreshToken
+    if (!newAccess) return null
+    storeTokens(newAccess, newRefresh)
+    return newAccess
+  } catch {
+    clearTokens()
+    return null
+  }
+}
+
 // ── Axios instance with auth interceptor ─────────────────────────────────
 // Base URL defaults to a relative /api/v1 path which Next.js rewrites to the backend
 // (see next.config.ts rewrites). Override with NEXT_PUBLIC_API_URL for a full URL.
@@ -23,16 +59,31 @@ apiClient.interceptors.request.use((config) => {
 // Global error handler - fail loudly, never silently return fake data
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
+    const config = error.config as any
     const message = (error.response?.data as any)?.message || error.message || 'Network error'
-    
+
     // Log the error for debugging
     console.error('[SureXend API Error]:', {
-      url: error.config?.url,
+      url: config?.url,
       status: error.response?.status,
       message
     })
-    
+
+    // On 401, try to refresh the access token once and retry the request
+    const isRefreshCall = config?.url?.includes('/auth/refresh')
+    if (error.response?.status === 401 && config && !config._retried && !isRefreshCall) {
+      config._retried = true
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null })
+      }
+      const newToken = await refreshPromise
+      if (newToken) {
+        config.headers.Authorization = `Bearer ${newToken}`
+        return apiClient(config)
+      }
+    }
+
     // Show user-friendly error toast (only for critical operations, using unique IDs to prevent duplicate spam)
     if (error.response?.status === 401) {
       toast.error('Session expired. Please login again.', { id: 'auth-error' })
@@ -41,7 +92,7 @@ apiClient.interceptors.response.use(
     } else if (!error.response) {
       toast.error('Cannot connect to server. Please check your connection.', { id: 'network-error' })
     }
-    
+
     return Promise.reject(error)
   }
 )
@@ -66,8 +117,7 @@ export const authAPI = {
   login: async (payload: { email: string; password: string }) => {
     const response = await apiClient.post('/auth/login', payload)
     if (typeof window !== 'undefined' && response.data?.accessToken) {
-      localStorage.setItem('surexend_access_token', response.data.accessToken)
-      document.cookie = `surexend_access_token=${response.data.accessToken}; path=/; max-age=86400;`
+      storeTokens(response.data.accessToken, response.data.refreshToken)
     }
     return response
   },
@@ -75,8 +125,7 @@ export const authAPI = {
   verifyOTP: async (payload: { identifier: string; code: string }) => {
     const response = await apiClient.post('/auth/verify-otp', payload)
     if (typeof window !== 'undefined' && response.data?.accessToken) {
-      localStorage.setItem('surexend_access_token', response.data.accessToken)
-      document.cookie = `surexend_access_token=${response.data.accessToken}; path=/; max-age=86400;`
+      storeTokens(response.data.accessToken, response.data.refreshToken)
     }
     return response
   },
@@ -90,8 +139,7 @@ export const authAPI = {
   logout: async () => {
     const response = await apiClient.post('/auth/logout')
     if (typeof window !== 'undefined') {
-      localStorage.clear()
-      document.cookie = 'surexend_access_token=; path=/; max-age=0;'
+      clearTokens()
     }
     return response
   },
