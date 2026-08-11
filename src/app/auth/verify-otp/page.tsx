@@ -66,18 +66,11 @@ function VerifyOTPForm() {
   const verify = async (code: string) => {
     setIsLoading(true)
     try {
-      const res = await authAPI.verifyOTP({ identifier, code })
-      const token = res.data?.accessToken || 'demo_token_' + Date.now()
-      localStorage.setItem('surexend_access_token', token)
-      document.cookie = `surexend_access_token=${token}; path=/; max-age=86400; SameSite=Lax;`
+      await authAPI.verifyOTP({ identifier, code })
       toast.success('Account verified successfully!')
       window.location.href = '/app/dashboard'
     } catch (error: any) {
-      const fallbackToken = 'demo_token_' + Date.now()
-      localStorage.setItem('surexend_access_token', fallbackToken)
-      document.cookie = `surexend_access_token=${fallbackToken}; path=/; max-age=86400; SameSite=Lax;`
-      toast.success('Account verified successfully!')
-      window.location.href = '/app/dashboard'
+      toast.error(error.response?.data?.message || 'Verification failed. Please check the code and try again.')
     } finally {
       setIsLoading(false)
     }

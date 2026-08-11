@@ -17,6 +17,16 @@ function clearTokens() {
   document.cookie = 'surexend_access_token=; path=/; max-age=0;'
 }
 
+// Send the user to the login page after clearing tokens (deduped)
+let redirectingToLogin = false
+function redirectToLogin() {
+  if (redirectingToLogin) return
+  redirectingToLogin = true
+  if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth/login')) {
+    window.location.href = '/auth/login'
+  }
+}
+
 // Single in-flight refresh promise so concurrent 401s share one refresh call
 let refreshPromise: Promise<string | null> | null = null
 
@@ -82,6 +92,10 @@ apiClient.interceptors.response.use(
         config.headers.Authorization = `Bearer ${newToken}`
         return apiClient(config)
       }
+      // Refresh failed or no refresh token available — session is over
+      clearTokens()
+      redirectToLogin()
+      return Promise.reject(error)
     }
 
     // Show user-friendly error toast (only for critical operations, using unique IDs to prevent duplicate spam)
