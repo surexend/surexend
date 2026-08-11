@@ -55,21 +55,6 @@ export class CctpService {
     );
 
     try {
-      const estimate = await this.kit.estimate({
-        from: {
-          adapter,
-          chain: BridgeChain.Arc_Testnet,
-          address: sourceAddress,
-        },
-        to: {
-          chain: destChain as any,
-          recipientAddress,
-          useForwarder: true,
-        },
-        amount: amountStr,
-      });
-      this.logger.log(`CCTP estimate complete for ${amount} USDC: ${JSON.stringify(estimate.fees || [])}`);
-
       const result = await this.kit.bridge({
         from: {
           adapter,
@@ -86,9 +71,26 @@ export class CctpService {
       });
 
       this.logger.log(`CCTP bridge result state: ${result.state}`);
-      return result;
+
+      const steps: any[] = Array.isArray(result.steps) ? result.steps : [];
+      const txHashes = steps
+        .filter((s) => s?.txHash)
+        .map((s) => ({ step: s.name, txHash: s.txHash }));
+
+      this.logger.log(`CCTP bridge tx hashes: ${JSON.stringify(txHashes)}`);
+
+      return {
+        state: result.state,
+        provider: result.provider,
+        steps,
+        txHashes,
+      };
     } catch (err: any) {
-      this.logger.error('CCTP bridge failed:', err?.message || err);
+      this.logger.error(
+        'CCTP bridge failed:',
+        err?.message || err,
+        err?.stack,
+      );
       throw new BadRequestException(err?.message || 'Cross-chain transfer failed.');
     }
   }

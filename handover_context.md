@@ -55,11 +55,40 @@ The following files are being committed and pushed to git:
 
 ---
 
-## 4. Immediate Next Steps for the Next Session
+---
 
-1. **Verify Live Deployment**:
-   * Inspect build pipelines (on Vercel, Railway, etc.) once git commits are pushed to confirm clean production building.
-2. **Interactive Testing of ArcListenerService**:
-   * Simulate a mock transfer log or deposit a small amount of testnet USDC to a registered user address on the Arc testnet RPC, and verify that [`ArcListenerService`](file:///C:/Users/ASAKE%20ISLAMIA%20SALAH/.gemini/antigravity/scratch/surexend/backend/src/wallets/arc-listener.service.ts) detects the transfer, credits `usdcBalance` in the database, and creates the transaction.
-3. **CCTP Bridging Verification**:
-   * Connect MetaMask on the testnet, bridge test USDC using the `/app/bridge` screen, and verify that the Bridge Kit flow successfully burns tokens and that the Orbit relayer finishes minting to the user's destination deposit address.
+## 4. Task D (NEWEST): Backend-Autonomous CCTP Cross-Chain Sends from Arc (The "Dream")
+
+### What Was Built
+* **The dream**: When a user sends **native USDC from Arc** to another blockchain that Arc supports, the backend should **autonomously execute a CCTP cross-chain transfer** (burn on Arc, mint on destination). It must NOT require users to manually bridge.
+* Commit `210c311` implemented this:
+  * [`cctp.service.ts`](backend/src/wallets/cctp.service.ts) — Uses `@circle-fin/bridge-kit` + `@circle-fin/adapter-circle-wallets` to run `kit.bridge()` from `BridgeChain.Arc_Testnet` → destination chain with `useForwarder: true` (Circle's Orbit relayer does the mint, no user gas/signature needed on destination).
+  * `wallets.service.ts` → `sendCrossChainFromArc()` routes any `network === 'ARC'` send through CctpService, validates `usdcBalance`, then records a SEND transaction with `cctp`, `cctpState`, `cctpTxHashes` metadata.
+  * Controller + frontend accept `destinationNetwork`. The Send page (`src/app/app/send/page.tsx`) shows a **Destination Network (CCTP)** picker when the source network is ARC (defaults POLYGON).
+* Supported destinations (CCTP): POLYGON, ETHEREUM, AVALANCHE, ARBITRUM, BASE, OPTIMISM, SOLANA.
+
+### Verified Facts (2026-08-11)
+* ✅ The active Circle sandbox key returns HTTP 200 + entity public key (key is live).
+* ✅ Circle's account now has a **LIVE ARC-TESTNET wallet** (`0x967440e22b409b7d5a485a776f88dda89027efc8`) holding ~**2.8 USDC** — Circle DID add native ARC support (the old "400 for ARC" limitation no longer applies to this account).
+* ✅ `Arc_Testnet` has CCTPv2 contracts (domain 26, split architecture) and `forwarderSupported.destination: true` in `@circle-fin/bridge-kit` v1.13.
+* ✅ `@circle-fin/adapter-circle-wallets` v1.6.0 supports `Arc_Testnet`.
+
+### The Railway Build Fix (IMPORTANT)
+* **Root cause of deploy failure**: `@circle-fin/developer-controlled-wallets` (transitive dep of `@circle-fin/adapter-circle-wallets`) declares `"engines": { "node": ">=22" }`, but the backend `Dockerfile` used `node:20-slim`.
+* **Fix applied**: backend `Dockerfile` now uses `node:22-slim` for BOTH build and runtime stages. Railway will pick this up on the next deploy.
+* Local backend `nest build` and frontend `next build` both pass after these changes.
+
+### Notes / Caveats
+* The Circle Wallets adapter needs the real `CIRCLE_ENTITY_SECRET` (64 lowercase hex chars) registered in the Circle console, set as `CIRCLE_ENTITY_SECRET` in Railway env.
+* The CCTP burn executes synchronously inside `POST /wallets/send`; the frontend already raised its timeout to 180s for settlement. If minting takes longer than that, the client may time out even though the burn succeeded server-side (funds still arrive).
+* Per-user Arc addresses are currently **mapped** EVM addresses. For the adapter to execute a burn, the address must also be a registered Circle `ARC-TESTNET` wallet (the account owner's `0x967440...` is one). Generating native ARC wallets via `getDepositAddress` for ARC is worth revisiting so every user's Arc address is a real Circle ARC-TESTNET wallet.
+
+---
+
+## 5. Immediate Next Steps for the Next Session
+
+1. **Deploy & Confirm**: Push these changes, redeploy the backend on Railway, and confirm a green deploy + healthy start (Node 22 now).
+2. **Verify the send flow in the app**: Log in, generate an Arc deposit address, fund native USDC on Arc testnet, then use the Send page with source=ARC + a destination chain. Confirm the burn happens on Arc and USDC is minted to the recipient's address on the destination chain.
+3. **Interactive Testing of ArcListenerService**:
+   * Deposit a small amount of testnet USDC to a registered user address on the Arc testnet RPC, and verify that [`ArcListenerService`](file:///C:/Users/ASAKE%20ISLAMIA%20SALAH/.gemini/antigravity/scratch/surexend/backend/src/wallets/arc-listener.service.ts) detects the transfer, credits `usdcBalance` in the database, and creates the transaction.
+4. **Legacy manual bridge page** (`/app/bridge`): still exists as the old "manual" approach. The autonomous send flow supersedes it — decide later whether to remove or keep it.

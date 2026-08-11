@@ -451,6 +451,7 @@ export class WalletsService {
           destinationNetwork: destNet,
           cctp: true,
           cctpState: result.state,
+          cctpTxHashes: result.txHashes || [],
         }
       });
     });
