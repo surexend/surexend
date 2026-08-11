@@ -19,6 +19,7 @@ async function bootstrap() {
   
   const allowedOrigins = [
     'https://surexend.com',
+    'https://surexend.vercel.app',
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3002',
@@ -27,10 +28,16 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || origin.startsWith('http://localhost:')) {
+      const isAllowed =
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.monkeycode-ai.live') ||
+        origin.startsWith('http://localhost:');
+      if (isAllowed) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        callback(null, false);
       }
     },
     credentials: true,
