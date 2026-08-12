@@ -16,7 +16,7 @@ const sendSchema = z.object({
   address: z.string().min(3, 'Invalid recipient handle or address'),
   network: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'SUREX_TAG']),
   destinationNetwork: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA']).optional(),
-  amount: z.number().positive('Amount must be positive')
+  amount: z.number().positive('Amount must be positive').optional()
 })
 
 type SendFormValues = z.infer<typeof sendSchema>
@@ -54,8 +54,13 @@ export default function SendPage() {
     setStep(2)
   }
 
-  const onSubmitStep2 = (data: { amount: number }) => {
-    setFormData(prev => ({ ...prev, ...data }))
+  const onSubmitStep2 = (data: { amount?: number }) => {
+    const amt = Number(data.amount)
+    if (!amt || amt <= 0) {
+      toast.error('Enter a valid amount')
+      return
+    }
+    setFormData(prev => ({ ...prev, amount: amt }))
     setStep(3)
   }
 
