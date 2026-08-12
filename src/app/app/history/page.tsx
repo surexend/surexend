@@ -113,12 +113,13 @@ function StatementModal({
           <motion.div className="fixed inset-0 bg-black/60 z-[80] backdrop-blur-sm"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose} />
+          <div className="fixed inset-0 z-[90] flex items-end sm:items-center sm:justify-center px-3 pb-20 sm:pb-0 pointer-events-none">
           <motion.div
-            className="fixed inset-x-3 bottom-20 z-[90] sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[420px] max-h-[80vh] overflow-y-auto"
+            className="w-full sm:w-[420px] max-h-[80vh] overflow-y-auto pointer-events-auto"
             initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }}
             transition={{ type: 'spring', damping: 24, stiffness: 300 }}
           >
-            <div className="bg-[#0F1629] rounded-3xl p-5 sm:p-6 border border-white/10 shadow-2xl">
+            <div className="bg-[#0F1629] rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 border border-white/10 shadow-2xl">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -213,6 +214,7 @@ function StatementModal({
               </motion.button>
             </div>
           </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>,
@@ -412,8 +414,9 @@ function TransactionDetailModal({
       <motion.div className="fixed inset-0 bg-black/70 z-[80] backdrop-blur-sm"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose} />
+      <div className="fixed inset-0 z-[90] flex items-end sm:items-center sm:justify-center pointer-events-none">
       <motion.div
-        className="fixed inset-x-0 bottom-0 z-[90] sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[460px] sm:max-w-[94vw] max-h-[88vh] overflow-y-auto sm:rounded-2xl rounded-t-2xl"
+        className="w-full sm:w-[460px] sm:max-w-[94vw] max-h-[88vh] overflow-y-auto sm:rounded-2xl rounded-t-2xl pointer-events-auto"
         initial={{ opacity: 0, y: 80 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 80 }}
@@ -502,6 +505,7 @@ function TransactionDetailModal({
           )}
         </div>
       </motion.div>
+      </div>
     </AnimatePresence>,
     document.body
   )
