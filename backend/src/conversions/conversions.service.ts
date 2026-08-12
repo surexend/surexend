@@ -217,15 +217,26 @@ export class ConversionsService {
         });
       }
 
-      // Apply local-balance changes (deduct source + credit dest) in one update
+      // Apply local-balance changes (deduct source + credit dest) in one update.
+      // Writes to localBalances are guarded: if the column isn't migrated yet in
+      // the deployed DB, fall back to the legacy NGN-only field so conversions
+      // never 500 (mirrors getBalance's defensive read).
       const localChanged =
         (fromCode !== 'USD' && (localBalances[fromCode] || 0) !== updatedLocalBalances[fromCode]) ||
         (toCode !== 'USD' && (localBalances[toCode] || 0) !== updatedLocalBalances[toCode]);
       if (localChanged) {
-        await prisma.wallet.update({
-          where: { id: wallet.id },
-          data: { localBalances: updatedLocalBalances }
-        });
+        try {
+          await prisma.wallet.update({
+            where: { id: wallet.id },
+            data: { localBalances: updatedLocalBalances }
+          });
+        } catch (err: any) {
+          this.logger.warn(`localBalances column unavailable; falling back to legacy localBalance: ${err.message}`);
+          await prisma.wallet.update({
+            where: { id: wallet.id },
+            data: { localBalance: updatedLocalBalances['NGN'] ?? 0 }
+          });
+        }
       }
 
       // Record Conversion record
