@@ -78,7 +78,7 @@ export class ConversionsService {
   // Compute a conversion between any two wallets:
   //   USD <-> LOCAL and LOCAL <-> LOCAL (via USD as the cross-rate basis).
   private computeConversion(amount: number, from: string, to: string, fromRate: number, toRate: number) {
-    const feeRate = 0.012; // 1.2% fee on the USD value
+    const feeRate = 0; // No fee during testing
     let usdValue: number;
     if (from === 'USD') {
       usdValue = amount;
@@ -134,15 +134,25 @@ export class ConversionsService {
     const isPinValid = await bcrypt.compare(pin, user.pin);
     if (!isPinValid) throw new ForbiddenException('Invalid PIN');
 
-    const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+    // Load wallet with a defensive select so a not-yet-migrated localBalances
+    // column can't 500 conversion execution.
+    let wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { id: true, usdtBalance: true, usdcBalance: true, localBalance: true }
+    });
     if (!wallet) throw new BadRequestException('Wallet not found');
 
     // Load per-currency local balances (fall back to legacy localBalance as NGN)
     let localBalances: Record<string, number> = {};
     try {
-      const parsed = (wallet.localBalances as any) || {};
+      const fullWallet = await this.prisma.wallet.findUnique({
+        where: { userId },
+        select: { localBalances: true }
+      });
+      const parsed = fullWallet?.localBalances as any;
       if (parsed && typeof parsed === 'object') localBalances = { ...parsed };
     } catch {
+      // Column may not exist in the DB yet (pre-migration); fall through to legacy field
       localBalances = {};
     }
     if (wallet.localBalance > 0 && !localBalances['NGN']) localBalances['NGN'] = wallet.localBalance;

@@ -77,7 +77,10 @@ export class BillsService {
     const rate = 1500;
     const usdtAmount = amount / rate;
 
-    const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { id: true, usdtBalance: true }
+    });
     if (wallet.usdtBalance < usdtAmount) throw new BadRequestException('Insufficient balance');
 
     const reference = `VTP-${Date.now()}${Math.floor(Math.random() * 100)}`;

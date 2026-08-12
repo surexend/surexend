@@ -182,7 +182,7 @@ export default function DashboardPage() {
               color: colors.primary,
             }}
           >
-            ✓ Tier 2 Verified
+            ✓ Verified
           </span>
           <Link href="/app/invoice" className="hidden xs:flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-white/5 hover:bg-white/10 text-white text-[11px] font-semibold border border-white/10">
             <Sparkles className="w-3 h-3 text-blue-400" /> EU Invoice

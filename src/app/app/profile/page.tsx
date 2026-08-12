@@ -60,15 +60,11 @@ function MenuItem({
   )
 }
 
-// ── KYC tier badge ─────────────────────────────────────────────────────────
-function KYCBadge({ tier }: { tier: number }) {
-  const config = [
-    { label: 'Unverified', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
-    { label: 'Tier 1', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)' },
-    { label: 'Tier 2', color: '#6366F1', bg: 'rgba(99,102,241,0.1)' },
-    { label: 'Tier 3 ✓', color: '#10B981', bg: 'rgba(16,185,129,0.1)' },
-  ]
-  const cfg = config[tier] || config[0]
+// ── KYC status badge ───────────────────────────────────────────────────────
+function KYCBadge({ verified }: { verified: boolean }) {
+  const cfg = verified
+    ? { label: 'Verified', color: '#10B981', bg: 'rgba(16,185,129,0.1)' }
+    : { label: 'Unverified', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' }
   return (
     <span className="px-2.5 py-1 rounded-full text-xs font-semibold"
       style={{ background: cfg.bg, color: cfg.color }}>
@@ -140,7 +136,8 @@ export default function ProfilePage() {
     router.push('/auth/login')
   }
 
-  const kycTier = kycData?.tier || 0
+  const kycStatus = kycData?.status || 'UNVERIFIED'
+  const kycVerified = !!kycData?.isVerified || kycStatus === 'VERIFIED'
   const fullName = `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim()
 
   return (
@@ -164,7 +161,7 @@ export default function ProfilePage() {
               </h2>
               {/* Twitter / X style Scalloped Gold/Lemon Verified Rosette */}
               <VerifiedCheckmark size={18} variant={variant} />
-              <KYCBadge tier={kycTier} />
+              <KYCBadge verified={kycVerified} />
             </div>
             <p className="text-[#94A3B8] text-xs font-medium truncate">@alex_xend • alex@example.com</p>
           </div>
@@ -227,8 +224,8 @@ export default function ProfilePage() {
         </span>
       </div>
 
-      {/* KYC completion banner (if not fully verified) */}
-      {kycTier < 3 && (
+      {/* KYC completion banner (if not verified) */}
+      {!kycVerified && (
         <motion.div
           className="w-full"
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
@@ -243,7 +240,7 @@ export default function ProfilePage() {
             <div className="flex-1">
               <p className="text-white text-sm font-semibold">Complete Identity Verification</p>
               <p className="text-[#94A3B8] text-xs mt-0.5">
-                You are on Tier {kycTier}. Upgrade to unlock higher limits.
+                Verify your identity to unlock higher limits.
               </p>
             </div>
             <button
@@ -264,8 +261,8 @@ export default function ProfilePage() {
             accentHex={accentHex} accentRgb={accentRgb}
             onClick={() => router.push('/app/profile/edit')} />
           <MenuItem icon={Shield} label="Identity Verification (KYC)"
-            value={`Currently Tier ${kycTier}`}
-            badge={kycTier >= 3 ? 'Verified' : `Tier ${kycTier}`}
+            value={kycVerified ? 'Your identity is verified' : 'Verify your identity'}
+            badge={kycVerified ? 'Verified' : undefined}
             accentHex={accentHex} accentRgb={accentRgb}
             onClick={() => router.push('/app/kyc')} />
           <MenuItem icon={CreditCard} label="Bank Accounts" value="Manage withdrawal banks"
@@ -274,8 +271,9 @@ export default function ProfilePage() {
         </MenuSection>
 
         <MenuSection title="Security">
-          <MenuItem icon={Lock} label="Change Transaction PIN"
-            value="Update your 6-digit PIN"
+          <MenuItem icon={Lock} label="Transaction PIN"
+            value={profile?.pinSet ? 'Change your 4-digit PIN' : 'Set up your 4-digit PIN'}
+            badge={profile?.pinSet ? undefined : 'Set Up'}
             accentHex={accentHex} accentRgb={accentRgb}
             onClick={() => router.push('/app/settings/change-pin')} />
           <MenuItem icon={Fingerprint} label="Two-Factor Authentication (2FA)"

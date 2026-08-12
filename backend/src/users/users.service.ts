@@ -9,7 +9,7 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async getProfile(userId: string) {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -23,8 +23,14 @@ export class UsersService {
         twoFactorEnabled: true,
         createdAt: true,
         isActive: true,
+        pin: true,
       }
     });
+
+    if (!user) return null;
+
+    const { pin, ...profile } = user;
+    return { ...profile, pinSet: !!pin };
   }
 
   async setupPin(userId: string, pin: string) {
@@ -125,18 +131,20 @@ export class UsersService {
         kycTier: true,
         kycStatus: true,
         kycDocuments: {
-          select: { id: true, tier: true, status: true, type: true, rejectionReason: true },
+          select: { id: true, status: true, type: true, rejectionReason: true },
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
       },
     });
 
+    const status = user?.kycStatus ?? 'UNVERIFIED';
+
     return {
-      tier: user?.kycTier ?? 0,
-      status: user?.kycStatus ?? 'UNVERIFIED',
+      status,
+      isVerified: status === 'VERIFIED',
       limits: {
-        dailyWithdrawal: user?.kycTier === 0 ? '1,000 USDT' : user?.kycTier === 1 ? '5,000 USDT' : '50,000 USDT',
+        dailyWithdrawal: status === 'VERIFIED' ? '50,000 USDT' : '1,000 USDT',
       },
       latestDocument: user?.kycDocuments?.[0] ?? null,
     };

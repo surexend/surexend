@@ -344,8 +344,8 @@ export const conversionAPI = {
         return {
           currency: fiatCurrency,
           rate: rateMap[fiatCurrency] || 1500,
-          feePercent: 0.5,
-          minUsdt: 5,
+          feePercent: 0,
+          minUsdt: 1,
           maxUsdt: 50000,
         }
       }
@@ -361,8 +361,8 @@ export const conversionAPI = {
         const from = payload.from.toUpperCase()
         const to = payload.to.toUpperCase()
         const usdValue = from === 'USD' ? payload.amount : payload.amount / (rateMap[from] || 1500)
-        const feeUsd = usdValue * 0.012
-        const receiveAmount = to === 'USD' ? usdValue - feeUsd : (usdValue - feeUsd) * (rateMap[to] || 1500)
+        const feeUsd = 0
+        const receiveAmount = to === 'USD' ? usdValue : usdValue * (rateMap[to] || 1500)
         return {
           from,
           to,
@@ -390,7 +390,7 @@ export const conversionAPI = {
         amount: payload.amount,
         receiveAmount: payload.amount * 1500,
         rate: 1500,
-        fee: payload.amount * 0.012,
+        fee: 0,
         message: 'Conversion completed successfully'
       })
     ),
@@ -544,10 +544,10 @@ export const userAPI = {
         lastName: 'SureXend',
         email: 'emmanuel@surexend.com',
         phone: '+2348012345678',
-        kycTier: 2,
-        kycStatus: 'APPROVED',
+        kycStatus: 'VERIFIED',
         avatar: '',
-        referralCode: 'SUREXEND-AFRICA'
+        referralCode: 'SUREXEND-AFRICA',
+        pinSet: true,
       })
     ),
 
@@ -561,6 +561,12 @@ export const userAPI = {
     tryWithMock(
       () => apiClient.post('/users/change-pin', payload).then(r => r.data),
       () => ({ message: 'PIN changed successfully' })
+    ),
+
+  setupPin: (pin: string) =>
+    tryWithMock(
+      () => apiClient.post('/users/setup-pin', { pin }).then(r => r.data),
+      () => ({ message: 'PIN set up successfully' })
     ),
 
   setup2FA: () =>
@@ -578,7 +584,7 @@ export const userAPI = {
   getKYCStatus: () =>
     tryWithMock(
       () => apiClient.get('/users/kyc').then(r => r.data),
-      () => ({ tier: 2, status: 'APPROVED', limits: { dailyWithdrawal: '10,000 USDT' } })
+      () => ({ status: 'VERIFIED', isVerified: true, limits: { dailyWithdrawal: '50,000 USDT' } })
     ),
 
   submitKYC: (payload: FormData) =>

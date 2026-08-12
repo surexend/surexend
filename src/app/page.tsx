@@ -897,7 +897,7 @@ export default function LandingPage() {
                     { icon: Lock, title: '2FA on All Withdrawals', desc: 'Google Authenticator or SMS OTP required for every withdrawal.' },
                     { icon: Shield, title: 'AES-256 Encryption', desc: 'All sensitive data encrypted at rest and in transit.' },
                     { icon: Clock, title: 'Real-Time Fraud Detection', desc: 'AI-powered anomaly detection flags suspicious activity instantly.' },
-                    { icon: Globe, title: 'Tiered KYC', desc: 'Identity verification matched to your transaction limits. More trust = higher limits.' },
+                    { icon: Globe, title: 'Identity Verification', desc: 'Verify once to unlock higher transaction limits. Your funds stay protected with bank-grade security.' },
                     { icon: Users, title: 'Audit Logs', desc: 'Every action logged with IP, device, and timestamp. Full audit trail.' },
                     { icon: Check, title: 'NDPR & GDPR Compliant', desc: 'Fully compliant with Nigerian data protection regulations and GDPR.' },
                   ].map(({ icon: Icon, title, desc }, i) => (

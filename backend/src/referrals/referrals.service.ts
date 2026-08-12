@@ -96,7 +96,10 @@ export class ReferralsService {
     if (commissionAmount <= 0) return;
 
     await this.prisma.$transaction(async (prisma) => {
-      const wallet = await prisma.wallet.findUnique({ where: { userId: referrerId } });
+      const wallet = await prisma.wallet.findUnique({
+        where: { userId: referrerId },
+        select: { id: true }
+      });
       await prisma.wallet.update({
         where: { id: wallet.id },
         data: { usdtBalance: { increment: commissionAmount } }

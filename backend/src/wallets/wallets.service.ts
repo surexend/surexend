@@ -429,9 +429,16 @@ export class WalletsService {
       throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20, ARC');
     }
 
-    let wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+    // Explicit select so a not-yet-migrated localBalances column can't 500 this endpoint
+    let wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { id: true }
+    });
     if (!wallet) {
-      wallet = await this.prisma.wallet.create({ data: { userId } });
+      wallet = await this.prisma.wallet.create({
+        data: { userId },
+        select: { id: true }
+      });
     }
 
     let walletAddress = await this.prisma.walletAddress.findFirst({
@@ -533,7 +540,11 @@ export class WalletsService {
   async sendCrypto(userId: string, toAddress: string, amount: number, network: string, destinationNetwork?: string) {
     if (amount <= 0) throw new BadRequestException('Amount must be greater than 0');
 
-    const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+    // Explicit select so a not-yet-migrated localBalances column can't 500 this endpoint
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { id: true, usdtBalance: true, usdcBalance: true }
+    });
 
     const net = network.toUpperCase();
 

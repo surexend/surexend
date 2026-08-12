@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { conversionAPI, walletAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
+import { useRouter } from 'next/navigation'
 import CurrencyFlag from '@/components/CurrencyFlag'
 
 const USD_ASSET = { code: 'USD', name: 'US Dollar', symbol: '$', flag: '💵', countryCode: 'US' }
@@ -15,6 +16,7 @@ export default function ConvertPage() {
   const { variant, colors } = useTheme()
   const isGold = variant === 'gold'
   const accentRgb = isGold ? '212, 160, 23' : '181, 226, 61'
+  const router = useRouter()
   const accentHex = isGold ? '#D4A017' : '#B5E23D'
 
   const [amount, setAmount] = useState<string>('')
@@ -80,8 +82,8 @@ export default function ConvertPage() {
   const preview = useMemo(() => {
     if (!numAmount || numAmount <= 0 || fromCode === toCode) return null
     const usdValue = fromCode === 'USD' ? numAmount : numAmount / (assetInfo(fromCode)?.rate || 1500)
-    const feeUsd = usdValue * 0.012
-    const receiveAmount = toCode === 'USD' ? usdValue - feeUsd : (usdValue - feeUsd) * (assetInfo(toCode)?.rate || 1500)
+    const feeUsd = 0
+    const receiveAmount = toCode === 'USD' ? usdValue : usdValue * (assetInfo(toCode)?.rate || 1500)
     return { usdValue, feeUsd, receiveAmount }
   }, [numAmount, fromCode, toCode, allAssets])
 
@@ -134,7 +136,12 @@ export default function ConvertPage() {
       setStep(3)
       refetchBalance()
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Conversion failed')
+      const msg = error.response?.data?.message || 'Conversion failed'
+      toast.error(msg)
+      if (msg === 'PIN not set up') {
+        setStep(1)
+        router.push('/app/settings/change-pin')
+      }
       setPin(['', '', '', ''])
     } finally {
       setIsLoading(false)

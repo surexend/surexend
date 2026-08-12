@@ -407,7 +407,7 @@ export default function BillsPage() {
                   <p className="text-white font-inter font-bold text-xl">
                     ~{((selectedPlan?.amount || parseFloat(amount) || 0) / 1650).toFixed(4)} USDT
                   </p>
-                  <p className="text-[#64748B] text-xs mt-1">At current rate ₦1,650/$1 · includes 1.2% fee</p>
+                  <p className="text-[#64748B] text-xs mt-1">At current rate ₦1,650/$1</p>
                 </motion.div>
               )}
 
