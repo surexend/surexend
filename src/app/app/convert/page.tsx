@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowUpDown, CheckCircle2, ChevronDown, Check, X, Globe, ArrowDown, Wallet } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { conversionAPI, walletAPI } from '@/lib/api'
+import { conversionAPI, walletAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
+import CurrencyFlag from '@/components/CurrencyFlag'
 
-const USD_ASSET = { code: 'USD', name: 'US Dollar', symbol: '$', flag: '💵' }
+const USD_ASSET = { code: 'USD', name: 'US Dollar', symbol: '$', flag: '💵', countryCode: 'US' }
 
 export default function ConvertPage() {
   const { variant, colors } = useTheme()
@@ -20,6 +21,7 @@ export default function ConvertPage() {
   const [fromCode, setFromCode] = useState('USD')
   const [toCode, setToCode] = useState('NGN')
   const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null)
+  const [currencySearch, setCurrencySearch] = useState('')
   const [step, setStep] = useState(1)
   const [pin, setPin] = useState(['', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
@@ -38,13 +40,23 @@ export default function ConvertPage() {
 
   const localCurrencies = useMemo(() => {
     const locals = currenciesData?.local || []
-    return locals.length ? locals : []
+    return locals.length ? locals : AFRICAN_CURRENCIES
   }, [currenciesData])
 
   const allAssets = useMemo(() => [USD_ASSET, ...localCurrencies], [localCurrencies])
 
+  const filteredAssets = useMemo(() => {
+    const q = currencySearch.trim().toLowerCase()
+    if (!q) return allAssets
+    return allAssets.filter(a =>
+      a.code.toLowerCase().includes(q) ||
+      a.name.toLowerCase().includes(q) ||
+      (a.country || '').toLowerCase().includes(q)
+    )
+  }, [allAssets, currencySearch])
+
   const assetInfo = (code: string) =>
-    allAssets.find(a => a.code === code) || (code === 'USD' ? USD_ASSET : localCurrencies.find(a => a.code === code))
+    allAssets.find(a => a.code === code) || (code === 'USD' ? USD_ASSET : allAssets.find(a => a.code === code))
 
   const fromInfo = assetInfo(fromCode)
   const toInfo = assetInfo(toCode)
@@ -170,7 +182,7 @@ export default function ConvertPage() {
                   onClick={() => setPickerTarget('from')}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 transition-all active:scale-95"
                 >
-                  <span className="text-base">{fromInfo?.flag}</span>
+                  <CurrencyFlag countryCode={fromInfo?.countryCode} size={18} />
                   <span className="font-extrabold text-sm text-white">{fromCode}</span>
                   <ChevronDown className="w-4 h-4 text-[#64748B]" />
                 </button>
@@ -232,7 +244,7 @@ export default function ConvertPage() {
                   onClick={() => setPickerTarget('to')}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 transition-all active:scale-95"
                 >
-                  <span className="text-lg">{toInfo?.flag}</span>
+                  <CurrencyFlag countryCode={toInfo?.countryCode} size={18} />
                   <span className="font-extrabold text-sm text-white">{toCode}</span>
                   <ChevronDown className="w-4 h-4 text-[#64748B]" />
                 </button>
@@ -353,7 +365,15 @@ export default function ConvertPage() {
                 </button>
               </div>
               <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto pb-8">
-                {allAssets.map((asset: any) => {
+                <div className="relative mb-2">
+                  <input
+                    value={currencySearch}
+                    onChange={(e) => setCurrencySearch(e.target.value)}
+                    placeholder="Search country or currency…"
+                    className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
+                  />
+                </div>
+                {filteredAssets.map((asset: any) => {
                   const isSelected = (pickerTarget === 'from' ? fromCode : toCode) === asset.code
                   const isUsd = asset.code === 'USD'
                   const balance = getAssetBalance(asset.code)
@@ -370,6 +390,7 @@ export default function ConvertPage() {
                           setToCode(asset.code)
                         }
                         setPickerTarget(null)
+                        setCurrencySearch('')
                       }}
                       className="w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all"
                       style={isSelected
@@ -378,7 +399,7 @@ export default function ConvertPage() {
                       }
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">{asset.flag}</span>
+                        <CurrencyFlag countryCode={asset.countryCode} size={32} />
                         <div className="text-left">
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-white text-sm">{asset.code}</span>

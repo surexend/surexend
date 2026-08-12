@@ -6,9 +6,10 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, TrendingUp, TrendingDown, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { walletAPI, transactionAPI } from '@/lib/api'
+import { walletAPI, transactionAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
+import CurrencyFlag from '@/components/CurrencyFlag'
 import toast from 'react-hot-toast'
 
 // Market data for USDT and USDC
@@ -68,16 +69,7 @@ const cryptoMarketData = {
 }
 
 // African local currencies for the Local Wallet selector
-const LOCAL_CURRENCIES = [
-  { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', flag: '🇳🇬' },
-  { code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵', flag: '🇬🇭' },
-  { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', flag: '🇰🇪' },
-  { code: 'ZAR', name: 'South African Rand', symbol: 'R', flag: '🇿🇦' },
-  { code: 'UGX', name: 'Ugandan Shilling', symbol: 'USh', flag: '🇺🇬' },
-  { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TSh', flag: '🇹🇿' },
-  { code: 'XAF', name: 'Central African CFA', symbol: 'FCFA', flag: '🇨🇲' },
-  { code: 'XOF', name: 'West African CFA', symbol: 'CFA', flag: '🇸🇳' },
-]
+const LOCAL_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.name, symbol: c.symbol, flag: c.flag, countryCode: c.countryCode, country: c.country }))
 
 
 
@@ -88,6 +80,7 @@ export default function DashboardPage() {
   const [walletView, setWalletView] = useState<'USD' | 'LOCAL'>('USD')
   const [selectedLocalCurrency, setSelectedLocalCurrency] = useState('NGN')
   const [showLocalCurrencyPicker, setShowLocalCurrencyPicker] = useState(false)
+  const [localCurrencySearch, setLocalCurrencySearch] = useState('')
   const [selectedCrypto, setSelectedCrypto] = useState<'USDT' | 'USDC'>('USDC')
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
   const [showSendModal, setShowSendModal] = useState(false)
@@ -255,7 +248,7 @@ export default function DashboardPage() {
                   onClick={() => setShowLocalCurrencyPicker(true)}
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/8 hover:bg-white/15 border border-white/10 transition-all text-[10px] font-bold text-white"
                 >
-                  <span className="text-[11px]">{LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.flag}</span>
+                  <span className="text-[11px]"><CurrencyFlag countryCode={LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.countryCode} size={16} /></span>
                   {selectedLocalCurrency}
                   <ChevronDown className="w-3 h-3 text-[#64748B]" />
                 </button>
@@ -270,7 +263,7 @@ export default function DashboardPage() {
                 <div className="h-9 w-40 skeleton rounded-lg" />
               ) : showBalance ? (
                 walletView === 'USD'
-                  ? `$${(balanceData?.usdBalance ?? 2450.75).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  ? `$${(balanceData?.usdBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : `${(LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.symbol || '₦')}${((balanceData?.localBalances?.[selectedLocalCurrency] ?? 0) || (selectedLocalCurrency === 'NGN' ? (balanceData?.ngnBalance ?? 0) : 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               ) : '••••••••'}
             </div>
@@ -974,13 +967,25 @@ export default function DashboardPage() {
                   </button>
                 </div>
                 <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto pb-8">
-                  {LOCAL_CURRENCIES.map((curr) => {
+                  <div className="relative mb-2">
+                    <input
+                      value={localCurrencySearch}
+                      onChange={(e) => setLocalCurrencySearch(e.target.value)}
+                      placeholder="Search country or currency…"
+                      className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
+                    />
+                  </div>
+                  {LOCAL_CURRENCIES.filter(c => {
+                    const q = localCurrencySearch.trim().toLowerCase()
+                    if (!q) return true
+                    return c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || c.country.toLowerCase().includes(q)
+                  }).map((curr) => {
                     const isSelected = selectedLocalCurrency === curr.code
                     const bal = (balanceData?.localBalances?.[curr.code] ?? 0) || (curr.code === 'NGN' ? (balanceData?.ngnBalance ?? 0) : 0)
                     return (
                       <button
                         key={curr.code}
-                        onClick={() => { setSelectedLocalCurrency(curr.code); setShowLocalCurrencyPicker(false) }}
+                        onClick={() => { setSelectedLocalCurrency(curr.code); setShowLocalCurrencyPicker(false); setLocalCurrencySearch('') }}
                         className="w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all"
                         style={isSelected
                           ? { background: `rgba(${colors.glowRgb},0.12)`, borderColor: colors.primary }
@@ -988,7 +993,7 @@ export default function DashboardPage() {
                         }
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-2xl">{curr.flag}</span>
+                          <CurrencyFlag countryCode={curr.countryCode} size={32} />
                           <div className="text-left">
                             <div className="flex items-center gap-2">
                               <span className="font-extrabold text-white text-sm">{curr.code}</span>

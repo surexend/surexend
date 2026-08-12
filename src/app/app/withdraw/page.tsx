@@ -6,14 +6,11 @@ import { useTheme } from '@/context/ThemeContext'
 import { ArrowLeft, Building2, CheckCircle2, ChevronRight, AlertCircle, Loader2, ShieldCheck, ArrowUpRight, DollarSign } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { useQuery } from '@tanstack/react-query'
+import { walletAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 
-// ── Fiat Options ────────────────────────────────────────────────────────────
-const FIAT_CURRENCIES = [
-  { code: 'NGN', name: 'Nigerian Naira', flag: '🇳🇬', symbol: '₦', rate: 1500 },
-  { code: 'GHS', name: 'Ghanaian Cedi', flag: '🇬🇭', symbol: '₵', rate: 15.2 },
-  { code: 'KES', name: 'Kenyan Shilling', flag: '🇰🇪', symbol: 'KSh', rate: 132 },
-  { code: 'ZAR', name: 'South African Rand', flag: '🇿🇦', symbol: 'R', rate: 18.5 },
-]
+// ── Fiat Options (all African countries) ──────────────────────────────────
+const FIAT_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.name, flag: c.flag, symbol: c.symbol, rate: c.rate }))
 
 // ── Saved Bank Accounts Mock ────────────────────────────────────────────────
 const SAVED_BANKS = [
@@ -82,6 +79,12 @@ export default function WithdrawPage() {
   const [selectedBank, setSelectedBank] = useState<any>(SAVED_BANKS[0])
   const [isProcessing, setIsProcessing] = useState(false)
 
+  const { data: balanceData } = useQuery({
+    queryKey: ['balance'],
+    queryFn: walletAPI.getBalance,
+  })
+  const availableUsdt = balanceData?.usdBalance ?? 0
+
   const numUsdt = parseFloat(amountUsdt) || 0
   const feeUsdt = 0.50
   const netUsdt = Math.max(0, numUsdt - feeUsdt)
@@ -90,6 +93,10 @@ export default function WithdrawPage() {
   const handleNext = () => {
     if (numUsdt < 5) {
       toast.error('Minimum withdrawal is 5 USDT')
+      return
+    }
+    if (numUsdt > availableUsdt) {
+      toast.error('Insufficient USDT balance')
       return
     }
     setStep('bank')
@@ -148,7 +155,7 @@ export default function WithdrawPage() {
             <div className="bg-[#121827] p-5 rounded-2xl border border-white/5 space-y-3">
               <div className="flex justify-between items-center text-xs font-semibold text-[#94A3B8]">
                 <span>Withdraw Amount (USDT)</span>
-                <span>Available: <strong className="text-white">2,450.75 USDT</strong></span>
+                <span>Available: <strong className="text-white">{availableUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</strong></span>
               </div>
               <div className="relative">
                 <input
@@ -159,7 +166,7 @@ export default function WithdrawPage() {
                   className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3.5 text-2xl font-bold text-white focus:outline-none focus:border-white/30"
                 />
                 <button
-                  onClick={() => setAmountUsdt('2450.75')}
+                  onClick={() => setAmountUsdt(availableUsdt.toFixed(2))}
                   className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/10 text-white hover:bg-white/20"
                 >
                   MAX

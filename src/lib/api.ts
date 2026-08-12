@@ -2,6 +2,54 @@ import axios, { AxiosError } from 'axios'
 import { withRetry } from './utils'
 import toast from 'react-hot-toast'
 
+// African local currencies (mirrors backend SUPPORTED_LOCAL_CURRENCIES).
+// `countryCode` renders a cross-platform flag badge (Windows doesn't render
+// flag emoji). `country` powers the picker search by country name.
+export const AFRICAN_CURRENCIES = [
+  { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', country: 'Nigeria', countryCode: 'NG', flag: '🇳🇬', rate: 1500 },
+  { code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵', country: 'Ghana', countryCode: 'GH', flag: '🇬🇭', rate: 15.8 },
+  { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', country: 'Kenya', countryCode: 'KE', flag: '🇰🇪', rate: 129.5 },
+  { code: 'ZAR', name: 'South African Rand', symbol: 'R', country: 'South Africa', countryCode: 'ZA', flag: '🇿🇦', rate: 18.2 },
+  { code: 'UGX', name: 'Ugandan Shilling', symbol: 'USh', country: 'Uganda', countryCode: 'UG', flag: '🇺🇬', rate: 3680 },
+  { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TSh', country: 'Tanzania', countryCode: 'TZ', flag: '🇹🇿', rate: 2650 },
+  { code: 'EGP', name: 'Egyptian Pound', symbol: 'E£', country: 'Egypt', countryCode: 'EG', flag: '🇪🇬', rate: 48.2 },
+  { code: 'MAD', name: 'Moroccan Dirham', symbol: 'DH', country: 'Morocco', countryCode: 'MA', flag: '🇲🇦', rate: 10.1 },
+  { code: 'ETB', name: 'Ethiopian Birr', symbol: 'Br', country: 'Ethiopia', countryCode: 'ET', flag: '🇪🇹', rate: 57.2 },
+  { code: 'RWF', name: 'Rwandan Franc', symbol: 'FRw', country: 'Rwanda', countryCode: 'RW', flag: '🇷🇼', rate: 1320 },
+  { code: 'ZMW', name: 'Zambian Kwacha', symbol: 'K', country: 'Zambia', countryCode: 'ZM', flag: '🇿🇲', rate: 26.4 },
+  { code: 'MZN', name: 'Mozambican Metical', symbol: 'MT', country: 'Mozambique', countryCode: 'MZ', flag: '🇲🇿', rate: 64.2 },
+  { code: 'BWP', name: 'Botswana Pula', symbol: 'P', country: 'Botswana', countryCode: 'BW', flag: '🇧🇼', rate: 13.7 },
+  { code: 'AOA', name: 'Angolan Kwanza', symbol: 'Kz', country: 'Angola', countryCode: 'AO', flag: '🇦🇴', rate: 830 },
+  { code: 'CDF', name: 'Congolese Franc', symbol: 'FC', country: 'DR Congo', countryCode: 'CD', flag: '🇨🇩', rate: 2850 },
+  { code: 'TND', name: 'Tunisian Dinar', symbol: 'DT', country: 'Tunisia', countryCode: 'TN', flag: '🇹🇳', rate: 3.1 },
+  { code: 'DZD', name: 'Algerian Dinar', symbol: 'DA', country: 'Algeria', countryCode: 'DZ', flag: '🇩🇿', rate: 134.5 },
+  { code: 'LYD', name: 'Libyan Dinar', symbol: 'LD', country: 'Libya', countryCode: 'LY', flag: '🇱🇾', rate: 4.85 },
+  { code: 'SDG', name: 'Sudanese Pound', symbol: 'SD', country: 'Sudan', countryCode: 'SD', flag: '🇸🇩', rate: 600 },
+  { code: 'SSP', name: 'South Sudanese Pound', symbol: 'SS', country: 'South Sudan', countryCode: 'SS', flag: '🇸🇸', rate: 1300 },
+  { code: 'SOS', name: 'Somali Shilling', symbol: 'Sh', country: 'Somalia', countryCode: 'SO', flag: '🇸🇴', rate: 57000 },
+  { code: 'DJF', name: 'Djiboutian Franc', symbol: 'Fdj', country: 'Djibouti', countryCode: 'DJ', flag: '🇩🇯', rate: 177.5 },
+  { code: 'ERN', name: 'Eritrean Nakfa', symbol: 'Nfk', country: 'Eritrea', countryCode: 'ER', flag: '🇪🇷', rate: 15.2 },
+  { code: 'MRU', name: 'Mauritanian Ouguiya', symbol: 'UM', country: 'Mauritania', countryCode: 'MR', flag: '🇲🇷', rate: 40.1 },
+  { code: 'MGA', name: 'Malagasy Ariary', symbol: 'Ar', country: 'Madagascar', countryCode: 'MG', flag: '🇲🇬', rate: 4550 },
+  { code: 'MWK', name: 'Malawian Kwacha', symbol: 'MK', country: 'Malawi', countryCode: 'MW', flag: '🇲🇼', rate: 1750 },
+  { code: 'NAD', name: 'Namibian Dollar', symbol: 'N$', country: 'Namibia', countryCode: 'NA', flag: '🇳🇦', rate: 18.2 },
+  { code: 'LSL', name: 'Lesotho Loti', symbol: 'L', country: 'Lesotho', countryCode: 'LS', flag: '🇱🇸', rate: 18.2 },
+  { code: 'SZL', name: 'Swazi Lilangeni', symbol: 'E', country: 'Eswatini', countryCode: 'SZ', flag: '🇸🇿', rate: 18.2 },
+  { code: 'MUR', name: 'Mauritian Rupee', symbol: 'Rs', country: 'Mauritius', countryCode: 'MU', flag: '🇲🇺', rate: 46.4 },
+  { code: 'SCR', name: 'Seychellois Rupee', symbol: 'SR', country: 'Seychelles', countryCode: 'SC', flag: '🇸🇨', rate: 13.6 },
+  { code: 'KMF', name: 'Comorian Franc', symbol: 'CF', country: 'Comoros', countryCode: 'KM', flag: '🇰🇲', rate: 490 },
+  { code: 'CVE', name: 'Cape Verdean Escudo', symbol: '$', country: 'Cape Verde', countryCode: 'CV', flag: '🇨🇻', rate: 110 },
+  { code: 'STN', name: 'São Tomé Dobra', symbol: 'Db', country: 'São Tomé and Príncipe', countryCode: 'ST', flag: '🇸🇹', rate: 22.5 },
+  { code: 'GMD', name: 'Gambian Dalasi', symbol: 'D', country: 'Gambia', countryCode: 'GM', flag: '🇬🇲', rate: 67 },
+  { code: 'SLL', name: 'Sierra Leonean Leone', symbol: 'Le', country: 'Sierra Leone', countryCode: 'SL', flag: '🇸🇱', rate: 22500 },
+  { code: 'LRD', name: 'Liberian Dollar', symbol: 'L$', country: 'Liberia', countryCode: 'LR', flag: '🇱🇷', rate: 155 },
+  { code: 'GNF', name: 'Guinean Franc', symbol: 'FG', country: 'Guinea', countryCode: 'GN', flag: '🇬🇳', rate: 8600 },
+  { code: 'BIF', name: 'Burundian Franc', symbol: 'FBu', country: 'Burundi', countryCode: 'BI', flag: '🇧🇮', rate: 2900 },
+  { code: 'ZWL', name: 'Zimbabwean Gold', symbol: 'ZWG', country: 'Zimbabwe', countryCode: 'ZW', flag: '🇿🇼', rate: 25.8 },
+  { code: 'XAF', name: 'Central African CFA Franc', symbol: 'FCFA', country: 'Cameroon', countryCode: 'CM', flag: '🇨🇲', rate: 610 },
+  { code: 'XOF', name: 'West African CFA Franc', symbol: 'CFA', country: 'Senegal', countryCode: 'SN', flag: '🇸🇳', rate: 605 },
+]
+
 // Store access + refresh tokens in localStorage and the access token as a cookie
 function storeTokens(accessToken: string, refreshToken?: string) {
   localStorage.setItem('surexend_access_token', accessToken)
@@ -171,7 +219,7 @@ export const walletAPI = {
   getBalance: () =>
     tryWithMock(
       () => withRetry(() => apiClient.get('/wallets/balance').then(r => r.data)),
-      () => ({ usdt: 2450.75, fiat: 3676125, rate: 1500, locked: 0, pending: 0, usdBalance: 2450.75, ngnBalance: 0, localBalances: { NGN: 0 } })
+      () => ({ usdt: 0, fiat: 0, rate: 1500, locked: 0, pending: 0, usdBalance: 0, ngnBalance: 0, localBalances: { NGN: 0 } })
     ),
 
   getDepositAddress: (network: 'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC' | 'BEP20' | 'ARC') =>
@@ -282,16 +330,7 @@ export const conversionAPI = {
       () => withRetry(() => apiClient.get('/conversions/currencies').then(r => r.data)),
       () => ({
         usd: { code: 'USD', name: 'US Dollar', symbol: '$' },
-        local: [
-          { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', flag: '🇳🇬', rate: 1500 },
-          { code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵', flag: '🇬🇭', rate: 15.8 },
-          { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', flag: '🇰🇪', rate: 129.5 },
-          { code: 'ZAR', name: 'South African Rand', symbol: 'R', flag: '🇿🇦', rate: 18.2 },
-          { code: 'UGX', name: 'Ugandan Shilling', symbol: 'USh', flag: '🇺🇬', rate: 3680 },
-          { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TSh', flag: '🇹🇿', rate: 2650 },
-          { code: 'XAF', name: 'Central African CFA', symbol: 'FCFA', flag: '🇨🇲', rate: 610 },
-          { code: 'XOF', name: 'West African CFA', symbol: 'CFA', flag: '🇸🇳', rate: 605 },
-        ],
+        local: AFRICAN_CURRENCIES,
       })
     ),
 
@@ -299,15 +338,9 @@ export const conversionAPI = {
     tryWithMock(
       () => withRetry(() => apiClient.get(`/conversions/rates?currency=${fiatCurrency}`).then(r => r.data)),
       () => {
-        const rateMap: Record<string, number> = {
-          NGN: 1500,
-          GHS: 14.5,
-          KES: 132,
-          ZAR: 18.5,
-          UGX: 3750,
-          TZS: 2600,
-          XOF: 605,
-        }
+        const rateMap: Record<string, number> = Object.fromEntries(
+          AFRICAN_CURRENCIES.map(c => [c.code, c.rate])
+        )
         return {
           currency: fiatCurrency,
           rate: rateMap[fiatCurrency] || 1500,
@@ -322,7 +355,9 @@ export const conversionAPI = {
     tryWithMock(
       () => apiClient.post('/conversions/preview', { from: payload.from, to: payload.to, amount: payload.amount }).then(r => r.data),
       () => {
-        const rateMap: Record<string, number> = { NGN: 1500, GHS: 14.5, KES: 132, ZAR: 18.5 }
+        const rateMap: Record<string, number> = Object.fromEntries(
+          AFRICAN_CURRENCIES.map(c => [c.code, c.rate])
+        )
         const from = payload.from.toUpperCase()
         const to = payload.to.toUpperCase()
         const usdValue = from === 'USD' ? payload.amount : payload.amount / (rateMap[from] || 1500)

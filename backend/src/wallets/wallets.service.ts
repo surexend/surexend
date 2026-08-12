@@ -69,7 +69,21 @@ export class WalletsService {
   }
 
   async getBalance(userId: string) {
-    let wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+    // Use an explicit select so this endpoint never fails if the DB schema is
+    // not yet migrated (e.g. the new localBalances column). Reading only the
+    // columns that always exist keeps the balance screen resilient.
+    let wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        userId: true,
+        usdtBalance: true,
+        usdcBalance: true,
+        lockedBalance: true,
+        localBalance: true,
+        pendingBalance: true,
+      }
+    });
     if (!wallet) {
       wallet = await this.prisma.wallet.create({ data: { userId } });
     }
@@ -143,11 +157,16 @@ export class WalletsService {
     // localBalance field as NGN so existing accounts still show their funds.
     let localBalances: Record<string, number> = {};
     try {
-      const parsed = (wallet.localBalances as any) || {};
+      const fullWallet = await this.prisma.wallet.findUnique({
+        where: { userId },
+        select: { localBalances: true }
+      });
+      const parsed = fullWallet?.localBalances as any;
       if (parsed && typeof parsed === 'object') {
         localBalances = { ...parsed };
       }
     } catch {
+      // Column may not exist in the DB yet (pre-migration); fall through to legacy field
       localBalances = {};
     }
     if (!localBalances['NGN'] && localVal > 0) {
