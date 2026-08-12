@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, TrendingUp, TrendingDown, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy } from 'lucide-react'
+import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, TrendingUp, TrendingDown, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { walletAPI, transactionAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
@@ -67,6 +67,18 @@ const cryptoMarketData = {
   }
 }
 
+// African local currencies for the Local Wallet selector
+const LOCAL_CURRENCIES = [
+  { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', flag: '🇳🇬' },
+  { code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵', flag: '🇬🇭' },
+  { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', flag: '🇰🇪' },
+  { code: 'ZAR', name: 'South African Rand', symbol: 'R', flag: '🇿🇦' },
+  { code: 'UGX', name: 'Ugandan Shilling', symbol: 'USh', flag: '🇺🇬' },
+  { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TSh', flag: '🇹🇿' },
+  { code: 'XAF', name: 'Central African CFA', symbol: 'FCFA', flag: '🇨🇲' },
+  { code: 'XOF', name: 'West African CFA', symbol: 'CFA', flag: '🇸🇳' },
+]
+
 
 
 export default function DashboardPage() {
@@ -74,6 +86,8 @@ export default function DashboardPage() {
   const [showBalance, setShowBalance] = useState(true)
   // 'USD' = crypto wallet (USDC/USDT), 'LOCAL' = local currency wallet (NGN/GHS/etc)
   const [walletView, setWalletView] = useState<'USD' | 'LOCAL'>('USD')
+  const [selectedLocalCurrency, setSelectedLocalCurrency] = useState('NGN')
+  const [showLocalCurrencyPicker, setShowLocalCurrencyPicker] = useState(false)
   const [selectedCrypto, setSelectedCrypto] = useState<'USDT' | 'USDC'>('USDC')
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
   const [showSendModal, setShowSendModal] = useState(false)
@@ -235,7 +249,17 @@ export default function DashboardPage() {
             </div>
 
             <p className="text-xs font-medium text-[#64748B] flex items-center gap-2">
-              {walletView === 'USD' ? 'USD Crypto Balance (USDC / USDT)' : 'Local Currency Balance (NGN)'}
+              {walletView === 'USD' ? 'USD Crypto Balance (USDC / USDT)' : 'Local Wallet Balance'}
+              {walletView === 'LOCAL' && (
+                <button
+                  onClick={() => setShowLocalCurrencyPicker(true)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/8 hover:bg-white/15 border border-white/10 transition-all text-[10px] font-bold text-white"
+                >
+                  <span className="text-[11px]">{LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.flag}</span>
+                  {selectedLocalCurrency}
+                  <ChevronDown className="w-3 h-3 text-[#64748B]" />
+                </button>
+              )}
               <button onClick={() => setShowBalance(!showBalance)} className="hover:text-white transition-colors">
                 {showBalance ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
@@ -247,7 +271,7 @@ export default function DashboardPage() {
               ) : showBalance ? (
                 walletView === 'USD'
                   ? `$${(balanceData?.usdBalance ?? 2450.75).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  : `₦${(balanceData?.ngnBalance ?? 185000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : `${(LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.symbol || '₦')}${((balanceData?.localBalances?.[selectedLocalCurrency] ?? 0) || (selectedLocalCurrency === 'NGN' ? (balanceData?.ngnBalance ?? 0) : 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               ) : '••••••••'}
             </div>
 
@@ -255,7 +279,7 @@ export default function DashboardPage() {
               <p className="text-[11px] text-[#475569] mt-1 font-medium">
                 {walletView === 'USD'
                   ? 'Deposited via crypto (USDC/USDT). Convert on Convert tab to get local currency.'
-                  : 'Deposited via local bank transfer. Convert on Convert tab to get USD.'}
+                  : `Deposited via local bank transfer or converted from USD. Convert on Convert tab to get ${selectedLocalCurrency} or USD.`}
               </p>
             )}
           </div>
@@ -927,6 +951,71 @@ export default function DashboardPage() {
             </motion.div>
           </div>
         )}
+
+        {/* ── Local Currency Picker ── */}
+        <AnimatePresence>
+          {showLocalCurrencyPicker && (
+            <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/80 backdrop-blur-md">
+              <motion.div
+                initial={{ opacity: 0, y: 100 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 100 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className="w-full max-w-md glass-card rounded-t-3xl border-t border-white/15 shadow-2xl"
+                style={{ borderColor: `rgba(${colors.glowRgb},0.4)` }}
+              >
+                <div className="flex items-center justify-between p-4 border-b border-white/10">
+                  <div>
+                    <h3 className="font-bold text-white text-sm">Local Wallet Currency</h3>
+                    <p className="text-[11px] text-[#64748B]">Choose the African currency to display</p>
+                  </div>
+                  <button onClick={() => setShowLocalCurrencyPicker(false)} className="p-1.5 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto pb-8">
+                  {LOCAL_CURRENCIES.map((curr) => {
+                    const isSelected = selectedLocalCurrency === curr.code
+                    const bal = (balanceData?.localBalances?.[curr.code] ?? 0) || (curr.code === 'NGN' ? (balanceData?.ngnBalance ?? 0) : 0)
+                    return (
+                      <button
+                        key={curr.code}
+                        onClick={() => { setSelectedLocalCurrency(curr.code); setShowLocalCurrencyPicker(false) }}
+                        className="w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all"
+                        style={isSelected
+                          ? { background: `rgba(${colors.glowRgb},0.12)`, borderColor: colors.primary }
+                          : { background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.08)' }
+                        }
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{curr.flag}</span>
+                          <div className="text-left">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-white text-sm">{curr.code}</span>
+                              <span className="text-xs text-[#94A3B8]">({curr.symbol})</span>
+                            </div>
+                            <p className="text-[11px] text-[#64748B]">{curr.name}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-white">{curr.symbol}{bal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                            <p className="text-[9px] text-[#64748B]">Wallet balance</p>
+                          </div>
+                          {isSelected && (
+                            <div className="w-5 h-5 rounded-full flex items-center justify-center text-black" style={{ background: colors.primary }}>
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </AnimatePresence>
     </div>
   )

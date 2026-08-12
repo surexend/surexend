@@ -9,6 +9,11 @@ import { CreateConversionDto, PreviewConversionDto } from './dto/create-conversi
 export class ConversionsController {
   constructor(private readonly conversionsService: ConversionsService) {}
 
+  @Get('currencies')
+  async getCurrencies() {
+    return this.conversionsService.getSupportedCurrencies();
+  }
+
   @Get('rates')
   async getRates(@Query('currency') currency: string) {
     return this.conversionsService.getRates(currency);
@@ -16,16 +21,16 @@ export class ConversionsController {
 
   @Post('preview')
   async preview(@Body() dto: PreviewConversionDto) {
-    return this.conversionsService.preview(dto.usdtAmount, dto.fiatCurrency);
+    return this.conversionsService.preview(dto.from, dto.to, dto.amount);
   }
 
   @Post('execute')
   async execute(@CurrentUser() user: any, @Body() dto: CreateConversionDto) {
     return this.conversionsService.execute(
       user.id,
-      dto.usdtAmount,
-      dto.fiatCurrency,
-      dto.bankAccountId,
+      dto.from,
+      dto.to,
+      dto.amount,
       dto.pin
     );
   }

@@ -50,6 +50,7 @@ model Wallet {
   usdcBalance    Float           @default(0.0)
   lockedBalance  Float           @default(0.0)
   localBalance   Float           @default(0.0) // NGN/GHS/KES balance
+  localBalances  Json            @default("{}") // Per-currency local balances e.g. {"NGN":1000,"GHS":200}
   pendingBalance Float           @default(0.0) // Incoming deposits not yet confirmed
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   addresses      WalletAddress[]
@@ -110,7 +111,7 @@ model Conversion {
   fee             Float
   status          ConversionStatus @default(PENDING)
   flutterwaveRef  String?
-  bankAccountId   String
+  bankAccountId   String?
   createdAt       DateTime         @default(now())
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

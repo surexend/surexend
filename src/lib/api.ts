@@ -171,7 +171,7 @@ export const walletAPI = {
   getBalance: () =>
     tryWithMock(
       () => withRetry(() => apiClient.get('/wallets/balance').then(r => r.data)),
-      () => ({ usdt: 2450.75, fiat: 3676125, rate: 1500, locked: 0, pending: 0 })
+      () => ({ usdt: 2450.75, fiat: 3676125, rate: 1500, locked: 0, pending: 0, usdBalance: 2450.75, ngnBalance: 0, localBalances: { NGN: 0 } })
     ),
 
   getDepositAddress: (network: 'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC' | 'BEP20' | 'ARC') =>
@@ -277,6 +277,24 @@ export const transactionAPI = {
 
 // ── Conversion API ────────────────────────────────────────────────────────
 export const conversionAPI = {
+  getCurrencies: () =>
+    tryWithMock(
+      () => withRetry(() => apiClient.get('/conversions/currencies').then(r => r.data)),
+      () => ({
+        usd: { code: 'USD', name: 'US Dollar', symbol: '$' },
+        local: [
+          { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', flag: '🇳🇬', rate: 1500 },
+          { code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵', flag: '🇬🇭', rate: 15.8 },
+          { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', flag: '🇰🇪', rate: 129.5 },
+          { code: 'ZAR', name: 'South African Rand', symbol: 'R', flag: '🇿🇦', rate: 18.2 },
+          { code: 'UGX', name: 'Ugandan Shilling', symbol: 'USh', flag: '🇺🇬', rate: 3680 },
+          { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TSh', flag: '🇹🇿', rate: 2650 },
+          { code: 'XAF', name: 'Central African CFA', symbol: 'FCFA', flag: '🇨🇲', rate: 610 },
+          { code: 'XOF', name: 'West African CFA', symbol: 'CFA', flag: '🇸🇳', rate: 605 },
+        ],
+      })
+    ),
+
   getRates: (fiatCurrency: string) =>
     tryWithMock(
       () => withRetry(() => apiClient.get(`/conversions/rates?currency=${fiatCurrency}`).then(r => r.data)),
@@ -300,40 +318,45 @@ export const conversionAPI = {
       }
     ),
 
-  preview: (payload: { amount: number; currency: string }) =>
+  preview: (payload: { from: string; to: string; amount: number }) =>
     tryWithMock(
-      () => apiClient.post('/conversions/preview', { usdtAmount: payload.amount, fiatCurrency: payload.currency }).then(r => r.data),
+      () => apiClient.post('/conversions/preview', { from: payload.from, to: payload.to, amount: payload.amount }).then(r => r.data),
       () => {
         const rateMap: Record<string, number> = { NGN: 1500, GHS: 14.5, KES: 132, ZAR: 18.5 }
-        const rate = rateMap[payload.currency] || 1500
-        const grossFiat = payload.amount * rate
-        const feeFiat = grossFiat * 0.005
+        const from = payload.from.toUpperCase()
+        const to = payload.to.toUpperCase()
+        const usdValue = from === 'USD' ? payload.amount : payload.amount / (rateMap[from] || 1500)
+        const feeUsd = usdValue * 0.012
+        const receiveAmount = to === 'USD' ? usdValue - feeUsd : (usdValue - feeUsd) * (rateMap[to] || 1500)
         return {
-          usdtAmount: payload.amount,
-          fiatCurrency: payload.currency,
-          rate,
-          grossFiat,
-          feeUsdt: payload.amount * 0.005,
-          netFiat: grossFiat - feeFiat,
+          from,
+          to,
+          amount: payload.amount,
+          rate: to === 'USD' ? 1 / (rateMap[from] || 1500) : (rateMap[to] || 1500),
+          fee: feeUsd,
+          receiveAmount,
         }
       }
     ),
 
-  execute: (payload: { amount: number; currency: string; bankAccountId: string; pin: string }) =>
+  execute: (payload: { from: string; to: string; amount: number; pin: string }) =>
     tryWithMock(
       () => apiClient.post('/conversions/execute', {
-        usdtAmount: payload.amount,
-        fiatCurrency: payload.currency,
-        bankAccountId: payload.bankAccountId,
+        from: payload.from,
+        to: payload.to,
+        amount: payload.amount,
         pin: payload.pin,
       }).then(r => r.data),
       () => ({
         success: true,
         reference: 'CNV-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
+        from: payload.from,
+        to: payload.to,
         amount: payload.amount,
-        fiatCurrency: payload.currency,
-        estimatedDelivery: 'Instant (1-3 minutes)',
-        message: 'Conversion & bank withdrawal initiated successfully'
+        receiveAmount: payload.amount * 1500,
+        rate: 1500,
+        fee: payload.amount * 0.012,
+        message: 'Conversion completed successfully'
       })
     ),
 }

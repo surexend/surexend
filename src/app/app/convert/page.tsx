@@ -1,83 +1,107 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowUpDown, Building2, CheckCircle2, ChevronDown, Check, X, Globe, ArrowDown } from 'lucide-react'
+import { ArrowUpDown, CheckCircle2, ChevronDown, Check, X, Globe, ArrowDown, Wallet } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { conversionAPI, bankAPI } from '@/lib/api'
+import { conversionAPI, walletAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 
-const SUPPORTED_CURRENCIES = [
-  { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', flag: '🇳🇬', rate: 1500 },
-  { code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵', flag: '🇬🇭', rate: 15.8 },
-  { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', flag: '🇰🇪', rate: 129.5 },
-  { code: 'ZAR', name: 'South African Rand', symbol: 'R', flag: '🇿🇦', rate: 18.2 },
-  { code: 'UGX', name: 'Ugandan Shilling', symbol: 'USh', flag: '🇺🇬', rate: 3680 },
-  { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TSh', flag: '🇹🇿', rate: 2650 },
-  { code: 'XAF', name: 'Central African CFA', symbol: 'FCFA', flag: '🇨🇲', rate: 610 },
-  { code: 'XOF', name: 'West African CFA', symbol: 'CFA', flag: '🇸🇳', rate: 605 },
-]
+const USD_ASSET = { code: 'USD', name: 'US Dollar', symbol: '$', flag: '💵' }
 
 export default function ConvertPage() {
   const { variant, colors } = useTheme()
+  const isGold = variant === 'gold'
+  const accentRgb = isGold ? '212, 160, 23' : '181, 226, 61'
+  const accentHex = isGold ? '#D4A017' : '#B5E23D'
+
   const [amount, setAmount] = useState<string>('')
-  const [fiatCurrency, setFiatCurrency] = useState('NGN')
-  const [showCurrencyModal, setShowCurrencyModal] = useState(false)
+  const [fromCode, setFromCode] = useState('USD')
+  const [toCode, setToCode] = useState('NGN')
+  const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null)
   const [step, setStep] = useState(1)
-  const [selectedBank, setSelectedBank] = useState<string>('')
   const [pin, setPin] = useState(['', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
-  const [userBalance] = useState(2450.75)
-  const [flipped, setFlipped] = useState(false) // false = USD → Fiat, true = Fiat → USD
+  const [result, setResult] = useState<any>(null)
 
-  const selectedCurrInfo = SUPPORTED_CURRENCIES.find(c => c.code === fiatCurrency) || SUPPORTED_CURRENCIES[0]
+  // ── Real balances ────────────────────────────────────────────────────────
+  const { data: balanceData, refetch: refetchBalance } = useQuery({
+    queryKey: ['balance'],
+    queryFn: walletAPI.getBalance,
+  })
 
+  const { data: currenciesData } = useQuery({
+    queryKey: ['currencies'],
+    queryFn: conversionAPI.getCurrencies,
+  })
+
+  const localCurrencies = useMemo(() => {
+    const locals = currenciesData?.local || []
+    return locals.length ? locals : []
+  }, [currenciesData])
+
+  const allAssets = useMemo(() => [USD_ASSET, ...localCurrencies], [localCurrencies])
+
+  const assetInfo = (code: string) =>
+    allAssets.find(a => a.code === code) || (code === 'USD' ? USD_ASSET : localCurrencies.find(a => a.code === code))
+
+  const fromInfo = assetInfo(fromCode)
+  const toInfo = assetInfo(toCode)
+
+  // Balances per asset
+  const localBalances: Record<string, number> = balanceData?.localBalances || {}
+  const usdBalance = balanceData?.usdBalance ?? 0
+  const getAssetBalance = (code: string) => code === 'USD' ? usdBalance : (localBalances[code] || 0)
+
+  // Live/static rate for the "to" currency
   const { data: ratesData } = useQuery({
-    queryKey: ['rates', fiatCurrency],
-    queryFn: () => conversionAPI.getRates(fiatCurrency),
-    initialData: { rate: selectedCurrInfo.rate }
+    queryKey: ['rates', toCode],
+    queryFn: () => conversionAPI.getRates(toCode),
+    enabled: !!toCode && toCode !== 'USD',
   })
+  const toRate = ratesData?.rate || (toCode === 'USD' ? 1 : 1)
 
-  const { data: banksData } = useQuery({
-    queryKey: ['savedBanks'],
-    queryFn: bankAPI.list,
-    initialData: [
-      { id: '1', bankName: 'Guaranty Trust Bank', accountNumber: '0123456789' },
-      { id: '2', bankName: 'Zenith Bank', accountNumber: '9876543210' }
-    ]
-  })
-
-  const rate = ratesData?.rate || selectedCurrInfo.rate
-  const fee = 1.5
+  // Client-side preview estimate (server is authoritative on execution)
   const numAmount = parseFloat(amount) || 0
-  const receiveAmount = flipped
-    ? Math.max(0, (numAmount / rate) - fee)
-    : Math.max(0, (numAmount - fee) * rate)
+  const preview = useMemo(() => {
+    if (!numAmount || numAmount <= 0 || fromCode === toCode) return null
+    const usdValue = fromCode === 'USD' ? numAmount : numAmount / (assetInfo(fromCode)?.rate || 1500)
+    const feeUsd = usdValue * 0.012
+    const receiveAmount = toCode === 'USD' ? usdValue - feeUsd : (usdValue - feeUsd) * (assetInfo(toCode)?.rate || 1500)
+    return { usdValue, feeUsd, receiveAmount }
+  }, [numAmount, fromCode, toCode, allAssets])
 
-  const fromSymbol = flipped ? selectedCurrInfo.symbol : '$'
-  const fromCode = flipped ? selectedCurrInfo.code : 'USD'
-  const toSymbol = flipped ? '$' : selectedCurrInfo.symbol
-  const toCode = flipped ? 'USD' : selectedCurrInfo.code
+  const fromSymbol = fromInfo?.symbol || ''
+  const toSymbol = toInfo?.symbol || ''
+  const fromBalance = getAssetBalance(fromCode)
+  const fromRate = fromCode === 'USD' ? 1 : (assetInfo(fromCode)?.rate || 1500)
+  const toRateForDisplay = toCode === 'USD' ? 1 : (assetInfo(toCode)?.rate || 1500)
+
+  const handleSwap = () => {
+    setFromCode(toCode)
+    setToCode(fromCode)
+    setAmount('')
+  }
 
   const handlePreset = (pct: number) => {
-    const base = flipped ? userBalance * rate : userBalance
-    setAmount((base * pct / 100).toFixed(2))
+    setAmount((fromBalance * pct / 100).toFixed(2))
   }
 
   const handleNext = () => {
-    if (numAmount <= fee) { toast.error('Amount must be greater than fee'); return }
+    if (fromCode === toCode) { toast.error('Select different currencies to convert'); return }
+    if (!numAmount || numAmount <= 0) { toast.error('Enter an amount'); return }
+    if (numAmount > fromBalance) { toast.error(`Insufficient balance in ${fromCode}`); return }
     setStep(2)
   }
 
-  const handlePinInput = (num: string) => {
+  const handlePinInput = (digit: string) => {
     const emptyIndex = pin.findIndex(p => p === '')
-    if (emptyIndex !== -1) {
-      const newPin = [...pin]
-      newPin[emptyIndex] = num
-      setPin(newPin)
-      if (emptyIndex === 3) executeConversion(newPin.join(''))
-    }
+    if (emptyIndex === -1) return
+    const newPin = [...pin]
+    newPin[emptyIndex] = digit
+    setPin(newPin)
+    if (emptyIndex === 3) executeConversion(newPin.join(''))
   }
 
   const handlePinDelete = () => {
@@ -92,15 +116,23 @@ export default function ConvertPage() {
   const executeConversion = async (finalPin: string) => {
     setIsLoading(true)
     try {
-      await conversionAPI.execute({ amount: numAmount, currency: fiatCurrency, bankAccountId: selectedBank, pin: finalPin })
-      setStep(4)
+      const res = await conversionAPI.execute({ from: fromCode, to: toCode, amount: numAmount, pin: finalPin })
+      setResult(res)
+      setStep(3)
+      refetchBalance()
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Conversion failed')
       setPin(['', '', '', ''])
-      setStep(2)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const resetAll = () => {
+    setStep(1)
+    setAmount('')
+    setPin(['', '', '', ''])
+    setResult(null)
   }
 
   return (
@@ -122,37 +154,31 @@ export default function ConvertPage() {
                   <ArrowUpDown className="w-5 h-5 flex-shrink-0" style={{ color: colors.primary }} />
                   Convert Currency
                 </h2>
-                <p className="text-[11px] text-[#64748B] mt-0.5">Live rates · Instant bank settlement</p>
+                <p className="text-[11px] text-[#64748B] mt-0.5">Move funds between your USD & local wallets instantly</p>
               </div>
               <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap flex-shrink-0">
-                Live Rates
+                Instant
               </span>
             </div>
 
             {/* FROM Card */}
             <div className="glass-card p-4 rounded-2xl border border-white/10 space-y-3">
-              {/* Top row: token badge + balance + presets */}
               <div className="flex items-center justify-between gap-2">
-                {/* Token badge */}
-                <div className="flex items-center gap-2 bg-white/8 px-3 py-1.5 rounded-xl border border-white/10 flex-shrink-0">
-                  {flipped ? (
-                    <>
-                      <span className="text-base">{selectedCurrInfo.flag}</span>
-                      <span className="font-extrabold text-sm text-white">{selectedCurrInfo.code}</span>
-                    </>
-                  ) : (
-                    <>
-                      <img src="/usd-coin-logo.png" alt="USD" className="w-5 h-5 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                      <span className="font-extrabold text-sm text-white">USD</span>
-                      <span className="text-[10px] text-emerald-400 font-bold">✓</span>
-                    </>
-                  )}
-                </div>
+                {/* Currency selector (FROM) */}
+                <button
+                  type="button"
+                  onClick={() => setPickerTarget('from')}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 transition-all active:scale-95"
+                >
+                  <span className="text-base">{fromInfo?.flag}</span>
+                  <span className="font-extrabold text-sm text-white">{fromCode}</span>
+                  <ChevronDown className="w-4 h-4 text-[#64748B]" />
+                </button>
 
                 {/* Bal + presets */}
                 <div className="flex items-center gap-1 flex-wrap justify-end">
-                  <span className="text-[10px] text-[#64748B] font-medium mr-1">
-                    Bal: {flipped ? `${selectedCurrInfo.symbol}${(userBalance * rate).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `$${userBalance.toLocaleString()}`}
+                  <span className="text-[10px] text-[#64748B] font-medium mr-1 flex items-center gap-1">
+                    <Wallet className="w-3 h-3" /> Bal: {fromSymbol}{fromBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </span>
                   {[25, 50, 75, 100].map((pct) => (
                     <button
@@ -172,6 +198,7 @@ export default function ConvertPage() {
                 <span className="text-2xl font-bold text-[#64748B]">{fromSymbol}</span>
                 <input
                   type="number"
+                  inputMode="decimal"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0"
@@ -184,13 +211,13 @@ export default function ConvertPage() {
             <div className="flex justify-center -my-1 relative z-10">
               <button
                 type="button"
-                onClick={() => { setFlipped(f => !f); setAmount('') }}
+                onClick={handleSwap}
                 className="w-10 h-10 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-90 border-2"
                 style={{
                   background: colors.gradientBg,
                   borderColor: `rgba(${colors.glowRgb}, 0.4)`
                 }}
-                title="Flip conversion direction"
+                title="Swap conversion direction"
               >
                 <ArrowDown className="w-5 h-5 text-black" />
               </button>
@@ -199,33 +226,26 @@ export default function ConvertPage() {
             {/* TO Card */}
             <div className="glass-card p-4 rounded-2xl border border-white/10 space-y-3">
               <div className="flex items-center justify-between">
-                {/* Currency selector */}
+                {/* Currency selector (TO) */}
                 <button
                   type="button"
-                  onClick={() => setShowCurrencyModal(true)}
+                  onClick={() => setPickerTarget('to')}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 transition-all active:scale-95"
                 >
-                  {flipped ? (
-                    <>
-                      <img src="/usd-coin-logo.png" alt="USD" className="w-5 h-5 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                      <span className="font-extrabold text-sm text-white">USD</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-lg">{selectedCurrInfo.flag}</span>
-                      <span className="font-extrabold text-sm text-white">{selectedCurrInfo.code}</span>
-                      <ChevronDown className="w-4 h-4 text-[#64748B]" />
-                    </>
-                  )}
+                  <span className="text-lg">{toInfo?.flag}</span>
+                  <span className="font-extrabold text-sm text-white">{toCode}</span>
+                  <ChevronDown className="w-4 h-4 text-[#64748B]" />
                 </button>
-                <span className="text-[11px] text-[#64748B]">You receive</span>
+                <span className="text-[11px] text-[#64748B] flex items-center gap-1">
+                  <Wallet className="w-3 h-3" /> Bal: {toSymbol}{getAssetBalance(toCode).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-[#64748B]">{toSymbol}</span>
                 <span className="text-3xl sm:text-4xl font-black text-white">
-                  {receiveAmount > 0
-                    ? receiveAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                  {preview && preview.receiveAmount > 0
+                    ? preview.receiveAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })
                     : '0'}
                 </span>
                 <span className="text-sm text-[#64748B] font-medium">{toCode}</span>
@@ -234,55 +254,31 @@ export default function ConvertPage() {
               {/* Rate + fee pill */}
               <div className="flex items-center gap-3 pt-1 border-t border-white/5 flex-wrap">
                 <span className="text-[11px] text-[#64748B]">
-                  1 USD = {selectedCurrInfo.symbol}{rate.toLocaleString()} {selectedCurrInfo.code}
+                  1 {fromCode} = {(fromRate && toRateForDisplay ? (toRateForDisplay / fromRate) : 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {toCode}
                 </span>
-                <span className="text-[10px] text-[#64748B]">Fee: {fee} USD</span>
+                <span className="text-[10px] text-[#64748B]">Fee: {preview ? preview.feeUsd.toFixed(2) : '0.00'} USD</span>
               </div>
             </div>
 
             {/* CTA */}
             <button
               onClick={handleNext}
-              disabled={!numAmount || numAmount <= fee}
+              disabled={!numAmount || fromCode === toCode}
               className="w-full py-4 rounded-2xl font-extrabold text-black shadow-xl transition-transform active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed mt-2"
               style={{ background: colors.gradientBg }}
             >
-              Continue to Bank Selection
+              Continue
             </button>
           </motion.div>
         )}
 
-        {/* ─── STEP 2: Bank Selection ─── */}
+        {/* ─── STEP 2: PIN ─── */}
         {step === 2 && (
-          <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="glass-card p-5 space-y-5 rounded-2xl">
+          <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="glass-card p-6 text-center space-y-6 rounded-2xl">
             <button onClick={() => setStep(1)} className="text-[#94A3B8] hover:text-white text-xs font-semibold flex items-center gap-1">← Back</button>
-            <h2 className="text-lg font-bold text-white">Select Bank Account</h2>
-            <div className="space-y-2.5">
-              {(banksData as any[])?.map((bank: any) => (
-                <label key={bank.id} className="flex items-center p-4 border border-white/10 rounded-2xl cursor-pointer hover:bg-white/[0.04] transition-all bg-white/[0.02]">
-                  <input type="radio" name="bank" value={bank.id} checked={selectedBank === bank.id} onChange={() => setSelectedBank(bank.id)} className="mr-4 accent-emerald-500 w-4 h-4" />
-                  <div>
-                    <p className="font-bold text-white text-sm">{bank.bankName}</p>
-                    <p className="text-xs text-[#94A3B8] font-mono mt-0.5">{bank.accountNumber}</p>
-                  </div>
-                </label>
-              ))}
-              <button onClick={() => toast.success('Redirecting to Add Bank...')} className="w-full p-4 border border-dashed border-white/20 rounded-2xl text-[#94A3B8] hover:text-white hover:border-white/40 transition-colors flex items-center justify-center gap-2 text-xs font-bold">
-                <Building2 className="w-4 h-4" /> Add New Bank Account
-              </button>
-            </div>
-            <button onClick={() => setStep(3)} disabled={!selectedBank} className="w-full py-4 rounded-xl font-bold text-black shadow-lg disabled:opacity-50" style={{ background: colors.gradientBg }}>
-              Review Withdrawal
-            </button>
-          </motion.div>
-        )}
-
-        {/* ─── STEP 3: PIN ─── */}
-        {step === 3 && (
-          <motion.div key="step3" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-6 text-center space-y-6 rounded-2xl">
             <h2 className="text-xl font-bold text-white">Enter 4-Digit PIN</h2>
             <p className="text-xs text-[#94A3B8]">
-              Confirm conversion of {fromSymbol}{numAmount} {fromCode} → {toSymbol}{receiveAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {toCode}
+              Convert {fromSymbol}{numAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {fromCode} → {toSymbol}{(preview?.receiveAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {toCode}
             </p>
             <div className="flex justify-center gap-3 my-4">
               {pin.map((digit, idx) => (
@@ -295,35 +291,49 @@ export default function ConvertPage() {
               {[1,2,3,4,5,6,7,8,9].map(n => (
                 <button key={n} onClick={() => handlePinInput(n.toString())} className="p-3.5 rounded-2xl bg-white/6 hover:bg-white/12 text-white font-bold text-lg active:scale-95 transition-all">{n}</button>
               ))}
-              <button onClick={() => setStep(2)} className="p-3.5 rounded-2xl bg-white/4 text-[#94A3B8] text-xs font-bold">Cancel</button>
+              <button onClick={() => setStep(1)} className="p-3.5 rounded-2xl bg-white/4 text-[#94A3B8] text-xs font-bold">Cancel</button>
               <button onClick={() => handlePinInput('0')} className="p-3.5 rounded-2xl bg-white/6 hover:bg-white/12 text-white font-bold text-lg active:scale-95">0</button>
               <button onClick={handlePinDelete} className="p-3.5 rounded-2xl bg-white/6 text-red-400 font-bold text-lg active:scale-95">⌫</button>
             </div>
           </motion.div>
         )}
 
-        {/* ─── STEP 4: Success ─── */}
-        {step === 4 && (
-          <motion.div key="step4" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-8 text-center space-y-6 rounded-2xl">
+        {/* ─── STEP 3: Success ─── */}
+        {step === 3 && (
+          <motion.div key="step3" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-8 text-center space-y-6 rounded-2xl">
             <div className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-12 h-12 text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white">Conversion Submitted!</h2>
+              <h2 className="text-2xl font-black text-white">Conversion Successful!</h2>
               <p className="text-sm text-[#94A3B8] mt-2">
-                Your bank account will receive {toSymbol}{receiveAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {toCode} within 5 minutes.
+                {toSymbol}{(result?.receiveAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {toCode} has been added to your wallet.
               </p>
             </div>
-            <button onClick={() => { setStep(1); setAmount(''); setPin(['','','','']); setFlipped(false) }} className="w-full py-4 rounded-xl font-bold text-black shadow-lg" style={{ background: colors.gradientBg }}>
+            <div className="glass-card p-4 rounded-xl border border-white/10 space-y-2 text-left">
+              <div className="flex justify-between text-xs">
+                <span className="text-[#94A3B8]">Converted</span>
+                <span className="text-white font-bold">{fromSymbol}{(result?.amount || 0).toLocaleString()} {fromCode}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-[#94A3B8]">Rate</span>
+                <span className="text-white font-bold">1 {fromCode} = {result?.rate ? (result.rate / (fromRate || 1)).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'} {toCode}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-[#94A3B8]">Fee</span>
+                <span className="text-white font-bold">${(result?.fee || 0).toFixed(2)}</span>
+              </div>
+            </div>
+            <button onClick={resetAll} className="w-full py-4 rounded-xl font-bold text-black shadow-lg" style={{ background: colors.gradientBg }}>
               Done / Convert Again
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Fiat Currency Modal ── */}
+      {/* ── Currency Picker Modal ── */}
       <AnimatePresence>
-        {showCurrencyModal && (
+        {pickerTarget && (
           <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/80 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, y: 100 }}
@@ -336,19 +346,31 @@ export default function ConvertPage() {
               <div className="flex items-center justify-between p-4 border-b border-white/10">
                 <div className="flex items-center gap-2">
                   <Globe className="w-4 h-4 text-emerald-400" />
-                  <h3 className="font-bold text-white text-sm">Select Fiat Currency</h3>
+                  <h3 className="font-bold text-white text-sm">Select {pickerTarget === 'from' ? 'From' : 'To'} Currency</h3>
                 </div>
-                <button onClick={() => setShowCurrencyModal(false)} className="p-1.5 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white">
+                <button onClick={() => setPickerTarget(null)} className="p-1.5 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto pb-8">
-                {SUPPORTED_CURRENCIES.map((curr) => {
-                  const isSelected = fiatCurrency === curr.code
+                {allAssets.map((asset: any) => {
+                  const isSelected = (pickerTarget === 'from' ? fromCode : toCode) === asset.code
+                  const isUsd = asset.code === 'USD'
+                  const balance = getAssetBalance(asset.code)
+                  const assetRate = isUsd ? 1 : (asset.rate || 1500)
                   return (
                     <button
-                      key={curr.code}
-                      onClick={() => { setFiatCurrency(curr.code); setShowCurrencyModal(false); toast.success(`Selected ${curr.name}`) }}
+                      key={asset.code}
+                      onClick={() => {
+                        if (pickerTarget === 'from') {
+                          if (asset.code === toCode) { toast.error('From and To must be different'); return }
+                          setFromCode(asset.code)
+                        } else {
+                          if (asset.code === fromCode) { toast.error('From and To must be different'); return }
+                          setToCode(asset.code)
+                        }
+                        setPickerTarget(null)
+                      }}
                       className="w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all"
                       style={isSelected
                         ? { background: `rgba(${colors.glowRgb},0.12)`, borderColor: colors.primary }
@@ -356,19 +378,19 @@ export default function ConvertPage() {
                       }
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">{curr.flag}</span>
+                        <span className="text-2xl">{asset.flag}</span>
                         <div className="text-left">
                           <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-white text-sm">{curr.code}</span>
-                            <span className="text-xs text-[#94A3B8]">({curr.symbol})</span>
+                            <span className="font-extrabold text-white text-sm">{asset.code}</span>
+                            <span className="text-xs text-[#94A3B8]">({asset.symbol})</span>
                           </div>
-                          <p className="text-[11px] text-[#64748B]">{curr.name}</p>
+                          <p className="text-[11px] text-[#64748B]">{asset.name}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <p className="text-xs font-bold text-emerald-400">1 USD = {curr.symbol}{curr.rate.toLocaleString()}</p>
-                          <p className="text-[9px] text-[#64748B]">Instant Settlement</p>
+                          <p className="text-xs font-bold text-emerald-400">{isUsd ? 'Crypto balance' : `1 USD = ${asset.symbol}${assetRate.toLocaleString()}`}</p>
+                          <p className="text-[10px] text-[#64748B]">Bal: {asset.symbol}{balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
                         </div>
                         {isSelected && (
                           <div className="w-5 h-5 rounded-full flex items-center justify-center text-black" style={{ background: colors.primary }}>

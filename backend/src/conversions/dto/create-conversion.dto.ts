@@ -1,17 +1,17 @@
 import { IsString, IsNumber, IsNotEmpty, Min } from 'class-validator';
 
 export class CreateConversionDto {
+  @IsString()
+  @IsNotEmpty()
+  from: string;
+
+  @IsString()
+  @IsNotEmpty()
+  to: string;
+
   @IsNumber()
   @Min(1)
-  usdtAmount: number;
-
-  @IsString()
-  @IsNotEmpty()
-  fiatCurrency: string;
-
-  @IsString()
-  @IsNotEmpty()
-  bankAccountId: string;
+  amount: number;
 
   @IsString()
   @IsNotEmpty()
@@ -19,11 +19,15 @@ export class CreateConversionDto {
 }
 
 export class PreviewConversionDto {
-  @IsNumber()
-  @Min(1)
-  usdtAmount: number;
+  @IsString()
+  @IsNotEmpty()
+  from: string;
 
   @IsString()
   @IsNotEmpty()
-  fiatCurrency: string;
+  to: string;
+
+  @IsNumber()
+  @Min(1)
+  amount: number;
 }

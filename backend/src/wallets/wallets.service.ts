@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { CctpService } from './cctp.service';
+import { getLocalRate } from '../common/currency.constants';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
@@ -133,19 +134,36 @@ export class WalletsService {
       this.logger.error('Error syncing balance with Circle:', err.message);
     }
 
-    const rate = 1500;
     const usdVal = wallet.usdtBalance + wallet.usdcBalance;
     const lockedVal = wallet.lockedBalance || 0;
     const pendingVal = wallet.pendingBalance || 0;
     const localVal = wallet.localBalance || 0;
 
+    // Parse per-currency local balances; fall back to the legacy single
+    // localBalance field as NGN so existing accounts still show their funds.
+    let localBalances: Record<string, number> = {};
+    try {
+      const parsed = (wallet.localBalances as any) || {};
+      if (parsed && typeof parsed === 'object') {
+        localBalances = { ...parsed };
+      }
+    } catch {
+      localBalances = {};
+    }
+    if (!localBalances['NGN'] && localVal > 0) {
+      localBalances['NGN'] = localVal;
+    }
+
+    const ngnBalance = localBalances['NGN'] || 0;
+
     return {
       usdBalance: usdVal,
-      ngnBalance: (usdVal + localVal) * rate,
+      ngnBalance,
+      localBalances,
       lockedBalance: lockedVal,
       usdt: usdVal,
-      fiat: localVal * rate,
-      rate,
+      fiat: ngnBalance,
+      rate: getLocalRate('NGN'),
       locked: lockedVal,
       pending: pendingVal
     };
