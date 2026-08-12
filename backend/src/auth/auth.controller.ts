@@ -1,7 +1,8 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseInterceptors } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseInterceptors, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, VerifyOtpDto } from './dto/auth.dto';
 import { AuditLogInterceptor } from '../common/interceptors/audit-log.interceptor';
+import { Request } from 'express';
 
 @Controller('auth')
 @UseInterceptors(AuditLogInterceptor)
@@ -15,8 +16,8 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Body() dto: LoginDto, @Req() req: Request) {
+    return this.authService.login(dto, req);
   }
 
   @Post('verify-otp')

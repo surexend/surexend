@@ -551,3 +551,18 @@ export const supportAPI = {
       ]
     ),
 }
+
+// ── Notifications API ─────────────────────────────────────────────────────
+export const notificationsAPI = {
+  getAll: () =>
+    tryWithMock(
+      () => apiClient.get('/notifications').then(r => r.data),
+      () => ({ notifications: [], unreadCount: 0 })
+    ),
+
+  markAllRead: () =>
+    tryWithMock(
+      () => apiClient.patch('/notifications/read-all').then(r => r.data),
+      () => ({ message: 'All notifications marked as read' })
+    ),
+}

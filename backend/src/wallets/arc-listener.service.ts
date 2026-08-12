@@ -136,6 +136,14 @@ export class ArcListenerService implements OnModuleInit {
               data: {}
             });
 
+            // Persist in-app notification so the bell drawer shows the deposit
+            await this.notificationsService.createNotification(walletAddress.wallet.userId, {
+              title: 'Deposit Received',
+              body: `Successfully received +${amount} USDC on Arc.`,
+              type: 'DEPOSIT',
+              data: { amount, currency: 'USDC', network: 'ARC', txHash }
+            });
+
             await this.notificationsService.sendTransactionEmail(
               walletAddress.wallet.user.email,
               amount,

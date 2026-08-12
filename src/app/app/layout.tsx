@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AISupportWidget from '@/components/AISupportWidget'
+import { notificationsAPI } from '@/lib/api'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,14 +30,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(2)
+  const [unreadCount, setUnreadCount] = useState(0)
   const [avatar, setAvatar] = useState<string | null>(null)
+  const [notifications, setNotifications] = useState<any[]>([])
 
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'KYC Tier 2 Approved! 🎉', desc: 'Your identity has been verified. Daily limits increased to $50,000.', time: '10m ago', isRead: false, type: 'kyc' },
-    { id: 2, title: 'Deposit Received', desc: 'Successfully received +128.50 USD via Polygon.', time: '1h ago', isRead: false, type: 'deposit' },
-    { id: 3, title: 'Security Alert', desc: 'New login detected from Mobile Safari (Lagos, Nigeria).', time: '5h ago', isRead: true, type: 'security' },
-  ])
+  const loadNotifications = useCallback(async () => {
+    try {
+      const data = await notificationsAPI.getAll()
+      setNotifications(data?.notifications || [])
+      setUnreadCount(data?.unreadCount ?? 0)
+    } catch {
+      setNotifications([])
+      setUnreadCount(0)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadNotifications()
+  }, [loadNotifications])
 
   useEffect(() => {
     setMounted(true)
@@ -75,6 +86,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const markAllRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
     setUnreadCount(0)
+    notificationsAPI.markAllRead().catch(() => {})
     toast.success('All notifications marked as read')
   }
 
@@ -170,7 +182,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
               {/* Notification Bell Button with badge & drawer */}
               <button 
-                onClick={() => setShowNotifications(true)}
+                onClick={() => { setShowNotifications(true); loadNotifications() }}
                 className="relative p-2 rounded-xl hover:bg-white/5 text-[#94A3B8] hover:text-white transition-colors active:scale-95"
                 title="Notifications"
               >
@@ -258,6 +270,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
 
                 <div className="space-y-2.5">
+                  {notifications.length === 0 && (
+                    <div className="text-center py-10">
+                      <Bell className="w-8 h-8 text-[#64748B] mx-auto mb-2 opacity-50" />
+                      <p className="text-sm text-[#94A3B8]">No notifications yet</p>
+                    </div>
+                  )}
                   {notifications.map((n) => (
                     <div 
                       key={n.id}
@@ -268,10 +286,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       }`}
                     >
                       <div className="flex justify-between items-start mb-1">
-                        <h4 className="font-bold text-white text-xs">{n.title}</h4>
-                        <span className="text-[10px] text-[#64748B]">{n.time}</span>
+                        <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
+                          {n.type === 'LOGIN' ? <ShieldCheck className="w-3.5 h-3.5 text-blue-400" /> : <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-400" />}
+                          {n.title}
+                        </h4>
+                        <span className="text-[10px] text-[#64748B] flex-shrink-0 ml-2">
+                          {new Date(n.createdAt || Date.now()).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </div>
-                      <p className="text-[11px] text-[#94A3B8] leading-relaxed">{n.desc}</p>
+                      <p className="text-[11px] text-[#94A3B8] leading-relaxed">{n.body}</p>
                     </div>
                   ))}
                 </div>

@@ -341,8 +341,6 @@ function TransactionDetailModal({
 }: { tx: any; onClose: () => void; accentHex: string; accentRgb: string }) {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [details, setDetails] = useState<any>(tx)
-  const [loading, setLoading] = useState(!!tx?.id)
-  const [error, setError] = useState('')
 
   useEffect(() => {
     let active = true
@@ -350,15 +348,9 @@ function TransactionDetailModal({
       if (!tx?.id) return
       try {
         const full = await transactionAPI.getById(tx.id)
-        if (active) {
-          setDetails(full || tx)
-          setLoading(false)
-        }
+        if (active) setDetails(full || tx)
       } catch {
-        if (active) {
-          setDetails(tx)
-          setLoading(false)
-        }
+        if (active) setDetails(tx)
       }
     }
     load()
@@ -379,6 +371,10 @@ function TransactionDetailModal({
   const sign = isCredit ? '+' : isDebit ? '-' : ''
   const amtColor = isCredit ? 'text-emerald-400' : isDebit ? 'text-red-400' : 'text-[#64748B]'
   const symbol = details?.currency === 'NGN' ? '₦' : details?.currency === 'GHS' ? 'GH₵' : details?.currency === 'KES' ? 'KSh' : '$'
+  const typeLabel: Record<string, string> = {
+    SEND: 'Send', RECEIVE: 'Receive', CONVERT: 'Convert',
+    BILL_PAYMENT: 'Bill Payment', REFERRAL_EARNING: 'Referral Rewards',
+  }
 
   const meta = details?.metadata || {}
   const network = meta.network || details?.network || 'ARC'
@@ -388,17 +384,22 @@ function TransactionDetailModal({
       : `https://etherscan.io/tx/${meta.txHash}`
     : null
 
-  const rows: { label: string; value: string; copyable?: string }[] = [
-    { label: 'Reference', value: details?.reference || '—', copyable: details?.reference },
-    { label: 'Type', value: (details?.type || '—') },
-    { label: 'Status', value: (details?.status || '—') },
+  const statusColor = (s: string) => {
+    const u = (s || '').toUpperCase()
+    if (u === 'COMPLETED') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+    if (u === 'FAILED') return 'bg-red-500/10 text-red-400 border-red-500/20'
+    return 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+  }
+
+  const rows: { label: string; value: string; copyable?: string; mono?: boolean }[] = [
+    { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
     { label: 'Amount', value: `${sign}${symbol}${details?.amount}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}` },
     { label: 'Fee', value: `$${(details?.fee || 0)}` },
     { label: 'Network', value: network },
-    ...(meta.sourceAddress ? [{ label: 'From', value: meta.sourceAddress, copyable: meta.sourceAddress }] : []),
-    ...(meta.destinationAddress || details?.recipient ? [{ label: 'To', value: meta.destinationAddress || details?.recipient, copyable: meta.destinationAddress || details?.recipient }] : []),
-    ...(meta.txHash ? [{ label: 'Transaction Hash', value: meta.txHash, copyable: meta.txHash }] : []),
     { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
+    ...(meta.sourceAddress ? [{ label: 'From Address', value: meta.sourceAddress, copyable: meta.sourceAddress, mono: true }] : []),
+    ...(meta.destinationAddress || details?.recipient ? [{ label: 'To Address', value: meta.destinationAddress || details?.recipient, copyable: meta.destinationAddress || details?.recipient, mono: true }] : []),
+    ...(meta.txHash ? [{ label: 'Transaction Hash', value: meta.txHash, copyable: meta.txHash, mono: true }] : []),
   ]
 
   return (
@@ -417,17 +418,17 @@ function TransactionDetailModal({
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{ background: `rgba(${accentRgb}, 0.12)` }}>
-                {typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING'
+                {isCredit
                   ? <ArrowDownLeft size={18} style={{ color: '#10B981' }} />
                   : typeUpper === 'CONVERT'
                     ? <RefreshCw size={18} style={{ color: '#F59E0B' }} />
                     : <ArrowUpRight size={18} style={{ color: '#EF4444' }} />}
               </div>
               <div>
-                <h3 className="text-white font-bold text-sm sm:text-base">Transaction Details</h3>
-                <p className="text-[#94A3B8] text-xs">
-                  {(details?.type || 'Transaction')}
-                </p>
+                <h3 className="text-white font-bold text-sm sm:text-base">{typeLabel[typeUpper] || 'Transaction'}</h3>
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusColor(details?.status)}`}>
+                  {(details?.status || 'PENDING').toUpperCase()}
+                </span>
               </div>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white transition-colors">
@@ -436,28 +437,22 @@ function TransactionDetailModal({
           </div>
 
           {/* Amount */}
-          <div className="text-center py-6 mb-4 border-y border-white/5">
+          <div className="text-center py-6 mb-4 border-y border-white/5 rounded-lg">
             <p className={`text-4xl font-extrabold ${amtColor}`}>
               {sign}{symbol}{details?.amount}
             </p>
             <p className="text-[#64748B] text-xs mt-2">
-              {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'}
+              {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {network}
             </p>
           </div>
 
           {/* Detail rows */}
           <div className="space-y-3">
             {rows.map((row) => (
-              <div key={row.label} className="flex items-start justify-between gap-3">
+              <div key={row.label} className="flex items-start justify-between gap-3 pb-2.5 border-b border-white/[0.04] last:border-0 last:pb-0">
                 <span className="text-[#94A3B8] text-xs font-medium mt-0.5 flex-shrink-0">{row.label}</span>
                 <span className="flex items-center gap-2 min-w-0 justify-end">
-                  {row.label === 'Type' || row.label === 'Status' ? (
-                    row.label === 'Status'
-                      ? <StatusBadge status={row.value} />
-                      : <span className="text-white text-xs font-semibold">{row.value}</span>
-                  ) : (
-                    <span className="text-white text-xs font-medium font-mono text-right break-all">{row.value}</span>
-                  )}
+                  <span className={`text-white text-xs font-medium text-right break-all ${row.mono ? 'font-mono' : ''}`}>{row.value}</span>
                   {row.copyable && (
                     <button
                       onClick={() => copy(row.label, row.copyable!)}

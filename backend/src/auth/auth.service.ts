@@ -6,6 +6,7 @@ import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
+import axios from 'axios';
 import { RegisterDto, LoginDto, VerifyOtpDto } from './dto/auth.dto';
 import { v4 as uuidv4 } from 'uuid';
 import Redis from 'ioredis';
@@ -74,7 +75,7 @@ export class AuthService {
     return { message: 'Registration successful, OTP sent' };
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, req?: any) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email }
     });
@@ -96,7 +97,49 @@ export class AuthService {
       };
     }
 
+    // Record a "new login" notification with device + location so the bell
+    // drawer shows real activity (date/time/location) instead of fake entries.
+    try {
+      const ip = (req?.ip || req?.headers?.['x-forwarded-for'] || 'Unknown').toString();
+      const cleanIp = ip.includes(',') ? ip.split(',')[0].trim() : ip;
+      const userAgent = req?.headers?.['user-agent'] || '';
+      const device = this.parseDevice(userAgent);
+      let location = 'Unknown location';
+      try {
+        const geo = await axios.get(`https://ipwho.is/${encodeURIComponent(cleanIp)}`, { timeout: 3000 });
+        if (geo.data?.success) {
+          const c = geo.data;
+          location = [c.city, c.region, c.country].filter(Boolean).join(', ') || 'Unknown location';
+        }
+      } catch { /* geolocation is best-effort */ }
+
+      const time = new Date().toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+
+      await this.notificationsService.createNotification(user.id, {
+        title: 'New Login',
+        body: `Signed in from ${device} (${location}). ${time}.`,
+        type: 'LOGIN',
+        data: { ip: cleanIp, device, location, time }
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to record login notification: ${err.message}`);
+    }
+
     return this.generateTokens(user);
+  }
+
+  private parseDevice(userAgent: string): string {
+    if (!userAgent) return 'Unknown device';
+    const ua = userAgent.toLowerCase();
+    if (ua.includes('iphone')) return 'iPhone';
+    if (ua.includes('ipad')) return 'iPad';
+    if (ua.includes('android')) return 'Android';
+    if (ua.includes('macintosh')) return 'Mac';
+    if (ua.includes('windows')) return 'Windows';
+    if (ua.includes('linux')) return 'Linux';
+    return userAgent.slice(0, 40);
   }
 
   async generateTokens(user: any) {

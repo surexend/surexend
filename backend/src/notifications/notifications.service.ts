@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import axios from 'axios';
 import * as admin from 'firebase-admin';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class NotificationsService {
@@ -10,7 +11,10 @@ export class NotificationsService {
   private resend: Resend;
   private firebaseInitialized = false;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private prisma: PrismaService,
+  ) {
     const resendKey = this.configService.get('app.resend.apiKey');
     if (resendKey) {
       this.resend = new Resend(resendKey);
@@ -118,5 +122,45 @@ export class NotificationsService {
     } catch (error) {
       this.logger.error(`Failed to send push notification: ${error.message}`);
     }
+  }
+
+  // Persist an in-app notification to the DB (shown in the bell drawer)
+  async createNotification(userId: string, payload: { title: string, body: string, type: string, data?: any }) {
+    try {
+      return await this.prisma.notification.create({
+        data: {
+          userId,
+          title: payload.title,
+          body: payload.body,
+          type: payload.type,
+          data: payload.data || {},
+        }
+      });
+    } catch (error: any) {
+      this.logger.error(`Failed to persist notification: ${error.message}`);
+      return null;
+    }
+  }
+
+  async getNotifications(userId: string, limit = 30) {
+    return this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  async getUnreadCount(userId: string) {
+    return this.prisma.notification.count({
+      where: { userId, isRead: false }
+    });
+  }
+
+  async markAllRead(userId: string) {
+    await this.prisma.notification.updateMany({
+      where: { userId, isRead: false },
+      data: { isRead: true }
+    });
+    return { message: 'All notifications marked as read' };
   }
 }
