@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
@@ -67,16 +67,7 @@ const cryptoMarketData = {
   }
 }
 
-// Cash Flow Money In vs Money Out data
-const cashFlowData = [
-  { day: 'Mon', moneyIn: 850, moneyOut: 210 },
-  { day: 'Tue', moneyIn: 1200, moneyOut: 450 },
-  { day: 'Wed', moneyIn: 640, moneyOut: 300 },
-  { day: 'Thu', moneyIn: 1500, moneyOut: 620 },
-  { day: 'Fri', moneyIn: 980, moneyOut: 180 },
-  { day: 'Sat', moneyIn: 1850, moneyOut: 790 },
-  { day: 'Sun', moneyIn: 2100, moneyOut: 340 },
-]
+
 
 export default function DashboardPage() {
   const { variant, colors } = useTheme()
@@ -113,7 +104,7 @@ export default function DashboardPage() {
 
   const { data: txData, isLoading: isLoadingTx } = useQuery({
     queryKey: ['recentTransactions'],
-    queryFn: () => transactionAPI.getHistory({ limit: 5 }),
+    queryFn: () => transactionAPI.getHistory({ limit: 100 }),
     retry: false
   })
 
@@ -126,6 +117,32 @@ export default function DashboardPage() {
     BILL_PAYMENT: 'Bill Payment',
     REFERRAL_EARNING: 'Referral Rewards',
   }
+
+  // Real 7-day cash flow (Money In vs Money Out) computed from transactions
+  const cashFlowData = useMemo(() => {
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    const result = labels.map(label => ({ day: label, moneyIn: 0, moneyOut: 0 }))
+    const now = new Date()
+    const dayKeys = labels.map((_, i) => {
+      const d = new Date(now)
+      d.setDate(now.getDate() - (6 - i))
+      return d.toDateString()
+    })
+    for (const tx of list) {
+      const t = new Date(tx.createdAt || tx.date || Date.now())
+      const idx = dayKeys.indexOf(t.toDateString())
+      if (idx === -1) continue
+      const amt = Number(tx.amount) || 0
+      const type = (tx.type || '').toUpperCase()
+      const isOut = type === 'SEND' || type === 'BILL_PAYMENT'
+      if (isOut) result[idx].moneyOut += amt
+      else result[idx].moneyIn += amt
+    }
+    return result
+  }, [list])
+
+  const totalIn = cashFlowData.reduce((s, d) => s + d.moneyIn, 0)
+  const totalOut = cashFlowData.reduce((s, d) => s + d.moneyOut, 0)
 
   return (
     <div className="w-full max-w-full overflow-x-hidden px-4 py-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-6 pb-36 sm:pb-32">
@@ -471,11 +488,11 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-3 mb-3 bg-[#121827] p-3 rounded-xl border border-white/5">
             <div>
               <p className="text-[10px] text-[#64748B] uppercase tracking-wider">Total Money In</p>
-              <p className="text-sm font-bold text-[#10B981]">+$9,120.00</p>
+              <p className="text-sm font-bold text-[#10B981]">+${totalIn.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
             <div>
               <p className="text-[10px] text-[#64748B] uppercase tracking-wider">Total Money Out</p>
-              <p className="text-sm font-bold text-[#EF4444]">-$2,890.00</p>
+              <p className="text-sm font-bold text-[#EF4444]">-${totalOut.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
           </div>
 

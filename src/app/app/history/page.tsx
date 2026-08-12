@@ -408,50 +408,53 @@ function TransactionDetailModal({
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose} />
       <motion.div
-        className="fixed inset-x-3 bottom-20 z-[70] sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[440px] max-h-[82vh] overflow-y-auto"
-        initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }}
-        transition={{ type: 'spring', damping: 24, stiffness: 300 }}
+        className="fixed inset-x-0 bottom-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[560px] sm:max-w-[92vw] max-h-[88vh] overflow-y-auto sm:rounded-3xl rounded-t-3xl"
+        initial={{ opacity: 0, y: 60 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 60 }}
+        transition={{ type: 'spring', damping: 26, stiffness: 320 }}
       >
-        <div className="bg-[#0F1629] rounded-3xl p-5 sm:p-6 border border-white/10 shadow-2xl">
+        <div className="bg-[#0F1629] sm:border border-white/10 shadow-2xl p-5 sm:p-7">
           {/* Header */}
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: `rgba(${accentRgb}, 0.12)` }}>
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+                style={{ background: `rgba(${accentRgb}, 0.14)` }}>
                 {isCredit
-                  ? <ArrowDownLeft size={18} style={{ color: '#10B981' }} />
+                  ? <ArrowDownLeft size={20} style={{ color: '#10B981' }} />
                   : typeUpper === 'CONVERT'
-                    ? <RefreshCw size={18} style={{ color: '#F59E0B' }} />
-                    : <ArrowUpRight size={18} style={{ color: '#EF4444' }} />}
+                    ? <RefreshCw size={20} style={{ color: '#F59E0B' }} />
+                    : <ArrowUpRight size={20} style={{ color: '#EF4444' }} />}
               </div>
               <div>
-                <h3 className="text-white font-bold text-sm sm:text-base">{typeLabel[typeUpper] || 'Transaction'}</h3>
+                <h3 className="text-white font-bold text-base">{typeLabel[typeUpper] || 'Transaction'}</h3>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusColor(details?.status)}`}>
                   {(details?.status || 'PENDING').toUpperCase()}
                 </span>
               </div>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white transition-colors">
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/10 text-[#64748B] hover:text-white transition-colors">
               <X size={18} />
             </button>
           </div>
 
           {/* Amount */}
-          <div className="text-center py-6 mb-4 border-y border-white/5 rounded-lg">
-            <p className={`text-4xl font-extrabold ${amtColor}`}>
+          <div className="text-center py-7 mb-5 bg-white/[0.03] border border-white/5 rounded-2xl">
+            <p className="text-[10px] uppercase tracking-widest text-[#64748B] font-bold mb-2">Amount</p>
+            <p className={`text-5xl font-extrabold ${amtColor}`}>
               {sign}{symbol}{details?.amount}
             </p>
-            <p className="text-[#64748B] text-xs mt-2">
+            <p className="text-[#94A3B8] text-xs mt-2">
               {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {network}
             </p>
           </div>
 
-          {/* Detail rows */}
-          <div className="space-y-3">
+          {/* Detail grid (2 columns on desktop, stacked on mobile) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0">
             {rows.map((row) => (
-              <div key={row.label} className="flex items-start justify-between gap-3 pb-2.5 border-b border-white/[0.04] last:border-0 last:pb-0">
+              <div key={row.label} className="flex items-start justify-between gap-3 py-3 border-b border-white/[0.05]">
                 <span className="text-[#94A3B8] text-xs font-medium mt-0.5 flex-shrink-0">{row.label}</span>
-                <span className="flex items-center gap-2 min-w-0 justify-end">
+                <span className="flex items-center gap-2 min-w-0 justify-end max-w-[70%]">
                   <span className={`text-white text-xs font-medium text-right break-all ${row.mono ? 'font-mono' : ''}`}>{row.value}</span>
                   {row.copyable && (
                     <button
@@ -473,7 +476,7 @@ function TransactionDetailModal({
               href={explorerUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-5 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white transition-all"
+              className="mt-6 flex items-center justify-center gap-2 py-3.5 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white transition-all"
             >
               <ExternalLink size={14} style={{ color: accentHex }} />
               View on {network} Explorer
