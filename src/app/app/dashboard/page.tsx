@@ -134,6 +134,8 @@ export default function DashboardPage() {
       if (idx === -1) continue
       const amt = Number(tx.amount) || 0
       const type = (tx.type || '').toUpperCase()
+      const status = (tx.status || '').toUpperCase()
+      if (status === 'FAILED') continue
       const isOut = type === 'SEND' || type === 'BILL_PAYMENT'
       if (isOut) result[idx].moneyOut += amt
       else result[idx].moneyIn += amt

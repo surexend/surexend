@@ -378,6 +378,7 @@ function TransactionDetailModal({
 
   const meta = details?.metadata || {}
   const network = meta.network || details?.network || 'ARC'
+  const errorReason = meta.errorReason || details?.errorReason
   const explorerUrl = meta.txHash
     ? network === 'ARC'
       ? `https://testnet.arcscan.app/tx/${meta.txHash}`
@@ -437,6 +438,19 @@ function TransactionDetailModal({
               <X size={18} />
             </button>
           </div>
+
+          {/* Failure explanation */}
+          {(details?.status || '').toUpperCase() === 'FAILED' && (
+            <div className="mb-4 flex items-start gap-2.5 p-3.5 rounded-xl bg-red-500/[0.08] border border-red-500/25">
+              <XCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-red-400 text-xs font-bold mb-0.5">Transaction Failed</p>
+                <p className="text-[#FDA4AF] text-[11px] leading-relaxed">
+                  {errorReason || 'This transaction was not completed. The sent amount (if any) has been refunded to your available balance.'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Amount */}
           <div className="text-center py-6 mb-5 bg-white/[0.03] border border-white/5 rounded-xl">

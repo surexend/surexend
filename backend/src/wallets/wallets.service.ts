@@ -221,17 +221,20 @@ export class WalletsService {
 
         const circleTxs = txResponse.data.data.transactions || [];
         for (const tx of circleTxs) {
-          if (tx.state !== 'COMPLETE' && tx.state !== 'COMPLETED') continue;
           const amount = parseFloat((tx.amounts || [])[0]);
           if (!amount || amount <= 0) continue;
 
           const symbol = symbolByTokenId.get(tx.tokenId) || 'USDC';
           const type = tx.transactionType === 'OUTBOUND' ? 'SEND' : 'RECEIVE';
+
+          const state = (tx.state || '').toUpperCase();
+          if (state !== 'COMPLETE' && state !== 'COMPLETED' && state !== 'FAILED') continue;
+
+          const isFailed = state === 'FAILED';
+          const status = isFailed ? 'FAILED' : 'COMPLETED';
           // Match the ArcListener's reference scheme so the same on-chain tx is
           // not recorded twice (listener: RECV-ARC-<txHash>, this sync: SEND-ARC-<txHash>).
-          const reference = type === 'RECEIVE'
-            ? `RECV-ARC-${tx.txHash}`
-            : `SEND-ARC-${tx.txHash}`;
+          const reference = `${type === 'RECEIVE' ? 'RECV' : 'SEND'}-ARC-${tx.txHash}`;
 
           const existing = await this.prisma.transaction.findUnique({
             where: { reference }
@@ -242,7 +245,7 @@ export class WalletsService {
             data: {
               userId,
               type,
-              status: 'COMPLETED',
+              status,
               amount,
               fee: parseFloat(tx.networkFee || '0') || 0,
               currency: symbol,
@@ -252,12 +255,13 @@ export class WalletsService {
                 txHash: tx.txHash,
                 circleTransactionId: tx.id,
                 destinationAddress: tx.destinationAddress,
-                sourceAddress: tx.sourceAddress
+                sourceAddress: tx.sourceAddress,
+                ...(isFailed ? { errorReason: tx.errorCode || tx.errorMessage || 'Transaction failed on Circle.', failedAt: 'circle-sync' } : {})
               },
               createdAt: new Date(tx.createDate)
             }
           });
-          this.logger.log(`Synced Circle ${type} history: ${amount} ${symbol} (${tx.txHash})`);
+          this.logger.log(`Synced Circle ${type} history: ${amount} ${symbol} (${tx.txHash}) status=${status}`);
         }
       }
     } catch (err: any) {
@@ -508,28 +512,44 @@ export class WalletsService {
           }
         }
       );
-      
+
       const tokenBalances = balancesResponse.data.data.tokenBalances || [];
       const usdtToken = tokenBalances.find(t => t.token.symbol.toUpperCase() === 'USDT' || t.token.symbol.toUpperCase() === 'USDC');
-      
+
       if (!usdtToken) {
         throw new BadRequestException('USD stablecoin token configuration not found in wallet.');
+      }
+
+      // 3b. Real-time balance check against Circle so we never try to send more
+      // than the wallet actually holds (the local DB figure can be stale).
+      const available = parseFloat(usdtToken.amount || '0') || 0;
+      if (available < amount) {
+        const reason = `Insufficient balance on Circle. Available: ${available} ${usdtToken.token.symbol}. Requested: ${amount}.`;
+        await this.transactionsService.createTransaction(this.prisma, {
+          userId,
+          type: 'SEND',
+          status: 'FAILED',
+          amount,
+          fee: 0,
+          currency: usdtToken.token.symbol.toUpperCase(),
+          reference: `TX-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+          metadata: {
+            toAddress,
+            network,
+            destinationNetwork,
+            errorReason: reason,
+            failedAt: 'send-initiation'
+          }
+        });
+        throw new BadRequestException(reason);
       }
 
       const tokenId = usdtToken.token.id;
       const reference = `TX-${Date.now()}-${Math.floor(Math.random()*1000)}`;
 
-      // Execute transfer in transaction
-      await this.prisma.$transaction(async (prisma) => {
-        await prisma.wallet.update({
-          where: { id: wallet.id },
-          data: { 
-            usdtBalance: { decrement: amount },
-            lockedBalance: { increment: amount }
-          }
-        });
-
-        // Trigger transfer via Circle Developer API
+      // Execute transfer first; only touch local state if Circle accepts it.
+      let transferError: any = null;
+      try {
         await axios.post(
           `${this.baseUrl}/v1/w3s/developer/transactions/transfer`,
           {
@@ -550,6 +570,44 @@ export class WalletsService {
             }
           }
         );
+      } catch (err: any) {
+        transferError = err;
+      }
+
+      if (transferError) {
+        const reason = transferError?.response?.data?.message
+          || transferError?.response?.data?.error?.message
+          || transferError?.message
+          || 'Transfer rejected by Circle.';
+        await this.transactionsService.createTransaction(this.prisma, {
+          userId,
+          type: 'SEND',
+          status: 'FAILED',
+          amount,
+          fee: 0,
+          currency: usdtToken.token.symbol.toUpperCase(),
+          reference,
+          metadata: {
+            toAddress,
+            network,
+            destinationNetwork,
+            errorReason: reason,
+            failedAt: 'circle-rejection'
+          }
+        });
+        this.logger.error(`Circle rejected transfer ${reference}: ${reason}`);
+        throw new BadRequestException(reason);
+      }
+
+      // Only after Circle accepts, decrement balance + lock + record PENDING.
+      await this.prisma.$transaction(async (prisma) => {
+        await prisma.wallet.update({
+          where: { id: wallet.id },
+          data: {
+            usdtBalance: { decrement: amount },
+            lockedBalance: { increment: amount }
+          }
+        });
 
         await this.transactionsService.createTransaction(prisma, {
           userId,
@@ -559,7 +617,7 @@ export class WalletsService {
           fee: 0,
           currency: usdtToken.token.symbol.toUpperCase(),
           reference,
-          metadata: { toAddress, network, circleWalletId: circleWallet.id }
+          metadata: { toAddress, network, destinationNetwork, circleWalletId: circleWallet.id }
         });
       });
 
@@ -611,12 +669,38 @@ export class WalletsService {
 
     const reference = `TX-${Date.now()}-${Math.floor(Math.random()*1000)}`;
 
-    const result = await this.cctpService.bridgeFromArc({
-      sourceAddress: sourceAddressRecord.address,
-      destChain,
-      recipientAddress: toAddress,
-      amount,
-    });
+    let result: any;
+    try {
+      result = await this.cctpService.bridgeFromArc({
+        sourceAddress: sourceAddressRecord.address,
+        destChain,
+        recipientAddress: toAddress,
+        amount,
+      });
+    } catch (err: any) {
+      const reason = err?.response?.data?.message
+        || err?.message
+        || 'Cross-chain transfer failed on Arc.';
+      await this.transactionsService.createTransaction(this.prisma, {
+        userId,
+        type: 'SEND',
+        status: 'FAILED',
+        amount,
+        fee: 0,
+        currency: 'USDC',
+        reference,
+        metadata: {
+          toAddress,
+          network: 'ARC',
+          destinationNetwork: destNet,
+          cctp: true,
+          errorReason: reason,
+          failedAt: 'cctp-rejection'
+        }
+      });
+      this.logger.error(`CCTP rejected transfer ${reference}: ${reason}`);
+      throw new BadRequestException(reason);
+    }
 
     await this.prisma.$transaction(async (prisma) => {
       await prisma.wallet.update({

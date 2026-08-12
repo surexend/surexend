@@ -198,6 +198,10 @@ export class WebhooksService {
           }
         } else if (txStatus === 'FAILED') {
           // Refund locked balance back to active balance
+          const errorReason = transaction.errorMessage
+            || transaction.reason
+            || transaction.errorCode
+            || 'Transfer failed on Circle.';
           await this.prisma.$transaction(async (prisma) => {
             await prisma.wallet.update({
               where: { userId: matchingTx.userId },
@@ -209,9 +213,25 @@ export class WebhooksService {
 
             await prisma.transaction.update({
               where: { id: matchingTx.id },
-              data: { status: 'FAILED' }
+              data: {
+                status: 'FAILED',
+                metadata: {
+                  ...((matchingTx.metadata as Record<string, any>) || {}),
+                  errorReason,
+                  failedAt: 'circle-webhook'
+                }
+              }
             });
           });
+
+          const user = await this.prisma.user.findUnique({ where: { id: matchingTx.userId } });
+          if (user) {
+            await this.notificationsService.sendPushNotification(user.id, {
+              title: 'Transfer Failed',
+              body: `Your transfer of ${matchingTx.amount} ${matchingTx.currency} failed: ${errorReason}`,
+              data: {}
+            });
+          }
         }
       }
     }

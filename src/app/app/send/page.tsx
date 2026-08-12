@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 import { walletAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import { useSearchParams } from 'next/navigation'
+import { useQuery } from '@tanstack/react-query'
 
 const sendSchema = z.object({
   address: z.string().min(3, 'Invalid recipient handle or address'),
@@ -42,6 +43,13 @@ export default function SendPage() {
     }
   }, [])
 
+  const { data: balanceData } = useQuery({
+    queryKey: ['sendBalance'],
+    queryFn: walletAPI.getBalance,
+    retry: false
+  })
+  const sendableBalance = Math.max(0, (balanceData?.usdBalance ?? 0) - (balanceData?.lockedBalance ?? 0))
+
   const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<SendFormValues>({
     resolver: zodResolver(sendSchema),
     defaultValues: { network: sendMode === 'TAG' ? 'SUREX_TAG' : 'POLYGON', destinationNetwork: 'POLYGON' }
@@ -58,6 +66,10 @@ export default function SendPage() {
     const amt = Number(data.amount)
     if (!amt || amt <= 0) {
       toast.error('Enter a valid amount')
+      return
+    }
+    if (amt > sendableBalance) {
+      toast.error(`Insufficient balance. You can send up to ${sendableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`)
       return
     }
     setFormData(prev => ({ ...prev, amount: amt }))
@@ -259,8 +271,12 @@ export default function SendPage() {
               <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10">
                 <div className="flex justify-between items-center mb-1">
                   <label className="text-xs text-[#94A3B8]">Send Amount (USDC)</label>
-                  <button type="button" onClick={() => setValue('amount', 500)} className="text-xs font-bold text-emerald-400">
-                    Max: 500 USDC
+                  <button
+                    type="button"
+                    onClick={() => setValue('amount', sendableBalance)}
+                    className="text-xs font-bold text-emerald-400"
+                  >
+                    Max: {sendableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
                   </button>
                 </div>
                 <div className="flex justify-between items-center">
@@ -288,7 +304,7 @@ export default function SendPage() {
 
               <button 
                 type="submit"
-                disabled={!(watch('amount') && watch('amount') > networkFee)}
+                disabled={!((watch('amount') ?? 0) > networkFee)}
                 className="w-full py-4 rounded-2xl font-bold text-black shadow-lg transition-transform hover:scale-[1.02] disabled:opacity-50"
                 style={{ background: colors.gradientBg }}
               >
