@@ -122,33 +122,9 @@ export class WalletsService {
         data: { usdtBalance, usdcBalance }
       });
 
-      // Backfill history: if the wallet holds on-chain USDC/USDT but has no
-      // transaction records yet, seed a RECEIVE entry so history isn't empty
-      // for balances that predate the Arc listener.
-      try {
-        if (usdcBalance > 0 || usdtBalance > 0) {
-          const existingCount = await this.prisma.transaction.count({
-            where: { userId: wallet.userId }
-          });
-          if (existingCount === 0) {
-            const backfill = usdcBalance >= usdtBalance ? 'USDC' : 'USDT';
-            const amount = backfill === 'USDC' ? usdcBalance : usdtBalance;
-            await this.transactionsService.createTransaction(this.prisma, {
-              userId: wallet.userId,
-              type: 'RECEIVE',
-              status: 'COMPLETED',
-              amount,
-              fee: 0,
-              currency: backfill,
-              reference: `RECV-BACKFILL-${wallet.id}-${backfill}`,
-              metadata: { network: 'ARC', backfill: true }
-            });
-            this.logger.log(`Backfilled ${amount} ${backfill} RECEIVE transaction for wallet ${wallet.id}`);
-          }
-        }
-      } catch (err: any) {
-        this.logger.error('Error backfilling transaction history:', err.message);
-      }
+      // Sync real deposit/withdrawal history from Circle so the transactions
+      // page reflects actual on-chain activity (including pre-listener deposits).
+      await this.syncCircleHistory(wallet.userId, wallet.id);
     } catch (err: any) {
       this.logger.error('Error syncing balance with Circle:', err.message);
     }
@@ -183,6 +159,89 @@ export class WalletsService {
     );
     const wallets = response.data.data.wallets || [];
     return wallets.length > 0 ? wallets[0] : null;
+  }
+
+  // Mirror real Circle deposit/withdrawal history into the local DB so the
+  // transactions page reflects actual on-chain activity (including deposits
+  // that predate the Arc listener). Idempotent: deduped by on-chain txHash.
+  private async syncCircleHistory(userId: string, walletId: string) {
+    try {
+      const addressRecords = await this.prisma.walletAddress.findMany({
+        where: { walletId }
+      });
+
+      const seenCircleWallets = new Set<string>();
+      for (const addressRecord of addressRecords) {
+        const circleWallet = await this.getCircleWalletByAddress(addressRecord.address);
+        if (!circleWallet || seenCircleWallets.has(circleWallet.id)) continue;
+        seenCircleWallets.add(circleWallet.id);
+
+        // Resolve tokenId -> symbol from the wallet's token balances
+        const balancesResponse = await axios.get(
+          `${this.baseUrl}/v1/w3s/wallets/${circleWallet.id}/balances`,
+          {
+            headers: {
+              Authorization: `Bearer ${this.apiKey}`,
+              accept: 'application/json',
+            }
+          }
+        );
+        const symbolByTokenId = new Map<string, string>();
+        const tokenBalances = balancesResponse.data.data.tokenBalances || [];
+        for (const bal of tokenBalances) {
+          symbolByTokenId.set(bal.token.id, bal.token.symbol.toUpperCase());
+        }
+
+        const txResponse = await axios.get(
+          `${this.baseUrl}/v1/w3s/transactions?walletId=${circleWallet.id}&pageSize=50`,
+          {
+            headers: {
+              Authorization: `Bearer ${this.apiKey}`,
+              accept: 'application/json',
+            }
+          }
+        );
+
+        const circleTxs = txResponse.data.data.transactions || [];
+        for (const tx of circleTxs) {
+          if (tx.state !== 'COMPLETE' && tx.state !== 'COMPLETED') continue;
+          const amount = parseFloat((tx.amounts || [])[0]);
+          if (!amount || amount <= 0) continue;
+
+          const symbol = symbolByTokenId.get(tx.tokenId) || 'USDC';
+          const type = tx.transactionType === 'OUTBOUND' ? 'SEND' : 'RECEIVE';
+          const reference = `ARC-${tx.transactionType}-${tx.txHash}`;
+
+          const existing = await this.prisma.transaction.findUnique({
+            where: { reference }
+          });
+          if (existing) continue;
+
+          await this.prisma.transaction.create({
+            data: {
+              userId,
+              type,
+              status: 'COMPLETED',
+              amount,
+              fee: parseFloat(tx.networkFee || '0') || 0,
+              currency: symbol,
+              reference,
+              metadata: {
+                network: 'ARC',
+                txHash: tx.txHash,
+                circleTransactionId: tx.id,
+                destinationAddress: tx.destinationAddress,
+                sourceAddress: tx.sourceAddress
+              },
+              createdAt: new Date(tx.createDate)
+            }
+          });
+          this.logger.log(`Synced Circle ${type} history: ${amount} ${symbol} (${tx.txHash})`);
+        }
+      }
+    } catch (err: any) {
+      this.logger.error('Error syncing Circle transaction history:', err.message);
+    }
   }
 
   async getDepositAddress(userId: string, network: string) {
