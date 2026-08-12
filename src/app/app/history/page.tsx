@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   ArrowUpRight, ArrowDownLeft, RefreshCw, Zap, Gift,
   Search, Filter, Download, ChevronDown, Calendar,
-  CheckCircle, XCircle, Clock, FileText, X
+  CheckCircle, XCircle, Clock, FileText, X, Copy, Check, Hash, ExternalLink
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -335,6 +335,161 @@ function FilterPanel({ filters, setFilters, accentHex, accentRgb, onClose }: {
   )
 }
 
+// ── Transaction Detail Modal ───────────────────────────────────────────────
+function TransactionDetailModal({
+  tx, onClose, accentHex, accentRgb
+}: { tx: any; onClose: () => void; accentHex: string; accentRgb: string }) {
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [details, setDetails] = useState<any>(tx)
+  const [loading, setLoading] = useState(!!tx?.id)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    async function load() {
+      if (!tx?.id) return
+      try {
+        const full = await transactionAPI.getById(tx.id)
+        if (active) {
+          setDetails(full || tx)
+          setLoading(false)
+        }
+      } catch {
+        if (active) {
+          setDetails(tx)
+          setLoading(false)
+        }
+      }
+    }
+    load()
+    return () => { active = false }
+  }, [tx])
+
+  const copy = async (field: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedField(field)
+      setTimeout(() => setCopiedField(null), 1500)
+    } catch { /* ignore */ }
+  }
+
+  const typeUpper = (details?.type || '').toUpperCase()
+  const isCredit = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING' || typeUpper === 'CONVERT'
+  const isDebit = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
+  const sign = isCredit ? '+' : isDebit ? '-' : ''
+  const amtColor = isCredit ? 'text-emerald-400' : isDebit ? 'text-red-400' : 'text-[#64748B]'
+  const symbol = details?.currency === 'NGN' ? '₦' : details?.currency === 'GHS' ? 'GH₵' : details?.currency === 'KES' ? 'KSh' : '$'
+
+  const meta = details?.metadata || {}
+  const network = meta.network || details?.network || 'ARC'
+  const explorerUrl = meta.txHash
+    ? network === 'ARC'
+      ? `https://arc-testnet-explorer.vercel.app/tx/${meta.txHash}`
+      : `https://etherscan.io/tx/${meta.txHash}`
+    : null
+
+  const rows: { label: string; value: string; copyable?: string }[] = [
+    { label: 'Reference', value: details?.reference || '—', copyable: details?.reference },
+    { label: 'Type', value: (details?.type || '—') },
+    { label: 'Status', value: (details?.status || '—') },
+    { label: 'Amount', value: `${sign}${symbol}${details?.amount}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}` },
+    { label: 'Fee', value: `$${(details?.fee || 0)}` },
+    { label: 'Network', value: network },
+    ...(meta.sourceAddress ? [{ label: 'From', value: meta.sourceAddress, copyable: meta.sourceAddress }] : []),
+    ...(meta.destinationAddress || details?.recipient ? [{ label: 'To', value: meta.destinationAddress || details?.recipient, copyable: meta.destinationAddress || details?.recipient }] : []),
+    ...(meta.txHash ? [{ label: 'Transaction Hash', value: meta.txHash, copyable: meta.txHash }] : []),
+    { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
+  ]
+
+  return (
+    <AnimatePresence>
+      <motion.div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose} />
+      <motion.div
+        className="fixed inset-x-3 bottom-20 z-[70] sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[440px] max-h-[82vh] overflow-y-auto"
+        initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }}
+        transition={{ type: 'spring', damping: 24, stiffness: 300 }}
+      >
+        <div className="bg-[#0F1629] rounded-3xl p-5 sm:p-6 border border-white/10 shadow-2xl">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: `rgba(${accentRgb}, 0.12)` }}>
+                {typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING'
+                  ? <ArrowDownLeft size={18} style={{ color: '#10B981' }} />
+                  : typeUpper === 'CONVERT'
+                    ? <RefreshCw size={18} style={{ color: '#F59E0B' }} />
+                    : <ArrowUpRight size={18} style={{ color: '#EF4444' }} />}
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-sm sm:text-base">Transaction Details</h3>
+                <p className="text-[#94A3B8] text-xs">
+                  {(details?.type || 'Transaction')}
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Amount */}
+          <div className="text-center py-6 mb-4 border-y border-white/5">
+            <p className={`text-4xl font-extrabold ${amtColor}`}>
+              {sign}{symbol}{details?.amount}
+            </p>
+            <p className="text-[#64748B] text-xs mt-2">
+              {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'}
+            </p>
+          </div>
+
+          {/* Detail rows */}
+          <div className="space-y-3">
+            {rows.map((row) => (
+              <div key={row.label} className="flex items-start justify-between gap-3">
+                <span className="text-[#94A3B8] text-xs font-medium mt-0.5 flex-shrink-0">{row.label}</span>
+                <span className="flex items-center gap-2 min-w-0 justify-end">
+                  {row.label === 'Type' || row.label === 'Status' ? (
+                    row.label === 'Status'
+                      ? <StatusBadge status={row.value} />
+                      : <span className="text-white text-xs font-semibold">{row.value}</span>
+                  ) : (
+                    <span className="text-white text-xs font-medium font-mono text-right break-all">{row.value}</span>
+                  )}
+                  {row.copyable && (
+                    <button
+                      onClick={() => copy(row.label, row.copyable!)}
+                      className="text-[#64748B] hover:text-white transition-colors flex-shrink-0"
+                      title="Copy"
+                    >
+                      {copiedField === row.label ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Explorer link */}
+          {explorerUrl && (
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-5 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white transition-all"
+            >
+              <ExternalLink size={14} style={{ color: accentHex }} />
+              View on {network} Explorer
+            </a>
+          )}
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 // HISTORY PAGE
 // ══════════════════════════════════════════════════════════════════════════
@@ -349,6 +504,7 @@ export default function HistoryPage() {
   const [search, setSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [showStatement, setShowStatement] = useState(false)
+  const [selectedTx, setSelectedTx] = useState<any>(null)
   const [page, setPage] = useState(1)
 
   // Build query params
@@ -553,6 +709,7 @@ export default function HistoryPage() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: (groupIdx * 5 + idx) * 0.035 }}
                         whileHover={{ x: 2 }}
+                        onClick={() => setSelectedTx(tx)}
                       >
                         <div className="flex items-center gap-3">
                           <TxIcon type={tx.type} accentHex={accentHex} />
@@ -603,6 +760,16 @@ export default function HistoryPage() {
         accentHex={accentHex}
         accentRgb={accentRgb}
       />
+
+      {/* Transaction detail modal */}
+      {selectedTx && (
+        <TransactionDetailModal
+          tx={selectedTx}
+          onClose={() => setSelectedTx(null)}
+          accentHex={accentHex}
+          accentRgb={accentRgb}
+        />
+      )}
     </div>
   )
 }

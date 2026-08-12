@@ -166,6 +166,19 @@ export class WalletsService {
   // that predate the Arc listener). Idempotent: deduped by on-chain txHash.
   private async syncCircleHistory(userId: string, walletId: string) {
     try {
+      // Remove legacy synthetic/duplicate records from earlier schemes so the
+      // same on-chain tx is never listed twice in history.
+      await this.prisma.transaction.deleteMany({
+        where: {
+          userId,
+          OR: [
+            { reference: { startsWith: 'RECV-BACKFILL-' } },
+            { reference: { startsWith: 'ARC-INBOUND-' } },
+            { reference: { startsWith: 'ARC-OUTBOUND-' } },
+          ]
+        }
+      });
+
       const addressRecords = await this.prisma.walletAddress.findMany({
         where: { walletId }
       });
@@ -210,7 +223,11 @@ export class WalletsService {
 
           const symbol = symbolByTokenId.get(tx.tokenId) || 'USDC';
           const type = tx.transactionType === 'OUTBOUND' ? 'SEND' : 'RECEIVE';
-          const reference = `ARC-${tx.transactionType}-${tx.txHash}`;
+          // Match the ArcListener's reference scheme so the same on-chain tx is
+          // not recorded twice (listener: RECV-ARC-<txHash>, this sync: SEND-ARC-<txHash>).
+          const reference = type === 'RECEIVE'
+            ? `RECV-ARC-${tx.txHash}`
+            : `SEND-ARC-${tx.txHash}`;
 
           const existing = await this.prisma.transaction.findUnique({
             where: { reference }

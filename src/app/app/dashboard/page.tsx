@@ -119,6 +119,14 @@ export default function DashboardPage() {
 
   const list = Array.isArray(txData) ? txData : (txData?.transactions || [])
 
+  const txTypeLabel: Record<string, string> = {
+    SEND: 'Send',
+    RECEIVE: 'Receive',
+    CONVERT: 'Convert',
+    BILL_PAYMENT: 'Bill Payment',
+    REFERRAL_EARNING: 'Referral Rewards',
+  }
+
   return (
     <div className="w-full max-w-full overflow-x-hidden px-4 py-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-6 pb-36 sm:pb-32">
       {/* 🟢 SLEEK SINGLE-LINE FINTECH USER BAR */}
@@ -586,11 +594,13 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-2.5">
             {list.slice(0, 5).map((tx: any) => {
-              const isSend = tx.type === 'send'
-              const isReceive = tx.type === 'receive'
+              const typeUpper = (tx.type || '').toUpperCase()
+              const isSend = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
+              const isReceive = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING'
               return (
-                <div 
+                <Link
                   key={tx.id}
+                  href="/app/history"
                   className="flex items-center justify-between p-3 rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.04)] transition-all"
                 >
                   <div className="flex items-center gap-3">
@@ -600,8 +610,8 @@ export default function DashboardPage() {
                       {isSend ? <ArrowUpRight className="w-5 h-5" /> : isReceive ? <ArrowDownLeft className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white capitalize">{tx.type}</p>
-                      <p className="text-xs text-[#64748B]">{new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                      <p className="text-sm font-semibold text-white capitalize">{txTypeLabel[typeUpper] || tx.type}</p>
+                      <p className="text-xs text-[#64748B]">{new Date(tx.createdAt || tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                   </div>
 
@@ -610,12 +620,12 @@ export default function DashboardPage() {
                       {isSend ? '-' : '+'}${tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
                     </p>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${
-                      tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      (tx.status || '').toUpperCase() === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                     }`}>
                       {tx.status}
                     </span>
                   </div>
-                </div>
+                </Link>
               )
             })}
           </div>
