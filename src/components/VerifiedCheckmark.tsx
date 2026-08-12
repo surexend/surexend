@@ -25,7 +25,8 @@ export default function VerifiedCheckmark({ size = 18, className = '', variant }
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={`inline-block flex-shrink-0 align-middle ${className}`}
-      title="Verified User"
+      role="img"
+      aria-label="Verified User"
     >
       {/* Twitter / X style 12-point scalloped rosette shape */}
       <path

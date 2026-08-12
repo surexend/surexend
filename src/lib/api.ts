@@ -99,9 +99,10 @@ apiClient.interceptors.response.use(
     }
 
     // Show user-friendly error toast (only for critical operations, using unique IDs to prevent duplicate spam)
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    if (status === 401) {
       toast.error('Session expired. Please login again.', { id: 'auth-error' })
-    } else if (error.response?.status >= 500) {
+    } else if (status !== undefined && status >= 500) {
       toast.error('Server error. Please try again later.', { id: 'server-error' })
     } else if (!error.response) {
       toast.error('Cannot connect to server. Please check your connection.', { id: 'network-error' })
@@ -362,7 +363,7 @@ export const bankAPI = {
 
   remove: (id: string) =>
     tryWithMock(
-      () => apiClient.delete(`/bank-accounts/${id}`),
+      () => apiClient.delete(`/bank-accounts/${id}`).then(r => r.data),
       () => ({ success: true })
     ),
 
@@ -524,7 +525,7 @@ export const userAPI = {
 
   submitKYC: (payload: FormData) =>
     tryWithMock(
-      () => apiClient.post('/users/kyc', payload, { headers: { 'Content-Type': 'multipart/form-data' } }),
+      () => apiClient.post('/users/kyc', payload, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
       () => ({ success: true, message: 'KYC documents submitted for review' })
     ),
 }

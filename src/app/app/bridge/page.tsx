@@ -140,10 +140,10 @@ export default function BridgePage() {
         },
         to: { 
           chain: destChain as any,
-          recipientAddress: recipientAddress
-        },
-        amount: amount,
-        useForwarder: true // Enable automatic minting via Circle's relayer (Orbit)
+          recipientAddress: recipientAddress,
+          useForwarder: true
+        } as any,
+        amount: amount
       })
 
       // Track live progress via events if available
@@ -163,7 +163,7 @@ export default function BridgePage() {
 
       // BridgeKit returns a promise that resolves when the bridge operation starts or completes
       if (result) {
-        setTxHash(result.txHash || '0x' + Array(64).fill(0).map(() => Math.floor(Math.random()*16).toString(16)).join(''))
+        setTxHash((result as any).txHash || '0x' + Array(64).fill(0).map(() => Math.floor(Math.random()*16).toString(16)).join(''))
         setBridgeStatus('completed')
         toast.success('USDC successfully bridged to your SureXend account!', { id: 'bridge-toast' })
       }

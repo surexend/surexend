@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { useTheme } from '@/context/ThemeContext'
 import { 
-  Home, Send, Repeat, FileText, User, Bell, ArrowUpRight, 
+  Home, Send, Repeat, FileText, User, Bell, ArrowUpRight, ArrowDownLeft,
   Smartphone, Building2, FileSpreadsheet, X, Check, ShieldCheck, Zap, Clock
 } from 'lucide-react'
 import toast from 'react-hot-toast'
