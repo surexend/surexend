@@ -46,8 +46,8 @@ export const AFRICAN_CURRENCIES = [
   { code: 'GNF', name: 'Guinean Franc', symbol: 'FG', country: 'Guinea', countryCode: 'GN', flag: '🇬🇳', rate: 8600 },
   { code: 'BIF', name: 'Burundian Franc', symbol: 'FBu', country: 'Burundi', countryCode: 'BI', flag: '🇧🇮', rate: 2900 },
   { code: 'ZWL', name: 'Zimbabwean Gold', symbol: 'ZWG', country: 'Zimbabwe', countryCode: 'ZW', flag: '🇿🇼', rate: 25.8 },
-  { code: 'XAF', name: 'Central African CFA Franc', symbol: 'FCFA', country: 'Cameroon', countryCode: 'CM', flag: '🇨🇲', rate: 610 },
-  { code: 'XOF', name: 'West African CFA Franc', symbol: 'CFA', country: 'Senegal', countryCode: 'SN', flag: '🇸🇳', rate: 605 },
+  { code: 'XAF', name: 'Central African CFA Franc', symbol: 'FCFA', country: 'Cameroon', countryCode: 'CM', flag: '🇨🇲', rate: 610, countries: ['Cameroon', 'Central African Republic', 'Chad', 'Republic of the Congo', 'Equatorial Guinea', 'Gabon'] },
+  { code: 'XOF', name: 'West African CFA Franc', symbol: 'CFA', country: 'Senegal', countryCode: 'SN', flag: '🇸🇳', rate: 605, countries: ['Benin', 'Burkina Faso', 'Côte d’Ivoire', 'Guinea-Bissau', 'Mali', 'Niger', 'Senegal', 'Togo'] },
 ]
 
 // Store access + refresh tokens in localStorage and the access token as a cookie

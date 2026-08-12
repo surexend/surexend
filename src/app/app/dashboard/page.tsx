@@ -69,7 +69,7 @@ const cryptoMarketData = {
 }
 
 // African local currencies for the Local Wallet selector
-const LOCAL_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.name, symbol: c.symbol, flag: c.flag, countryCode: c.countryCode, country: c.country }))
+const LOCAL_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.name, symbol: c.symbol, flag: c.flag, countryCode: c.countryCode, country: c.country, countries: c.countries }))
 
 
 
@@ -248,7 +248,7 @@ export default function DashboardPage() {
                   onClick={() => setShowLocalCurrencyPicker(true)}
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/8 hover:bg-white/15 border border-white/10 transition-all text-[10px] font-bold text-white"
                 >
-                  <span className="text-[11px]"><CurrencyFlag countryCode={LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.countryCode} size={16} /></span>
+                  <span className="text-[11px]"><CurrencyFlag countryCode={LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.countryCode} emoji={LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.flag} size={16} /></span>
                   {selectedLocalCurrency}
                   <ChevronDown className="w-3 h-3 text-[#64748B]" />
                 </button>
@@ -966,19 +966,19 @@ export default function DashboardPage() {
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto pb-8">
-                  <div className="relative mb-2">
-                    <input
-                      value={localCurrencySearch}
-                      onChange={(e) => setLocalCurrencySearch(e.target.value)}
-                      placeholder="Search country or currency…"
-                      className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
-                    />
-                  </div>
+                <div className="p-4 pb-2 sticky top-0 z-10" style={{ background: 'rgba(10,15,30,0.95)', backdropFilter: 'blur(12px)' }}>
+                  <input
+                    value={localCurrencySearch}
+                    onChange={(e) => setLocalCurrencySearch(e.target.value)}
+                    placeholder="Search country or currency…"
+                    className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
+                  />
+                </div>
+                <div className="p-4 space-y-2 max-h-[55vh] overflow-y-auto pb-8">
                   {LOCAL_CURRENCIES.filter(c => {
                     const q = localCurrencySearch.trim().toLowerCase()
                     if (!q) return true
-                    return c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || c.country.toLowerCase().includes(q)
+                    return c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || c.country.toLowerCase().includes(q) || (c.countries || []).some((cc: string) => cc.toLowerCase().includes(q))
                   }).map((curr) => {
                     const isSelected = selectedLocalCurrency === curr.code
                     const bal = (balanceData?.localBalances?.[curr.code] ?? 0) || (curr.code === 'NGN' ? (balanceData?.ngnBalance ?? 0) : 0)
@@ -993,7 +993,7 @@ export default function DashboardPage() {
                         }
                       >
                         <div className="flex items-center gap-3">
-                          <CurrencyFlag countryCode={curr.countryCode} size={32} />
+                          <CurrencyFlag countryCode={curr.countryCode} emoji={curr.flag} size={32} />
                           <div className="text-left">
                             <div className="flex items-center gap-2">
                               <span className="font-extrabold text-white text-sm">{curr.code}</span>

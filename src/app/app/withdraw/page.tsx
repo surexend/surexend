@@ -8,9 +8,10 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { useQuery } from '@tanstack/react-query'
 import { walletAPI, AFRICAN_CURRENCIES } from '@/lib/api'
+import CurrencyFlag from '@/components/CurrencyFlag'
 
 // ── Fiat Options (all African countries) ──────────────────────────────────
-const FIAT_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.name, flag: c.flag, symbol: c.symbol, rate: c.rate }))
+const FIAT_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.name, flag: c.flag, symbol: c.symbol, rate: c.rate, countryCode: c.countryCode }))
 
 // ── Saved Bank Accounts Mock ────────────────────────────────────────────────
 const SAVED_BANKS = [
@@ -141,7 +142,7 @@ export default function WithdrawPage() {
                         : 'bg-white/[0.02] border-white/5 text-[#94A3B8] hover:text-white'
                     }`}
                   >
-                    <span className="text-2xl">{fiat.flag}</span>
+                    <CurrencyFlag countryCode={fiat.countryCode} emoji={fiat.flag} size={24} />
                     <div>
                       <p className="font-bold text-sm text-white">{fiat.code}</p>
                       <p className="text-[10px] text-[#64748B]">{fiat.name}</p>

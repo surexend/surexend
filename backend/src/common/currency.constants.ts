@@ -48,8 +48,8 @@ export const SUPPORTED_LOCAL_CURRENCIES = [
   { code: 'GNF', name: 'Guinean Franc', symbol: 'FG', country: 'Guinea', countryCode: 'GN', flag: '\u{1F1EC}\u{1F1F3}', rate: 8600 },
   { code: 'BIF', name: 'Burundian Franc', symbol: 'FBu', country: 'Burundi', countryCode: 'BI', flag: '\u{1F1E7}\u{1F1EE}', rate: 2900 },
   { code: 'ZWL', name: 'Zimbabwean Gold', symbol: 'ZWG', country: 'Zimbabwe', countryCode: 'ZW', flag: '\u{1F1FF}\u{1F1FC}', rate: 25.8 },
-  { code: 'XAF', name: 'Central African CFA Franc', symbol: 'FCFA', country: 'Cameroon', countryCode: 'CM', flag: '\u{1F1E8}\u{1F1F2}', rate: 610 },
-  { code: 'XOF', name: 'West African CFA Franc', symbol: 'CFA', country: 'Senegal', countryCode: 'SN', flag: '\u{1F1F8}\u{1F1EB}', rate: 605 },
+  { code: 'XAF', name: 'Central African CFA Franc', symbol: 'FCFA', country: 'Cameroon', countryCode: 'CM', flag: '\u{1F1E8}\u{1F1F2}', rate: 610, countries: ['Cameroon', 'Central African Republic', 'Chad', 'Republic of the Congo', 'Equatorial Guinea', 'Gabon'] },
+  { code: 'XOF', name: 'West African CFA Franc', symbol: 'CFA', country: 'Senegal', countryCode: 'SN', flag: '\u{1F1F8}\u{1F1EB}', rate: 605, countries: ['Benin', 'Burkina Faso', 'C\u00F4te d\u2019Ivoire', 'Guinea-Bissau', 'Mali', 'Niger', 'Senegal', 'Togo'] },
 ] as const;
 
 export type LocalCurrencyCode = (typeof SUPPORTED_LOCAL_CURRENCIES)[number]['code'];
@@ -72,4 +72,16 @@ export const LOCAL_CURRENCY_COUNTRIES: Record<string, string> = Object.fromEntri
 
 export function getLocalRate(currency: string): number {
   return LOCAL_CURRENCY_RATES[currency.toUpperCase()] || 1500;
+}
+
+// All countries that use a given currency (single-country currencies return
+// their own name). Used for search-by-country in the currency pickers.
+export function getLocalCurrencyCountries(currency: string): string[] {
+  const entry = SUPPORTED_LOCAL_CURRENCIES.find(
+    (c) => c.code === currency.toUpperCase()
+  );
+  if (!entry) return [currency];
+  return (entry as any).countries?.length
+    ? (entry as any).countries
+    : [entry.country];
 }

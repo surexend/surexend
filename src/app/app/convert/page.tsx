@@ -51,7 +51,8 @@ export default function ConvertPage() {
     return allAssets.filter(a =>
       a.code.toLowerCase().includes(q) ||
       a.name.toLowerCase().includes(q) ||
-      (a.country || '').toLowerCase().includes(q)
+      (a.country || '').toLowerCase().includes(q) ||
+      (a.countries || []).some((c: string) => c.toLowerCase().includes(q))
     )
   }, [allAssets, currencySearch])
 
@@ -182,7 +183,7 @@ export default function ConvertPage() {
                   onClick={() => setPickerTarget('from')}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 transition-all active:scale-95"
                 >
-                  <CurrencyFlag countryCode={fromInfo?.countryCode} size={18} />
+                  <CurrencyFlag countryCode={fromInfo?.countryCode} emoji={fromInfo?.flag} size={18} />
                   <span className="font-extrabold text-sm text-white">{fromCode}</span>
                   <ChevronDown className="w-4 h-4 text-[#64748B]" />
                 </button>
@@ -244,7 +245,7 @@ export default function ConvertPage() {
                   onClick={() => setPickerTarget('to')}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 transition-all active:scale-95"
                 >
-                  <CurrencyFlag countryCode={toInfo?.countryCode} size={18} />
+                  <CurrencyFlag countryCode={toInfo?.countryCode} emoji={toInfo?.flag} size={18} />
                   <span className="font-extrabold text-sm text-white">{toCode}</span>
                   <ChevronDown className="w-4 h-4 text-[#64748B]" />
                 </button>
@@ -364,8 +365,8 @@ export default function ConvertPage() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto pb-8">
-                <div className="relative mb-2">
+              <div className="p-4 pb-2 sticky top-0 z-10" style={{ background: 'rgba(10,15,30,0.95)', backdropFilter: 'blur(12px)' }}>
+                <div className="relative">
                   <input
                     value={currencySearch}
                     onChange={(e) => setCurrencySearch(e.target.value)}
@@ -373,6 +374,8 @@ export default function ConvertPage() {
                     className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
                   />
                 </div>
+              </div>
+              <div className="p-4 space-y-2 max-h-[55vh] overflow-y-auto pb-8">
                 {filteredAssets.map((asset: any) => {
                   const isSelected = (pickerTarget === 'from' ? fromCode : toCode) === asset.code
                   const isUsd = asset.code === 'USD'
@@ -399,7 +402,7 @@ export default function ConvertPage() {
                       }
                     >
                       <div className="flex items-center gap-3">
-                        <CurrencyFlag countryCode={asset.countryCode} size={32} />
+                        <CurrencyFlag countryCode={asset.countryCode} emoji={asset.flag} size={32} />
                         <div className="text-left">
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-white text-sm">{asset.code}</span>

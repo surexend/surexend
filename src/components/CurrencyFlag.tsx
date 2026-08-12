@@ -1,8 +1,11 @@
 'use client'
 
-// Cross-platform flag badge. Flag emoji (e.g. 🇳🇬) do not render on Windows
-// (Chrome/Edge show the two letters instead), so we render a deterministic
-// gradient badge with the ISO country code instead. Works everywhere.
+import { useState, useEffect } from 'react'
+
+// Country flag emoji render fine on iOS/Android/macOS (the majority of users)
+// but NOT on Windows Chrome/Edge (they show as two letters). So we render the
+// real flag emoji everywhere, and only fall back to a deterministic gradient
+// badge on Windows where the emoji can't display.
 const FLAG_GRADIENTS: Record<string, string> = {
   NG: 'linear-gradient(135deg,#1B7A3D,#3E9B5F)',
   GH: 'linear-gradient(135deg,#F5B400,#1B7A3D)',
@@ -46,6 +49,7 @@ const FLAG_GRADIENTS: Record<string, string> = {
   ZW: 'linear-gradient(135deg,#006400,#FFD200)',
   CM: 'linear-gradient(135deg,#007A5E,#CE1126)',
   SN: 'linear-gradient(135deg,#00853F,#FCD116)',
+  US: 'linear-gradient(135deg,#3C3B6E,#B22234)',
 }
 
 function hashToColor(code: string): string {
@@ -55,7 +59,26 @@ function hashToColor(code: string): string {
   return `linear-gradient(135deg, hsl(${hue},65%,35%), hsl(${(hue + 60) % 360},65%,45%))`
 }
 
-export default function CurrencyFlag({ countryCode, size = 28 }: { countryCode?: string; size?: number }) {
+export default function CurrencyFlag({ countryCode, emoji, size = 28 }: { countryCode?: string; emoji?: string; size?: number }) {
+  const [isWindows, setIsWindows] = useState(false)
+
+  useEffect(() => {
+    setIsWindows(typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent || ''))
+  }, [])
+
+  // Use the real flag emoji everywhere except Windows (which can't render it)
+  if (!isWindows && emoji) {
+    return (
+      <span
+        className="inline-flex items-center justify-center shrink-0 select-none leading-none"
+        style={{ fontSize: Math.round(size * 0.72) }}
+        aria-label={`${countryCode} flag`}
+      >
+        {emoji}
+      </span>
+    )
+  }
+
   const code = (countryCode || 'XX').toUpperCase()
   const background = FLAG_GRADIENTS[code] || hashToColor(code)
   return (
