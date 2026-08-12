@@ -125,6 +125,10 @@ export class WalletsService {
       // Sync real deposit/withdrawal history from Circle so the transactions
       // page reflects actual on-chain activity (including pre-listener deposits).
       await this.syncCircleHistory(wallet.userId, wallet.id);
+
+      // Also sync from the actual chain (ArcScan) because Circle's transaction
+      // feed can miss deposits (e.g. the 1.5 USDC that balances the 2.8 total).
+      await this.syncArcOnChainHistory(wallet.userId, wallet.id);
     } catch (err: any) {
       this.logger.error('Error syncing balance with Circle:', err.message);
     }
@@ -258,6 +262,86 @@ export class WalletsService {
       }
     } catch (err: any) {
       this.logger.error('Error syncing Circle transaction history:', err.message);
+    }
+  }
+
+  // ArcScan's /transactions feed is incomplete (e.g. it missed a 1.5 USDC
+  // deposit while the on-chain balance shows 2.8). This method reads the actual
+  // chain via ArcScan (Blockscout API) and records every inbound USDC transfer
+  // to the user's addresses so history matches the true balance.
+  private async syncArcOnChainHistory(userId: string, walletId: string) {
+    try {
+      const addressRecords = await this.prisma.walletAddress.findMany({
+        where: { walletId, network: 'ARC' }
+      });
+
+      for (const addressRecord of addressRecords) {
+        const address = addressRecord.address.toLowerCase();
+        let cursorParams: any = null;
+        const seenTxHashes = new Set<string>();
+
+        for (let i = 0; i < 10; i++) {
+          let response: any;
+          try {
+            const params = cursorParams ? { ...cursorParams } : {};
+            response = await axios.get(
+              `https://testnet.arcscan.app/api/v2/addresses/${address}/token-transfers`,
+              { params, timeout: 20000 }
+            );
+          } catch (err: any) {
+            this.logger.error(`ArcScan token-transfers fetch failed for ${address}: ${err.message}`);
+            break;
+          }
+
+          const items = response?.data?.items || [];
+          for (const item of items) {
+            const toHash = (item?.to?.hash || '').toLowerCase();
+            if (toHash !== address) continue; // only inbound
+            const token = item?.token?.symbol || '';
+            if (token.toUpperCase() !== 'USDC') continue;
+
+            const decimals = item?.token?.decimals || 6;
+            const amount = parseFloat(item?.total?.value || '0') / Math.pow(10, decimals);
+            if (!amount || amount <= 0) continue;
+
+            const txHash = item?.transaction_hash;
+            if (!txHash || seenTxHashes.has(txHash)) continue;
+            seenTxHashes.add(txHash);
+
+            const reference = `RECV-ARC-${txHash}`;
+            const existing = await this.prisma.transaction.findUnique({
+              where: { reference }
+            });
+            if (existing) continue;
+
+            await this.prisma.transaction.create({
+              data: {
+                userId,
+                type: 'RECEIVE',
+                status: 'COMPLETED',
+                amount,
+                fee: 0,
+                currency: 'USDC',
+                reference,
+                metadata: {
+                  network: 'ARC',
+                  txHash,
+                  sourceAddress: item?.from?.hash,
+                  destinationAddress: item?.to?.hash
+                },
+                createdAt: new Date(item?.timestamp || Date.now())
+              }
+            });
+            this.logger.log(`Synced on-chain RECEIVE history: ${amount} USDC (${txHash})`);
+          }
+
+          const next = response?.data?.next_page_params;
+          if (!next || typeof next !== 'object' || Object.keys(next).length === 0) break;
+          cursorParams = next;
+        }
+      }
+    } catch (err: any) {
+      this.logger.error('Error syncing Arc on-chain history:', err.message);
     }
   }
 

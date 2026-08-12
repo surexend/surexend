@@ -380,7 +380,7 @@ function TransactionDetailModal({
   const network = meta.network || details?.network || 'ARC'
   const explorerUrl = meta.txHash
     ? network === 'ARC'
-      ? `https://arc-testnet-explorer.vercel.app/tx/${meta.txHash}`
+      ? `https://testnet.arcscan.app/tx/${meta.txHash}`
       : `https://etherscan.io/tx/${meta.txHash}`
     : null
 
