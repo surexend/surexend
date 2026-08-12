@@ -297,6 +297,9 @@ export default function ConvertPage() {
           <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="glass-card p-6 text-center space-y-6 rounded-2xl">
             <button onClick={() => setStep(1)} className="text-[#94A3B8] hover:text-white text-xs font-semibold flex items-center gap-1">← Back</button>
             <h2 className="text-xl font-bold text-white">Enter 4-Digit PIN</h2>
+            {process.env.NEXT_PUBLIC_TESTING_ENABLED === 'true' && (
+              <p className="text-[10px] text-[#F59E0B] font-semibold">Testing mode: use default PIN 0000 if you haven't set one</p>
+            )}
             <p className="text-xs text-[#94A3B8]">
               Convert {fromSymbol}{numAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {fromCode} → {toSymbol}{(preview?.receiveAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {toCode}
             </p>

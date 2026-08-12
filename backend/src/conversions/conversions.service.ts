@@ -130,9 +130,16 @@ export class ConversionsService {
     if (!(toCode === 'USD' || LOCAL_CODES.includes(toCode))) throw new BadRequestException(`Unsupported currency: ${toCode}`);
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user || !user.pin) throw new ForbiddenException('PIN not set up');
-    const isPinValid = await bcrypt.compare(pin, user.pin);
-    if (!isPinValid) throw new ForbiddenException('Invalid PIN');
+
+    // Testing mode: accept the default PIN if the user hasn't set a custom one yet
+    const testing = this.configService.get<{ enabled: boolean; defaultPin: string }>('app.testing');
+    if ((!user || !user.pin) && testing?.enabled) {
+      if (pin !== testing.defaultPin) throw new ForbiddenException('Invalid PIN');
+    } else {
+      if (!user || !user.pin) throw new ForbiddenException('PIN not set up');
+      const isPinValid = await bcrypt.compare(pin, user.pin);
+      if (!isPinValid) throw new ForbiddenException('Invalid PIN');
+    }
 
     // Load wallet with a defensive select so a not-yet-migrated localBalances
     // column can't 500 conversion execution.

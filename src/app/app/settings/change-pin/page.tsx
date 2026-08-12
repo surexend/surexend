@@ -48,7 +48,7 @@ export default function ChangePinPage() {
       const i = confirmPin.findIndex(p => p === '')
       if (i === -1) return
       const next = [...confirmPin]; next[i] = n; setConfirmPin(next)
-      if (i === 3) submit(newPin.join(''), confirmPin.join(''))
+      if (i === 3) submit(newPin.join(''), next.join(''))
     } else {
       const i = currentPin.findIndex(p => p === '')
       if (i === -1) return
@@ -129,6 +129,11 @@ export default function ChangePinPage() {
               <p className="text-xs text-[#94A3B8] mt-1">
                 Your 4-digit PIN protects every conversion, send, and bill payment. It is stored as a secure hash — never plaintext.
               </p>
+              {process.env.NEXT_PUBLIC_TESTING_ENABLED === 'true' && !profile?.pinSet && (
+                <p className="text-[10px] text-[#F59E0B] font-semibold mt-1">
+                  Testing mode: your default PIN is 0000 — set a custom one now or leave it for testing.
+                </p>
+              )}
             </div>
 
             {field === 'current' && (
