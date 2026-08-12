@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -238,12 +239,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* ── NOTIFICATIONS GLASSMORPHIC DRAWER / MODAL ────────────────── */}
-        <AnimatePresence>
-          {showNotifications && (
-            <div className="fixed inset-0 z-50 flex items-start justify-end p-2 sm:p-4 bg-black/75 backdrop-blur-md">
-              <motion.div
-                initial={{ opacity: 0, x: 50, scale: 0.95 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
+        {createPortal(
+          <AnimatePresence>
+            {showNotifications && (
+              <div className="fixed inset-0 z-[80] flex items-start justify-end p-2 sm:p-4 bg-black/75 backdrop-blur-md">
+                <motion.div
+                  initial={{ opacity: 0, x: 50, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 50, scale: 0.95 }}
                 className="glass-card w-[94vw] sm:w-96 max-h-[85vh] overflow-y-auto p-4 sm:p-5 relative rounded-3xl shadow-2xl border space-y-4"
                 style={{ borderColor: colors.cardBorder }}
@@ -301,7 +303,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
+          </AnimatePresence>,
+          document.body
+        )}
         <AISupportWidget />
       </div>
     </QueryClientProvider>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
@@ -104,15 +105,16 @@ function StatementModal({
     }
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
-          <motion.div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
+          <motion.div className="fixed inset-0 bg-black/60 z-[80] backdrop-blur-sm"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose} />
           <motion.div
-            className="fixed inset-x-3 bottom-20 z-[70] sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[420px] max-h-[80vh] overflow-y-auto"
+            className="fixed inset-x-3 bottom-20 z-[90] sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[420px] max-h-[80vh] overflow-y-auto"
             initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }}
             transition={{ type: 'spring', damping: 24, stiffness: 300 }}
           >
@@ -213,7 +215,8 @@ function StatementModal({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }
 
@@ -403,13 +406,14 @@ function TransactionDetailModal({
     ...(meta.txHash ? [{ label: 'Transaction Hash', value: meta.txHash, copyable: meta.txHash, mono: true }] : []),
   ]
 
-  return (
+  if (typeof document === 'undefined') return null
+  return createPortal(
     <AnimatePresence>
-      <motion.div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
+      <motion.div className="fixed inset-0 bg-black/70 z-[80] backdrop-blur-sm"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose} />
       <motion.div
-        className="fixed inset-x-0 bottom-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[460px] sm:max-w-[94vw] max-h-[88vh] overflow-y-auto sm:rounded-2xl rounded-t-2xl"
+        className="fixed inset-x-0 bottom-0 z-[90] sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[460px] sm:max-w-[94vw] max-h-[88vh] overflow-y-auto sm:rounded-2xl rounded-t-2xl"
         initial={{ opacity: 0, y: 80 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 80 }}
@@ -498,7 +502,8 @@ function TransactionDetailModal({
           )}
         </div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }
 

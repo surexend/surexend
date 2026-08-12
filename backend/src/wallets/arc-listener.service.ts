@@ -110,11 +110,10 @@ export class ArcListenerService implements OnModuleInit {
             this.logger.log(`Detected Arc Deposit: ${amount} USDC to ${toAddress}`);
 
             await this.prisma.$transaction(async (prisma) => {
-              // Increment USDC balance
-              await prisma.wallet.update({
-                where: { id: walletAddress.wallet.id },
-                data: { usdcBalance: { increment: amount } }
-              });
+              // Do NOT increment the balance here. The displayed balance must
+              // only ever reflect what Circle confirms as sendable. Raw on-chain
+              // events (including wrong-chain / unconfirmed deposits) must not
+              // inflate it; getBalance() overwrites from Circle's live API.
 
               // Create transaction record
               await this.transactionsService.createTransaction(prisma, {

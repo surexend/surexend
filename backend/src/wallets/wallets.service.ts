@@ -284,6 +284,30 @@ export class WalletsService {
         let cursorParams: any = null;
         const seenTxHashes = new Set<string>();
 
+        // Fetch the Circle-confirmed transaction feed for this address once, so
+        // deposits Circle has NOT confirmed (wrong-chain / unsupported network)
+        // can be flagged as FAILED instead of being shown as sendable funds.
+        const circleTxHashes = new Set<string>();
+        try {
+          const circleWallet = await this.getCircleWalletByAddress(addressRecord.address);
+          if (circleWallet) {
+            const circleTxResponse = await axios.get(
+              `${this.baseUrl}/v1/w3s/transactions?walletId=${circleWallet.id}&pageSize=100`,
+              {
+                headers: {
+                  Authorization: `Bearer ${this.apiKey}`,
+                  accept: 'application/json',
+                }
+              }
+            );
+            for (const ct of circleTxResponse?.data?.data?.transactions || []) {
+              if (ct.txHash) circleTxHashes.add(ct.txHash.toLowerCase());
+            }
+          }
+        } catch (err: any) {
+          this.logger.error(`Failed to fetch Circle tx feed for ${address}: ${err.message}`);
+        }
+
         for (let i = 0; i < 10; i++) {
           let response: any;
           try {
@@ -318,11 +342,17 @@ export class WalletsService {
             });
             if (existing) continue;
 
+            // A deposit that Circle has NOT confirmed is not sendable. Show it
+            // as FAILED with an explanation so the balance never counts it and
+            // the user understands why the funds aren't available.
+            const circleConfirmed = circleTxHashes.has(txHash.toLowerCase());
+            const status = circleConfirmed ? 'COMPLETED' : 'FAILED';
+
             await this.prisma.transaction.create({
               data: {
                 userId,
                 type: 'RECEIVE',
-                status: 'COMPLETED',
+                status,
                 amount,
                 fee: 0,
                 currency: 'USDC',
@@ -331,12 +361,19 @@ export class WalletsService {
                   network: 'ARC',
                   txHash,
                   sourceAddress: item?.from?.hash,
-                  destinationAddress: item?.to?.hash
+                  destinationAddress: item?.to?.hash,
+                  ...(circleConfirmed
+                    ? {}
+                    : {
+                        errorReason:
+                          'Deposit was received on-chain but has not been confirmed by our payment provider. It may have been sent to an unsupported network and is not available to send.',
+                        failedAt: 'arc-sync-unconfirmed'
+                      })
                 },
                 createdAt: new Date(item?.timestamp || Date.now())
               }
             });
-            this.logger.log(`Synced on-chain RECEIVE history: ${amount} USDC (${txHash})`);
+            this.logger.log(`Synced on-chain RECEIVE history: ${amount} USDC (${txHash}) status=${status}`);
           }
 
           const next = response?.data?.next_page_params;
