@@ -100,14 +100,16 @@ export class WalletsService {
             );
             
             const tokenBalances = balancesResponse.data.data.tokenBalances || [];
+            // Dedupe per symbol: the same token can appear multiple times with
+            // different token IDs on some testnets. Count each symbol once (max).
+            const perSymbol = new Map<string, number>();
             for (const bal of tokenBalances) {
               const symbol = bal.token.symbol.toUpperCase();
-              if (symbol === 'USDT') {
-                usdtBalance += parseFloat(bal.amount);
-              } else if (symbol === 'USDC') {
-                usdcBalance += parseFloat(bal.amount);
-              }
+              const amount = parseFloat(bal.amount) || 0;
+              perSymbol.set(symbol, Math.max(perSymbol.get(symbol) || 0, amount));
             }
+            usdtBalance += perSymbol.get('USDT') || 0;
+            usdcBalance += perSymbol.get('USDC') || 0;
           }
         } catch (err: any) {
           this.logger.error(`Error syncing balance for address ${addressRecord.address}:`, err.message);
@@ -119,6 +121,34 @@ export class WalletsService {
         where: { id: wallet.id },
         data: { usdtBalance, usdcBalance }
       });
+
+      // Backfill history: if the wallet holds on-chain USDC/USDT but has no
+      // transaction records yet, seed a RECEIVE entry so history isn't empty
+      // for balances that predate the Arc listener.
+      try {
+        if (usdcBalance > 0 || usdtBalance > 0) {
+          const existingCount = await this.prisma.transaction.count({
+            where: { userId: wallet.userId }
+          });
+          if (existingCount === 0) {
+            const backfill = usdcBalance >= usdtBalance ? 'USDC' : 'USDT';
+            const amount = backfill === 'USDC' ? usdcBalance : usdtBalance;
+            await this.transactionsService.createTransaction(this.prisma, {
+              userId: wallet.userId,
+              type: 'RECEIVE',
+              status: 'COMPLETED',
+              amount,
+              fee: 0,
+              currency: backfill,
+              reference: `RECV-BACKFILL-${wallet.id}-${backfill}`,
+              metadata: { network: 'ARC', backfill: true }
+            });
+            this.logger.log(`Backfilled ${amount} ${backfill} RECEIVE transaction for wallet ${wallet.id}`);
+          }
+        }
+      } catch (err: any) {
+        this.logger.error('Error backfilling transaction history:', err.message);
+      }
     } catch (err: any) {
       this.logger.error('Error syncing balance with Circle:', err.message);
     }

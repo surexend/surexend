@@ -84,7 +84,7 @@ export class TransactionsService {
       this.prisma.transaction.count({ where }),
     ]);
 
-    return { transactions, total, page };
+    return { transactions, total, totalPages: Math.max(1, Math.ceil(total / limit)), page };
   }
 
   async getTransactionById(userId: string, id: string) {

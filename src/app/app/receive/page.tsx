@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Copy, Share2, AlertTriangle, CheckCircle2, Zap } from 'lucide-react'
-import Link from 'next/link'
+import { Copy, Share2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import QRCode from 'qrcode'
 import toast from 'react-hot-toast'
 import { walletAPI } from '@/lib/api'
@@ -277,25 +276,6 @@ export default function ReceivePage() {
           </div>
         </>
       )}
-
-      {/* CCTP Bridging Prompt Banner */}
-      <div className="flex items-center justify-between p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 gap-3">
-        <div className="space-y-1">
-          <p className="text-xs font-bold text-white flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-purple-400" />
-            Cross-Chain Deposit (CCTP)
-          </p>
-          <p className="text-[10px] text-[#94A3B8] leading-normal max-w-[210px]">
-            Bridge native USDC automatically from Arc, Arbitrum, Base, or other chains.
-          </p>
-        </div>
-        <Link 
-          href="/app/bridge" 
-          className="px-3.5 py-2 rounded-xl text-[10px] font-extrabold text-black bg-purple-400 shadow-md hover:scale-[1.02] active:scale-95 transition-transform"
-        >
-          Bridge Now
-        </Link>
-      </div>
 
       {/* Warning */}
       <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-red-500/8 border border-red-500/20">
