@@ -226,6 +226,7 @@ export class WalletsService {
 
       const seenCircleWallets = new Set<string>();
       for (const addressRecord of addressRecords) {
+        try {
         const circleWallet = await this.getCircleWalletByAddress(addressRecord.address);
         if (!circleWallet || seenCircleWallets.has(circleWallet.id)) continue;
         seenCircleWallets.add(circleWallet.id);
@@ -299,6 +300,9 @@ export class WalletsService {
             }
           });
           this.logger.log(`Synced Circle ${type} history: ${amount} ${symbol} (${tx.txHash}) status=${status}`);
+          }
+        } catch (err: any) {
+          this.logger.error(`syncCircleHistory failed for ${addressRecord.address}: ${err.message}`);
         }
       }
     } catch (err: any) {
@@ -318,6 +322,7 @@ export class WalletsService {
 
       for (const addressRecord of addressRecords) {
         const address = addressRecord.address.toLowerCase();
+        try {
         let cursorParams: any = null;
         const seenTxHashes = new Set<string>();
 
@@ -416,6 +421,9 @@ export class WalletsService {
           const next = response?.data?.next_page_params;
           if (!next || typeof next !== 'object' || Object.keys(next).length === 0) break;
           cursorParams = next;
+        }
+        } catch (err: any) {
+          this.logger.error(`syncArcOnChainHistory failed for ${address}: ${err.message}`);
         }
       }
     } catch (err: any) {
