@@ -97,9 +97,32 @@ export class WalletsService {
       let usdtBalance = 0;
       let usdcBalance = 0;
       const seenWalletIds = new Set<string>();
+      const seenArcAddresses = new Set<string>();
+
+      // Any address that has an ARC record is an on-chain authoritative USDC
+      // balance: native Arc USDC is read directly from the chain, and the same
+      // EVM address is often stored under multiple networks (e.g. the demo
+      // wallet has the same address as both ETHEREUM and ARC). Circle's balance
+      // API can under-report native Arc USDC, so the chain read wins and the
+      // address is counted only once.
+      const arcAddresses = new Set<string>(
+        addressRecords.filter((r) => r.network === 'ARC').map((r) => r.address.toLocaleLowerCase())
+      );
 
       for (const addressRecord of addressRecords) {
         try {
+          const addr = addressRecord.address ? addressRecord.address.toLocaleLowerCase() : '';
+          if (!addr) continue;
+
+          if (arcAddresses.has(addr)) {
+            if (!seenArcAddresses.has(addr)) {
+              seenArcAddresses.add(addr);
+              const arcUsdc = await this.getArcUsdcBalance(addr);
+              if (arcUsdc > 0) usdcBalance = Math.max(usdcBalance, arcUsdc);
+            }
+            continue;
+          }
+
           const circleWallet = await this.getCircleWalletByAddress(addressRecord.address);
           if (circleWallet && !seenWalletIds.has(circleWallet.id)) {
             seenWalletIds.add(circleWallet.id);
@@ -200,6 +223,29 @@ export class WalletsService {
     );
     const wallets = response.data.data.wallets || [];
     return wallets.length > 0 ? wallets[0] : null;
+  }
+
+  // Read the authoritative native USDC balance for an Arc address directly from
+  // the chain (eth_call balanceOf on the USDC precompile). Circle's balance API
+  // can under-report or miss native Arc USDC entirely, which was causing the
+  // displayed balance to lag the real on-chain amount.
+  private async getArcUsdcBalance(address: string): Promise<number> {
+    try {
+      const rpcUrl = this.configService.get<string>('app.arc.rpcUrl') || 'https://rpc.testnet.arc.network';
+      const usdcContract = this.configService.get<string>('app.arc.usdcContractAddress') || '0x3600000000000000000000000000000000000000';
+      const data = '0x70a08231000000000000000000000000' + address.toLowerCase().replace(/^0x/, '');
+      const response = await axios.post(rpcUrl, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_call',
+        params: [{ to: usdcContract, data }, 'latest']
+      }, { timeout: 15000 });
+      const raw = response.data?.result || '0x0';
+      return Number(BigInt(raw)) / 1e6;
+    } catch (err: any) {
+      this.logger.error(`getArcUsdcBalance failed for ${address}: ${err.message}`);
+      return 0;
+    }
   }
 
   // Mirror real Circle deposit/withdrawal history into the local DB so the
