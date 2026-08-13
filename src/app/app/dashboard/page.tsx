@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, TrendingUp, TrendingDown, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { walletAPI, transactionAPI, AFRICAN_CURRENCIES } from '@/lib/api'
+import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 import CurrencyFlag from '@/components/CurrencyFlag'
@@ -633,6 +634,7 @@ export default function DashboardPage() {
               const typeUpper = (tx.type || '').toUpperCase()
               const isSend = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
               const isReceive = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING'
+              const swap = getSwapInfo(tx)
               return (
                 <Link
                   key={tx.id}
@@ -646,15 +648,37 @@ export default function DashboardPage() {
                       {isSend ? <ArrowUpRight className="w-5 h-5" /> : isReceive ? <ArrowDownLeft className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white capitalize">{txTypeLabel[typeUpper] || tx.type}</p>
-                      <p className="text-xs text-[#64748B]">{new Date(tx.createdAt || tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                      {swap ? (
+                        <>
+                          <p className="text-sm font-bold text-white leading-tight">
+                            {swap.from} <span className="text-[#94A3B8] font-semibold">→</span> {swap.to}
+                          </p>
+                          <p className="text-xs text-[#64748B] mt-0.5">{new Date(tx.createdAt || tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-semibold text-white capitalize">{txTypeLabel[typeUpper] || tx.type}</p>
+                          <p className="text-xs text-[#64748B] mt-0.5">{new Date(tx.createdAt || tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   <div className="text-right">
-                    <p className={`text-sm font-bold ${isSend ? 'text-red-400' : isReceive ? 'text-emerald-400' : 'text-amber-400'}`}>
-                      {isSend ? '-' : '+'}${tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
-                    </p>
+                    {swap ? (
+                      <>
+                        <p className="text-sm font-bold text-amber-400">
+                          +{currencySymbol(swap.to)}{formatAmount(swap.toAmount)} {swap.to}
+                        </p>
+                        <p className="text-xs text-[#94A3B8] mt-0.5">
+                          {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from}
+                        </p>
+                      </>
+                    ) : (
+                      <p className={`text-sm font-bold ${isSend ? 'text-red-400' : isReceive ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {isSend ? '-' : '+'}${tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
+                      </p>
+                    )}
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${
                       (tx.status || '').toUpperCase() === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                     }`}>

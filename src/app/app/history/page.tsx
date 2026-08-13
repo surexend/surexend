@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
 import { transactionAPI } from '@/lib/api'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency, getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowUpRight, ArrowDownLeft, RefreshCw, Zap, Gift,
@@ -389,6 +389,7 @@ function TransactionDetailModal({
       ? `https://testnet.arcscan.app/tx/${meta.txHash}`
       : `https://etherscan.io/tx/${meta.txHash}`
     : null
+  const swap = getSwapInfo(details)
 
   const statusColor = (s: string) => {
     const u = (s || '').toUpperCase()
@@ -397,16 +398,25 @@ function TransactionDetailModal({
     return 'bg-amber-500/10 text-amber-400 border-amber-500/20'
   }
 
-  const rows: { label: string; value: string; copyable?: string; mono?: boolean }[] = [
-    { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
-    { label: 'Amount', value: `${sign}${symbol}${details?.amount}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}` },
-    { label: 'Fee', value: `$${(details?.fee || 0)}` },
-    { label: 'Network', value: network },
-    { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
-    ...(meta.sourceAddress ? [{ label: 'From Address', value: meta.sourceAddress, copyable: meta.sourceAddress, mono: true }] : []),
-    ...(meta.destinationAddress || details?.recipient ? [{ label: 'To Address', value: meta.destinationAddress || details?.recipient, copyable: meta.destinationAddress || details?.recipient, mono: true }] : []),
-    ...(meta.txHash ? [{ label: 'Transaction Hash', value: meta.txHash, copyable: meta.txHash, mono: true }] : []),
-  ]
+  const rows: { label: string; value: string; copyable?: string; mono?: boolean }[] = swap
+    ? [
+        { label: 'You swapped', value: `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from}` },
+        { label: 'You received', value: `+${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}` },
+        ...(swap.rate ? [{ label: 'Rate', value: `1 ${swap.from} = ${formatAmount(swap.rate, 6)} ${swap.to}` }] : []),
+        { label: 'Fee', value: `$${(details?.fee || 0)}` },
+        { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
+        { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
+      ]
+    : [
+        { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
+        { label: 'Amount', value: `${sign}${symbol}${details?.amount}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}` },
+        { label: 'Fee', value: `$${(details?.fee || 0)}` },
+        { label: 'Network', value: network },
+        { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
+        ...(meta.sourceAddress ? [{ label: 'From Address', value: meta.sourceAddress, copyable: meta.sourceAddress, mono: true }] : []),
+        ...(meta.destinationAddress || details?.recipient ? [{ label: 'To Address', value: meta.destinationAddress || details?.recipient, copyable: meta.destinationAddress || details?.recipient, mono: true }] : []),
+        ...(meta.txHash ? [{ label: 'Transaction Hash', value: meta.txHash, copyable: meta.txHash, mono: true }] : []),
+      ]
 
   if (typeof document === 'undefined') return null
   return createPortal(
@@ -461,13 +471,28 @@ function TransactionDetailModal({
 
           {/* Amount */}
           <div className="text-center py-6 mb-5 bg-white/[0.03] border border-white/5 rounded-xl">
-            <p className="text-[10px] uppercase tracking-widest text-[#64748B] font-bold mb-1.5">Amount</p>
-            <p className={`text-4xl font-extrabold tracking-tight ${amtColor}`}>
-              {sign}{symbol}{details?.amount}
+            <p className="text-[10px] uppercase tracking-widest text-[#64748B] font-bold mb-1.5">
+              {swap ? 'Swap' : 'Amount'}
             </p>
-            <p className="text-[#94A3B8] text-xs mt-1.5">
-              {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {network}
-            </p>
+            {swap ? (
+              <>
+                <p className="text-4xl font-extrabold tracking-tight text-emerald-400">
+                  {currencySymbol(swap.to)}{formatAmount(swap.toAmount)}
+                </p>
+                <p className="text-[#94A3B8] text-xs mt-1.5">
+                  {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from} → {swap.to}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className={`text-4xl font-extrabold tracking-tight ${amtColor}`}>
+                  {sign}{symbol}{details?.amount}
+                </p>
+                <p className="text-[#94A3B8] text-xs mt-1.5">
+                  {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {network}
+                </p>
+              </>
+            )}
           </div>
 
           {/* Detail rows */}
@@ -719,8 +744,9 @@ export default function HistoryPage() {
                     const isDebit = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
                     const sign = isCredit ? '+' : isDebit ? '-' : ''
                     const amtColor = isCredit ? 'text-emerald-400' : isDebit ? 'text-red-400' : 'text-[#64748B]'
-                    
                     const symbol = tx.currency === 'NGN' ? '₦' : tx.currency === 'GHS' ? 'GH₵' : tx.currency === 'KES' ? 'KSh' : '$'
+                    const swap = getSwapInfo(tx)
+                    const dateStr = new Date(tx.createdAt || tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
                     return (
                       <motion.div
@@ -735,19 +761,39 @@ export default function HistoryPage() {
                         <div className="flex items-center gap-3">
                           <TxIcon type={tx.type} accentHex={accentHex} />
                           <div>
-                            <p className="text-white font-semibold text-sm leading-tight">
-                              {txTypeLabel[typeUpper] || tx.type}
-                            </p>
-                            <p className="text-[#64748B] text-xs mt-1 font-medium">
-                              {new Date(tx.createdAt || tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </p>
+                            {swap ? (
+                              <>
+                                <p className="text-white font-bold text-sm leading-tight">
+                                  {swap.from} <span className="text-[#94A3B8] font-semibold">→</span> {swap.to}
+                                </p>
+                                <p className="text-[#64748B] text-xs mt-1 font-medium">{dateStr}</p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-white font-semibold text-sm leading-tight">
+                                  {txTypeLabel[typeUpper] || tx.type}
+                                </p>
+                                <p className="text-[#64748B] text-xs mt-1 font-medium">{dateStr}</p>
+                              </>
+                            )}
                           </div>
                         </div>
 
                         <div className="text-right flex-shrink-0 ml-3">
-                          <p className={`font-bold text-sm ${amtColor}`}>
-                            {sign}{symbol}{tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
-                          </p>
+                          {swap ? (
+                            <>
+                              <p className="font-bold text-sm text-emerald-400">
+                                +{currencySymbol(swap.to)}{formatAmount(swap.toAmount)} {swap.to}
+                              </p>
+                              <p className="text-[#94A3B8] text-xs mt-1 font-medium">
+                                {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from}
+                              </p>
+                            </>
+                          ) : (
+                            <p className={`font-bold text-sm ${amtColor}`}>
+                              {sign}{symbol}{tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
+                            </p>
+                          )}
                           <StatusBadge status={tx.status} />
                         </div>
                       </motion.div>
