@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+﻿import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -97,104 +97,72 @@ export class WalletsService {
       let usdtBalance = 0;
       let usdcBalance = 0;
       const seenWalletIds = new Set<string>();
-      const seenArcAddresses = new Set<string>();
 
-      // Native Arc USDC is read directly from the chain because Circle's
-      // balance API can under-report it. The same EVM address is stored under
-      // multiple network labels (the demo wallet's address is registered as
-      // both ETHEREUM and ARC, and often BASE/BSC share it too), so probing only
-      // records labeled 'ARC' misses deposits into addresses stored under other
-      // networks. Probe EVERY EVM address on-chain once; the chain read wins and
-      // Circle is only consulted as the per-record fallback.
-      const isEthereumAddress = (addr: string) => /^0x[0-9a-f]{40}$/i.test(addr);
-      const arcOnChain = new Map<string, number>();
-      for (const r of addressRecords) {
-        const a = r.address ? r.address.toLocaleLowerCase() : '';
-        if (a && isEthereumAddress(a) && !arcOnChain.has(a)) {
-          arcOnChain.set(a, await this.getArcUsdcBalance(a));
-        }
-      }
-
+      // Circle is the single source of truth for every chain, including ARC:
+      // ARC-TESTNET is a natively supported Circle Wallets blockchain and its
+      // USDC is reported by the balances API (native + ERC-20 entries reference
+      // the same balance). Per-address balance lookups are deduped by wallet id.
       for (const addressRecord of addressRecords) {
         try {
-          const addr = addressRecord.address ? addressRecord.address.toLocaleLowerCase() : '';
-          if (!addr) continue;
-
-          const isArcRecord = addressRecord.network?.toUpperCase() === 'ARC';
-          const onChainArc = isEthereumAddress(addr) ? (arcOnChain.get(addr) || 0) : 0;
-
-          if (onChainArc > 0 && !seenArcAddresses.has(addr)) {
-            seenArcAddresses.add(addr);
-            usdcBalance = Math.max(usdcBalance, onChainArc);
-          }
-
           const circleWallet = await this.getCircleWalletByAddress(addressRecord.address, this.getBlockchainName(addressRecord.network));
-          if (circleWallet && !seenWalletIds.has(circleWallet.id)) {
-            seenWalletIds.add(circleWallet.id);
-            
-            const balancesResponse = await axios.get(
-              `${this.baseUrl}/v1/w3s/wallets/${circleWallet.id}/balances`,
-              {
-                headers: {
-                  Authorization: `Bearer ${this.apiKey}`,
-                  accept: 'application/json',
-                }
+          if (!circleWallet || seenWalletIds.has(circleWallet.id)) continue;
+          seenWalletIds.add(circleWallet.id);
+
+          const balancesResponse = await axios.get(
+            `${this.baseUrl}/v1/w3s/wallets/${circleWallet.id}/balances`,
+            {
+              headers: {
+                Authorization: `Bearer ${this.apiKey}`,
+                accept: 'application/json',
               }
-            );
-            
-            const tokenBalances = balancesResponse.data.data.tokenBalances || [];
-            // Dedupe per symbol: the same token can appear multiple times with
-            // different token IDs on some testnets. Count each symbol once (max).
-            const perSymbol = new Map<string, number>();
-            for (const bal of tokenBalances) {
-              const symbol = bal.token.symbol.toUpperCase();
-              const amount = parseFloat(bal.amount) || 0;
-              perSymbol.set(symbol, Math.max(perSymbol.get(symbol) || 0, amount));
             }
-            const circleUsdc = perSymbol.get('USDC') || 0;
-            if (isArcRecord && onChainArc > 0) {
-              // Circle may also report the native Arc USDC we already counted
-              // from the chain; keep the larger source, never double count.
-              if (circleUsdc > usdcBalance) usdcBalance = circleUsdc;
-            } else {
-              usdcBalance += circleUsdc;
-            }
-            usdtBalance += perSymbol.get('USDT') || 0;
+          );
+
+          const tokenBalances = balancesResponse.data.data.tokenBalances || [];
+          // Dedupe per symbol: the same token can appear multiple times with
+          // different token IDs on some testnets (e.g. Arc USDC native + ERC-20).
+          // Count each symbol once (max).
+          const perSymbol = new Map<string, number>();
+          for (const bal of tokenBalances) {
+            const symbol = bal.token.symbol.toUpperCase();
+            const amount = parseFloat(bal.amount) || 0;
+            perSymbol.set(symbol, Math.max(perSymbol.get(symbol) || 0, amount));
           }
+          usdcBalance += perSymbol.get('USDC') || 0;
+          usdtBalance += perSymbol.get('USDT') || 0;
         } catch (err: any) {
           this.logger.error(`Error syncing balance for address ${addressRecord.address}:`, err.message);
         }
       }
 
-      // Update local DB to stay in sync. For wallets with an ARC address the
-      // raw on-chain balance reflects only deposits/sends; conversions out of
-      // USD are bookkeeping (no chain movement) so re-persisting the chain
-      // total here would restore already-spent USD. Net out the CONVERT ledger
-      // so the spendable USD is accurate and balances stay consistent.
-      if (seenArcAddresses.size > 0) {
-        try {
-          const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
-            `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
-               SELECT 'out' AS kind, amount::float8 AS total
-                 FROM "Transaction"
-                WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
-                  AND (metadata->>'from' = 'USD')
-               UNION ALL
-               SELECT 'in', COALESCE((metadata->>'toAmount')::float8, 0)
-                 FROM "Transaction"
-                WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
-                  AND (metadata->>'to' = 'USD')
-             ) t GROUP BY kind`,
-            wallet.userId
-          );
-          const convertedOut = rows.find((r) => r.kind === 'out')?.total || 0;
-          const convertedIn = rows.find((r) => r.kind === 'in')?.total || 0;
-          const net = usdcBalance - convertedOut + convertedIn;
-          usdcBalance = Math.max(0, net);
-          this.logger.log(`ARC USD ledger for ${wallet.userId}: chain=${usdcBalance + convertedOut - convertedIn} out=${convertedOut} in=${convertedIn} spendable=${usdcBalance}`);
-        } catch (err: any) {
-          this.logger.error(`ARC USD ledger net failed: ${err.message}`);
+      // Wallet balances reflect on-chain deposits/sends; conversions out of USD
+      // (USDC â†’ local currency) are bookkeeping with no chain movement, so the
+      // Circle-reported total must be net of the CONVERT ledger to show only
+      // spendable USD.
+      try {
+        const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
+          `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
+             SELECT 'out' AS kind, amount::float8 AS total
+               FROM "Transaction"
+              WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
+                AND (metadata->>'from' = 'USD')
+             UNION ALL
+             SELECT 'in', COALESCE((metadata->>'toAmount')::float8, 0)
+               FROM "Transaction"
+              WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
+                AND (metadata->>'to' = 'USD')
+           ) t GROUP BY kind`,
+          wallet.userId
+        );
+        const convertedOut = rows.find((r) => r.kind === 'out')?.total || 0;
+        const convertedIn = rows.find((r) => r.kind === 'in')?.total || 0;
+        if (convertedOut > 0 || convertedIn > 0) {
+          const ledgerNet = Math.max(0, usdcBalance - convertedOut + convertedIn);
+          this.logger.log(`USD ledger for ${wallet.userId}: gross=${usdcBalance} out=${convertedOut} in=${convertedIn} spendable=${ledgerNet}`);
+          usdcBalance = ledgerNet;
         }
+      } catch (err: any) {
+        this.logger.error(`USD ledger net failed: ${err.message}`);
       }
 
       // Update local DB to stay in sync
@@ -204,12 +172,9 @@ export class WalletsService {
       });
 
       // Sync real deposit/withdrawal history from Circle so the transactions
-      // page reflects actual on-chain activity (including pre-listener deposits).
+      // page reflects confirmed on-chain activity. Circle natively indexes ARC,
+      // so this feed covers every supported chain including native Arc USDC.
       await this.syncCircleHistory(wallet.userId, wallet.id);
-
-      // Also sync from the actual chain (ArcScan) because Circle's transaction
-      // feed can miss deposits (e.g. the 1.5 USDC that balances the 2.8 total).
-      await this.syncArcOnChainHistory(wallet.userId, wallet.id);
     } catch (err: any) {
       this.logger.error('Error syncing balance with Circle:', err.message);
     }
@@ -279,29 +244,6 @@ export class WalletsService {
       if (exact) return exact;
     }
     return wallets[0];
-  }
-
-  // Read the authoritative native USDC balance for an Arc address directly from
-  // the chain (eth_call balanceOf on the USDC precompile). Circle's balance API
-  // can under-report or miss native Arc USDC entirely, which was causing the
-  // displayed balance to lag the real on-chain amount.
-  private async getArcUsdcBalance(address: string): Promise<number> {
-    try {
-      const rpcUrl = this.configService.get<string>('app.arc.rpcUrl') || 'https://rpc.testnet.arc.network';
-      const usdcContract = this.configService.get<string>('app.arc.usdcContractAddress') || '0x3600000000000000000000000000000000000000';
-      const data = '0x70a08231000000000000000000000000' + address.toLowerCase().replace(/^0x/, '');
-      const response = await axios.post(rpcUrl, {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'eth_call',
-        params: [{ to: usdcContract, data }, 'latest']
-      }, { timeout: 15000 });
-      const raw = response.data?.result || '0x0';
-      return Number(BigInt(raw)) / 1e6;
-    } catch (err: any) {
-      this.logger.error(`getArcUsdcBalance failed for ${address}: ${err.message}`);
-      return 0;
-    }
   }
 
   // Mirror real Circle deposit/withdrawal history into the local DB so the
@@ -412,125 +354,6 @@ export class WalletsService {
     }
   }
 
-  // ArcScan's /transactions feed is incomplete (e.g. it missed a 1.5 USDC
-  // deposit while the on-chain balance shows 2.8). This method reads the actual
-  // chain via ArcScan (Blockscout API) and records every inbound USDC transfer
-  // to the user's addresses so history matches the true balance.
-  private async syncArcOnChainHistory(userId: string, walletId: string) {
-    try {
-      // Mirror the balance logic: probe EVERY EVM address, not just records
-      // labeled 'ARC'. The same EVM address carries deposits across several
-      // network labels (BASE/BSC/ETHEREUM all share it), so restricting the
-      // query to ARC-labeled rows skips deposits into those addresses entirely.
-      const addressRecords = await this.prisma.walletAddress.findMany({
-        where: { walletId }
-      });
-
-      const evmAddresses = new Set<string>();
-      for (const record of addressRecords) {
-        const addr = record.address ? record.address.toLowerCase() : '';
-        if (/^0x[0-9a-f]{40}$/i.test(addr)) evmAddresses.add(addr);
-      }
-
-      for (const address of evmAddresses) {
-        try {
-        let cursorParams: any = null;
-        const seenTxHashes = new Set<string>();
-
-        for (let i = 0; i < 10; i++) {
-          let response: any;
-          try {
-            const params = cursorParams ? { ...cursorParams } : {};
-            response = await axios.get(
-              `https://testnet.arcscan.app/api/v2/addresses/${address}/token-transfers`,
-              { params, timeout: 20000 }
-            );
-          } catch (err: any) {
-            this.logger.error(`ArcScan token-transfers fetch failed for ${address}: ${err.message}`);
-            break;
-          }
-
-          const items = response?.data?.items || [];
-          for (const item of items) {
-            const toHash = (item?.to?.hash || '').toLowerCase();
-            if (toHash !== address) continue; // only inbound
-            const token = item?.token?.symbol || '';
-            if (token.toUpperCase() !== 'USDC') continue;
-
-            const decimals = item?.token?.decimals || 6;
-            const amount = parseFloat(item?.total?.value || '0') / Math.pow(10, decimals);
-            if (!amount || amount <= 0) continue;
-
-            const txHash = item?.transaction_hash;
-            if (!txHash || seenTxHashes.has(txHash)) continue;
-            seenTxHashes.add(txHash);
-
-            const reference = `RECV-ARC-${txHash}`;
-            const existing = await this.prisma.transaction.findUnique({
-              where: { reference }
-            });
-            if (existing) {
-              // Legacy records created while Arc deposits were treated as
-              // unconfirmed (Circle does not index native Arc USDC) were marked
-              // FAILED. They are real spendable funds now that the balance is
-              // read on-chain, so upgrade them so history matches the balance.
-              if (existing.status === 'FAILED') {
-                await this.prisma.transaction.update({
-                  where: { id: existing.id },
-                  data: {
-                    status: 'COMPLETED',
-                    metadata: {
-                      ...(existing.metadata as any),
-                      network: 'ARC',
-                      txHash,
-                      sourceAddress: item?.from?.hash,
-                      destinationAddress: item?.to?.hash
-                    }
-                  }
-                });
-                this.logger.log(`Upgraded Arc deposit to COMPLETED: ${amount} USDC (${txHash})`);
-              }
-              continue;
-            }
-
-            // Arc native USDC received at a registered address is real,
-            // spendable funds (the balance is read on-chain). Circle does not
-            // index native Arc USDC, so absence from Circle's feed is expected
-            // and must NOT make the deposit look failed.
-            await this.prisma.transaction.create({
-              data: {
-                userId,
-                type: 'RECEIVE',
-                status: 'COMPLETED',
-                amount,
-                fee: 0,
-                currency: 'USDC',
-                reference,
-                metadata: {
-                  network: 'ARC',
-                  txHash,
-                  sourceAddress: item?.from?.hash,
-                  destinationAddress: item?.to?.hash
-                },
-                createdAt: new Date(item?.timestamp || Date.now())
-              }
-            });
-            this.logger.log(`Synced on-chain RECEIVE history: ${amount} USDC (${txHash}) status=COMPLETED`);
-          }
-
-          const next = response?.data?.next_page_params;
-          if (!next || typeof next !== 'object' || Object.keys(next).length === 0) break;
-          cursorParams = next;
-        }
-        } catch (err: any) {
-          this.logger.error(`syncArcOnChainHistory failed for ${address}: ${err.message}`);
-        }
-      }
-    } catch (err: any) {
-      this.logger.error('Error syncing Arc on-chain history:', err.message);
-    }
-  }
-
   async getDepositAddress(userId: string, network: string) {
     const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC'];
     if (!validNetworks.includes(network.toUpperCase())) {
@@ -556,7 +379,55 @@ export class WalletsService {
     if (!walletAddress) {
       if (network.toUpperCase() === 'ARC') {
         try {
-          // Find any existing EVM address for this wallet
+          // Circle natively supports ARC (ARC-TESTNET) and tracks native USDC on
+          // it, so register a REAL Circle wallet instead of aliasing an EVM
+          // address. Unified EVM addressing returns the same address the user
+          // already has on other EVM chains, so previously-received Arc USDC
+          // becomes visible to Circle and the console.
+          const pubKeyResponse = await axios.get(`${this.baseUrl}/v1/w3s/config/entity/publicKey`, {
+            headers: {
+              Authorization: `Bearer ${this.apiKey}`,
+              accept: 'application/json',
+            },
+          });
+          const publicKeyPem = pubKeyResponse.data.data.publicKey;
+          const ciphertext = this.encryptSecret(this.entitySecret, publicKeyPem);
+
+          const createResponse = await axios.post(
+            `${this.baseUrl}/v1/w3s/developer/wallets`,
+            {
+              idempotencyKey: crypto.randomUUID(),
+              blockchains: ['ARC-TESTNET'],
+              entitySecretCiphertext: ciphertext,
+              walletSetId: this.walletSetId,
+              metadata: [
+                {
+                  name: `User ${userId.substring(0, 8)} - ARC`,
+                  refId: userId
+                }
+              ]
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${this.apiKey}`,
+                'Content-Type': 'application/json',
+                accept: 'application/json',
+              }
+            }
+          );
+
+          const circleWallet = createResponse.data.data.wallets[0];
+          walletAddress = await this.prisma.walletAddress.create({
+            data: {
+              walletId: wallet.id,
+              network: 'ARC',
+              address: circleWallet.address,
+            }
+          });
+        } catch (err: any) {
+          // Fallback: Circle API rejected ARC-TESTNET (e.g. not available on this
+          // key). Reuse the existing EVM address so deposit addresses keep working.
+          this.logger.warn(`ARC-TESTNET wallet creation failed; reusing EVM address: ${err.message}`);
           const evmAddressRecord = await this.prisma.walletAddress.findFirst({
             where: {
               walletId: wallet.id,
@@ -568,12 +439,10 @@ export class WalletsService {
           if (evmAddressRecord) {
             address = evmAddressRecord.address;
           } else {
-            // Generate a standard EVM wallet on Circle (using ETHEREUM as the baseline)
             const ethWalletRecord = await this.getDepositAddress(userId, 'ETHEREUM');
             address = ethWalletRecord.address;
           }
 
-          // Save Arc address record mapping to this EVM address
           walletAddress = await this.prisma.walletAddress.create({
             data: {
               walletId: wallet.id,
@@ -581,9 +450,6 @@ export class WalletsService {
               address
             }
           });
-        } catch (err: any) {
-          this.logger.error('Error generating mapped Arc wallet:', err.message);
-          throw new BadRequestException('Failed to resolve EVM address for Arc network');
         }
       } else {
         try {
