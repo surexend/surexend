@@ -7,6 +7,7 @@
     "start": "node dist/main",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
+    "register:wallets": "node scripts/register-all-wallets.js",
     "prestart": "prisma db push || echo \"[prestart] prisma db push failed; continuing anyway\"",
     "prestart:prod": "prisma db push || echo \"[prestart] prisma db push failed; continuing anyway\""
   },
