@@ -99,28 +99,33 @@ export class WalletsService {
       const seenWalletIds = new Set<string>();
       const seenArcAddresses = new Set<string>();
 
-      // Any address that has an ARC record is an on-chain authoritative USDC
-      // balance: native Arc USDC is read directly from the chain, and the same
-      // EVM address is often stored under multiple networks (e.g. the demo
-      // wallet has the same address as both ETHEREUM and ARC). Circle's balance
-      // API can under-report native Arc USDC, so the chain read wins and the
-      // address is counted only once.
-      const arcAddresses = new Set<string>(
-        addressRecords.filter((r) => r.network === 'ARC').map((r) => r.address.toLocaleLowerCase())
-      );
+      // Native Arc USDC is read directly from the chain because Circle's
+      // balance API can under-report it. The same EVM address is stored under
+      // multiple network labels (the demo wallet's address is registered as
+      // both ETHEREUM and ARC, and often BASE/BSC share it too), so probing only
+      // records labeled 'ARC' misses deposits into addresses stored under other
+      // networks. Probe EVERY EVM address on-chain once; the chain read wins and
+      // Circle is only consulted as the per-record fallback.
+      const isEthereumAddress = (addr: string) => /^0x[0-9a-f]{40}$/i.test(addr);
+      const arcOnChain = new Map<string, number>();
+      for (const r of addressRecords) {
+        const a = r.address ? r.address.toLocaleLowerCase() : '';
+        if (a && isEthereumAddress(a) && !arcOnChain.has(a)) {
+          arcOnChain.set(a, await this.getArcUsdcBalance(a));
+        }
+      }
 
       for (const addressRecord of addressRecords) {
         try {
           const addr = addressRecord.address ? addressRecord.address.toLocaleLowerCase() : '';
           if (!addr) continue;
 
-          if (arcAddresses.has(addr)) {
-            if (!seenArcAddresses.has(addr)) {
-              seenArcAddresses.add(addr);
-              const arcUsdc = await this.getArcUsdcBalance(addr);
-              if (arcUsdc > 0) usdcBalance = Math.max(usdcBalance, arcUsdc);
-            }
-            continue;
+          const isArcRecord = addressRecord.network?.toUpperCase() === 'ARC';
+          const onChainArc = isEthereumAddress(addr) ? (arcOnChain.get(addr) || 0) : 0;
+
+          if (onChainArc > 0 && !seenArcAddresses.has(addr)) {
+            seenArcAddresses.add(addr);
+            usdcBalance = Math.max(usdcBalance, onChainArc);
           }
 
           const circleWallet = await this.getCircleWalletByAddress(addressRecord.address, this.getBlockchainName(addressRecord.network));
@@ -146,8 +151,15 @@ export class WalletsService {
               const amount = parseFloat(bal.amount) || 0;
               perSymbol.set(symbol, Math.max(perSymbol.get(symbol) || 0, amount));
             }
+            const circleUsdc = perSymbol.get('USDC') || 0;
+            if (isArcRecord && onChainArc > 0) {
+              // Circle may also report the native Arc USDC we already counted
+              // from the chain; keep the larger source, never double count.
+              if (circleUsdc > usdcBalance) usdcBalance = circleUsdc;
+            } else {
+              usdcBalance += circleUsdc;
+            }
             usdtBalance += perSymbol.get('USDT') || 0;
-            usdcBalance += perSymbol.get('USDC') || 0;
           }
         } catch (err: any) {
           this.logger.error(`Error syncing balance for address ${addressRecord.address}:`, err.message);
@@ -159,7 +171,7 @@ export class WalletsService {
       // USD are bookkeeping (no chain movement) so re-persisting the chain
       // total here would restore already-spent USD. Net out the CONVERT ledger
       // so the spendable USD is accurate and balances stay consistent.
-      if (arcAddresses.size > 0) {
+      if (seenArcAddresses.size > 0) {
         try {
           const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
             `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
