@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, Logger, ForbiddenException } from '@ne
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import axios from 'axios';
@@ -23,6 +24,7 @@ export class ConversionsService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private transactionsService: TransactionsService,
+    private notificationsService: NotificationsService,
   ) {
     this.redis = new Redis(this.configService.get<string>('app.redisUrl') || 'redis://localhost:6379');
   }
@@ -278,6 +280,13 @@ export class ConversionsService {
           toAmount: result.receiveAmount,
           rate: result.rate,
         }
+      });
+
+      await this.notificationsService.createNotification(userId, {
+        title: 'Conversion Successful',
+        body: `Converted ${amount} ${fromCode} to ${result.receiveAmount.toFixed(2)} ${toCode} at ${result.rate} ${fromCode}/${toCode}.`,
+        type: 'SWAP',
+        data: { from: fromCode, to: toCode, fromAmount: amount, toAmount: result.receiveAmount, rate: result.rate }
       });
 
       return {

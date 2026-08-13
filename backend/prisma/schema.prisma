@@ -23,6 +23,8 @@ model User {
   referredById     String?
   twoFactorSecret  String?
   twoFactorEnabled Boolean   @default(false)
+  currencyDisplay  String    @default("NGN")
+  defaultWallet    String    @default("AUTO")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   isActive         Boolean   @default(true)

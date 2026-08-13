@@ -97,6 +97,40 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <Toaster position="top-center" toastOptions={{ style: { background: '#0F1629', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
       <div className="flex h-screen overflow-hidden bg-[var(--app-bg)] relative">
+        {/* Ambient morphing mesh background — the "morphe" */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              width: '70vmax',
+              height: '70vmax',
+              borderRadius: '50%',
+              background: `radial-gradient(circle at 30% 30%, rgba(${colors.glowRgb}, 0.10), transparent 60%)`,
+              filter: 'blur(90px)',
+              top: '-15%',
+              left: '-10%',
+              opacity: 0.7,
+            }}
+            animate={{ x: [0, 40, -20, 0], y: [0, -30, 15, 0] }}
+            transition={{ duration: 28, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              width: '60vmax',
+              height: '60vmax',
+              borderRadius: '50%',
+              background: `radial-gradient(circle at 60% 60%, rgba(96, 165, 250, 0.08), transparent 60%)`,
+              filter: 'blur(80px)',
+              bottom: '-15%',
+              right: '-10%',
+              opacity: 0.6,
+            }}
+            animate={{ x: [0, -30, 20, 0], y: [0, 25, -15, 0] }}
+            transition={{ duration: 32, repeat: Infinity, ease: 'easeInOut', delay: 6 }}
+          />
+          <div className="absolute inset-0 bg-radial-vignette" />
+        </div>
         {/* Desktop Sidebar */}
         <aside className="hidden md:flex flex-col w-60 md:w-64 h-full border-r border-[rgba(255,255,255,0.06)] bg-[#0F1629] p-4 flex-shrink-0 z-20 overflow-y-auto">
           <div className="flex items-center gap-2.5 mb-8 px-3 pt-3">
@@ -151,7 +185,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Main Content Area */}
         <main className="flex-1 flex flex-col h-screen overflow-y-auto w-full max-w-full relative bg-[var(--app-bg)]">
           {/* Header */}
-          <header className="h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#0A0F1E] sticky top-0 z-30">
+          <header className="h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] sticky top-0 z-30">
             <div className="md:hidden flex items-center gap-2">
               <img
                 src={variant === 'gold' ? '/logo-mark-gold.png' : '/logo-mark-plain.png'}
@@ -289,7 +323,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     >
                       <div className="flex justify-between items-start mb-1">
                         <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
-                          {n.type === 'LOGIN' ? <ShieldCheck className="w-3.5 h-3.5 text-blue-400" /> : <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-400" />}
+                          {(() => {
+                            switch (n.type) {
+                              case 'LOGIN': return <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                              case 'SWAP': return <Repeat className="w-3.5 h-3.5 text-purple-400" />
+                              case 'SEND': case 'WITHDRAWAL': return <ArrowUpRight className="w-3.5 h-3.5 text-amber-400" />
+                              case 'DEPOSIT': case 'RECEIVE': return <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-400" />
+                              default: return <Bell className="w-3.5 h-3.5 text-[#64748B]" />
+                            }
+                          })()}
                           {n.title}
                         </h4>
                         <span className="text-[10px] text-[#64748B] flex-shrink-0 ml-2">

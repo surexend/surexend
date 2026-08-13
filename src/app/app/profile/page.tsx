@@ -3,19 +3,20 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
-import { useQuery } from '@tanstack/react-query'
-import { userAPI } from '@/lib/api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { userAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import {
   User, Shield, Bell, CreditCard, HelpCircle, LogOut,
   ChevronRight, Camera, Edit3, Copy, CheckCircle,
   Fingerprint, Eye, EyeOff, Smartphone, Lock,
   Globe, Moon, Star, Award, Crown, ExternalLink,
-  AlertTriangle, Tag
+  AlertTriangle, Tag, Check, X
 } from 'lucide-react'
 import { getInitials } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
+import CurrencyFlag from '@/components/CurrencyFlag'
 
 function MenuSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -86,6 +87,10 @@ export default function ProfilePage() {
 
   const [copiedId, setCopiedId] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)
+  const [currencySearch, setCurrencySearch] = useState('')
+  const [savingCurrency, setSavingCurrency] = useState(false)
+  const queryClient = useQueryClient()
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -291,9 +296,10 @@ export default function ProfilePage() {
           <MenuItem icon={Bell} label="Notifications" value="Push, email, SMS"
             accentHex={accentHex} accentRgb={accentRgb}
             onClick={() => router.push('/app/settings/notifications')} />
-          <MenuItem icon={Globe} label="Currency Display" value="USD"
+          <MenuItem icon={Globe} label="Currency Display"
+            value={profile?.currencyDisplay || 'NGN'}
             accentHex={accentHex} accentRgb={accentRgb}
-            onClick={() => toast('Coming soon')} />
+            onClick={() => setShowCurrencyPicker(true)} />
         </MenuSection>
 
         <MenuSection title="About SureXend">
@@ -324,6 +330,93 @@ export default function ProfilePage() {
 
         <div className="h-8" />
       </div>
+
+      {/* ── Currency Display Picker ── */}
+      <AnimatePresence>
+        {showCurrencyPicker && (
+          <>
+            <motion.div className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowCurrencyPicker(false)} />
+            <motion.div
+              className="fixed inset-x-0 bottom-0 z-50 sm:inset-auto sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[400px] max-h-[80vh] overflow-y-auto"
+              initial={{ opacity: 0, y: 50, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            >
+              <div className="bg-[#0F1629] rounded-3xl border border-white/10 overflow-hidden">
+                <div className="flex items-center justify-between p-4 border-b border-white/10">
+                  <div>
+                    <h3 className="font-bold text-white text-sm">Currency Display</h3>
+                    <p className="text-[11px] text-[#64748B]">Choose the local currency shown on your wallet by default</p>
+                  </div>
+                  <button onClick={() => setShowCurrencyPicker(false)} className="p-1.5 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="p-3 sticky top-0 z-10" style={{ background: 'rgba(10,15,30,0.95)', backdropFilter: 'blur(12px)' }}>
+                  <input
+                    value={currencySearch}
+                    onChange={(e) => setCurrencySearch(e.target.value)}
+                    placeholder="Search country or currency…"
+                    className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
+                  />
+                </div>
+                <div className="p-3 space-y-2 max-h-[55vh] overflow-y-auto">
+                  {AFRICAN_CURRENCIES.filter(c => {
+                    const q = currencySearch.trim().toLowerCase()
+                    if (!q) return true
+                    return c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || c.country.toLowerCase().includes(q) || (c.countries || []).some((cc: string) => cc.toLowerCase().includes(q))
+                  }).map((curr) => {
+                    const isSelected = (profile?.currencyDisplay || 'NGN') === curr.code
+                    return (
+                      <button
+                        key={curr.code}
+                        disabled={savingCurrency}
+                        onClick={async () => {
+                          setSavingCurrency(true)
+                          try {
+                            await userAPI.updatePreferences({ currencyDisplay: curr.code })
+                            queryClient.setQueryData(['profile'], (old: any) => (old ? { ...old, currencyDisplay: curr.code } : old))
+                            setShowCurrencyPicker(false)
+                            setCurrencySearch('')
+                            toast.success(`Currency display set to ${curr.code}`)
+                          } catch {
+                            toast.error('Could not update currency display')
+                          } finally {
+                            setSavingCurrency(false)
+                          }
+                        }}
+                        className="w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all disabled:opacity-60"
+                        style={isSelected
+                          ? { background: `rgba(${accentRgb},0.12)`, borderColor: accentHex }
+                          : { background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.08)' }
+                        }
+                      >
+                        <div className="flex items-center gap-3">
+                          <CurrencyFlag countryCode={curr.countryCode} emoji={curr.flag} size={32} />
+                          <div className="text-left">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-white text-sm">{curr.code}</span>
+                              <span className="text-xs text-[#94A3B8]">({curr.symbol})</span>
+                            </div>
+                            <p className="text-[11px] text-[#64748B]">{curr.name}</p>
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center text-black" style={{ background: accentHex }}>
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Logout confirmation */}
       <AnimatePresence>

@@ -165,9 +165,9 @@ export default function BillsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0F1E] pb-32">
+    <div className="min-h-screen bg-[#060A15] pb-32">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-[#0A0F1E]/90 backdrop-blur-xl border-b border-white/5">
+      <div className="sticky top-0 z-30 bg-[#060A15]/90 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
           {step !== 'categories' && (
             <motion.button

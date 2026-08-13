@@ -1,12 +1,12 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, TrendingUp, TrendingDown, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { walletAPI, transactionAPI, AFRICAN_CURRENCIES } from '@/lib/api'
+import { walletAPI, transactionAPI, userAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
@@ -102,6 +102,41 @@ export default function DashboardPage() {
     queryFn: walletAPI.getBalance,
     retry: false
   })
+
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: userAPI.getProfile,
+    retry: false
+  })
+
+  // Persisted wallet preference: 'AUTO' (highest balance) | 'USD' | 'LOCAL'
+  const prefDefaultWallet = (profile?.defaultWallet as 'AUTO' | 'USD' | 'LOCAL' | undefined) || 'AUTO'
+  // Persisted display currency from Profile → default local currency shown
+  const prefCurrency = (profile?.currencyDisplay as string | undefined) || 'NGN'
+
+  // Once profile + balance load, initialize the default wallet view:
+  //   - explicit pref wins (USD / LOCAL)
+  //   - 'AUTO' → the wallet with the higher balance (falls back to USD)
+  const hasInited = useRef(false)
+  useEffect(() => {
+    if (hasInited.current) return
+    if (!balanceData) return
+
+    if (prefDefaultWallet === 'USD' || prefDefaultWallet === 'LOCAL') {
+      setWalletView(prefDefaultWallet)
+    } else {
+      const usdBal = Number(balanceData?.usdBalance ?? 0)
+      const localBal = (balanceData?.localBalances?.[prefCurrency] ?? 0) ||
+        (prefCurrency === 'NGN' ? (balanceData?.ngnBalance ?? 0) : 0)
+      setWalletView(usdBal >= localBal ? 'USD' : 'LOCAL')
+    }
+    hasInited.current = true
+  }, [balanceData, prefDefaultWallet, prefCurrency])
+
+  // Once profile loads, apply the persisted display currency to the picker
+  useEffect(() => {
+    if (profile?.currencyDisplay) setSelectedLocalCurrency(profile.currencyDisplay)
+  }, [profile?.currencyDisplay])
 
   const copyVBA = () => {
     navigator.clipboard.writeText('9824018420')
@@ -221,7 +256,10 @@ export default function DashboardPage() {
             {/* Wallet toggle tabs */}
             <div className="flex items-center gap-1.5 mb-3">
               <button
-                onClick={() => setWalletView('USD')}
+                onClick={() => {
+                  setWalletView('USD')
+                  if (prefDefaultWallet !== 'USD') userAPI.updatePreferences({ defaultWallet: 'USD' }).catch(() => {})
+                }}
                 className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ${
                   walletView === 'USD'
                     ? 'text-white bg-white/10 border-white/20'
@@ -231,7 +269,10 @@ export default function DashboardPage() {
                 💵 USD Wallet
               </button>
               <button
-                onClick={() => setWalletView('LOCAL')}
+                onClick={() => {
+                  setWalletView('LOCAL')
+                  if (prefDefaultWallet !== 'LOCAL') userAPI.updatePreferences({ defaultWallet: 'LOCAL' }).catch(() => {})
+                }}
                 className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ${
                   walletView === 'LOCAL'
                     ? 'text-white bg-white/10 border-white/20'
@@ -1009,7 +1050,7 @@ export default function DashboardPage() {
                     return (
                       <button
                         key={curr.code}
-                        onClick={() => { setSelectedLocalCurrency(curr.code); setShowLocalCurrencyPicker(false); setLocalCurrencySearch('') }}
+                        onClick={() => { setSelectedLocalCurrency(curr.code); setShowLocalCurrencyPicker(false); setLocalCurrencySearch(''); userAPI.updatePreferences({ currencyDisplay: curr.code }).catch(() => {}) }}
                         className="w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all"
                         style={isSelected
                           ? { background: `rgba(${colors.glowRgb},0.12)`, borderColor: colors.primary }

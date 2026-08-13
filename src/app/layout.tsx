@@ -76,7 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-startup-image" href="/splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px)" />
         <link rel="apple-touch-startup-image" href="/splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px)" />
       </head>
-      <body className="bg-[#0A0F1E] text-white font-dm antialiased">
+      <body className="bg-[#060A15] text-white font-dm antialiased">
         {/* Anti-white-screen-of-death mobile resilience */}
         <MobileResilienceScript />
         <ThemeProvider>

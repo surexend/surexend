@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, BadRequestException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { SUPPORTED_LOCAL_CURRENCIES } from '../common/currency.constants';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
@@ -25,6 +26,31 @@ export class UsersController {
     @Body('newPin') newPin: string,
   ) {
     return this.usersService.changePin(user.id, currentPin, newPin);
+  }
+
+  @Post('preferences')
+  async updatePreferences(
+    @CurrentUser() user: any,
+    @Body() body: { currencyDisplay?: string; defaultWallet?: string },
+  ) {
+    const validCurrencies: string[] = SUPPORTED_LOCAL_CURRENCIES.map((c) => c.code);
+    const validWallets: string[] = ['AUTO', 'USD', 'LOCAL'];
+
+    const prefs: { currencyDisplay?: string; defaultWallet?: string } = {};
+    if (body.currencyDisplay) {
+      if (!validCurrencies.includes(body.currencyDisplay)) {
+        throw new BadRequestException('Invalid currencyDisplay');
+      }
+      prefs.currencyDisplay = body.currencyDisplay;
+    }
+    if (body.defaultWallet) {
+      if (!validWallets.includes(body.defaultWallet)) {
+        throw new BadRequestException('Invalid defaultWallet');
+      }
+      prefs.defaultWallet = body.defaultWallet;
+    }
+
+    return this.usersService.updatePreferences(user.id, prefs);
   }
 
   @Post('2fa/setup')

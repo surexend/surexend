@@ -592,6 +592,12 @@ export const userAPI = {
       () => apiClient.post('/users/kyc', payload, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
       () => ({ success: true, message: 'KYC documents submitted for review' })
     ),
+
+  updatePreferences: (payload: { currencyDisplay?: string; defaultWallet?: string }) =>
+    tryWithMock(
+      () => apiClient.post('/users/preferences', payload).then(r => r.data),
+      () => ({ message: 'Preferences updated successfully' })
+    ),
 }
 
 // ── Support API ───────────────────────────────────────────────────────────

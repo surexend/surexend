@@ -246,7 +246,7 @@ export default function LandingPage() {
         )}
       </AnimatePresence>
 
-      <div id="app-shell" data-page-loaded className="min-h-screen bg-[#0A0F1E]">
+      <div id="app-shell" data-page-loaded className="min-h-screen bg-[#060A15]">
 
         {/* ── Navigation ─────────────────────────────────────────────── */}
         <motion.nav
@@ -522,7 +522,7 @@ export default function LandingPage() {
 
               {/* PWA Phone Screen */}
               <div 
-                className="rounded-[36px] bg-[#0A0F1E] overflow-hidden pt-6 relative border border-white/10 flex flex-col justify-between select-none"
+                className="rounded-[36px] bg-[#060A15] overflow-hidden pt-6 relative border border-white/10 flex flex-col justify-between select-none"
                 style={{ height: 540 }}
               >
                 {/* Content scroll area inside phone */}

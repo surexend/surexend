@@ -21,6 +21,8 @@ export class UsersService {
         kycStatus: true,
         referralCode: true,
         twoFactorEnabled: true,
+        currencyDisplay: true,
+        defaultWallet: true,
         createdAt: true,
         isActive: true,
         pin: true,
@@ -31,6 +33,21 @@ export class UsersService {
 
     const { pin, ...profile } = user;
     return { ...profile, pinSet: !!pin };
+  }
+
+  async updatePreferences(
+    userId: string,
+    prefs: { currencyDisplay?: string; defaultWallet?: string },
+  ) {
+    const data: { currencyDisplay?: string; defaultWallet?: string } = {};
+    if (prefs.currencyDisplay !== undefined) data.currencyDisplay = prefs.currencyDisplay;
+    if (prefs.defaultWallet !== undefined) data.defaultWallet = prefs.defaultWallet;
+    if (Object.keys(data).length === 0) {
+      return { message: 'No preferences to update' };
+    }
+
+    await this.prisma.user.update({ where: { id: userId }, data });
+    return { message: 'Preferences updated successfully' };
   }
 
   async setupPin(userId: string, pin: string) {

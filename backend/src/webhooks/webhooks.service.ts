@@ -44,6 +44,13 @@ export class WebhooksService {
           await this.referralsService.processReferralEarning(user.referredById, transaction.fee);
         }
 
+        await this.notificationsService.createNotification(transaction.userId, {
+          title: 'Withdrawal Completed',
+          body: `Your conversion & withdrawal of ${transaction.amount} ${transaction.currency} was completed successfully.`,
+          type: 'WITHDRAWAL',
+          data: { amount: transaction.amount, currency: transaction.currency, reference }
+        });
+
         await this.notificationsService.sendTransactionEmail(
           user.email,
           transaction.amount,
@@ -148,6 +155,13 @@ export class WebhooksService {
             data: {}
           });
 
+          await this.notificationsService.createNotification(wallet.userId, {
+            title: 'Deposit Received',
+            body: `Successfully received +${amount} ${symbol} on ${walletAddress.network}.`,
+            type: 'DEPOSIT',
+            data: { amount, currency: symbol, network: walletAddress.network, txId }
+          });
+
           await this.notificationsService.sendTransactionEmail(
             wallet.user.email,
             amount,
@@ -186,6 +200,13 @@ export class WebhooksService {
               title: 'Send Completed',
               body: `Your transfer of ${matchingTx.amount} ${matchingTx.currency} was completed successfully.`,
               data: {}
+            });
+
+            await this.notificationsService.createNotification(user.id, {
+              title: 'Transfer Completed',
+              body: `Your transfer of ${matchingTx.amount} ${matchingTx.currency} was completed successfully.`,
+              type: 'SEND',
+              data: { amount: matchingTx.amount, currency: matchingTx.currency, reference: refId }
             });
 
             await this.notificationsService.sendTransactionEmail(
@@ -230,6 +251,13 @@ export class WebhooksService {
               title: 'Transfer Failed',
               body: `Your transfer of ${matchingTx.amount} ${matchingTx.currency} failed: ${errorReason}`,
               data: {}
+            });
+
+            await this.notificationsService.createNotification(user.id, {
+              title: 'Transfer Failed',
+              body: `Your transfer of ${matchingTx.amount} ${matchingTx.currency} failed: ${errorReason}`,
+              type: 'SEND',
+              data: { amount: matchingTx.amount, currency: matchingTx.currency, reference: matchingTx.reference, errorReason }
             });
           }
         }
