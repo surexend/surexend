@@ -123,7 +123,7 @@ export class WalletsService {
             continue;
           }
 
-          const circleWallet = await this.getCircleWalletByAddress(addressRecord.address);
+          const circleWallet = await this.getCircleWalletByAddress(addressRecord.address, this.getBlockchainName(addressRecord.network));
           if (circleWallet && !seenWalletIds.has(circleWallet.id)) {
             seenWalletIds.add(circleWallet.id);
             
@@ -242,18 +242,31 @@ export class WalletsService {
     };
   }
 
-  private async getCircleWalletByAddress(address: string) {
-    const response = await axios.get(
-      `${this.baseUrl}/v1/w3s/wallets?address=${address}`,
-      {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          accept: 'application/json',
-        }
+  // Circle W3S can hold MULTIPLE wallet entries that share the same EVM address
+  // across chains (e.g. this project stores one Circle wallet per network, but
+  // BSC/BASE and POLYGON/OPTIMISM have proven to resolve to the same address).
+  // Listing only by address then guessing `wallets[0]` picks the wrong entry, so
+  // the deposit on the other chain never surfaces. Filter by blockchain too so we
+  // always read the wallet that actually received funds on the requested network.
+  private async getCircleWalletByAddress(address: string, blockchain?: string) {
+    let url = `${this.baseUrl}/v1/w3s/wallets?address=${encodeURIComponent(address)}`;
+    if (blockchain) url += `&blockchains=${encodeURIComponent(blockchain)}`;
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        accept: 'application/json',
       }
-    );
+    });
     const wallets = response.data.data.wallets || [];
-    return wallets.length > 0 ? wallets[0] : null;
+    if (wallets.length === 0) return null;
+    if (blockchain) {
+      const requested = blockchain.toUpperCase();
+      const exact = wallets.find(
+        (w: any) => (w.blockchains || []).map((b: string) => b.toUpperCase()).includes(requested)
+      );
+      if (exact) return exact;
+    }
+    return wallets[0];
   }
 
   // Read the authoritative native USDC balance for an Arc address directly from
@@ -304,7 +317,7 @@ export class WalletsService {
       const seenCircleWallets = new Set<string>();
       for (const addressRecord of addressRecords) {
         try {
-        const circleWallet = await this.getCircleWalletByAddress(addressRecord.address);
+        const circleWallet = await this.getCircleWalletByAddress(addressRecord.address, this.getBlockchainName(addressRecord.network));
         if (!circleWallet || seenCircleWallets.has(circleWallet.id)) continue;
         seenCircleWallets.add(circleWallet.id);
 
@@ -666,8 +679,8 @@ export class WalletsService {
       const publicKeyPem = pubKeyResponse.data.data.publicKey;
       const ciphertext = this.encryptSecret(this.entitySecret, publicKeyPem);
 
-      // 2. Resolve Circle wallet ID from address
-      const circleWallet = await this.getCircleWalletByAddress(sourceAddressRecord.address);
+      // 2. Resolve Circle wallet ID from address (scoped to the requested chain)
+      const circleWallet = await this.getCircleWalletByAddress(sourceAddressRecord.address, this.getBlockchainName(net));
       if (!circleWallet) {
         throw new BadRequestException('Source wallet not found in Circle account.');
       }
