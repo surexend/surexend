@@ -854,9 +854,10 @@ export class WalletsService {
 
     let result: any;
     try {
-      result = await this.cctpService.bridgeFromArc({
+      result = await this.cctpService.bridge({
+        sourceNetwork: 'ARC',
         sourceAddress: sourceAddressRecord.address,
-        destChain,
+        destNetwork: destNet,
         recipientAddress: toAddress,
         amount,
       });

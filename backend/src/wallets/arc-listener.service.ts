@@ -6,6 +6,16 @@ import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import axios from 'axios';
 
+// Arc uses USDC as its native gas token. Two emitters can represent USDC
+// movement (see https://docs.arc.io/arc/references/usdc-system-events):
+//   - ERC-20 USDC precompile 0x3600...0000 (6 decimals)
+//   - Native USDC system emitter 0xffff...fffe (18 decimals, EIP-7708)
+// A single ERC-20 transfer() emits BOTH logs; a plain native value send emits
+// only the system log. We must scan both and never double-count the same tx.
+const ERC20_USDC_EMITTER = '0x3600000000000000000000000000000000000000';
+const NATIVE_USDC_EMITTER = '0xfffffffffffffffffffffffffffffffffffffffe';
+const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
 @Injectable()
 export class ArcListenerService implements OnModuleInit {
   private readonly logger = new Logger(ArcListenerService.name);
@@ -21,7 +31,7 @@ export class ArcListenerService implements OnModuleInit {
     private configService: ConfigService
   ) {
     this.rpcUrl = this.configService.get<string>('app.arc.rpcUrl') || 'https://rpc.testnet.arc.network';
-    this.usdcContract = this.configService.get<string>('app.arc.usdcContractAddress') || '0x3600000000000000000000000000000000000000';
+    this.usdcContract = this.configService.get<string>('app.arc.usdcContractAddress') || ERC20_USDC_EMITTER;
   }
 
   async onModuleInit() {
@@ -68,91 +78,114 @@ export class ArcListenerService implements OnModuleInit {
 
       this.logger.log(`Scanning Arc blocks ${startBlock} to ${endBlock}...`);
 
-      const logsResponse = await axios.post(this.rpcUrl, {
-        jsonrpc: '2.0',
-        id: 2,
-        method: 'eth_getLogs',
-        params: [{
-          address: this.usdcContract,
-          topics: ['0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'],
-          fromBlock: '0x' + startBlock.toString(16),
-          toBlock: '0x' + endBlock.toString(16)
-        }]
-      });
+      // Scan both emitters: the ERC-20 precompile (6 decimals) and the native
+      // system emitter (18 decimals). A single ERC-20 transfer() emits BOTH logs,
+      // so we dedupe by transaction hash in-memory; a plain native value send
+      // produces only the system log and is caught by the second query.
+      const emitters = [
+        { address: this.usdcContract, decimals: 6 },
+        { address: NATIVE_USDC_EMITTER, decimals: 18 }
+      ];
 
-      const logs = logsResponse.data.result || [];
-      for (const log of logs) {
+      const seenInBatch = new Set<string>();
+      for (const emitter of emitters) {
+        let logsResponse: any;
         try {
-          if (!log.topics || log.topics.length < 3) continue;
-
-          // Extract recipient address (topic index 2, strip padding)
-          const rawToAddress = log.topics[2];
-          const toAddress = '0x' + rawToAddress.substring(26);
-
-          // Find address in database
-          const walletAddress = await this.prisma.walletAddress.findFirst({
-            where: {
-              address: { equals: toAddress, mode: 'insensitive' }
-            },
-            include: { wallet: { include: { user: true } } }
+          logsResponse = await axios.post(this.rpcUrl, {
+            jsonrpc: '2.0',
+            id: 2,
+            method: 'eth_getLogs',
+            params: [{
+              address: emitter.address,
+              topics: [TRANSFER_TOPIC],
+              fromBlock: '0x' + startBlock.toString(16),
+              toBlock: '0x' + endBlock.toString(16)
+            }]
           });
-
-          if (walletAddress) {
-            const txHash = log.transactionHash;
-            const amount = parseInt(log.data, 16) / 1000000; // 6 decimals
-
-            const reference = `RECV-ARC-${txHash}`;
-            const existingTx = await this.prisma.transaction.findUnique({
-              where: { reference }
-            });
-            if (existingTx) continue;
-
-            this.logger.log(`Detected Arc Deposit: ${amount} USDC to ${toAddress}`);
-
-            await this.prisma.$transaction(async (prisma) => {
-              // Do NOT increment the balance here. The displayed balance must
-              // only ever reflect what Circle confirms as sendable. Raw on-chain
-              // events (including wrong-chain / unconfirmed deposits) must not
-              // inflate it; getBalance() overwrites from Circle's live API.
-
-              // Create transaction record
-              await this.transactionsService.createTransaction(prisma, {
-                userId: walletAddress.wallet.userId,
-                type: 'RECEIVE',
-                status: 'COMPLETED',
-                amount,
-                fee: 0,
-                currency: 'USDC',
-                reference,
-                metadata: { txHash, network: 'ARC' }
-              });
-            });
-
-            // Send notification
-            await this.notificationsService.sendPushNotification(walletAddress.wallet.userId, {
-              title: 'Arc Deposit Confirmed',
-              body: `You successfully received ${amount} USDC on the Arc Network.`,
-              data: {}
-            });
-
-            // Persist in-app notification so the bell drawer shows the deposit
-            await this.notificationsService.createNotification(walletAddress.wallet.userId, {
-              title: 'Deposit Received',
-              body: `Successfully received +${amount} USDC on Arc.`,
-              type: 'DEPOSIT',
-              data: { amount, currency: 'USDC', network: 'ARC', txHash }
-            });
-
-            await this.notificationsService.sendTransactionEmail(
-              walletAddress.wallet.user.email,
-              amount,
-              'USDC',
-              reference,
-              'Arc USDC Deposit'
-            );
-          }
         } catch (err: any) {
-          this.logger.error(`Error processing Arc log:`, err.message);
+          this.logger.error(`Arc eth_getLogs failed for ${emitter.address}: ${err.message}`);
+          continue;
+        }
+
+        const logs = logsResponse.data.result || [];
+        for (const log of logs) {
+          if (seenInBatch.has(log.transactionHash)) continue;
+          seenInBatch.add(log.transactionHash);
+
+          try {
+            if (!log.topics || log.topics.length < 3) continue;
+
+            // Extract recipient address (topic index 2, strip padding)
+            const rawToAddress = log.topics[2];
+            const toAddress = '0x' + rawToAddress.substring(26);
+
+            // Find address in database
+            const walletAddress = await this.prisma.walletAddress.findFirst({
+              where: {
+                address: { equals: toAddress, mode: 'insensitive' }
+              },
+              include: { wallet: { include: { user: true } } }
+            });
+
+            if (walletAddress) {
+              const txHash = log.transactionHash;
+              // BigInt first: native USDC is 18 decimals and can exceed the safe
+              // integer range, so a plain parseInt() would silently lose precision.
+              const amount = Number(BigInt(log.data)) / Math.pow(10, emitter.decimals);
+
+              const reference = `RECV-ARC-${txHash}`;
+              const existingTx = await this.prisma.transaction.findUnique({
+                where: { reference }
+              });
+              if (existingTx) continue;
+
+              this.logger.log(`Detected Arc Deposit: ${amount} USDC to ${toAddress}`);
+
+              await this.prisma.$transaction(async (prisma) => {
+                // Do NOT increment the balance here. The displayed balance must
+                // only ever reflect what Circle confirms as sendable. Raw on-chain
+                // events (including wrong-chain / unconfirmed deposits) must not
+                // inflate it; getBalance() overwrites from Circle's live API.
+
+                // Create transaction record
+                await this.transactionsService.createTransaction(prisma, {
+                  userId: walletAddress.wallet.userId,
+                  type: 'RECEIVE',
+                  status: 'COMPLETED',
+                  amount,
+                  fee: 0,
+                  currency: 'USDC',
+                  reference,
+                  metadata: { txHash, network: 'ARC' }
+                });
+              });
+
+              // Send notification
+              await this.notificationsService.sendPushNotification(walletAddress.wallet.userId, {
+                title: 'Arc Deposit Confirmed',
+                body: `You successfully received ${amount} USDC on the Arc Network.`,
+                data: {}
+              });
+
+              // Persist in-app notification so the bell drawer shows the deposit
+              await this.notificationsService.createNotification(walletAddress.wallet.userId, {
+                title: 'Deposit Received',
+                body: `Successfully received +${amount} USDC on Arc.`,
+                type: 'DEPOSIT',
+                data: { amount, currency: 'USDC', network: 'ARC', txHash }
+              });
+
+              await this.notificationsService.sendTransactionEmail(
+                walletAddress.wallet.user.email,
+                amount,
+                'USDC',
+                reference,
+                'Arc USDC Deposit'
+              );
+            }
+          } catch (err: any) {
+            this.logger.error(`Error processing Arc log:`, err.message);
+          }
         }
       }
 

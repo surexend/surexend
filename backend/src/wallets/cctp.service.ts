@@ -32,40 +32,73 @@ export class CctpService {
     return createCircleWalletsAdapter({ apiKey, entitySecret });
   }
 
-  getDestinationChain(network: string): string {
+  // Resolve a network name to its BridgeKit chain constant. Every entry in
+  // NETWORK_TO_CHAIN can be used as a source OR destination since CCTP burns on
+  // one supported chain and mints on another (bidirectional by design).
+  private getChain(network: string, role: 'source' | 'destination'): string {
     const chain = NETWORK_TO_CHAIN[network.toUpperCase()];
-    if (!chain || chain === BridgeChain.Arc_Testnet) {
-      throw new BadRequestException(`Destination network ${network} is not supported for CCTP bridging.`);
+    if (!chain) {
+      throw new BadRequestException(
+        `${role === 'source' ? 'Source' : 'Destination'} network ${network} is not supported for CCTP bridging.`
+      );
     }
     return chain;
   }
 
-  async bridgeFromArc(params: {
+  getDestinationChain(network: string): string {
+    return this.getChain(network, 'destination');
+  }
+
+  getSourceChain(network: string): string {
+    return this.getChain(network, 'source');
+  }
+
+  // Bridging is generic: pass any supported source/destination network pair.
+  // CCTP handles burning USDC on the source chain and minting on the
+  // destination chain, so this works in both directions across all listed
+  // networks (Arc -> X and X -> Arc included).
+  async bridge(params: {
+    sourceNetwork: string;
     sourceAddress: string;
-    destChain: string;
+    destNetwork: string;
     recipientAddress: string;
     amount: number;
   }): Promise<any> {
-    const { sourceAddress, destChain, recipientAddress, amount } = params;
+    const { sourceNetwork, sourceAddress, destNetwork, recipientAddress, amount } = params;
+    const sourceNet = sourceNetwork.toUpperCase();
+    const destNet = destNetwork.toUpperCase();
+    if (sourceNet === destNet) {
+      throw new BadRequestException('Source and destination networks must be different.');
+    }
+
+    const sourceChain = this.getChain(sourceNet, 'source');
+    const destChain = this.getChain(destNet, 'destination');
+
     const adapter = this.createAdapter();
     const amountStr = amount.toFixed(6).replace(/\.?0+$/, '');
 
     this.logger.log(
-      `Initiating CCTP bridge: ${amount} USDC from Arc_Testnet (${sourceAddress}) -> ${destChain} (${recipientAddress})`
+      `Initiating CCTP bridge: ${amount} USDC from ${sourceChain} (${sourceAddress}) -> ${destChain} (${recipientAddress})`
     );
 
     try {
       const result = await this.kit.bridge({
         from: {
           adapter,
-          chain: BridgeChain.Arc_Testnet,
+          chain: sourceChain as any,
           address: sourceAddress,
         },
-        to: {
-          chain: destChain as any,
-          recipientAddress,
-          useForwarder: true,
-        },
+        to:
+          destChain === BridgeChain.Solana_Devnet
+            ? {
+                chain: destChain as any,
+                recipientAddress,
+              }
+            : {
+                chain: destChain as any,
+                recipientAddress,
+                useForwarder: true as const,
+              } as any,
         amount: amountStr,
         config: { transferSpeed: 'FAST' },
       });
