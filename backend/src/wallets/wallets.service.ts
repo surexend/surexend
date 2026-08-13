@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { CctpService } from './cctp.service';
+import { DepositMonitorService } from './deposit-monitor.service';
 import { getLocalRate } from '../common/currency.constants';
 import axios from 'axios';
 import * as crypto from 'crypto';
@@ -20,6 +21,7 @@ export class WalletsService {
     private configService: ConfigService,
     private transactionsService: TransactionsService,
     private cctpService: CctpService,
+    private depositMonitor: DepositMonitorService,
   ) {
     this.apiKey = this.configService.get<string>('app.circle.apiKey') || '';
     this.entitySecret = this.configService.get<string>('app.circle.entitySecret');
@@ -88,98 +90,60 @@ export class WalletsService {
       wallet = await this.prisma.wallet.create({ data: { userId } });
     }
 
-    // Try to sync with Circle balances in real-time across all generated addresses
+    // Reconcile on-chain first: the gross USDC balance is the sum of the USDC
+    // actually held at every generated address on every monitored EVM testnet
+    // (including Arc). This makes deposits appear instantly and never depends
+    // on Circle indexing the exact chain the funds landed on. It also records
+    // new deposits (history + in-app notifications) and backfills notifications
+    // for earlier ones.
+    let usdcBalance = 0;
     try {
-      const addressRecords = await this.prisma.walletAddress.findMany({
-        where: { walletId: wallet.id }
-      });
-      
-      let usdtBalance = 0;
-      let usdcBalance = 0;
-      const seenWalletIds = new Set<string>();
-
-      // Circle is the single source of truth for every chain, including ARC:
-      // ARC-TESTNET is a natively supported Circle Wallets blockchain and its
-      // USDC is reported by the balances API (native + ERC-20 entries reference
-      // the same balance). Per-address balance lookups are deduped by wallet id.
-      for (const addressRecord of addressRecords) {
-        try {
-          const circleWallet = await this.getCircleWalletByAddress(addressRecord.address, this.getBlockchainName(addressRecord.network));
-          if (!circleWallet || seenWalletIds.has(circleWallet.id)) continue;
-          seenWalletIds.add(circleWallet.id);
-
-          const balancesResponse = await axios.get(
-            `${this.baseUrl}/v1/w3s/wallets/${circleWallet.id}/balances`,
-            {
-              headers: {
-                Authorization: `Bearer ${this.apiKey}`,
-                accept: 'application/json',
-              }
-            }
-          );
-
-          const tokenBalances = balancesResponse.data.data.tokenBalances || [];
-          // Dedupe per symbol: the same token can appear multiple times with
-          // different token IDs on some testnets (e.g. Arc USDC native + ERC-20).
-          // Count each symbol once (max).
-          const perSymbol = new Map<string, number>();
-          for (const bal of tokenBalances) {
-            const symbol = bal.token.symbol.toUpperCase();
-            const amount = parseFloat(bal.amount) || 0;
-            perSymbol.set(symbol, Math.max(perSymbol.get(symbol) || 0, amount));
-          }
-          usdcBalance += perSymbol.get('USDC') || 0;
-          usdtBalance += perSymbol.get('USDT') || 0;
-        } catch (err: any) {
-          this.logger.error(`Error syncing balance for address ${addressRecord.address}:`, err.message);
-        }
-      }
-
-      // Wallet balances reflect on-chain deposits/sends; conversions out of USD
-      // (USDC â†’ local currency) are bookkeeping with no chain movement, so the
-      // Circle-reported total must be net of the CONVERT ledger to show only
-      // spendable USD.
-      try {
-        const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
-          `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
-             SELECT 'out' AS kind, amount::float8 AS total
-               FROM "Transaction"
-              WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
-                AND (metadata->>'from' = 'USD')
-             UNION ALL
-             SELECT 'in', COALESCE((metadata->>'toAmount')::float8, 0)
-               FROM "Transaction"
-              WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
-                AND (metadata->>'to' = 'USD')
-           ) t GROUP BY kind`,
-          wallet.userId
-        );
-        const convertedOut = rows.find((r) => r.kind === 'out')?.total || 0;
-        const convertedIn = rows.find((r) => r.kind === 'in')?.total || 0;
-        if (convertedOut > 0 || convertedIn > 0) {
-          const ledgerNet = Math.max(0, usdcBalance - convertedOut + convertedIn);
-          this.logger.log(`USD ledger for ${wallet.userId}: gross=${usdcBalance} out=${convertedOut} in=${convertedIn} spendable=${ledgerNet}`);
-          usdcBalance = ledgerNet;
-        }
-      } catch (err: any) {
-        this.logger.error(`USD ledger net failed: ${err.message}`);
-      }
-
-      // Update local DB to stay in sync
-      wallet = await this.prisma.wallet.update({
-        where: { id: wallet.id },
-        data: { usdtBalance, usdcBalance }
-      });
-
-      // Sync real deposit/withdrawal history from Circle so the transactions
-      // page reflects confirmed on-chain activity. Circle natively indexes ARC,
-      // so this feed covers every supported chain including native Arc USDC.
-      await this.syncCircleHistory(wallet.userId, wallet.id);
+      usdcBalance = await this.depositMonitor.reconcileWallet(userId, wallet.id);
     } catch (err: any) {
-      this.logger.error('Error syncing balance with Circle:', err.message);
+      this.logger.error(`Error reconciling on-chain balance: ${err.message}`);
+    }
+    const usdtBalance = wallet.usdtBalance || 0;
+
+    // Wallet balances reflect on-chain deposits/sends; conversions out of USD
+    // (USDC â†' local currency) are bookkeeping with no chain movement, so the
+    // reconciled on-chain total must be net of the CONVERT ledger to show only
+    // spendable USD.
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
+        `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
+           SELECT 'out' AS kind, amount::float8 AS total
+             FROM "Transaction"
+            WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
+              AND (metadata->>'from' = 'USD')
+           UNION ALL
+           SELECT 'in', COALESCE((metadata->>'toAmount')::float8, 0)
+             FROM "Transaction"
+            WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
+              AND (metadata->>'to' = 'USD')
+         ) t GROUP BY kind`,
+        userId
+      );
+      const convertedOut = rows.find((r) => r.kind === 'out')?.total || 0;
+      const convertedIn = rows.find((r) => r.kind === 'in')?.total || 0;
+      if (convertedOut > 0 || convertedIn > 0) {
+        const ledgerNet = Math.max(0, usdcBalance - convertedOut + convertedIn);
+        this.logger.log(`USD ledger for ${userId}: gross=${usdcBalance} out=${convertedOut} in=${convertedIn} spendable=${ledgerNet}`);
+        usdcBalance = ledgerNet;
+      }
+    } catch (err: any) {
+      this.logger.error(`USD ledger net failed: ${err.message}`);
     }
 
-    const usdVal = wallet.usdtBalance + wallet.usdcBalance;
+    // Sync real deposit/withdrawal history from Circle so the transactions page
+    // also reflects the activity Circle tracks natively. Idempotent and scoped
+    // to each address, so it never duplicates on-chain-synced records.
+    try {
+      await this.syncCircleHistory(userId, wallet.id);
+    } catch (err: any) {
+      this.logger.error('Error syncing Circle history:', err.message);
+    }
+
+    const usdVal = usdtBalance + usdcBalance;
     const lockedVal = wallet.lockedBalance || 0;
     const pendingVal = wallet.pendingBalance || 0;
     const localVal = wallet.localBalance || 0;
@@ -306,6 +270,15 @@ export class WalletsService {
           const amount = parseFloat((tx.amounts || [])[0]);
           if (!amount || amount <= 0) continue;
 
+          // Scope to THIS address: the wallet feed can surface activity for other
+          // addresses in the entity, and without this check the same inbound tx
+          // would be recorded once per shared-EVM-address record.
+          if (
+            tx.transactionType === 'INBOUND' &&
+            tx.destinationAddress &&
+            tx.destinationAddress.toLowerCase() !== addressRecord.address.toLowerCase()
+          ) continue;
+
           const symbol = symbolByTokenId.get(tx.tokenId) || 'USDC';
           const type = tx.transactionType === 'OUTBOUND' ? 'SEND' : 'RECEIVE';
 
@@ -314,14 +287,20 @@ export class WalletsService {
 
           const isFailed = state === 'FAILED';
           const status = isFailed ? 'FAILED' : 'COMPLETED';
-          // Match the ArcListener's reference scheme so the same on-chain tx is
-          // not recorded twice (listener: RECV-ARC-<txHash>, this sync: SEND-ARC-<txHash>).
-          const reference = `${type === 'RECEIVE' ? 'RECV' : 'SEND'}-ARC-${tx.txHash}`;
+          // Dedupe by txHash across every network record (on-chain monitor uses
+          // RECV-ONCHAIN-<chain>-<txHash>; this uses the network label) so the
+          // same on-chain tx is never listed twice in history.
+          const reference = `${type === 'RECEIVE' ? 'RECV' : 'SEND'}-${addressRecord.network}-${tx.txHash}`;
 
           const existing = await this.prisma.transaction.findUnique({
             where: { reference }
           });
           if (existing) continue;
+
+          const alreadyByHash = await this.prisma.transaction.findFirst({
+            where: { userId, metadata: { path: ['txHash'], equals: tx.txHash } }
+          });
+          if (alreadyByHash) continue;
 
           await this.prisma.transaction.create({
             data: {
@@ -333,7 +312,7 @@ export class WalletsService {
               currency: symbol,
               reference,
               metadata: {
-                network: 'ARC',
+                network: addressRecord.network,
                 txHash: tx.txHash,
                 circleTransactionId: tx.id,
                 destinationAddress: tx.destinationAddress,
@@ -343,7 +322,7 @@ export class WalletsService {
               createdAt: new Date(tx.createDate)
             }
           });
-          this.logger.log(`Synced Circle ${type} history: ${amount} ${symbol} (${tx.txHash}) status=${status}`);
+          this.logger.log(`Synced Circle ${type} history: ${amount} ${symbol} on ${addressRecord.network} (${tx.txHash}) status=${status}`);
           }
         } catch (err: any) {
           this.logger.error(`syncCircleHistory failed for ${addressRecord.address}: ${err.message}`);
