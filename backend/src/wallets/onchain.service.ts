@@ -107,20 +107,33 @@ export class OnchainService {
     toBlock: number,
   ): Promise<OnChainTransfer[]> {
     const paddedTo = '0x' + address.slice(2).toLowerCase().padStart(64, '0');
+    const params = [
+      {
+        address: chain.usdcContract,
+        topics: [TRANSFER_TOPIC, null, paddedTo],
+        fromBlock: `0x${fromBlock.toString(16)}`,
+        toBlock: `0x${toBlock.toString(16)}`,
+      },
+    ];
+
     let logs: any[] = [];
-    try {
-      const result = await this.rpc(chain, 'eth_getLogs', [
-        {
-          address: chain.usdcContract,
-          topics: [TRANSFER_TOPIC, null, paddedTo],
-          fromBlock: `0x${fromBlock.toString(16)}`,
-          toBlock: `0x${toBlock.toString(16)}`,
-        },
-      ]);
-      logs = Array.isArray(result) ? result : [];
-    } catch (err: any) {
-      this.logger.warn(`eth_getLogs failed on ${chain.key} for ${address}: ${err.message}`);
-      return [];
+    let attempts = 0;
+    while (attempts < 3) {
+      attempts += 1;
+      try {
+        const result = await this.rpc(chain, 'eth_getLogs', params);
+        logs = Array.isArray(result) ? result : [];
+        break;
+      } catch (err: any) {
+        if (attempts >= 3) break;
+        // Public testnet RPCs rate-limit (429); back off briefly and retry
+        // instead of losing the deposit window for this scan.
+        this.logger.warn(`eth_getLogs retry ${attempts}/2 on ${chain.key} for ${address}: ${err.message}`);
+        await new Promise((r) => setTimeout(r, 1200 * attempts));
+      }
+    }
+    if (attempts >= 3 && logs.length === 0) {
+      this.logger.warn(`eth_getLogs failed on ${chain.key} for ${address}`);
     }
 
     const transfers: OnChainTransfer[] = [];
