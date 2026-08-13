@@ -15,6 +15,9 @@ export class WalletsService implements OnModuleInit {
   private entitySecret: string;
   private walletSetId: string;
   private baseUrl: string;
+  // Per-wallet timestamp of the last full Circle history sync (see
+  // syncCircleHistory) so background refreshes don't re-sweep on every page load.
+  private lastCircleSyncAt: Map<string, number> = new Map();
 
   constructor(
     private prisma: PrismaService,
@@ -247,14 +250,8 @@ export class WalletsService implements OnModuleInit {
       this.logger.error(`USD ledger net failed: ${err.message}`);
     }
 
-    // Sync real deposit/withdrawal history from Circle so the transactions page
-    // also reflects the activity Circle tracks natively. Idempotent and scoped
-    // to each address, so it never duplicates on-chain-synced records.
-    try {
-      await this.syncCircleHistory(userId, wallet.id);
-    } catch (err: any) {
-      this.logger.error('Error syncing Circle history:', err.message);
-    }
+    // Sync real deposit/withdrawal history from Circle is backgrounded above so
+    // this endpoint stays fast; no synchronous Circle calls here.
 
     const usdVal = usdtBalance + usdcBalance;
     const lockedVal = wallet.lockedBalance || 0;
@@ -327,6 +324,15 @@ export class WalletsService implements OnModuleInit {
   // transactions page reflects actual on-chain activity (including deposits
   // that predate the Arc listener). Idempotent: deduped by on-chain txHash.
   private async syncCircleHistory(userId: string, walletId: string) {
+    // Throttle: a full Circle history sync fans out one wallet lookup + balances
+    // call + transactions call per address. getBalance fires this in the
+    // background on every load, so without a window it would re-run the whole
+    // sweep on each page view. 30s keeps history fresh without the churn.
+    const now = Date.now();
+    const lastSync = this.lastCircleSyncAt.get(walletId) || 0;
+    if (now - lastSync < 30_000) return;
+    this.lastCircleSyncAt.set(walletId, now);
+
     try {
       // Remove legacy synthetic/duplicate records from earlier schemes so the
       // same on-chain tx is never listed twice in history.
@@ -645,11 +651,6 @@ export class WalletsService implements OnModuleInit {
       throw new BadRequestException('Destination network is required when sending from Arc.');
     }
     const destNet = destinationNetwork.toUpperCase();
-    if (destNet === 'ARC') {
-      throw new BadRequestException('Same-chain Arc transfers are not supported. Choose a destination network such as POLYGON, BASE, OPTIMISM, SOLANA.');
-    }
-
-    const destChain = this.cctpService.getDestinationChain(destNet);
 
     // Same spendable figure the app shows: gross on-chain USDC, net of the
     // CONVERT ledger (conversions out of USD reduce spendable without any chain
@@ -669,7 +670,7 @@ export class WalletsService implements OnModuleInit {
           toAddress,
           network: 'ARC',
           destinationNetwork: destNet,
-          cctp: true,
+          delivery: destNet === 'ARC' ? 'native' : 'cctp',
           errorReason: reason,
           failedAt: 'send-initiation'
         }
@@ -688,17 +689,27 @@ export class WalletsService implements OnModuleInit {
 
     let result: any;
     try {
-      result = await this.cctpService.bridge({
-        sourceNetwork: 'ARC',
-        sourceAddress: sourceAddressRecord.address,
-        destNetwork: destNet,
-        recipientAddress: toAddress,
-        amount,
-      });
+      if (destNet === 'ARC') {
+        result = await this.sendNativeArcTransfer(
+          userId,
+          sourceAddressRecord.address,
+          toAddress,
+          amount,
+        );
+      } else {
+        result = await this.cctpService.bridge({
+          sourceNetwork: 'ARC',
+          sourceAddress: sourceAddressRecord.address,
+          destNetwork: destNet,
+          recipientAddress: toAddress,
+          amount,
+        });
+      }
     } catch (err: any) {
       const reason = err?.response?.data?.message
         || err?.message
-        || 'Cross-chain transfer failed on Arc.';
+        || 'Transfer failed on Arc.';
+      const delivery = destNet === 'ARC' ? 'native' : 'cctp';
       await this.transactionsService.createTransaction(this.prisma, {
         userId,
         type: 'SEND',
@@ -711,12 +722,13 @@ export class WalletsService implements OnModuleInit {
           toAddress,
           network: 'ARC',
           destinationNetwork: destNet,
-          cctp: true,
+          cctp: delivery === 'cctp',
+          delivery,
           errorReason: reason,
-          failedAt: 'cctp-rejection'
+          failedAt: 'circle-rejection'
         }
       });
-      this.logger.error(`CCTP rejected transfer ${reference}: ${reason}`);
+      this.logger.error(`Transfer rejected ${reference} (${delivery}): ${reason}`);
       throw new BadRequestException(reason);
     }
 
@@ -741,13 +753,69 @@ export class WalletsService implements OnModuleInit {
           toAddress,
           network: 'ARC',
           destinationNetwork: destNet,
-          cctp: true,
-          cctpState: result.state,
-          cctpTxHashes: result.txHashes || [],
+          cctp: destNet !== 'ARC',
+          delivery: destNet === 'ARC' ? 'native' : 'cctp',
+          txState: result.state,
+          txId: result.txId,
+          txHashes: result.txHashes || [],
         }
       });
     });
 
-    return { message: 'Cross-chain transfer initiated successfully via CCTP' };
+    return { message: destNet === 'ARC'
+      ? 'Arc transfer initiated successfully'
+      : 'Cross-chain transfer initiated successfully via CCTP' };
+  }
+
+  // Native same-chain USDC transfer on Arc (no bridge required). Uses Circle's
+  // developer transfer endpoint. The transaction is initiated and then finalized
+  // on-chain by Circle; we surface the Circle transaction id + initialState.
+  private async sendNativeArcTransfer(
+    userId: string,
+    sourceAddress: string,
+    destAddress: string,
+    amount: number,
+  ) {
+    const pubKeyResponse = await axios.get(`${this.baseUrl}/v1/w3s/config/entity/publicKey`, {
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        accept: 'application/json',
+      },
+    });
+    const publicKeyPem = pubKeyResponse.data.data.publicKey;
+    const ciphertext = this.encryptSecret(this.entitySecret, publicKeyPem);
+
+    const body = {
+      idempotencyKey: crypto.randomUUID(),
+      entitySecretCiphertext: ciphertext,
+      walletAddress: sourceAddress,
+      blockchain: 'ARC-TESTNET',
+      tokenAddress: '0x3600000000000000000000000000000000000000',
+      destinationAddress: destAddress,
+      amounts: [amount.toFixed(6).replace(/\.?0+$/, '')],
+      feeLevel: 'MEDIUM',
+    };
+
+    this.logger.log(`Initiating native Arc transfer: ${amount} USDC ${sourceAddress} -> ${destAddress}`);
+
+    try {
+      const res = await axios.post(
+        `${this.baseUrl}/v1/w3s/developer/transactions/transfer`,
+        body,
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+            accept: 'application/json',
+          },
+        }
+      );
+      const tx = res.data?.data;
+      this.logger.log(`Native Arc transfer tx ${tx?.id} state ${tx?.state}`);
+      return { state: tx?.state, txId: tx?.id, txHashes: [] };
+    } catch (err: any) {
+      this.logger.error(`Native Arc transfer rejected for ${userId}: ${err?.response?.data?.message || err?.message}`);
+      throw err;
+    }
   }
 }

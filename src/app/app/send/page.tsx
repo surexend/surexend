@@ -13,10 +13,11 @@ import { useTheme } from '@/context/ThemeContext'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-// Funds live on Arc (native USDC). The recipient picks the chain they want to
-// receive on — CCTP bridges Arc → that chain automatically, so there is only
-// ever one network choice (no separate CCTP destination step).
-const SEND_NETWORKS = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA'] as const
+// Funds live on Arc (native USDC). The recipient picks the network they want
+// to receive on — the backend handles delivery automatically (native when both
+// sides are on Arc, cross-network otherwise), so there is only ever one
+// network choice on this screen.
+const SEND_NETWORKS = ['ARC', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA'] as const
 
 const sendSchema = z.object({
   address: z.string().min(3, 'Invalid recipient handle or address'),
@@ -209,7 +210,7 @@ export default function SendPage() {
                       ))}
                     </div>
                     <p className="text-[11px] text-[#64748B] mt-1.5">
-                      Arc funds are bridged to the chosen chain automatically via CCTP.
+                      Select the network you want the recipient to receive on.
                     </p>
                   </div>
 
@@ -272,7 +273,7 @@ export default function SendPage() {
               <div className="text-xs space-y-2 py-3 px-4 rounded-xl bg-white/[0.02] border border-white/5 text-[#94A3B8]">
                 <div className="flex justify-between">
                   <span>Receiving Network</span>
-                  <span className="text-white font-bold">{formData.network} (via CCTP)</span>
+                  <span className="text-white font-bold">{formData.network}</span>
                 </div>
                 <div className="flex justify-between border-t border-white/5 pt-2">
                   <span>Recipient Receives</span>

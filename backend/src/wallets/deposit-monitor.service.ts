@@ -11,6 +11,12 @@ const SCAN_WINDOW_BLOCKS = 150_000;
 // Log scanning is throttled per wallet (60s) so frequent balance refreshes
 // don't hammer public RPC endpoints. Balances are always read live.
 const LOG_SCAN_COOLDOWN_MS = 60_000;
+// Individual wallet reconciles are expensive (every address x every monitored
+// chain), so a background reconcile kicked from getBalance is skipped if one
+// already ran within this window. The scheduled scan runs every 60s regardless,
+// so the DB figures never go stale; this only prevents page-loads from
+// re-fanning out dozens of RPC calls back-to-back.
+const RECONCILE_COOLDOWN_MS = 30_000;
 
 @Injectable()
 export class DepositMonitorService implements OnModuleInit {
@@ -18,6 +24,10 @@ export class DepositMonitorService implements OnModuleInit {
   private isScanning = false;
   private lastSeenBlockByChain: Map<string, number> = new Map();
   private lastLogScanAt: Map<string, number> = new Map();
+  // Tracks the last time each wallet was fully reconciled, so a getBalance
+  // background refresh within the cooldown window short-circuits instead of
+  // re-fanning out every address x every chain RPC call again.
+  private lastReconcileAt: Map<string, number> = new Map();
   // In-flight guard per wallet so the background reconcile kicked from
   // getBalance and the scheduled scan never run concurrently for the same
   // wallet (they'd both fan out the same RPC calls and double-write balance).
@@ -75,6 +85,8 @@ export class DepositMonitorService implements OnModuleInit {
   // Callers: the scheduled scan and getBalance (for an immediate, no-delay view).
   async reconcileWallet(userId: string, walletId: string) {
     if (this.reconciling.has(walletId)) return;
+    const last = this.lastReconcileAt.get(walletId) || 0;
+    if (Date.now() - last < RECONCILE_COOLDOWN_MS) return;
     this.reconciling.add(walletId);
     try {
       const addressRecords = await this.prisma.walletAddress.findMany({
@@ -127,6 +139,7 @@ export class DepositMonitorService implements OnModuleInit {
 
       await this.backfillDepositNotifications(userId);
 
+      this.lastReconcileAt.set(walletId, Date.now());
       return grossUsdc;
     } finally {
       this.reconciling.delete(walletId);
