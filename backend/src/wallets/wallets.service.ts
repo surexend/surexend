@@ -1,4 +1,4 @@
-﻿import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+﻿import { Injectable, BadRequestException, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -9,7 +9,7 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 
 @Injectable()
-export class WalletsService {
+export class WalletsService implements OnModuleInit {
   private readonly logger = new Logger(WalletsService.name);
   private apiKey: string;
   private entitySecret: string;
@@ -28,6 +28,87 @@ export class WalletsService {
     this.walletSetId = this.configService.get<string>('app.circle.walletSetId');
     this.baseUrl = 'https://api.circle.com';
     this.logger.log(`Circle API initialized: ${this.baseUrl}`);
+  }
+
+  // On boot, ensure EVERY EVM address this app displays (any network, any user)
+  // also exists in Circle as an ARC-TESTNET wallet. Circle only indexes deposits
+  // on chains where it holds a wallet at that exact address, so without this a
+  // base/Polygon deposit that lands on Arc stays invisible to the Circle console
+  // and to wallet feeds. Uses the `derive by address` endpoint, which creates an
+  // ARC wallet at a pre-existing address (unlike create, which only ever yields
+  // freshly-derived addresses).
+  async onModuleInit() {
+    try {
+      await this.ensureAllAddressesHaveArcWallets();
+    } catch (err: any) {
+      this.logger.error(`automatic ARC wallet registration failed: ${err.message}`);
+    }
+  }
+
+  async ensureAllAddressesHaveArcWallets(): Promise<{ registered: number; skipped: number; failed: string[] }> {
+    const records = await this.prisma.walletAddress.findMany({
+      include: { wallet: { select: { userId: true } } },
+    });
+    const seen = new Set<string>();
+    let registered = 0;
+    let skipped = 0;
+    const failed: string[] = [];
+    for (const record of records) {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(record.address)) continue;
+      const key = record.address.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      try {
+        const outcome = await this.ensureArcWalletAtAddress(record.address, record.wallet?.userId);
+        if (outcome === 'registered') registered++;
+        else if (outcome === 'skipped') skipped++;
+      } catch (err: any) {
+        failed.push(`${record.address}: ${err.response?.data?.message || err.message}`);
+      }
+    }
+    this.logger.log(`ARC wallet coverage: ${registered} registered, ${skipped} already present, ${failed.length} failed`);
+    return { registered, skipped, failed };
+  }
+
+  // Make sure Circle holds an ARC-TESTNET wallet at `address`. Returns
+  // 'registered' if it was missing and we derived it, 'skipped' if it already
+  // existed. Throws if Circle rejects the derivation.
+  private async ensureArcWalletAtAddress(address: string, userId?: string): Promise<'registered' | 'skipped'> {
+    const existing = await this.getCircleWalletByAddress(address, 'ARC-TESTNET');
+    if (existing) return 'skipped';
+
+    // Find a source EVM chain where Circle already has a wallet at this address.
+    // The address is always registered on at least one mapped chain (ETH/BASE/etc.)
+    // because it was originally created via Circle's create-wallet flow.
+    const source = await this.getCircleWalletByAddress(address);
+    if (!source) {
+      throw new Error(`no Circle wallet exists at ${address} on any chain; cannot derive ARC wallet`);
+    }
+    const sourceBlockchain = (source.blockchains || [source.blockchain] || [])[0] as string;
+
+    const res = await axios.put(
+      `${this.baseUrl}/v1/w3s/developer/wallets/derive`,
+      {
+        sourceBlockchain,
+        walletAddress: address,
+        targetBlockchain: this.getBlockchainName('ARC'),
+        metadata: {
+          name: `User ${String(userId || 'unknown').substring(0, 8)} - ARC`,
+          refId: userId,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          accept: 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+      }
+    );
+    const w = res.data.data.wallet;
+    this.logger.log(`Derived ARC-TESTNET wallet at ${w.address} (${w.id})`);
+    return 'registered';
   }
 
   private encryptSecret(secretHex: string, publicKeyPem: string): string {
@@ -486,6 +567,13 @@ export class WalletsService {
         }
       }
     }
+
+    // Newly-created Circle address: make sure Circle also holds an ARC-TESTNET
+    // wallet at this exact address so Arc-side deposits stay visible on console.
+    // Fire-and-forget; a failure here must not block address generation.
+    this.ensureArcWalletAtAddress(walletAddress.address, userId).catch((err: any) => {
+      this.logger.warn(`ARC coverage for new address ${walletAddress.address} failed: ${err.message}`);
+    });
 
     return { network: walletAddress.network, address: walletAddress.address };
   }
