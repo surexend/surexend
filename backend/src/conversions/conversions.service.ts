@@ -239,18 +239,27 @@ export class ConversionsService {
         }
       }
 
-      // Record Conversion record
-      const conversion = await prisma.conversion.create({
-        data: {
-          userId,
-          usdtAmount: result.usdValue,
-          fiatAmount: result.receiveAmount,
-          fiatCurrency: toCode,
-          rate: result.rate,
-          fee: result.feeUsd,
-          status: 'COMPLETED',
-        }
-      });
+      // Record Conversion record. If the deployed DB's Conversion table is not
+      // migrated (e.g. legacy NOT NULL columns like bankAccountId/flutterwaveRef
+      // that we can't populate), the conversion must still succeed and record
+      // its Transaction — mirroring the localBalances guard above.
+      let conversionId: string | null = null;
+      try {
+        const conversion = await prisma.conversion.create({
+          data: {
+            userId,
+            usdtAmount: result.usdValue,
+            fiatAmount: result.receiveAmount,
+            fiatCurrency: toCode,
+            rate: result.rate,
+            fee: result.feeUsd,
+            status: 'COMPLETED',
+          }
+        });
+        conversionId = conversion.id;
+      } catch (err: any) {
+        this.logger.warn(`Conversion record unavailable; skipping: ${err.message}`);
+      }
 
       // Record Transaction record
       await this.transactionsService.createTransaction(prisma, {
@@ -260,9 +269,9 @@ export class ConversionsService {
         amount: amount,
         fee: result.feeUsd,
         currency: fromCode,
-        reference: `CONV-${conversion.id}`,
+        reference: `CONV-${conversionId ?? `SKIPPED-${Date.now()}-${Math.floor(Math.random() * 1000)}`}`,
         metadata: {
-          conversionId: conversion.id,
+          ...(conversionId ? { conversionId } : { conversionRecordSkipped: true }),
           from: fromCode,
           to: toCode,
           fromAmount: amount,
@@ -273,7 +282,7 @@ export class ConversionsService {
 
       return {
         success: true,
-        reference: `CONV-${conversion.id}`,
+        reference: `CONV-${conversionId ?? 'SKIPPED'}`,
         from: fromCode,
         to: toCode,
         amount,
