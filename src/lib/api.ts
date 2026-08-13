@@ -245,13 +245,12 @@ export const walletAPI = {
       }
     ),
 
-  send: (payload: { address: string; amount: number; network: string; pin: string; destinationNetwork?: string }) =>
+  send: (payload: { address: string; amount: number; network: string; pin: string }) =>
     tryWithMock(
       () => apiClient.post('/wallets/send', {
         toAddress: payload.address,
         amount: payload.amount,
         network: payload.network,
-        destinationNetwork: payload.destinationNetwork,
         pin: payload.pin,
       }, { timeout: 180000 }).then(r => r.data),
       () => ({

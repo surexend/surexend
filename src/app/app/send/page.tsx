@@ -11,18 +11,20 @@ import toast from 'react-hot-toast'
 import { walletAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import { useSearchParams } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+
+// Funds live on Arc (native USDC). The recipient picks the chain they want to
+// receive on — CCTP bridges Arc → that chain automatically, so there is only
+// ever one network choice (no separate CCTP destination step).
+const SEND_NETWORKS = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA'] as const
 
 const sendSchema = z.object({
   address: z.string().min(3, 'Invalid recipient handle or address'),
   network: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'SUREX_TAG']),
-  destinationNetwork: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA']).optional(),
   amount: z.number().positive('Amount must be positive').optional()
 })
 
 type SendFormValues = z.infer<typeof sendSchema>
-
-const CCTP_DESTINATION_NETWORKS = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA'] as const
 
 export default function SendPage() {
   const { variant, colors } = useTheme()
@@ -36,6 +38,7 @@ export default function SendPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [windowSize, setWindowSize] = useState({ width: 1200, height: 800 })
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -43,7 +46,7 @@ export default function SendPage() {
     }
   }, [])
 
-  const { data: balanceData } = useQuery({
+  const { data: balanceData, isFetching } = useQuery({
     queryKey: ['sendBalance'],
     queryFn: walletAPI.getBalance,
     retry: false
@@ -52,12 +55,12 @@ export default function SendPage() {
 
   const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<SendFormValues>({
     resolver: zodResolver(sendSchema),
-    defaultValues: { network: sendMode === 'TAG' ? 'SUREX_TAG' : 'POLYGON', destinationNetwork: 'POLYGON' }
+    defaultValues: { network: sendMode === 'TAG' ? 'SUREX_TAG' : 'POLYGON' }
   })
 
-  const networkFee = sendMode === 'TAG' ? 0.0 : 1.0
+  const networkFee = 0.0
 
-  const onSubmitStep1 = (data: { address: string; network: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA'|'BSC'|'BEP20'|'SUREX_TAG'; destinationNetwork?: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA' }) => {
+  const onSubmitStep1 = (data: { address: string; network: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA'|'BSC'|'BEP20'|'SUREX_TAG' }) => {
     setFormData(prev => ({ ...prev, ...data }))
     setStep(2)
   }
@@ -76,19 +79,22 @@ export default function SendPage() {
     setStep(3)
   }
 
+  // 4-digit PIN flow only — the backend enforces exactly 4 digits. `emptyIndex`
+  // reaching slot 3 means all four are filled, so fire the send exactly once.
   const handlePinInput = (num: string) => {
+    if (isLoading) return
     const emptyIndex = pin.findIndex(p => p === '')
-    if (emptyIndex !== -1) {
-      const newPin = [...pin]
-      newPin[emptyIndex] = num
-      setPin(newPin)
-      if (emptyIndex === 3) {
-        executeSend(newPin.join(''))
-      }
+    if (emptyIndex === -1) return
+    const newPin = [...pin]
+    newPin[emptyIndex] = num
+    setPin(newPin)
+    if (emptyIndex === 3) {
+      executeSend(newPin.join(''))
     }
   }
 
   const handlePinDelete = () => {
+    if (isLoading) return
     const lastFilledIndex = pin.map(p => p !== '').lastIndexOf(true)
     if (lastFilledIndex !== -1) {
       const newPin = [...pin]
@@ -103,16 +109,17 @@ export default function SendPage() {
       await walletAPI.send({
         address: formData.address!,
         amount: formData.amount!,
-        network: formData.network === 'SUREX_TAG' ? 'TRC20' : formData.network!,
-        destinationNetwork: formData.destinationNetwork || undefined,
+        network: sendMode === 'TAG' ? 'SUREX_TAG' : formData.network!,
         pin: finalPin
       })
       setIsSuccess(true)
       setStep(5)
+      queryClient.invalidateQueries({ queryKey: ['sendBalance'] })
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Transaction failed')
-      setPin(['', '', '', '', '', ''])
-      setStep(3)
+      const message = error.response?.data?.message || 'Transaction failed'
+      toast.error(message)
+      // Reset to a fresh 4-digit PIN and stay on the same step.
+      setPin(['', '', '', ''])
     } finally {
       setIsLoading(false)
     }
@@ -186,16 +193,11 @@ export default function SendPage() {
                   <div>
                     <label className="block text-xs font-semibold text-[#94A3B8] mb-2">Network Protocol</label>
                     <div className="grid grid-cols-2 gap-2">
-                      {(['ETHEREUM', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'ARC'] as const).map((net) => (
+                      {SEND_NETWORKS.map((net) => (
                         <button
                           key={net}
                           type="button"
-                          onClick={() => {
-                            setValue('network', net)
-                            if (net === 'ARC' && !watch('destinationNetwork')) {
-                              setValue('destinationNetwork', 'POLYGON')
-                            }
-                          }}
+                          onClick={() => setValue('network', net)}
                           className={`p-3 rounded-xl border text-xs font-bold transition-all ${
                             watch('network') === net 
                               ? 'bg-white/10 text-white border-blue-500/50 shadow-md' 
@@ -206,34 +208,10 @@ export default function SendPage() {
                         </button>
                       ))}
                     </div>
+                    <p className="text-[11px] text-[#64748B] mt-1.5">
+                      Arc funds are bridged to the chosen chain automatically via CCTP.
+                    </p>
                   </div>
-
-                  {watch('network') === 'ARC' && (
-                    <div>
-                      <label className="block text-xs font-semibold text-[#94A3B8] mb-2">
-                        Destination Network (CCTP)
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {CCTP_DESTINATION_NETWORKS.map((net) => (
-                          <button
-                            key={net}
-                            type="button"
-                            onClick={() => setValue('destinationNetwork', net)}
-                            className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
-                              watch('destinationNetwork') === net 
-                                ? 'bg-white/10 text-white border-emerald-500/50 shadow-md' 
-                                : 'bg-white/[0.02] border-white/10 text-[#94A3B8] hover:bg-white/5'
-                            }`}
-                          >
-                            {net}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-[11px] text-[#64748B] mt-1.5">
-                        USDC on Arc is burned and minted natively on the destination chain via Circle CCTP.
-                      </p>
-                    </div>
-                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-[#94A3B8] mb-2">Recipient Wallet Address</label>
@@ -293,12 +271,12 @@ export default function SendPage() {
 
               <div className="text-xs space-y-2 py-3 px-4 rounded-xl bg-white/[0.02] border border-white/5 text-[#94A3B8]">
                 <div className="flex justify-between">
-                  <span>Transfer Fee</span>
-                  <span className="text-white font-bold">{networkFee === 0 ? 'FREE (SureX Tag)' : '1.00 USDC'}</span>
+                  <span>Receiving Network</span>
+                  <span className="text-white font-bold">{formData.network} (via CCTP)</span>
                 </div>
                 <div className="flex justify-between border-t border-white/5 pt-2">
                   <span>Recipient Receives</span>
-                  <span className="text-emerald-400 font-bold">${((watch('amount') || 0) - networkFee).toFixed(2)} USDT</span>
+                  <span className="text-emerald-400 font-bold">${((watch('amount') || 0) - networkFee).toFixed(2)} USDC</span>
                 </div>
               </div>
 
@@ -327,12 +305,6 @@ export default function SendPage() {
                 <span className="text-[#94A3B8]">Destination Type</span>
                 <span className="text-white font-bold">{sendMode === 'TAG' ? 'SureX Tag' : formData.network}</span>
               </div>
-              {formData.network === 'ARC' && (
-                <div className="flex justify-between py-1 border-b border-white/5">
-                  <span className="text-[#94A3B8]">Destination Chain</span>
-                  <span className="text-white font-bold">{formData.destinationNetwork} (CCTP)</span>
-                </div>
-              )}
               <div className="flex justify-between py-1 border-b border-white/5">
                 <span className="text-[#94A3B8]">Recipient</span>
                 <span className="text-white font-mono font-bold truncate max-w-[180px]">{sendMode === 'TAG' ? `@${formData.address}` : formData.address}</span>
@@ -396,7 +368,7 @@ export default function SendPage() {
                 Sent ${formData.amount} USDT to {sendMode === 'TAG' ? `@${formData.address}` : formData.address}
               </p>
             </div>
-            <button onClick={() => { setStep(1); setPin(['','','','','','']); setIsSuccess(false) }} className="w-full py-3.5 rounded-xl font-bold text-black shadow-lg" style={{ background: colors.gradientBg }}>
+            <button onClick={() => { setStep(1); setPin(['','','','']); setIsSuccess(false) }} className="w-full py-3.5 rounded-xl font-bold text-black shadow-lg" style={{ background: colors.gradientBg }}>
               Done / Send Again
             </button>
           </motion.div>

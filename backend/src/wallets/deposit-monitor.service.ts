@@ -18,6 +18,10 @@ export class DepositMonitorService implements OnModuleInit {
   private isScanning = false;
   private lastSeenBlockByChain: Map<string, number> = new Map();
   private lastLogScanAt: Map<string, number> = new Map();
+  // In-flight guard per wallet so the background reconcile kicked from
+  // getBalance and the scheduled scan never run concurrently for the same
+  // wallet (they'd both fan out the same RPC calls and double-write balance).
+  private reconciling = new Set<string>();
 
   constructor(
     private prisma: PrismaService,
@@ -70,57 +74,63 @@ export class DepositMonitorService implements OnModuleInit {
   //   3. backfill notifications for earlier deposits that predate this service
   // Callers: the scheduled scan and getBalance (for an immediate, no-delay view).
   async reconcileWallet(userId: string, walletId: string) {
-    const addressRecords = await this.prisma.walletAddress.findMany({
-      where: { walletId },
-    });
+    if (this.reconciling.has(walletId)) return;
+    this.reconciling.add(walletId);
+    try {
+      const addressRecords = await this.prisma.walletAddress.findMany({
+        where: { walletId },
+      });
 
-    const uniqueEthereum = new Set<string>();
-    for (const a of addressRecords) {
-      if (/^0x[a-fA-F0-9]{40}$/.test(a.address)) uniqueEthereum.add(a.address.toLowerCase());
-    }
-    if (uniqueEthereum.size === 0) return;
-
-    const addresses = Array.from(uniqueEthereum);
-    let grossUsdc = 0;
-
-    // Deposit-log scanning is throttled per wallet; balances are always fresh.
-    const scanLogs = this.shouldScanLogs(walletId);
-    const chains = [...EVM_CHAINS];
-    const results = await Promise.all(
-      addresses.flatMap((addr) =>
-        chains.map(async (chain): Promise<{ addr: string; chainKey: string; balance: number; transfers: OnChainTransfer[] }> => {
-          let balance = 0;
-          let transfers: OnChainTransfer[] = [];
-          try {
-            balance = await this.onchain.getUsdcBalance(chain, addr);
-            if (scanLogs) transfers = await this.scanTransfers(chain.key, addr);
-          } catch (err: any) {
-            this.logger.warn(`reconcile ${chain.key} ${addr} failed: ${err.message}`);
-          }
-          return { addr, chainKey: chain.key, balance, transfers };
-        }),
-      ),
-    );
-
-    for (const r of results) grossUsdc += r.balance;
-
-    // Persist deposits discovered in the log window (idempotent, deduped by hash).
-    for (const r of results) {
-      for (const tx of r.transfers) {
-        await this.recordDeposit(userId, tx);
+      const uniqueEthereum = new Set<string>();
+      for (const a of addressRecords) {
+        if (/^0x[a-fA-F0-9]{40}$/.test(a.address)) uniqueEthereum.add(a.address.toLowerCase());
       }
+      if (uniqueEthereum.size === 0) return;
+
+      const addresses = Array.from(uniqueEthereum);
+      let grossUsdc = 0;
+
+      // Deposit-log scanning is throttled per wallet; balances are always fresh.
+      const scanLogs = this.shouldScanLogs(walletId);
+      const chains = [...EVM_CHAINS];
+      const results = await Promise.all(
+        addresses.flatMap((addr) =>
+          chains.map(async (chain): Promise<{ addr: string; chainKey: string; balance: number; transfers: OnChainTransfer[] }> => {
+            let balance = 0;
+            let transfers: OnChainTransfer[] = [];
+            try {
+              balance = await this.onchain.getUsdcBalance(chain, addr);
+              if (scanLogs) transfers = await this.scanTransfers(chain.key, addr);
+            } catch (err: any) {
+              this.logger.warn(`reconcile ${chain.key} ${addr} failed: ${err.message}`);
+            }
+            return { addr, chainKey: chain.key, balance, transfers };
+          }),
+        ),
+      );
+
+      for (const r of results) grossUsdc += r.balance;
+
+      // Persist deposits discovered in the log window (idempotent, deduped by hash).
+      for (const r of results) {
+        for (const tx of r.transfers) {
+          await this.recordDeposit(userId, tx);
+        }
+      }
+
+      // Update the gross USDC balance from live on-chain state. getBalance()
+      // layers the CONVERT ledger on top to compute spendable USD.
+      await this.prisma.wallet.update({
+        where: { id: walletId },
+        data: { usdcBalance: grossUsdc },
+      });
+
+      await this.backfillDepositNotifications(userId);
+
+      return grossUsdc;
+    } finally {
+      this.reconciling.delete(walletId);
     }
-
-    // Update the gross USDC balance from live on-chain state. getBalance()
-    // layers the CONVERT ledger on top to compute spendable USD.
-    await this.prisma.wallet.update({
-      where: { id: walletId },
-      data: { usdcBalance: grossUsdc },
-    });
-
-    await this.backfillDepositNotifications(userId);
-
-    return grossUsdc;
   }
 
   // Scan the recent log window on a chain for transfers to any of the user's

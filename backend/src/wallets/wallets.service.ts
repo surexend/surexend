@@ -111,8 +111,39 @@ export class WalletsService implements OnModuleInit {
     return 'registered';
   }
 
-  private encryptSecret(secretHex: string, publicKeyPem: string): string {
-    const buffer = Buffer.from(secretHex, 'hex');
+  // Spendable USDC = gross on-chain USDC minus the CONVERT ledger (conversions
+  // out of USD are bookkeeping with no chain movement, so they reduce what is
+  // actually spendable). Mirrors the netting done in getBalance so sends and
+  // the balance screen always agree.
+  private async computeSpendableUsdc(userId: string, wallet: any, amount: number): Promise<number> {
+    let spendable = wallet.usdcBalance || 0;
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
+        `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
+           SELECT 'out' AS kind, amount::float8 AS total
+             FROM "Transaction"
+            WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
+              AND (metadata->>'from' = 'USD')
+           UNION ALL
+           SELECT 'in', COALESCE((metadata->>'toAmount')::float8, 0)
+             FROM "Transaction"
+            WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
+              AND (metadata->>'to' = 'USD')
+         ) t GROUP BY kind`,
+        userId
+      );
+      const convertedOut = rows.find((r) => r.kind === 'out')?.total || 0;
+      const convertedIn = rows.find((r) => r.kind === 'in')?.total || 0;
+      if (convertedOut > 0 || convertedIn > 0) {
+        spendable = Math.max(0, spendable - convertedOut + convertedIn);
+      }
+    } catch (err: any) {
+      this.logger.error(`Spendable USDC net failed for ${userId}: ${err.message}`);
+    }
+    return Math.max(0, spendable - (wallet.lockedBalance || 0));
+  }
+
+  private encryptSecret(secretHex: string, publicKeyPem: string): string {    const buffer = Buffer.from(secretHex, 'hex');
     const encrypted = crypto.publicEncrypt(
       {
         key: publicKeyPem,
@@ -171,19 +202,20 @@ export class WalletsService implements OnModuleInit {
       wallet = await this.prisma.wallet.create({ data: { userId } });
     }
 
-    // Reconcile on-chain first: the gross USDC balance is the sum of the USDC
-    // actually held at every generated address on every monitored EVM testnet
-    // (including Arc). This makes deposits appear instantly and never depends
-    // on Circle indexing the exact chain the funds landed on. It also records
-    // new deposits (history + in-app notifications) and backfills notifications
-    // for earlier ones.
-    let usdcBalance = 0;
-    try {
-      usdcBalance = await this.depositMonitor.reconcileWallet(userId, wallet.id);
-    } catch (err: any) {
-      this.logger.error(`Error reconciling on-chain balance: ${err.message}`);
-    }
+    // Balance must respond instantly on mobile. The on-chain reconcile and the
+    // Circle history mirror both fan out over many RPC/API calls (every address
+    // x every chain), so they are refreshed in the background here and by the
+    // DepositMonitor's scheduled scan rather than blocking this endpoint. The DB
+    // figures are at most ~60s stale, which only ever lags, never 500s.
+    let usdcBalance = wallet.usdcBalance || 0;
     const usdtBalance = wallet.usdtBalance || 0;
+
+    this.depositMonitor.reconcileWallet(userId, wallet.id).catch((err: any) => {
+      this.logger.error(`Background balance reconcile failed for ${userId}: ${err.message}`);
+    });
+    this.syncCircleHistory(userId, wallet.id).catch((err: any) => {
+      this.logger.error(`Background Circle history sync failed for ${userId}: ${err.message}`);
+    });
 
     // Wallet balances reflect on-chain deposits/sends; conversions out of USD
     // (USDC â†' local currency) are bookkeeping with no chain movement, so the
@@ -584,176 +616,13 @@ export class WalletsService implements OnModuleInit {
     // Explicit select so a not-yet-migrated localBalances column can't 500 this endpoint
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId },
-      select: { id: true, usdtBalance: true, usdcBalance: true }
+      select: { id: true, lockedBalance: true, usdcBalance: true }
     });
 
-    const net = network.toUpperCase();
-
-    // Native USDC on Arc is tracked separately; cross-chain sends from Arc use CCTP
-    if (net === 'ARC') {
-      return this.sendCrossChainFromArc(userId, wallet, toAddress, amount, destinationNetwork);
-    }
-
-    if (wallet.usdtBalance < amount) {
-      throw new BadRequestException('Insufficient balance');
-    }
-
-    const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20'];
-    if (!validNetworks.includes(net)) {
-      throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20');
-    }
-
-    const sourceAddressRecord = await this.prisma.walletAddress.findFirst({
-      where: { walletId: wallet.id, network: net }
-    });
-
-    if (!sourceAddressRecord) {
-      throw new BadRequestException(`Please generate a deposit address for ${network} first.`);
-    }
-
-    try {
-      // 1. Fetch public key & encrypt entity secret
-      const pubKeyResponse = await axios.get(`${this.baseUrl}/v1/w3s/config/entity/publicKey`, {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          accept: 'application/json',
-        },
-      });
-      const publicKeyPem = pubKeyResponse.data.data.publicKey;
-      const ciphertext = this.encryptSecret(this.entitySecret, publicKeyPem);
-
-      // 2. Resolve Circle wallet ID from address (scoped to the requested chain)
-      const circleWallet = await this.getCircleWalletByAddress(sourceAddressRecord.address, this.getBlockchainName(net));
-      if (!circleWallet) {
-        throw new BadRequestException('Source wallet not found in Circle account.');
-      }
-
-      // 3. Resolve Token ID for USDC/USDT from wallet balances
-      const balancesResponse = await axios.get(
-        `${this.baseUrl}/v1/w3s/wallets/${circleWallet.id}/balances`,
-        {
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-            accept: 'application/json',
-          }
-        }
-      );
-
-      const tokenBalances = balancesResponse.data.data.tokenBalances || [];
-      const usdtToken = tokenBalances.find(t => t.token.symbol.toUpperCase() === 'USDT' || t.token.symbol.toUpperCase() === 'USDC');
-
-      if (!usdtToken) {
-        throw new BadRequestException('USD stablecoin token configuration not found in wallet.');
-      }
-
-      // 3b. Real-time balance check against Circle so we never try to send more
-      // than the wallet actually holds (the local DB figure can be stale).
-      const available = parseFloat(usdtToken.amount || '0') || 0;
-      if (available < amount) {
-        const reason = `Insufficient balance on Circle. Available: ${available} ${usdtToken.token.symbol}. Requested: ${amount}.`;
-        await this.transactionsService.createTransaction(this.prisma, {
-          userId,
-          type: 'SEND',
-          status: 'FAILED',
-          amount,
-          fee: 0,
-          currency: usdtToken.token.symbol.toUpperCase(),
-          reference: `TX-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-          metadata: {
-            toAddress,
-            network,
-            destinationNetwork,
-            errorReason: reason,
-            failedAt: 'send-initiation'
-          }
-        });
-        throw new BadRequestException(reason);
-      }
-
-      const tokenId = usdtToken.token.id;
-      const reference = `TX-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-
-      // Execute transfer first; only touch local state if Circle accepts it.
-      let transferError: any = null;
-      try {
-        await axios.post(
-          `${this.baseUrl}/v1/w3s/developer/transactions/transfer`,
-          {
-            idempotencyKey: crypto.randomUUID(),
-            walletId: circleWallet.id,
-            destinationAddress: toAddress,
-            tokenId,
-            amounts: [amount.toString()],
-            entitySecretCiphertext: ciphertext,
-            feeLevel: 'MEDIUM',
-            refId: reference
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${this.apiKey}`,
-              'Content-Type': 'application/json',
-              accept: 'application/json',
-            }
-          }
-        );
-      } catch (err: any) {
-        transferError = err;
-      }
-
-      if (transferError) {
-        const reason = transferError?.response?.data?.message
-          || transferError?.response?.data?.error?.message
-          || transferError?.message
-          || 'Transfer rejected by Circle.';
-        await this.transactionsService.createTransaction(this.prisma, {
-          userId,
-          type: 'SEND',
-          status: 'FAILED',
-          amount,
-          fee: 0,
-          currency: usdtToken.token.symbol.toUpperCase(),
-          reference,
-          metadata: {
-            toAddress,
-            network,
-            destinationNetwork,
-            errorReason: reason,
-            failedAt: 'circle-rejection'
-          }
-        });
-        this.logger.error(`Circle rejected transfer ${reference}: ${reason}`);
-        throw new BadRequestException(reason);
-      }
-
-      // Only after Circle accepts, decrement balance + lock + record PENDING.
-      await this.prisma.$transaction(async (prisma) => {
-        await prisma.wallet.update({
-          where: { id: wallet.id },
-          data: {
-            usdtBalance: { decrement: amount },
-            lockedBalance: { increment: amount }
-          }
-        });
-
-        await this.transactionsService.createTransaction(prisma, {
-          userId,
-          type: 'SEND',
-          status: 'PENDING',
-          amount,
-          fee: 0,
-          currency: usdtToken.token.symbol.toUpperCase(),
-          reference,
-          metadata: { toAddress, network, destinationNetwork, circleWalletId: circleWallet.id }
-        });
-      });
-
-      return { message: 'Transaction initiated successfully via Circle' };
-    } catch (err) {
-      this.logger.error('Error executing Circle transfer:', err.response?.data || err.message);
-      throw new BadRequestException(
-        err.response?.data?.message || 'Transaction initiation failed via Circle'
-      );
-    }
+    // All funds sit on Arc (native USDC), regardless of where the recipient's
+    // wallet is. The picked network is the DESTINATION chain; CCTP bridges
+    // automatically — no separate destination step needed.
+    return this.sendCrossChainFromArc(userId, wallet, toAddress, amount, network.toUpperCase());
   }
 
   async getNetworks() {
@@ -782,8 +651,30 @@ export class WalletsService implements OnModuleInit {
 
     const destChain = this.cctpService.getDestinationChain(destNet);
 
-    if (wallet.usdcBalance < amount) {
-      throw new BadRequestException('Insufficient USDC balance on Arc.');
+    // Same spendable figure the app shows: gross on-chain USDC, net of the
+    // CONVERT ledger (conversions out of USD reduce spendable without any chain
+    // movement). Fail fast with a clear message instead of a Circle rejection.
+    const spendable = await this.computeSpendableUsdc(userId, wallet, amount);
+    if (spendable < amount) {
+      const reason = `Insufficient balance. You can send up to ${spendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`;
+      await this.transactionsService.createTransaction(this.prisma, {
+        userId,
+        type: 'SEND',
+        status: 'FAILED',
+        amount,
+        fee: 0,
+        currency: 'USDC',
+        reference: `TX-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+        metadata: {
+          toAddress,
+          network: 'ARC',
+          destinationNetwork: destNet,
+          cctp: true,
+          errorReason: reason,
+          failedAt: 'send-initiation'
+        }
+      });
+      throw new BadRequestException(reason);
     }
 
     const sourceAddressRecord = await this.prisma.walletAddress.findFirst({
