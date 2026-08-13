@@ -154,6 +154,37 @@ export class WalletsService {
         }
       }
 
+      // Update local DB to stay in sync. For wallets with an ARC address the
+      // raw on-chain balance reflects only deposits/sends; conversions out of
+      // USD are bookkeeping (no chain movement) so re-persisting the chain
+      // total here would restore already-spent USD. Net out the CONVERT ledger
+      // so the spendable USD is accurate and balances stay consistent.
+      if (arcAddresses.size > 0) {
+        try {
+          const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
+            `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
+               SELECT 'out' AS kind, amount::float8 AS total
+                 FROM "Transaction"
+                WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
+                  AND (metadata->>'from' = 'USD')
+               UNION ALL
+               SELECT 'in', COALESCE((metadata->>'toAmount')::float8, 0)
+                 FROM "Transaction"
+                WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
+                  AND (metadata->>'to' = 'USD')
+             ) t GROUP BY kind`,
+            wallet.userId
+          );
+          const convertedOut = rows.find((r) => r.kind === 'out')?.total || 0;
+          const convertedIn = rows.find((r) => r.kind === 'in')?.total || 0;
+          const net = usdcBalance - convertedOut + convertedIn;
+          usdcBalance = Math.max(0, net);
+          this.logger.log(`ARC USD ledger for ${wallet.userId}: chain=${usdcBalance + convertedOut - convertedIn} out=${convertedOut} in=${convertedIn} spendable=${usdcBalance}`);
+        } catch (err: any) {
+          this.logger.error(`ARC USD ledger net failed: ${err.message}`);
+        }
+      }
+
       // Update local DB to stay in sync
       wallet = await this.prisma.wallet.update({
         where: { id: wallet.id },
