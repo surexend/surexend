@@ -418,12 +418,21 @@ export class WalletsService {
   // to the user's addresses so history matches the true balance.
   private async syncArcOnChainHistory(userId: string, walletId: string) {
     try {
+      // Mirror the balance logic: probe EVERY EVM address, not just records
+      // labeled 'ARC'. The same EVM address carries deposits across several
+      // network labels (BASE/BSC/ETHEREUM all share it), so restricting the
+      // query to ARC-labeled rows skips deposits into those addresses entirely.
       const addressRecords = await this.prisma.walletAddress.findMany({
-        where: { walletId, network: 'ARC' }
+        where: { walletId }
       });
 
-      for (const addressRecord of addressRecords) {
-        const address = addressRecord.address.toLowerCase();
+      const evmAddresses = new Set<string>();
+      for (const record of addressRecords) {
+        const addr = record.address ? record.address.toLowerCase() : '';
+        if (/^0x[0-9a-f]{40}$/i.test(addr)) evmAddresses.add(addr);
+      }
+
+      for (const address of evmAddresses) {
         try {
         let cursorParams: any = null;
         const seenTxHashes = new Set<string>();
