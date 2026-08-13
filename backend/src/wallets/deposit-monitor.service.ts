@@ -5,15 +5,19 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { OnchainService, OnChainTransfer, EVM_CHAINS } from './onchain.service';
 
 // Rolling log-scan window (in blocks) used to detect deposits. Scans run every
-// 45s, so any deposit necessarily falls inside a window covering the recent
+// 60s, so any deposit necessarily falls inside a window covering the recent
 // history. 150k blocks comfortably spans the gap between scans on every chain.
 const SCAN_WINDOW_BLOCKS = 150_000;
+// Log scanning is throttled per wallet (60s) so frequent balance refreshes
+// don't hammer public RPC endpoints. Balances are always read live.
+const LOG_SCAN_COOLDOWN_MS = 60_000;
 
 @Injectable()
 export class DepositMonitorService implements OnModuleInit {
   private readonly logger = new Logger(DepositMonitorService.name);
   private isScanning = false;
   private lastSeenBlockByChain: Map<string, number> = new Map();
+  private lastLogScanAt: Map<string, number> = new Map();
 
   constructor(
     private prisma: PrismaService,
@@ -39,7 +43,7 @@ export class DepositMonitorService implements OnModuleInit {
 
   // Reconcile every wallet against live on-chain balances on a schedule so the
   // DB figures (and therefore the app) are fresh even without a page refresh.
-  @Interval(45000)
+  @Interval(60000)
   async scheduledScan() {
     if (this.isScanning) return;
     this.isScanning = true;
@@ -79,6 +83,8 @@ export class DepositMonitorService implements OnModuleInit {
     const addresses = Array.from(uniqueEthereum);
     let grossUsdc = 0;
 
+    // Deposit-log scanning is throttled per wallet; balances are always fresh.
+    const scanLogs = this.shouldScanLogs(walletId);
     const chains = [...EVM_CHAINS];
     const results = await Promise.all(
       addresses.flatMap((addr) =>
@@ -87,7 +93,7 @@ export class DepositMonitorService implements OnModuleInit {
           let transfers: OnChainTransfer[] = [];
           try {
             balance = await this.onchain.getUsdcBalance(chain, addr);
-            transfers = await this.scanTransfers(chain.key, addr);
+            if (scanLogs) transfers = await this.scanTransfers(chain.key, addr);
           } catch (err: any) {
             this.logger.warn(`reconcile ${chain.key} ${addr} failed: ${err.message}`);
           }
@@ -120,6 +126,16 @@ export class DepositMonitorService implements OnModuleInit {
   // Scan the recent log window on a chain for transfers to any of the user's
   // addresses, keeping track of the furthest block we've examined so repeated
   // scans never miss a deposit and don't re-read ancient history every time.
+  private shouldScanLogs(walletId: string): boolean {
+    const now = Date.now();
+    const last = this.lastLogScanAt.get(walletId) || 0;
+    if (now - last >= LOG_SCAN_COOLDOWN_MS) {
+      this.lastLogScanAt.set(walletId, now);
+      return true;
+    }
+    return false;
+  }
+
   private async scanTransfers(chainKey: string, address: string) {
     const chain = this.onchain.getChainByKey(chainKey);
     if (!chain) return [];

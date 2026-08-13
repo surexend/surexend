@@ -5,19 +5,22 @@ export interface ChainConfig {
   key: string;
   label: string;
   rpcUrl: string;
+  rpcUrls?: string[];
   usdcContract: string;
   usdcDecimals: number;
 }
 
 // EVM testnets the app monitors. Keyed by the value getBlockchainName() maps a
 // network label to, so the deposit monitor can look a network up directly.
+// Each chain carries a primary RPC plus fallbacks so transient public-endpoint
+// failures (404/429/502) never stop reconciliation.
 export const EVM_CHAINS: ChainConfig[] = [
   { key: 'ARC-TESTNET', label: 'ARC', rpcUrl: 'https://rpc.testnet.arc.network', usdcContract: '0x3600000000000000000000000000000000000000', usdcDecimals: 6 },
-  { key: 'MATIC-AMOY', label: 'POLYGON', rpcUrl: 'https://polygon-amoy-bor-rpc.publicnode.com', usdcContract: '0x41e94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', usdcDecimals: 6 },
-  { key: 'BASE-SEPOLIA', label: 'BASE', rpcUrl: 'https://sepolia.base.org', usdcContract: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', usdcDecimals: 6 },
-  { key: 'ETH-SEPOLIA', label: 'ETHEREUM', rpcUrl: 'https://rpc.sepolia.org', usdcContract: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', usdcDecimals: 6 },
-  { key: 'ARB-SEPOLIA', label: 'ARBITRUM', rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc', usdcContract: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', usdcDecimals: 6 },
-  { key: 'OP-SEPOLIA', label: 'OPTIMISM', rpcUrl: 'https://sepolia.optimism.io', usdcContract: '0x5fd84259d66Cd46123540766Be93DFE6D43130D7', usdcDecimals: 6 },
+  { key: 'MATIC-AMOY', label: 'POLYGON', rpcUrl: 'https://polygon-amoy-bor-rpc.publicnode.com', rpcUrls: ['https://polygon-amoy-bor-rpc.publicnode.com', 'https://amoy.drpc.org'], usdcContract: '0x41e94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', usdcDecimals: 6 },
+  { key: 'BASE-SEPOLIA', label: 'BASE', rpcUrl: 'https://sepolia.base.org', rpcUrls: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com'], usdcContract: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', usdcDecimals: 6 },
+  { key: 'ETH-SEPOLIA', label: 'ETHEREUM', rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com', usdcContract: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', usdcDecimals: 6 },
+  { key: 'ARB-SEPOLIA', label: 'ARBITRUM', rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc', rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc', 'https://arbitrum-sepolia-rpc.publicnode.com'], usdcContract: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', usdcDecimals: 6 },
+  { key: 'OP-SEPOLIA', label: 'OPTIMISM', rpcUrl: 'https://sepolia.optimism.io', rpcUrls: ['https://sepolia.optimism.io', 'https://optimism-sepolia-rpc.publicnode.com'], usdcContract: '0x5fd84259d66Cd46123540766Be93DFE6D43130D7', usdcDecimals: 6 },
   { key: 'AVAX-FUJI', label: 'AVALANCHE', rpcUrl: 'https://api.avax-test.network/ext/bc/C/rpc', usdcContract: '0x5425890298aed601595a70AB815c96711a31Bc65', usdcDecimals: 6 },
 ];
 
@@ -42,15 +45,24 @@ export class OnchainService {
   private readonly logger = new Logger(OnchainService.name);
 
   private async rpc(chain: ChainConfig, method: string, params: any[]): Promise<any> {
-    const res = await axios.post(
-      chain.rpcUrl,
-      { jsonrpc: '2.0', id: 1, method, params },
-      { timeout: 25000 },
-    );
-    if (res.data.error) {
-      throw new Error(`${chain.key} ${method}: ${res.data.error.message}`);
+    const urls = [chain.rpcUrl, ...(chain.rpcUrls || [])];
+    let lastErr: any = null;
+    for (const url of urls) {
+      try {
+        const res = await axios.post(
+          url,
+          { jsonrpc: '2.0', id: 1, method, params },
+          { timeout: 25000 },
+        );
+        if (res.data.error) {
+          throw new Error(`${chain.key} ${method}: ${res.data.error.message}`);
+        }
+        return res.data.result;
+      } catch (err: any) {
+        lastErr = err;
+      }
     }
-    return res.data.result;
+    throw new Error(`${chain.key} ${method}: all RPCs failed (${lastErr?.message || 'unknown'})`);
   }
 
   getChainByKey(key: string): ChainConfig | undefined {
