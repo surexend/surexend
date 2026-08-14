@@ -180,12 +180,21 @@ export class WebhooksService {
 
         if (!matchingTx) return;
 
+        // Settle only once: the send may already have been settled (PENDING ->
+        // COMPLETED/FAILED) by the Circle history sync (which is the actual
+        // completion path for our sends, since they carry no refId). Guard on
+        // status so a later webhook can't double-release / double-refund.
+        if (matchingTx.status !== 'PENDING') return;
+
         if (txStatus === 'COMPLETED') {
-          // Release locked balance, mark completed
+          // Release locked balance, mark completed. The send initiation locks
+          // amount + network fee together, so both must be released here or the
+          // fee stays frozen in lockedBalance and spendable is permanently short.
+          const totalLocked = (matchingTx.amount || 0) + (matchingTx.fee || 0);
           await this.prisma.$transaction(async (prisma) => {
             await prisma.wallet.update({
               where: { userId: matchingTx.userId },
-              data: { lockedBalance: { decrement: matchingTx.amount } }
+              data: { lockedBalance: { decrement: totalLocked } }
             });
 
             await prisma.transaction.update({
@@ -218,7 +227,9 @@ export class WebhooksService {
             );
           }
         } else if (txStatus === 'FAILED') {
-          // Refund locked balance back to active balance
+          // Refund locked balance back to active balance. Initiation debits
+          // usdcBalance and locks amount + network fee, so restore exactly that.
+          const totalLocked = (matchingTx.amount || 0) + (matchingTx.fee || 0);
           const errorReason = transaction.errorMessage
             || transaction.reason
             || transaction.errorCode
@@ -227,8 +238,8 @@ export class WebhooksService {
             await prisma.wallet.update({
               where: { userId: matchingTx.userId },
               data: { 
-                usdtBalance: { increment: matchingTx.amount },
-                lockedBalance: { decrement: matchingTx.amount }
+                usdcBalance: { increment: totalLocked },
+                lockedBalance: { decrement: totalLocked }
               }
             });
 

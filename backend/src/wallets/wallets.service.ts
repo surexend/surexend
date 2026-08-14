@@ -508,19 +508,45 @@ export class WalletsService implements OnModuleInit {
                 ? recorded.find((h: any) => (h?.step || '').toLowerCase() === 'burn')?.txHash
                 : undefined;
 
-              await this.prisma.transaction.update({
-                where: { id: pendingMatch.id },
-                data: {
-                  status,
-                  fee: parseFloat(tx.networkFee || '0') || 0,
-                  metadata: {
-                    ...((pendingMatch.metadata as Record<string, unknown>) || {}),
-                    ...txMeta,
-                    // CCTP merge keeps the destination/delivery hints from the
-                    // local row; the canonical hash should be the burn step.
-                    ...(burnHash ? { txHash: burnHash } : {}),
-                  }
-                },
+              const preservedFee =
+                (parseFloat(tx.networkFee || '0') || 0) || (pendingMatch.fee || 0);
+              // The send initiation debited amount + fee from the wallet and
+              // locked the same total. Release it here: on completion the funds
+              // are spent (lock released), on failure they must be refunded to
+              // the active balance. The outbound webhook cannot cover this —
+              // Circle sends carry no refId — so this merge is the de-facto
+              // settlement point; it flips status once so it runs exactly once.
+              const totalLocked = (pendingMatch.amount || 0) + (preservedFee || 0);
+              await this.prisma.$transaction(async (prisma) => {
+                await prisma.wallet.update({
+                  where: { userId: pendingMatch.userId },
+                  data:
+                    status === 'FAILED'
+                      ? {
+                          usdcBalance: { increment: totalLocked },
+                          lockedBalance: { decrement: totalLocked },
+                        }
+                      : { lockedBalance: { decrement: totalLocked } },
+                });
+
+                await prisma.transaction.update({
+                  where: { id: pendingMatch.id },
+                  data: {
+                    status,
+                    // Circle's feed reports networkFee in the native fee token
+                    // (often 0 for amount-less CCTP burn/approve steps). Keep the
+                    // relay fee we charged and recorded on the pending row so the
+                    // user still sees the full amount + fee they were debited.
+                    fee: preservedFee,
+                    metadata: {
+                      ...((pendingMatch.metadata as Record<string, unknown>) || {}),
+                      ...txMeta,
+                      // CCTP merge keeps the destination/delivery hints from the
+                      // local row; the canonical hash should be the burn step.
+                      ...(burnHash ? { txHash: burnHash } : {}),
+                    }
+                  },
+                });
               });
               this.logger.log(`Merged Circle ${type} history into PENDING tx ${pendingMatch.reference}: ${amount || 0} ${symbol} on ${chainLabel} status=${status}`);
               continue;
