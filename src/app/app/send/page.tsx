@@ -61,6 +61,21 @@ export default function SendPage() {
 
   const networkFee = 0.0
 
+  const formNetwork = sendMode === 'TAG' ? 'SUREX_TAG' : (watch('network') || 'POLYGON')
+  const amount = watch('amount') || 0
+  // Circle's CCTP forwarder charges a relay fee on cross-network sends; it is
+  // deducted at mint time so the app shows it and charges it from the user's
+  // balance (the send amount is bumped to compensate so the recipient still
+  // receives the full amount).
+  const { data: feeData, isFetching: feeLoading } = useQuery({
+    queryKey: ['cctpFee', formNetwork, amount],
+    queryFn: () => walletAPI.getCctpFee({ destinationNetwork: formNetwork, amount }),
+    enabled: sendMode === 'CRYPTO' && formNetwork !== 'ARC' && amount > 0,
+    staleTime: 30000
+  })
+  const cctpFee = (formNetwork === 'ARC' || formNetwork === 'SUREX_TAG') ? 0 : (feeData?.fee ?? 0)
+  const totalDeducted = amount + cctpFee
+
   const onSubmitStep1 = (data: { address: string; network: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA'|'MONAD'|'BSC'|'BEP20'|'SUREX_TAG' }) => {
     setFormData(prev => ({ ...prev, ...data }))
     setStep(2)
@@ -72,8 +87,9 @@ export default function SendPage() {
       toast.error('Enter a valid amount')
       return
     }
-    if (amt > sendableBalance) {
-      toast.error(`Insufficient balance. You can send up to ${sendableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`)
+    const total = amt + cctpFee
+    if (total > sendableBalance) {
+      toast.error(`Insufficient balance. This send needs ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC including a ${cctpFee.toFixed(2)} USDC network fee`)
       return
     }
     setFormData(prev => ({ ...prev, amount: amt }))
@@ -273,12 +289,24 @@ export default function SendPage() {
               <div className="text-xs space-y-2 py-3 px-4 rounded-xl bg-white/[0.02] border border-white/5 text-[#94A3B8]">
                 <div className="flex justify-between">
                   <span>Receiving Network</span>
-                  <span className="text-white font-bold">{formData.network}</span>
+                  <span className="text-white font-bold">{formNetwork}</span>
                 </div>
-                <div className="flex justify-between border-t border-white/5 pt-2">
+                <div className="flex justify-between">
                   <span>Recipient Receives</span>
-                  <span className="text-emerald-400 font-bold">${((watch('amount') || 0) - networkFee).toFixed(2)} USDC</span>
+                  <span className="text-emerald-400 font-bold">${amount.toFixed(2)} USDC</span>
                 </div>
+                {formNetwork !== 'ARC' && formNetwork !== 'SUREX_TAG' && (
+                  <>
+                    <div className="flex justify-between">
+                      <span>Network Fee (CCTP)</span>
+                      <span className="text-amber-400 font-bold">{feeLoading ? '—' : `$${cctpFee.toFixed(2)} USDC`}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-white/5 pt-2">
+                      <span>Total Deducted</span>
+                      <span className="text-white font-bold">${(amount + cctpFee).toFixed(2)} USDC</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               <button 
@@ -314,9 +342,15 @@ export default function SendPage() {
                 <span className="text-[#94A3B8]">Amount</span>
                 <span className="text-white font-bold">${formData.amount} USD</span>
               </div>
+              {formData.network && formData.network !== 'ARC' && formData.network !== 'SUREX_TAG' && (
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-[#94A3B8]">Network Fee (CCTP)</span>
+                  <span className="text-amber-400 font-bold">${(cctpFee).toFixed(2)} USD</span>
+                </div>
+              )}
               <div className="flex justify-between py-1">
                 <span className="text-[#94A3B8]">Total Deducted</span>
-                <span className="text-emerald-400 font-extrabold text-sm">${formData.amount} USD</span>
+                <span className="text-emerald-400 font-extrabold text-sm">${(Number(formData.amount || 0) + cctpFee).toFixed(2)} USD</span>
               </div>
             </div>
 
@@ -334,7 +368,7 @@ export default function SendPage() {
         {step === 4 && (
           <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-6 text-center space-y-6">
             <h2 className="text-xl font-extrabold text-white">Security Verification</h2>
-            <p className="text-xs text-[#94A3B8]">Enter your 4-digit transaction PIN to authorize sending ${formData.amount} USD</p>
+            <p className="text-xs text-[#94A3B8]">Enter your 4-digit transaction PIN to authorize sending ${formData.amount} USD{cctpFee > 0 ? ` + $${cctpFee.toFixed(2)} network fee` : ''} (${(Number(formData.amount || 0) + cctpFee).toFixed(2)} USD total)</p>
 
             <div className="flex justify-center gap-3 my-6">
               {pin.map((digit, idx) => (

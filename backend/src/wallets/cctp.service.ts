@@ -54,6 +54,54 @@ export class CctpService {
     return this.getChain(network, 'source');
   }
 
+  // Estimate the total USDC fee Circle's forwarder will deduct on a CCTP send
+  // (burn + relay fees). Recipient of a forwarder mint always nets
+  // amount - fee, so the app surfaces this fee and charges it from the
+  // sender's balance.
+  async estimateFee(params: {
+    sourceNetwork: string;
+    sourceAddress: string;
+    destNetwork: string;
+    recipientAddress: string;
+    amount: number;
+  }): Promise<number> {
+    const { sourceNetwork, sourceAddress, destNetwork, recipientAddress, amount } = params;
+    if (sourceNetwork.toUpperCase() === destNetwork.toUpperCase()) {
+      return 0;
+    }
+    const sourceChain = this.getChain(sourceNetwork.toUpperCase(), 'source');
+    const destChain = this.getChain(destNetwork.toUpperCase(), 'destination');
+    const adapter = this.createAdapter();
+    const amountStr = amount.toFixed(6).replace(/\.?0+$/, '');
+
+    const estimate: any = await this.kit.estimate({
+      from: {
+        adapter,
+        chain: sourceChain as any,
+        address: sourceAddress,
+      },
+      amount: amountStr,
+      config: { transferSpeed: 'FAST' },
+      to:
+        destChain === BridgeChain.Solana_Devnet
+          ? {
+              chain: destChain as any,
+              recipientAddress,
+            }
+          : {
+              chain: destChain as any,
+              recipientAddress,
+              useForwarder: true as const,
+            } as any,
+    });
+
+    const fees: any[] = Array.isArray(estimate?.fees) ? estimate.fees : [];
+    const total = fees
+      .filter((f) => f?.token === 'USDC' && f?.amount)
+      .reduce((sum, f) => sum + parseFloat(f.amount), 0);
+    return Math.max(0, total);
+  }
+
   // Bridging is generic: pass any supported source/destination network pair.
   // CCTP handles burning USDC on the source chain and minting on the
   // destination chain, so this works in both directions across all listed
@@ -81,6 +129,9 @@ export class CctpService {
     this.logger.log(
       `Initiating CCTP bridge: ${amount} USDC from ${sourceChain} (${sourceAddress}) -> ${destChain} (${recipientAddress})`
     );
+    if (destChain === BridgeChain.Solana_Devnet) {
+      this.logger.log('CCTP delivery mode: Solana (default relayer)');
+    }
 
     try {
       const result = await this.kit.bridge({
@@ -89,6 +140,8 @@ export class CctpService {
           chain: sourceChain as any,
           address: sourceAddress,
         },
+        amount: amountStr,
+        config: { transferSpeed: 'FAST' },
         to:
           destChain === BridgeChain.Solana_Devnet
             ? {
@@ -100,8 +153,6 @@ export class CctpService {
                 recipientAddress,
                 useForwarder: true as const,
               } as any,
-        amount: amountStr,
-        config: { transferSpeed: 'FAST' },
       });
 
       this.logger.log(`CCTP bridge result state: ${result.state}`);

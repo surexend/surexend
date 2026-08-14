@@ -27,6 +27,22 @@ export class WalletsController {
     return this.walletsService.getNetworks();
   }
 
+  // Cross-chain (CCTP) network fee estimate for the chosen destination, so the
+  // send form can show the user what Circle's forwarder will deduct before
+  // they confirm.
+  @Get('cctp-fee')
+  async getCctpFee(
+    @CurrentUser() user: any,
+    @Query('destinationNetwork') destinationNetwork: string,
+    @Query('amount') amount: string,
+  ) {
+    return this.walletsService.estimateSendFee(
+      user.id,
+      destinationNetwork,
+      parseFloat(amount) || 0,
+    );
+  }
+
   @Post('send')
   @UseGuards(PinGuard)
   async sendCrypto(

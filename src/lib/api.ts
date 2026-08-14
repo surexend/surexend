@@ -265,6 +265,12 @@ export const walletAPI = {
       })
     ),
 
+  // Cross-chain (CCTP) fee Circle's forwarder deducts on an Arc -> network
+  // send. Shows the user the fee before they confirm and what the total
+  // deduction from their balance will be.
+  getCctpFee: (payload: { destinationNetwork: string; amount: number }) =>
+    apiClient.get(`/wallets/cctp-fee?destinationNetwork=${payload.destinationNetwork}&amount=${payload.amount || 0}`).then(r => r.data),
+
   getNetworks: () =>
     tryWithMock(
       () => apiClient.get('/wallets/networks').then(r => r.data),

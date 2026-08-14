@@ -750,6 +750,45 @@ export class WalletsService implements OnModuleInit {
     ];
   }
 
+  // CCTP forwarder fee for a planned send (Arc -> destination). Native Arc
+  // sends have no fee. Surfaces the relay fee Circle deducts from the mint so
+  // the UI can show it and charge it from the sender's balance.
+  async estimateSendFee(userId: string, destinationNetwork: string, amount: number) {
+    if (!destinationNetwork) {
+      return { fee: 0, total: amount || 0, currency: 'USDC' };
+    }
+    const destNet = destinationNetwork.toUpperCase();
+    if (destNet === 'ARC') {
+      return { fee: 0, total: amount || 0, currency: 'USDC' };
+    }
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!wallet) {
+      return { fee: 0, total: amount || 0, currency: 'USDC' };
+    }
+    const sourceAddressRecord = await this.prisma.walletAddress.findFirst({
+      where: { walletId: wallet.id, network: 'ARC' },
+    });
+    if (!sourceAddressRecord) {
+      return { fee: 0, total: amount || 0, currency: 'USDC' };
+    }
+    try {
+      const fee = await this.cctpService.estimateFee({
+        sourceNetwork: 'ARC',
+        sourceAddress: sourceAddressRecord.address,
+        destNetwork: destNet,
+        recipientAddress: sourceAddressRecord.address,
+        amount: amount > 0 ? amount : 1,
+      });
+      return { fee, total: (amount || 0) + fee, currency: 'USDC' };
+    } catch (err: any) {
+      this.logger.warn(`CCTP fee estimate failed for ${destNet}: ${err?.message || err}`);
+      return { fee: 0, total: amount || 0, currency: 'USDC' };
+    }
+  }
+
   private async sendCrossChainFromArc(
     userId: string,
     wallet: any,
@@ -798,6 +837,7 @@ export class WalletsService implements OnModuleInit {
     const reference = `TX-${Date.now()}-${Math.floor(Math.random()*1000)}`;
 
     let result: any;
+    let fee = 0;
     try {
       if (destNet === 'ARC') {
         result = await this.sendNativeArcTransfer(
@@ -807,12 +847,27 @@ export class WalletsService implements OnModuleInit {
           amount,
         );
       } else {
-        result = await this.cctpService.bridge({
+        // Circle's CCTP forwarder deducts a dynamic relay fee from the minted
+        // USDC, so the recipient would otherwise receive amount - fee. Burn
+        // amount + fee so the recipient nets the full amount, and debit the
+        // fee from the sender's balance so it is transparent.
+        fee = await this.cctpService.estimateFee({
           sourceNetwork: 'ARC',
           sourceAddress: sourceAddressRecord.address,
           destNetwork: destNet,
           recipientAddress: toAddress,
           amount,
+        });
+        if (spendable < amount + fee) {
+          const reason = `Insufficient balance. This send needs ${(amount + fee).toFixed(2)} USDC including a ${fee.toFixed(2)} USDC cross-chain network fee.`;
+          throw new BadRequestException(reason);
+        }
+        result = await this.cctpService.bridge({
+          sourceNetwork: 'ARC',
+          sourceAddress: sourceAddressRecord.address,
+          destNetwork: destNet,
+          recipientAddress: toAddress,
+          amount: amount + fee,
         });
       }
     } catch (err: any) {
@@ -825,7 +880,7 @@ export class WalletsService implements OnModuleInit {
         type: 'SEND',
         status: 'FAILED',
         amount,
-        fee: 0,
+        fee,
         currency: 'USDC',
         reference,
         metadata: {
@@ -846,8 +901,8 @@ export class WalletsService implements OnModuleInit {
       await prisma.wallet.update({
         where: { id: wallet.id },
         data: {
-          usdcBalance: { decrement: amount },
-          lockedBalance: { increment: amount }
+          usdcBalance: { decrement: amount + fee },
+          lockedBalance: { increment: amount + fee }
         }
       });
 
@@ -856,7 +911,7 @@ export class WalletsService implements OnModuleInit {
         type: 'SEND',
         status: 'PENDING',
         amount,
-        fee: 0,
+        fee,
         currency: 'USDC',
         reference,
         metadata: {
