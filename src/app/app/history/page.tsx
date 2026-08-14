@@ -382,11 +382,17 @@ function TransactionDetailModal({
   }
 
   const meta = details?.metadata || {}
+  // A send's on-chain hash ALWAYS lives on Arc: same-chain sends are native Arc
+  // transfers, cross-chain sends burn on Arc first (via CCTP) before minting on
+  // the destination. So the explorer deep-link must be Arc for sends, while the
+  // displayed network reflects where the money is going.
+  const isSend = typeUpper === 'SEND'
   const network = meta.network || details?.network || 'ARC'
+  const displayNetwork = isSend ? (meta.destinationNetwork || network) : network
   const errorReason = meta.errorReason || details?.errorReason
   // Each chain has its own explorer. CCTP sends burn on Arc first, so a send's
   // txHash is an Arc hash even when the recipient is on another chain — always
-  // deep-link to the chain the transaction actually landed on.
+  // deep-link to the chain the transaction hash actually landed on.
   const EXPLORER_BASE: Record<string, string> = {
     ARC: 'https://testnet.arcscan.app/tx/',
     ETHEREUM: 'https://sepolia.etherscan.io/tx/',
@@ -399,7 +405,8 @@ function TransactionDetailModal({
     MONAD: 'https://testnet.monadscan.com/tx/',
     BSC: 'https://testnet.bscscan.com/tx/',
   }
-  const explorerUrl = meta.txHash ? `${EXPLORER_BASE[network] || EXPLORER_BASE.ARC}${meta.txHash}` : null
+  const explorerNetwork = isSend ? 'ARC' : displayNetwork
+  const explorerUrl = meta.txHash ? `${EXPLORER_BASE[explorerNetwork] || EXPLORER_BASE.ARC}${meta.txHash}` : null
   const swap = getSwapInfo(details)
 
   const statusColor = (s: string) => {
@@ -422,7 +429,7 @@ function TransactionDetailModal({
         { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
         { label: 'Amount', value: `${sign}${symbol}${details?.amount}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}` },
         { label: 'Fee', value: `$${(details?.fee || 0)}` },
-        { label: 'Network', value: network },
+        { label: 'Network', value: displayNetwork },
         { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
         ...(meta.sourceAddress ? [{ label: 'From Address', value: meta.sourceAddress, copyable: meta.sourceAddress, mono: true }] : []),
         ...(meta.destinationAddress || details?.recipient ? [{ label: 'To Address', value: meta.destinationAddress || details?.recipient, copyable: meta.destinationAddress || details?.recipient, mono: true }] : []),
@@ -500,7 +507,7 @@ function TransactionDetailModal({
                   {sign}{symbol}{details?.amount}
                 </p>
                 <p className="text-[#94A3B8] text-xs mt-1.5">
-                  {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {network}
+                  {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {displayNetwork}
                 </p>
               </>
             )}
@@ -536,7 +543,7 @@ function TransactionDetailModal({
               className="mt-5 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white transition-all"
             >
               <ExternalLink size={14} style={{ color: accentHex }} />
-              View on {network} Explorer
+              View on {explorerNetwork} Explorer
             </a>
           )}
         </div>

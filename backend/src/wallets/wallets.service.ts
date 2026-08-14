@@ -408,8 +408,16 @@ export class WalletsService implements OnModuleInit {
 
         const circleTxs = txResponse.data.data.transactions || [];
         for (const tx of circleTxs) {
-          const amount = parseFloat((tx.amounts || [])[0]);
-          if (!amount || amount <= 0) continue;
+          const amount = parseFloat((tx.amounts || [])[0]) || 0;
+          const isCctpStep = tx.transactionType === 'OUTBOUND' && (!amount || amount <= 0);
+
+          // CCTP bridges split into two on-chain steps from the sender's wallet:
+          // an ERC20 approval ("Contract Execution Outbound", 0 USDC) then a burn.
+          // Those steps carry no amount on the Circle feed, but they are the
+          // on-chain completion of a pending cross-chain send, so we must not
+          // skip them like plain amount-less noise. Inbound rows without an
+          // amount genuinely have nothing to reconcile though.
+          if (!isCctpStep && (!amount || amount <= 0)) continue;
 
           // The feed can surface activity for other addresses in the entity, so
           // scope both directions to THIS address: inbound must land on this
@@ -464,24 +472,42 @@ export class WalletsService implements OnModuleInit {
           // (the user had seen the same send listed twice: one PENDING with no
           // details and one COMPLETED). Prefer an exact recipient match; for
           // CCTP the burn's destination is the bridge contract, so fall back to
-          // a recent PENDING send of the same amount. Fail open if nothing matches.
+          // the txHash the pending row already recorded (from bridge steps) or a
+          // recent PENDING send of the same amount. Fail open if nothing matches.
           if (type === 'SEND') {
+            const pendingWhere: any = {
+              userId,
+              type: 'SEND',
+              status: 'PENDING',
+              createdAt: { gte: new Date(Date.now() - 6 * 60 * 60 * 1000) },
+            };
+            if (!isCctpStep && amount > 0) pendingWhere.amount = amount;
+
             const candidates = await this.prisma.transaction.findMany({
-              where: {
-                userId,
-                type: 'SEND',
-                status: 'PENDING',
-                amount,
-                createdAt: { gte: new Date(Date.now() - 6 * 60 * 60 * 1000) }
-              },
+              where: pendingWhere,
               orderBy: { createdAt: 'desc' },
-              take: 5,
+              take: 10,
             });
-            const pendingMatch = candidates.find((c) => {
+
+            const hashLower = (tx.txHash || '').toLowerCase();
+            let pendingMatch = candidates.find((c) => {
+              // Native same-chain transfer: destination is the real recipient.
               const to = (c.metadata as any)?.toAddress;
-              return typeof to === 'string' && to.toLowerCase() === dstLower;
+              if (typeof to === 'string' && to.toLowerCase() === dstLower) return true;
+              // CCTP: match by the bridge txHash the local row already recorded.
+              const recorded = (c.metadata as any)?.txHashes;
+              if (Array.isArray(recorded) && recorded.some((h: any) => typeof h?.txHash === 'string' && h.txHash.toLowerCase() === hashLower)) return true;
+              return false;
             }) || candidates[0];
+
             if (pendingMatch) {
+              // For CCTP, prefer the burn hash over the approve hash as the
+              // canonical on-chain reference so the explorer shows the transfer.
+              const recorded = (pendingMatch.metadata as any)?.txHashes;
+              const burnHash = Array.isArray(recorded)
+                ? recorded.find((h: any) => (h?.step || '').toLowerCase() === 'burn')?.txHash
+                : undefined;
+
               await this.prisma.transaction.update({
                 where: { id: pendingMatch.id },
                 data: {
@@ -490,14 +516,21 @@ export class WalletsService implements OnModuleInit {
                   metadata: {
                     ...((pendingMatch.metadata as Record<string, unknown>) || {}),
                     ...txMeta,
-                    // Keep the original destinationNetwork/delivery hints from
-                    // the local row so history still shows where it was going.
+                    // CCTP merge keeps the destination/delivery hints from the
+                    // local row; the canonical hash should be the burn step.
+                    ...(burnHash ? { txHash: burnHash } : {}),
                   }
                 },
               });
-              this.logger.log(`Merged Circle ${type} history into PENDING tx ${pendingMatch.reference}: ${amount} ${symbol} on ${chainLabel} status=${status}`);
+              this.logger.log(`Merged Circle ${type} history into PENDING tx ${pendingMatch.reference}: ${amount || 0} ${symbol} on ${chainLabel} status=${status}`);
               continue;
             }
+
+            // CCTP contract-execution steps (approve/burn) carry no amount and are
+            // only meaningful as the completion of a pending cross-chain send. If
+            // there is no pending row to merge into (e.g. the burn hash was already
+            // merged by the approve step), never create a standalone 0-USDC row.
+            if (isCctpStep) continue;
           }
 
           await this.prisma.transaction.create({
@@ -513,7 +546,7 @@ export class WalletsService implements OnModuleInit {
               createdAt: new Date(tx.createDate)
             }
           });
-          this.logger.log(`Synced Circle ${type} history: ${amount} ${symbol} on ${chainLabel} (${tx.txHash}) status=${status}`);
+          this.logger.log(`Synced Circle ${type} history: ${amount || 0} ${symbol} on ${chainLabel} (${tx.txHash}) status=${status}`);
           }
         } catch (err: any) {
           this.logger.error(`syncCircleHistory failed for ${addressRecord.address}: ${err.message}`);
