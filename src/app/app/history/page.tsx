@@ -384,11 +384,22 @@ function TransactionDetailModal({
   const meta = details?.metadata || {}
   const network = meta.network || details?.network || 'ARC'
   const errorReason = meta.errorReason || details?.errorReason
-  const explorerUrl = meta.txHash
-    ? network === 'ARC'
-      ? `https://testnet.arcscan.app/tx/${meta.txHash}`
-      : `https://etherscan.io/tx/${meta.txHash}`
-    : null
+  // Each chain has its own explorer. CCTP sends burn on Arc first, so a send's
+  // txHash is an Arc hash even when the recipient is on another chain — always
+  // deep-link to the chain the transaction actually landed on.
+  const EXPLORER_BASE: Record<string, string> = {
+    ARC: 'https://testnet.arcscan.app/tx/',
+    ETHEREUM: 'https://sepolia.etherscan.io/tx/',
+    POLYGON: 'https://amoy.polygonscan.com/tx/',
+    AVALANCHE: 'https://testnet.snowtrace.io/tx/',
+    ARBITRUM: 'https://sepolia.arbiscan.io/tx/',
+    BASE: 'https://sepolia.basescan.org/tx/',
+    OPTIMISM: 'https://sepolia-optimistic.etherscan.io/tx/',
+    SOLANA: 'https://explorer.solana.com/tx/',
+    MONAD: 'https://testnet.monadscan.com/tx/',
+    BSC: 'https://testnet.bscscan.com/tx/',
+  }
+  const explorerUrl = meta.txHash ? `${EXPLORER_BASE[network] || EXPLORER_BASE.ARC}${meta.txHash}` : null
   const swap = getSwapInfo(details)
 
   const statusColor = (s: string) => {

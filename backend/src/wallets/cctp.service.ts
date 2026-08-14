@@ -12,6 +12,7 @@ const NETWORK_TO_CHAIN: Record<string, string> = {
   BASE: BridgeChain.Base_Sepolia,
   OPTIMISM: BridgeChain.Optimism_Sepolia,
   SOLANA: BridgeChain.Solana_Devnet,
+  MONAD: BridgeChain.Monad_Testnet,
 };
 
 @Injectable()

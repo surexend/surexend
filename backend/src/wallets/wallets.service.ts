@@ -171,6 +171,7 @@ export class WalletsService implements OnModuleInit {
       if (net === 'SOLANA') return 'SOL-DEVNET';
       if (net === 'BSC' || net === 'BEP20') return 'EVM-TESTNET';
       if (net === 'ARC') return 'ARC-TESTNET';
+      if (net === 'MONAD') return 'MONAD-TESTNET';
     } else {
       if (net === 'POLYGON') return 'POLYGON';
       if (net === 'AVALANCHE') return 'AVAX';
@@ -181,8 +182,29 @@ export class WalletsService implements OnModuleInit {
       if (net === 'SOLANA') return 'SOL';
       if (net === 'BSC' || net === 'BEP20') return 'EVM';
       if (net === 'ARC') return 'ARC';
+      if (net === 'MONAD') return 'MONAD';
     }
     return net;
+  }
+
+  // Reverse of getBlockchainName(): map a Circle blockchain value from the tx
+  // feed (e.g. "ARC-TESTNET", "ETH-SEPOLIA") back to the app's network label so
+  // history/explorer links point at the right chain regardless of which address
+  // record is being iterated. Returns undefined for unknown values.
+  private getNetworkFromBlockchain(blockchain: string): string | undefined {
+    const map: Record<string, string> = {
+      'ARC-TESTNET': 'ARC',
+      'ETH-SEPOLIA': 'ETHEREUM',
+      'MATIC-AMOY': 'POLYGON',
+      'AVAX-FUJI': 'AVALANCHE',
+      'ARB-SEPOLIA': 'ARBITRUM',
+      'BASE-SEPOLIA': 'BASE',
+      'OP-SEPOLIA': 'OPTIMISM',
+      'SOL-DEVNET': 'SOLANA',
+      'MONAD-TESTNET': 'MONAD',
+      'EVM-TESTNET': 'BSC',
+    };
+    return map[(blockchain || '').toUpperCase()];
   }
 
   async getBalance(userId: string) {
@@ -389,14 +411,20 @@ export class WalletsService implements OnModuleInit {
           const amount = parseFloat((tx.amounts || [])[0]);
           if (!amount || amount <= 0) continue;
 
-          // Scope to THIS address: the wallet feed can surface activity for other
-          // addresses in the entity, and without this check the same inbound tx
-          // would be recorded once per shared-EVM-address record.
-          if (
-            tx.transactionType === 'INBOUND' &&
-            tx.destinationAddress &&
-            tx.destinationAddress.toLowerCase() !== addressRecord.address.toLowerCase()
-          ) continue;
+          // The feed can surface activity for other addresses in the entity, so
+          // scope both directions to THIS address: inbound must land on this
+          // record's address, outbound must originate from it.
+          const srcLower = (tx.sourceAddress || '').toLowerCase();
+          const dstLower = (tx.destinationAddress || '').toLowerCase();
+          const recAddr = addressRecord.address.toLowerCase();
+          if (tx.transactionType === 'INBOUND' && dstLower !== recAddr) continue;
+          if (tx.transactionType === 'OUTBOUND' && srcLower !== recAddr) continue;
+
+          // Attribute the tx to the blockchain it actually happened on (from the
+          // Circle feed), not to whichever address record happens to be iterated
+          // first — shared-EVM addresses would otherwise label Arc burns as
+          // ETHEREUM/POLYGON and break the explorer deep-link.
+          const chainLabel = this.getNetworkFromBlockchain(tx.blockchain) || addressRecord.network;
 
           const symbol = symbolByTokenId.get(tx.tokenId) || 'USDC';
           const type = tx.transactionType === 'OUTBOUND' ? 'SEND' : 'RECEIVE';
@@ -409,7 +437,7 @@ export class WalletsService implements OnModuleInit {
           // Dedupe by txHash across every network record (on-chain monitor uses
           // RECV-ONCHAIN-<chain>-<txHash>; this uses the network label) so the
           // same on-chain tx is never listed twice in history.
-          const reference = `${type === 'RECEIVE' ? 'RECV' : 'SEND'}-${addressRecord.network}-${tx.txHash}`;
+          const reference = `${type === 'RECEIVE' ? 'RECV' : 'SEND'}-${chainLabel}-${tx.txHash}`;
 
           const existing = await this.prisma.transaction.findUnique({
             where: { reference }
@@ -421,6 +449,57 @@ export class WalletsService implements OnModuleInit {
           });
           if (alreadyByHash) continue;
 
+          const txMeta = {
+            network: chainLabel,
+            txHash: tx.txHash,
+            circleTransactionId: tx.id,
+            destinationAddress: tx.destinationAddress,
+            sourceAddress: tx.sourceAddress,
+            ...(isFailed ? { errorReason: tx.errorCode || tx.errorMessage || 'Transaction failed on Circle.', failedAt: 'circle-sync' } : {})
+          };
+
+          // An OUTBOUND SEND is first recorded locally (PENDING, no txHash yet)
+          // when the user initiates it. If a Circle tx is the completion of that
+          // local send, UPDATE the pending row instead of creating a duplicate
+          // (the user had seen the same send listed twice: one PENDING with no
+          // details and one COMPLETED). Prefer an exact recipient match; for
+          // CCTP the burn's destination is the bridge contract, so fall back to
+          // a recent PENDING send of the same amount. Fail open if nothing matches.
+          if (type === 'SEND') {
+            const candidates = await this.prisma.transaction.findMany({
+              where: {
+                userId,
+                type: 'SEND',
+                status: 'PENDING',
+                amount,
+                createdAt: { gte: new Date(Date.now() - 6 * 60 * 60 * 1000) }
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 5,
+            });
+            const pendingMatch = candidates.find((c) => {
+              const to = (c.metadata as any)?.toAddress;
+              return typeof to === 'string' && to.toLowerCase() === dstLower;
+            }) || candidates[0];
+            if (pendingMatch) {
+              await this.prisma.transaction.update({
+                where: { id: pendingMatch.id },
+                data: {
+                  status,
+                  fee: parseFloat(tx.networkFee || '0') || 0,
+                  metadata: {
+                    ...((pendingMatch.metadata as Record<string, unknown>) || {}),
+                    ...txMeta,
+                    // Keep the original destinationNetwork/delivery hints from
+                    // the local row so history still shows where it was going.
+                  }
+                },
+              });
+              this.logger.log(`Merged Circle ${type} history into PENDING tx ${pendingMatch.reference}: ${amount} ${symbol} on ${chainLabel} status=${status}`);
+              continue;
+            }
+          }
+
           await this.prisma.transaction.create({
             data: {
               userId,
@@ -430,18 +509,11 @@ export class WalletsService implements OnModuleInit {
               fee: parseFloat(tx.networkFee || '0') || 0,
               currency: symbol,
               reference,
-              metadata: {
-                network: addressRecord.network,
-                txHash: tx.txHash,
-                circleTransactionId: tx.id,
-                destinationAddress: tx.destinationAddress,
-                sourceAddress: tx.sourceAddress,
-                ...(isFailed ? { errorReason: tx.errorCode || tx.errorMessage || 'Transaction failed on Circle.', failedAt: 'circle-sync' } : {})
-              },
+              metadata: txMeta,
               createdAt: new Date(tx.createDate)
             }
           });
-          this.logger.log(`Synced Circle ${type} history: ${amount} ${symbol} on ${addressRecord.network} (${tx.txHash}) status=${status}`);
+          this.logger.log(`Synced Circle ${type} history: ${amount} ${symbol} on ${chainLabel} (${tx.txHash}) status=${status}`);
           }
         } catch (err: any) {
           this.logger.error(`syncCircleHistory failed for ${addressRecord.address}: ${err.message}`);
@@ -453,9 +525,9 @@ export class WalletsService implements OnModuleInit {
   }
 
   async getDepositAddress(userId: string, network: string) {
-    const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC'];
+    const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'MONAD'];
     if (!validNetworks.includes(network.toUpperCase())) {
-      throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20, ARC');
+      throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20, ARC, MONAD');
     }
 
     // Explicit select so a not-yet-migrated localBalances column can't 500 this endpoint
@@ -636,7 +708,12 @@ export class WalletsService implements OnModuleInit {
       { id: 'POLYGON', name: 'Polygon', fee: 0.0 },
       { id: 'AVALANCHE', name: 'Avalanche', fee: 0.0 },
       { id: 'ARBITRUM', name: 'Arbitrum', fee: 0.0 },
-      { id: 'ETHEREUM', name: 'Ethereum', fee: 0.0 }
+      { id: 'ETHEREUM', name: 'Ethereum', fee: 0.0 },
+      { id: 'BASE', name: 'Base', fee: 0.0 },
+      { id: 'OPTIMISM', name: 'Optimism', fee: 0.0 },
+      { id: 'SOLANA', name: 'Solana', fee: 0.0 },
+      { id: 'MONAD', name: 'Monad', fee: 0.0 },
+      { id: 'ARC', name: 'Arc', fee: 0.0 },
     ];
   }
 

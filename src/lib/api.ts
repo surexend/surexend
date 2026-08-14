@@ -222,7 +222,7 @@ export const walletAPI = {
       () => ({ usdt: 0, fiat: 0, rate: 1500, locked: 0, pending: 0, usdBalance: 0, ngnBalance: 0, localBalances: { NGN: 0 } })
     ),
 
-  getDepositAddress: (network: 'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC' | 'BEP20' | 'ARC') =>
+  getDepositAddress: (network: 'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'MONAD' | 'BSC' | 'BEP20' | 'ARC') =>
     tryWithMock(
       () => apiClient.get(`/wallets/deposit-address?network=${network}`).then(r => r.data),
       () => {
@@ -234,6 +234,7 @@ export const walletAPI = {
           BASE: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
           OPTIMISM: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
           SOLANA: 'HN7cABviJ373u4AeeaoeeNC6YtUt1qq1C9Xf6S7vwLdi',
+          MONAD: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
           BSC: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
           BEP20: '0x3F91A775191a8F47A7308D22e968D740E7A68412',
         }

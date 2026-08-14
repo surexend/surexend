@@ -17,11 +17,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 // to receive on — the backend handles delivery automatically (native when both
 // sides are on Arc, cross-network otherwise), so there is only ever one
 // network choice on this screen.
-const SEND_NETWORKS = ['ARC', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA'] as const
+const SEND_NETWORKS = ['ARC', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'MONAD'] as const
 
 const sendSchema = z.object({
   address: z.string().min(3, 'Invalid recipient handle or address'),
-  network: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'SUREX_TAG']),
+  network: z.enum(['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'MONAD', 'BSC', 'BEP20', 'ARC', 'SUREX_TAG']),
   amount: z.number().positive('Amount must be positive').optional()
 })
 
@@ -61,7 +61,7 @@ export default function SendPage() {
 
   const networkFee = 0.0
 
-  const onSubmitStep1 = (data: { address: string; network: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA'|'BSC'|'BEP20'|'SUREX_TAG' }) => {
+  const onSubmitStep1 = (data: { address: string; network: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA'|'MONAD'|'BSC'|'BEP20'|'SUREX_TAG' }) => {
     setFormData(prev => ({ ...prev, ...data }))
     setStep(2)
   }

@@ -22,6 +22,7 @@ export const EVM_CHAINS: ChainConfig[] = [
   { key: 'ARB-SEPOLIA', label: 'ARBITRUM', rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc', rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc', 'https://arbitrum-sepolia-rpc.publicnode.com'], usdcContract: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', usdcDecimals: 6 },
   { key: 'OP-SEPOLIA', label: 'OPTIMISM', rpcUrl: 'https://sepolia.optimism.io', rpcUrls: ['https://sepolia.optimism.io', 'https://optimism-sepolia-rpc.publicnode.com'], usdcContract: '0x5fd84259d66Cd46123540766Be93DFE6D43130D7', usdcDecimals: 6 },
   { key: 'AVAX-FUJI', label: 'AVALANCHE', rpcUrl: 'https://api.avax-test.network/ext/bc/C/rpc', usdcContract: '0x5425890298aed601595a70AB815c96711a31Bc65', usdcDecimals: 6 },
+  { key: 'MONAD-TESTNET', label: 'MONAD', rpcUrl: 'https://testnet-rpc.monad.xyz', rpcUrls: ['https://testnet-rpc.monad.xyz', 'https://rpc.ankr.com/monad_testnet', 'https://rpc-testnet.monadinfra.com'], usdcContract: '0x534b2f3A21130d7a60830c2Df862319e593943A3', usdcDecimals: 6 },
 ];
 
 export const TRANSFER_TOPIC =
