@@ -154,7 +154,7 @@ export default function SendPage() {
               <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
                 <Send className="w-5 h-5" style={{ color: colors.primary }} /> Send Stablecoins
               </h2>
-              <p className="text-xs text-[#94A3B8] mt-0.5">Transfer USDT/USDC to crypto wallet or SureX Tag</p>
+              <p className="text-xs text-[#94A3B8] mt-0.5">Transfer USDC to crypto wallet or SureX Tag</p>
             </div>
 
             {/* Mode Switcher Tabs */}
@@ -400,7 +400,7 @@ export default function SendPage() {
             <div>
               <h2 className="text-2xl font-black text-white">Transfer Successful!</h2>
               <p className="text-xs text-[#94A3B8] mt-1">
-                Sent ${formData.amount} USDT to {sendMode === 'TAG' ? `@${formData.address}` : formData.address}
+                Sent ${formData.amount} USDC to {sendMode === 'TAG' ? `@${formData.address}` : formData.address}
               </p>
             </div>
             <button onClick={() => { setStep(1); setPin(['','','','']); setIsSuccess(false) }} className="w-full py-3.5 rounded-xl font-bold text-black shadow-lg" style={{ background: colors.gradientBg }}>

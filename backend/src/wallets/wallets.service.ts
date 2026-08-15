@@ -2,6 +2,7 @@
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CctpService } from './cctp.service';
 import { DepositMonitorService } from './deposit-monitor.service';
 import { getLocalRate } from '../common/currency.constants';
@@ -25,6 +26,7 @@ export class WalletsService implements OnModuleInit {
     private transactionsService: TransactionsService,
     private cctpService: CctpService,
     private depositMonitor: DepositMonitorService,
+    private notifications: NotificationsService,
   ) {
     this.apiKey = this.configService.get<string>('app.circle.apiKey') || '';
     this.entitySecret = this.configService.get<string>('app.circle.entitySecret');
@@ -750,6 +752,13 @@ export class WalletsService implements OnModuleInit {
   async sendCrypto(userId: string, toAddress: string, amount: number, network: string, destinationNetwork?: string) {
     if (amount <= 0) throw new BadRequestException('Amount must be greater than 0');
 
+    const net = network.toUpperCase();
+    // In-app tag send: zero-fee internal USDC transfer between SureXend users.
+    // Resolves the @tag, moves balance between wallets, records SEND + RECEIVE.
+    if (net === 'SUREX_TAG') {
+      return this.sendToSurexTag(userId, toAddress, amount);
+    }
+
     // Explicit select so a not-yet-migrated localBalances column can't 500 this endpoint
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId },
@@ -759,7 +768,112 @@ export class WalletsService implements OnModuleInit {
     // All funds sit on Arc (native USDC), regardless of where the recipient's
     // wallet is. The picked network is the DESTINATION chain; CCTP bridges
     // automatically — no separate destination step needed.
-    return this.sendCrossChainFromArc(userId, wallet, toAddress, amount, network.toUpperCase());
+    return this.sendCrossChainFromArc(userId, wallet, toAddress, amount, net);
+  }
+
+  // Zero-fee in-app transfer by SureX tag (@username → @username).
+  // Debits the sender's USDC, credits the recipient's USDC, and writes a SEND
+  // row for the sender + a RECEIVE row for the recipient so both histories and
+  // cash-flow charts reflect real money movement. No chain hops, no fees.
+  private async sendToSurexTag(senderUserId: string, tagInput: string, amount: number) {
+    const tag = tagInput.trim().replace(/^@/, '').toLowerCase();
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(tag)) {
+      throw new BadRequestException('Enter a valid SureX tag like @username.');
+    }
+
+    const recipient = await this.prisma.user.findUnique({ where: { surexTag: tag } });
+    if (!recipient) {
+      throw new BadRequestException(`No SureXend user found with the tag @${tag}.`);
+    }
+    if (recipient.id === senderUserId) {
+      throw new BadRequestException('You cannot send to your own SureX tag. Choose a different user.');
+    }
+
+    const [senderWallet, recipientWallet] = await Promise.all([
+      this.prisma.wallet.findUnique({ where: { userId: senderUserId }, include: { user: true } }),
+      this.prisma.wallet.findUnique({ where: { userId: recipient.id } }),
+    ]);
+    if (!senderWallet) throw new BadRequestException('Wallet not found.');
+    if (!recipientWallet) throw new BadRequestException('Recipient wallet not found.');
+
+    const senderName = `${senderWallet.user?.firstName || ''} ${senderWallet.user?.lastName || ''}`.trim();
+    const recipientName = `${recipient.firstName} ${recipient.lastName}`.trim();
+
+    const spendable = await this.computeSpendableUsdc(senderUserId, senderWallet, amount);
+    if (spendable < amount) {
+      const reason = `Insufficient balance. You can send up to ${spendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`;
+      throw new BadRequestException(reason);
+    }
+
+    const reference = `TAG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const result = await this.prisma.$transaction(async (prisma) => {
+      await prisma.wallet.update({
+        where: { id: senderWallet.id },
+        data: { usdcBalance: { decrement: amount } },
+      });
+      await prisma.wallet.update({
+        where: { id: recipientWallet.id },
+        data: { usdcBalance: { increment: amount } },
+      });
+      await this.transactionsService.createTransaction(prisma, {
+        userId: senderUserId,
+        type: 'SEND',
+        status: 'COMPLETED',
+        amount,
+        fee: 0,
+        currency: 'USDC',
+        reference,
+        metadata: {
+          toTag: tag,
+          recipientUserId: recipient.id,
+          recipientName,
+          delivery: 'internal',
+          method: 'surex-tag',
+        },
+      });
+      await this.transactionsService.createTransaction(prisma, {
+        userId: recipient.id,
+        type: 'RECEIVE',
+        status: 'COMPLETED',
+        amount,
+        fee: 0,
+        currency: 'USDC',
+        reference,
+        metadata: {
+          fromTag: senderWallet.user?.surexTag || null,
+          senderUserId,
+          senderName,
+          delivery: 'internal',
+          method: 'surex-tag',
+        },
+      });
+      return { senderUserId, recipientUserId: recipient.id };
+    });
+
+    // In-app notifications so both users see the movement in the bell drawer.
+    await this.notifications.createNotification(senderUserId, {
+      title: 'Send Successful',
+      body: `You sent ${amount} USDC to @${tag}.`,
+      type: 'SEND',
+      data: { amount, currency: 'USDC', toTag: tag, reference },
+    });
+    await this.notifications.createNotification(recipient.id, {
+      title: 'Payment Received',
+      body: `You received +${amount} USDC from ${senderName || `@${senderWallet.user?.surexTag || 'a SureXend user'}`}.`,
+      type: 'DEPOSIT',
+      data: { amount, currency: 'USDC', fromTag: senderWallet.user?.surexTag || null, reference },
+    });
+
+    return {
+      success: true,
+      reference,
+      amount,
+      currency: 'USDC',
+      recipient: `@${tag}`,
+      network: 'SUREX_TAG',
+      method: 'internal',
+      fee: 0,
+    };
   }
 
   async getNetworks() {
@@ -952,6 +1066,18 @@ export class WalletsService implements OnModuleInit {
         }
       });
     });
+
+    // In-app SEND notification so the bell drawer reflects real money movement.
+    try {
+      await this.notifications.createNotification(userId, {
+        title: 'Transfer Initiated',
+        body: `Sending ${amount} USDC to ${toAddress.slice(0, 6)}...${toAddress.slice(-4)} on ${destNet}${fee > 0 ? ` (${fee.toFixed(2)} USDC fee)` : ''}.`,
+        type: 'SEND',
+        data: { amount, currency: 'USDC', toAddress, network: destNet, fee, reference },
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to record SEND notification: ${err.message}`);
+    }
 
     return { message: destNet === 'ARC'
       ? 'Arc transfer initiated successfully'

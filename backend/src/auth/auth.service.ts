@@ -40,6 +40,18 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
 
+    // SureX tag is user-chosen at registration. Normalize to lowercase, strip a
+    // leading @, and fall back to a name-based handle if none was provided so
+    // every user always has a resolvable tag for in-app sends.
+    let surexTag = (dto.surexTag || '').trim().replace(/^@/, '').toLowerCase();
+    if (!surexTag) {
+      surexTag = `${dto.firstName.replace(/[^a-zA-Z0-9]/g, '')}.${dto.lastName.replace(/[^a-zA-Z0-9]/g, '')}`.toLowerCase();
+    }
+    const existingTag = await this.prisma.user.findUnique({ where: { surexTag } });
+    if (existingTag) {
+      throw new BadRequestException(`The SureX tag @${surexTag} is already taken.`);
+    }
+
     let referredById = null;
     if (dto.referralCode) {
       const referrer = await this.prisma.user.findUnique({ where: { referralCode: dto.referralCode } });
@@ -53,6 +65,7 @@ export class AuthService {
         passwordHash,
         firstName: dto.firstName,
         lastName: dto.lastName,
+        surexTag,
         referralCode,
         referredById,
         wallet: {

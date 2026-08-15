@@ -133,8 +133,38 @@ Never assert an explanation without verifying on-chain receipts. Mint/transfer
 hashes are the ground truth. See `docs/memory.md` for the "mistakes not to
 repeat" list.
 
+## SUREX TAG SYSTEM + HOME PAGE LAUNCH BATCH (2026-08-15)
+
+- **SureX Tag**: new `User.surexTag String? @unique` column. Users choose it at
+  registration (`@handle`, 3-20 alphanum/underscore, unique; auto-fallback to
+  `firstname.lastname` if skipped). `users.service.getProfile` lazy-backfills a
+  tag for pre-tag users.
+- **Tag sends WORK**: `POST /wallets/send` with `network: 'SUREX_TAG'` →
+  `sendToSurexTag` — zero-fee internal USDC transfer (debit sender / credit
+  recipient wallet), writes SEND + RECEIVE COMPLETED txs (shared
+  `TAG-<ts>-<rand>` reference), fires SEND + DEPOSIT notifications. No chain hop.
+  Previously SUREX_TAG crashed (hit CCTP bridge with an invalid chain).
+- **Notifications**: bell drawer = transactions + security. Backend now creates
+  SEND notifications on successful sends (crypto + tag). DEPOSIT / SWAP / LOGIN
+  already existed.
+- **USDC is the main coin** — USDT removed from dashboard banner/balance/chart/
+  fund modal + send-page wording. Dashboard ticker + market chart now use live
+  FX rates (`https://open.er-api.com/v6/latest/USD`, 30s poll, static fallback).
+- **Dashboard polish**: real profile name + @tag (no hardcoded "Alex"); EU
+  Invoice link removed; AUTO wallet ordering compares USD value (so $39 > 5,000
+  NGN); cash-flow chart excludes CONVERT + converts local→USD (kills the fake
+  "$2,401.10 in"); referral card is "Coming Soon" (no fake numbers); CONVERT
+  amount green on homepage (was amber).
+- New frontend files/touches: `auth/register/page.tsx` (tag input),
+  `app/dashboard/page.tsx`, `app/layout.tsx`, `app/profile/page.tsx`,
+  `app/send/page.tsx`, `lib/api.ts`. Backend: `schema.prisma`, `auth.service.ts`,
+  `auth/dto/auth.dto.ts`, `users.service.ts`, `wallets.service.ts` (now injects
+  NotificationsService — global module, no import needed).
+
 ## COMMITS SO FAR (main, all pushed to origin)
 
+- (pending) — homepage launch batch + SureX Tag system (see below)
+- `22dbba3`, `fe7a788` — docs: PRD/architecture/project plan/memory + testnet decision
 - `2bb2d3a` — fix: settle CCTP fee via history sync and webhook settlement paths
 - `3e9ffaa` — fix: surface and charge CCTP forwarder relay fee on cross-chain sends
 - `8b7b97d` — fix: complete CCTP sends from amount-less Circle steps, correct Arc network labels

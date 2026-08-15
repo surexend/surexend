@@ -17,6 +17,7 @@ export class UsersService {
         phone: true,
         firstName: true,
         lastName: true,
+        surexTag: true,
         kycTier: true,
         kycStatus: true,
         referralCode: true,
@@ -30,6 +31,20 @@ export class UsersService {
     });
 
     if (!user) return null;
+
+    // Lazy-backfill a SureX tag for users who registered before the tag system
+    // shipped, so tag sends always have a resolvable handle.
+    if (!user.surexTag) {
+      const base = `${user.firstName.replace(/[^a-zA-Z0-9]/g, '')}.${user.lastName.replace(/[^a-zA-Z0-9]/g, '')}`.toLowerCase();
+      let tag = base;
+      let n = 1;
+      while (await this.prisma.user.findUnique({ where: { surexTag: tag } })) {
+        n += 1;
+        tag = `${base}${n}`;
+      }
+      await this.prisma.user.update({ where: { id: userId }, data: { surexTag: tag } });
+      user.surexTag = tag;
+    }
 
     const { pin, ...profile } = user;
     return { ...profile, pinSet: !!pin };

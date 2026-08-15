@@ -174,7 +174,7 @@ const tryWithMock = async <T>(apiCall: () => Promise<T>, mockFallback: () => T |
 
 // ── Auth API ──────────────────────────────────────────────────────────────
 export const authAPI = {
-  register: (payload: { email: string; phone: string; password: string; firstName: string; lastName: string; referralCode?: string }) =>
+  register: (payload: { email: string; phone: string; password: string; firstName: string; lastName: string; surexTag?: string; referralCode?: string }) =>
     apiClient.post('/auth/register', payload),
 
   login: async (payload: { email: string; password: string }) => {
@@ -548,6 +548,7 @@ export const userAPI = {
         id: 'demo_user_1',
         firstName: 'Emmanuel',
         lastName: 'SureXend',
+        surexTag: 'emmanuel.surexend',
         email: 'emmanuel@surexend.com',
         phone: '+2348012345678',
         kycStatus: 'VERIFIED',

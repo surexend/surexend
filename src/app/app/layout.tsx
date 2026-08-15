@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AISupportWidget from '@/components/AISupportWidget'
-import { notificationsAPI } from '@/lib/api'
+import { notificationsAPI, userAPI } from '@/lib/api'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +34,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [avatar, setAvatar] = useState<string | null>(null)
   const [notifications, setNotifications] = useState<any[]>([])
+  const [profile, setProfile] = useState<any>(null)
+
+  useEffect(() => {
+    let active = true
+    userAPI.getProfile().then((p: any) => {
+      if (active) setProfile(p || null)
+    }).catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  const fullName = `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'SureXend User'
+  const surexTag = profile?.surexTag || profile?.firstName?.toLowerCase() || 'surex'
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -175,8 +187,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <div className="truncate">
-                <p className="text-xs font-bold text-white truncate">Alex Johnson</p>
-                <p className="text-[10px] text-[#64748B] truncate">@alex_xend</p>
+                <p className="text-xs font-bold text-white truncate">{fullName}</p>
+                <p className="text-[10px] text-[#64748B] truncate">@{surexTag}</p>
               </div>
             </div>
           </div>

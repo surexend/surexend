@@ -144,6 +144,7 @@ export default function ProfilePage() {
   const kycStatus = kycData?.status || 'UNVERIFIED'
   const kycVerified = !!kycData?.isVerified || kycStatus === 'VERIFIED'
   const fullName = `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim()
+  const surexTag = profile?.surexTag || profile?.firstName?.toLowerCase() || 'surex'
 
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 py-4 sm:p-6 md:p-8 max-w-2xl mx-auto space-y-4 pb-28 sm:pb-32">
@@ -159,17 +160,17 @@ export default function ProfilePage() {
             )}
           </div>
 
-          <div className="truncate">
-            <div className="flex items-center gap-1.5">
-              <h2 className="text-white font-extrabold text-sm sm:text-base truncate">
-                {fullName || 'Alex Johnson'}
-              </h2>
-              {/* Twitter / X style Scalloped Gold/Lemon Verified Rosette */}
-              <VerifiedCheckmark size={18} variant={variant} />
-              <KYCBadge verified={kycVerified} />
+            <div className="truncate">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-white font-extrabold text-sm sm:text-base truncate">
+                  {fullName || 'SureXend User'}
+                </h2>
+                {/* Twitter / X style Scalloped Gold/Lemon Verified Rosette */}
+                <VerifiedCheckmark size={18} variant={variant} />
+                <KYCBadge verified={kycVerified} />
+              </div>
+              <p className="text-[#94A3B8] text-xs font-medium truncate">@{surexTag} • {profile?.email || 'your email'}</p>
             </div>
-            <p className="text-[#94A3B8] text-xs font-medium truncate">@alex_xend • alex@example.com</p>
-          </div>
         </div>
 
         {/* Single Sleek Upload Photo Button */}
@@ -197,11 +198,11 @@ export default function ProfilePage() {
             </div>
             <div>
               <p className="text-[11px] text-[#94A3B8] uppercase font-bold tracking-wider">Your Xend Tag</p>
-              <p className="font-mono text-sm font-extrabold text-white">@alex_xend</p>
+              <p className="font-mono text-sm font-extrabold text-white">@{surexTag}</p>
             </div>
           </div>
           <button 
-            onClick={() => { navigator.clipboard.writeText('@alex_xend'); toast.success('Copied Xend Tag @alex_xend!') }}
+            onClick={() => { navigator.clipboard.writeText(`@${surexTag}`); toast.success(`Copied Xend Tag @${surexTag}!`) }}
             className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-semibold border border-white/10 flex items-center gap-1.5 transition-all"
           >
             <Copy className="w-3.5 h-3.5" /> Copy Tag

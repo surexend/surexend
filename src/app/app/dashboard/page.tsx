@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, TrendingUp, TrendingDown, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check } from 'lucide-react'
+import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { walletAPI, transactionAPI, userAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
@@ -13,60 +13,27 @@ import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 import CurrencyFlag from '@/components/CurrencyFlag'
 import toast from 'react-hot-toast'
 
-// Market data for USDT and USDC
-const cryptoMarketData = {
-  USDT: {
-    symbol: 'USDT',
-    name: 'Tether USD',
-    currentPrice: 1.0004,
-    change24h: 0.04,
-    high24h: 1.0018,
-    low24h: 0.9982,
-    volume24h: '42.5M',
-    data: [
-      { time: '10:25:40', value: 1.0001 },
-      { time: '10:25:52', value: 1.0005 },
-      { time: '10:26:01', value: 1.0002 },
-      { time: '10:26:15', value: 1.0008 },
-      { time: '10:26:22', value: 1.0004 },
-      { time: '10:26:33', value: 1.0012 },
-      { time: '10:26:43', value: 1.0009 },
-      { time: '10:26:55', value: 1.0004 },
-      { time: '10:27:04', value: 1.0007 },
-      { time: '10:27:12', value: 1.0002 },
-      { time: '10:27:23', value: 1.0011 },
-      { time: '10:27:32', value: 1.0005 },
-      { time: '10:27:40', value: 1.0008 },
-      { time: '10:27:47', value: 1.0015 },
-      { time: '10:27:55', value: 1.0004 },
-    ]
-  },
-  USDC: {
-    symbol: 'USDC',
-    name: 'USD Coin',
-    currentPrice: 0.9998,
-    change24h: -0.02,
-    high24h: 1.0005,
-    low24h: 0.9975,
-    volume24h: '28.1M',
-    data: [
-      { time: '10:25:40', value: 0.9999 },
-      { time: '10:25:52', value: 0.9996 },
-      { time: '10:26:01', value: 1.0001 },
-      { time: '10:26:15', value: 0.9994 },
-      { time: '10:26:22', value: 0.9998 },
-      { time: '10:26:33', value: 1.0002 },
-      { time: '10:26:43', value: 0.9997 },
-      { time: '10:26:55', value: 0.9998 },
-      { time: '10:27:04', value: 1.0000 },
-      { time: '10:27:12', value: 0.9995 },
-      { time: '10:27:23', value: 1.0003 },
-      { time: '10:27:32', value: 0.9996 },
-      { time: '10:27:40', value: 0.9999 },
-      { time: '10:27:47', value: 1.0004 },
-      { time: '10:27:55', value: 0.9998 },
-    ]
-  }
+// Market pairs: USDC/USD (pegged at 1.0) + every supported local currency vs USD.
+// Rates come from a live public FX feed (er-api) and refresh on an interval so
+// the ticker and chart are real and current rather than static mock data.
+const MARKET_PAIRS = [
+  { id: 'USDC', label: 'USDC/USD', name: 'USD Coin', symbol: '$', decimals: 4 },
+  ...AFRICAN_CURRENCIES.map(c => ({
+    id: c.code,
+    label: `${c.code}/USD`,
+    name: c.name,
+    symbol: c.symbol,
+    decimals: c.rate >= 1000 ? 0 : c.rate >= 100 ? 1 : 2,
+  })),
+]
+
+const LIVE_RATES_URL = 'https://open.er-api.com/v6/latest/USD'
+
+// Fallback rate source (same figures the app uses for conversions) so the UI
+// still renders real-looking, meaningful numbers if the live feed is offline.
+const fallbackRate = (code: string) => {
+  const entry = AFRICAN_CURRENCIES.find(c => c.code === code)
+  return entry ? entry.rate : 1500
 }
 
 // African local currencies for the Local Wallet selector
@@ -77,25 +44,87 @@ const LOCAL_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.na
 export default function DashboardPage() {
   const { variant, colors } = useTheme()
   const [showBalance, setShowBalance] = useState(true)
-  // 'USD' = crypto wallet (USDC/USDT), 'LOCAL' = local currency wallet (NGN/GHS/etc)
+  // 'USD' = crypto wallet (USDC), 'LOCAL' = local currency wallet (NGN/GHS/etc)
   const [walletView, setWalletView] = useState<'USD' | 'LOCAL'>('USD')
   const [selectedLocalCurrency, setSelectedLocalCurrency] = useState('NGN')
   const [showLocalCurrencyPicker, setShowLocalCurrencyPicker] = useState(false)
   const [localCurrencySearch, setLocalCurrencySearch] = useState('')
-  const [selectedCrypto, setSelectedCrypto] = useState<'USDT' | 'USDC'>('USDC')
+  const [selectedMarket, setSelectedMarket] = useState<string>('USDC')
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
   const [showSendModal, setShowSendModal] = useState(false)
   const [showFundModal, setShowFundModal] = useState(false)
   const [showVBAModal, setShowVBAModal] = useState(false)
   const [copiedVBA, setCopiedVBA] = useState(false)
   const [avatar, setAvatar] = useState<string | null>(null)
+  const [showMarketPicker, setShowMarketPicker] = useState(false)
+
+  // ── LIVE MARKET DATA ─────────────────────────────────────────────
+  // Fetch USD base rates from a public feed on an interval and keep a short
+  // rolling series so the chart shows genuinely live movement, not a mock.
+  const [liveRates, setLiveRates] = useState<Record<string, number>>({})
+  const [liveUpdatedAt, setLiveUpdatedAt] = useState<number | null>(null)
+  const [rateSeries, setRateSeries] = useState<Record<string, { time: string; value: number }[]>>({})
+
+  const refreshRates = useCallback(async () => {
+    try {
+      const res = await fetch(LIVE_RATES_URL)
+      if (!res.ok) throw new Error(`Rates feed ${res.status}`)
+      const json = await res.json()
+      const rates = json?.rates || {}
+      if (!rates.USD) return
+      setLiveRates(rates)
+      setLiveUpdatedAt(Date.now())
+      // Append the current rate for every pair to its rolling series.
+      setRateSeries(prev => {
+        const next: Record<string, { time: string; value: number }[]> = { ...prev }
+        for (const pair of MARKET_PAIRS) {
+          const rate = pair.id === 'USDC' ? 1 : Number(rates[pair.id]) || 0
+          if (!rate) continue
+          const now = new Date()
+          const stamp = now.toLocaleTimeString('en-US', { hour12: false })
+          const arr = [...(next[pair.id] || [])]
+          arr.push({ time: stamp, value: rate })
+          if (arr.length > 60) arr.shift()
+          next[pair.id] = arr
+        }
+        return next
+      })
+    } catch (err) {
+      // Keep the last good series; fallback static rates still power display.
+      if (!liveRates.USD) {
+        setLiveRates({ NGN: 1500, GHS: 15.8, KES: 129.5, ZAR: 18.2, UGX: 3680, TZS: 2650, EGP: 48.2, MAD: 10.1, ETB: 57.2, RWF: 1320, ZMW: 26.4, MZN: 64.2, BWP: 13.7, AOA: 830, CDF: 2850, TND: 3.1, DZD: 134.5, LYD: 4.85, SDG: 600, SSP: 1300, SOS: 57000, DJF: 177.5, ERN: 15.2, MRU: 40.1, MGA: 4550, MWK: 1750, NAD: 18.2, LSL: 18.2, SZL: 18.2, MUR: 46.4, SCR: 13.6, KMF: 490, CVE: 110, STN: 22.5, GMD: 67, SLL: 22500, LRD: 155, GNF: 8600, BIF: 2900, ZWL: 25.8, XAF: 610, XOF: 605 })
+      }
+    }
+  }, [liveRates.USD])
+
+  useEffect(() => {
+    refreshRates()
+    const id = setInterval(refreshRates, 30000)
+    return () => clearInterval(id)
+  }, [refreshRates])
+
+  const rateFor = (code: string) => code === 'USDC' ? 1 : (liveRates[code] ?? fallbackRate(code))
+
+  // Chart series for the currently selected market pair.
+  const chartSeries = useMemo(() => {
+    const pair = MARKET_PAIRS.find(p => p.id === selectedMarket)
+    const series = rateSeries[selectedMarket]
+    const current = rateFor(selectedMarket)
+    // If the rolling series is empty (first load), seed a flat real-value line.
+    if (!series || series.length === 0) {
+      const now = new Date()
+      return Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(now.getTime() - (12 - i) * 5000)
+        return { time: d.toLocaleTimeString('en-US', { hour12: false }), value: current }
+      })
+    }
+    return series
+  }, [selectedMarket, rateSeries, rateFor, liveRates])
 
   useEffect(() => {
     const saved = localStorage.getItem('surexend_user_avatar')
     if (saved) setAvatar(saved)
   }, [])
-
-  const currentCrypto = cryptoMarketData[selectedCrypto]
 
   const { data: balanceData, isLoading: isLoadingBalance } = useQuery({
     queryKey: ['balance'],
@@ -125,13 +154,18 @@ export default function DashboardPage() {
     if (prefDefaultWallet === 'USD' || prefDefaultWallet === 'LOCAL') {
       setWalletView(prefDefaultWallet)
     } else {
+      // AUTO: show the wallet with the higher balance measured in USD VALUE.
+      // Compare local balance converted to USD (local / rate) against the USD
+      // balance, so e.g. $39 ranks above 5,000 NGN (≈ $3.33 at 1500/NGN).
       const usdBal = Number(balanceData?.usdBalance ?? 0)
       const localBal = (balanceData?.localBalances?.[prefCurrency] ?? 0) ||
         (prefCurrency === 'NGN' ? (balanceData?.ngnBalance ?? 0) : 0)
-      setWalletView(usdBal >= localBal ? 'USD' : 'LOCAL')
+      const rate = rateFor(prefCurrency)
+      const localBalUsd = localBal / rate
+      setWalletView(usdBal >= localBalUsd ? 'USD' : 'LOCAL')
     }
     hasInited.current = true
-  }, [balanceData, prefDefaultWallet, prefCurrency])
+  }, [balanceData, prefDefaultWallet, prefCurrency, rateFor])
 
   // Once profile loads, apply the persisted display currency to the picker
   useEffect(() => {
@@ -161,7 +195,11 @@ export default function DashboardPage() {
     REFERRAL_EARNING: 'Referral Rewards',
   }
 
-  // Real 7-day cash flow (Money In vs Money Out) computed from transactions
+  // Real 7-day cash flow (Money In vs Money Out) computed from transactions.
+  // Only true money movement counts: RECEIVE/REFERRAL_EARNING = money in,
+  // SEND/BILL_PAYMENT = money out. CONVERT is internal (USD ⇄ local) and is
+  // NOT money in or out, so it never inflates the totals. All figures are
+  // converted to USD so the chart never mixes currencies.
   const cashFlowData = useMemo(() => {
     const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     const result = labels.map(label => ({ day: label, moneyIn: 0, moneyOut: 0 }))
@@ -175,16 +213,22 @@ export default function DashboardPage() {
       const t = new Date(tx.createdAt || tx.date || Date.now())
       const idx = dayKeys.indexOf(t.toDateString())
       if (idx === -1) continue
-      const amt = Number(tx.amount) || 0
-      const type = (tx.type || '').toUpperCase()
       const status = (tx.status || '').toUpperCase()
-      if (status === 'FAILED') continue
+      if (status !== 'COMPLETED') continue
+      const type = (tx.type || '').toUpperCase()
+      if (type === 'CONVERT') continue
+      const rawAmt = Number(tx.amount) || 0
+      // Convert any non-USD leg to USD value so totals are comparable.
+      const currency = (tx.currency || 'USD').toUpperCase()
+      const amt = currency === 'USD' || currency === 'USDC'
+        ? rawAmt
+        : rawAmt / rateFor(currency)
       const isOut = type === 'SEND' || type === 'BILL_PAYMENT'
       if (isOut) result[idx].moneyOut += amt
       else result[idx].moneyIn += amt
     }
     return result
-  }, [list])
+  }, [list, rateFor])
 
   const totalIn = cashFlowData.reduce((s, d) => s + d.moneyIn, 0)
   const totalOut = cashFlowData.reduce((s, d) => s + d.moneyOut, 0)
@@ -202,11 +246,11 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="flex items-center gap-1 truncate">
-            <span className="font-extrabold text-white truncate text-xs sm:text-sm">Welcome back, Alex</span>
+            <span className="font-extrabold text-white truncate text-xs sm:text-sm">Welcome back, {profile?.firstName || 'there'}</span>
             <VerifiedCheckmark size={16} variant={variant} />
           </div>
           <span className="hidden sm:inline text-[#64748B]">•</span>
-          <span className="hidden sm:inline text-[#94A3B8] font-mono font-bold">@alex_xend</span>
+          <span className="hidden sm:inline text-[#94A3B8] font-mono font-bold">@{profile?.surexTag || profile?.firstName?.toLowerCase() || 'surex'}</span>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -220,24 +264,20 @@ export default function DashboardPage() {
           >
             ✓ Verified
           </span>
-          <Link href="/app/invoice" className="hidden xs:flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-white/5 hover:bg-white/10 text-white text-[11px] font-semibold border border-white/10">
-            <Sparkles className="w-3 h-3 text-blue-400" /> EU Invoice
-          </Link>
         </div>
       </div>
 
-      {/* Live rates ticker */}
+      {/* Live rates ticker — USDC/USD + USD to every supported local currency */}
       <div className="w-full overflow-hidden bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-lg py-1.5 flex items-center">
         <motion.div 
           className="flex whitespace-nowrap text-xs text-[#94A3B8] gap-8 px-4"
           animate={{ x: [0, -400] }}
           transition={{ repeat: Infinity, duration: 15, ease: 'linear' }}
         >
-          <span>USDC/NGN: <strong className="text-white">₦1,500.00</strong> <span className="text-[#10B981]">+0.4%</span></span>
-          <span>USDT/NGN: <strong className="text-white">₦1,498.50</strong> <span className="text-[#10B981]">+0.2%</span></span>
-          <span>BTC/USD: <strong className="text-white">$67,473.54</strong> <span className="text-[#10B981]">+2.1%</span></span>
-          <span>ETH/USD: <strong className="text-white">$3,420.10</strong> <span className="text-[#EF4444]">-0.8%</span></span>
-          <span>SOL/USD: <strong className="text-white">$145.80</strong> <span className="text-[#10B981]">+5.4%</span></span>
+          <span>USDC/USD: <strong className="text-white">$1.0000</strong> <span className="text-[#10B981]">pegged</span></span>
+          {AFRICAN_CURRENCIES.slice(0, 8).map((c) => (
+            <span key={c.code}>{c.code}/USD: <strong className="text-white">{c.symbol}{(rateFor(c.code)).toLocaleString(undefined, { maximumFractionDigits: c.rate >= 1000 ? 0 : 2 })}</strong> <span className="text-[#64748B]">live</span></span>
+          ))}
         </motion.div>
       </div>
 
@@ -284,7 +324,7 @@ export default function DashboardPage() {
             </div>
 
             <p className="text-xs font-medium text-[#64748B] flex items-center gap-2">
-              {walletView === 'USD' ? 'USD Crypto Balance (USDC / USDT)' : 'Local Wallet Balance'}
+              {walletView === 'USD' ? 'USD Crypto Balance (USDC)' : 'Local Wallet Balance'}
               {walletView === 'LOCAL' && (
                 <button
                   onClick={() => setShowLocalCurrencyPicker(true)}
@@ -313,7 +353,7 @@ export default function DashboardPage() {
             {showBalance && (
               <p className="text-[11px] text-[#475569] mt-1 font-medium">
                 {walletView === 'USD'
-                  ? 'Deposited via crypto (USDC/USDT). Convert on Convert tab to get local currency.'
+                  ? 'Deposited via crypto (USDC). Convert on Convert tab to get local currency.'
                   : `Deposited via local bank transfer or converted from USD. Convert on Convert tab to get ${selectedLocalCurrency} or USD.`}
               </p>
             )}
@@ -390,32 +430,55 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      {/* 🟢 BIG MARKET CRYPTO LIVE CHART (USDT / USDC) */}
+      {/* 🟢 LIVE MARKET CHART (USDC/USD + USD → local currencies) */}
       <motion.div 
         className="glass-card p-4 sm:p-6 relative overflow-hidden"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.2 }}
       >
-        {/* Top bar with crypto selector tabs & timeframes */}
+        {/* Top bar with market pair selector & timeframes */}
         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4 pb-4 border-b border-white/5">
           <div className="flex items-center gap-2">
             <span className="text-xs text-[#64748B] font-medium mr-1">Market:</span>
-            {(['USDC', 'USDT'] as const).map((crypto) => (
+            {/* Pair dropdown: USDC/USD + every local currency */}
+            <div className="relative">
               <button
-                key={crypto}
-                onClick={() => setSelectedCrypto(crypto)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  selectedCrypto === crypto
-                    ? 'bg-white/10 text-white border border-white/20 shadow-lg'
-                    : 'text-[#64748B] hover:text-white hover:bg-white/5'
-                }`}
-                style={selectedCrypto === crypto ? { color: colors.primary } : {}}
+                onClick={() => setShowMarketPicker(!showMarketPicker)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-white/10 text-white border border-white/20 shadow-lg"
+                style={{ color: colors.primary }}
               >
                 <Coins className="w-3.5 h-3.5" />
-                {crypto}/USD
+                {MARKET_PAIRS.find(p => p.id === selectedMarket)?.label || 'USDC/USD'}
+                <ChevronDown className="w-3 h-3" />
               </button>
-            ))}
+              <AnimatePresence>
+                {showMarketPicker && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="absolute left-0 top-full mt-2 z-30 w-60 max-h-72 overflow-y-auto rounded-2xl glass-card p-1.5 border border-white/10 shadow-2xl"
+                  >
+                    {MARKET_PAIRS.map((pair) => (
+                      <button
+                        key={pair.id}
+                        onClick={() => { setSelectedMarket(pair.id); setShowMarketPicker(false) }}
+                        className={`w-full px-3 py-2 rounded-xl text-left flex items-center justify-between transition-all ${
+                          selectedMarket === pair.id ? 'bg-white/10 text-white' : 'text-[#94A3B8] hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <span className="text-xs font-bold flex items-center gap-2">
+                          {pair.id === 'USDC' ? <Coins className="w-3.5 h-3.5" /> : <span className="text-[11px]"><CurrencyFlag countryCode={AFRICAN_CURRENCIES.find(c => c.code === pair.id)?.countryCode} emoji={AFRICAN_CURRENCIES.find(c => c.code === pair.id)?.flag} size={16} /></span>}
+                          {pair.label}
+                        </span>
+                        <span className="text-[11px] text-[#64748B]">{pair.symbol}{(rateFor(pair.id)).toLocaleString(undefined, { maximumFractionDigits: pair.decimals })}</span>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* Timeframes */}
@@ -439,34 +502,31 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center gap-3">
               <span className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                ${currentCrypto.currentPrice.toFixed(4)}
+                {selectedMarket === 'USDC' ? '$1.0000' : `${MARKET_PAIRS.find(p => p.id === selectedMarket)?.symbol || '$'}${rateFor(selectedMarket).toFixed(MARKET_PAIRS.find(p => p.id === selectedMarket)?.decimals ?? 2)}`}
               </span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-0.5 ${
-                currentCrypto.change24h >= 0 
-                  ? 'bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.2)]'
-                  : 'bg-[rgba(239,68,68,0.15)] text-[#EF4444] border border-[rgba(239,68,68,0.2)]'
-              }`}>
-                {currentCrypto.change24h >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {currentCrypto.change24h >= 0 ? '+' : ''}{currentCrypto.change24h}%
+              <span className="text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-0.5 bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.2)]">
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[#10B981]" /> Live
               </span>
             </div>
-            <p className="text-xs text-[#64748B] mt-0.5 font-medium">{currentCrypto.name} Live Rate</p>
+            <p className="text-xs text-[#64748B] mt-0.5 font-medium">
+              {MARKET_PAIRS.find(p => p.id === selectedMarket)?.name} · 1 USD = {MARKET_PAIRS.find(p => p.id === selectedMarket)?.symbol}{(rateFor(selectedMarket)).toLocaleString(undefined, { maximumFractionDigits: MARKET_PAIRS.find(p => p.id === selectedMarket)?.decimals ?? 2 })} {selectedMarket}
+            </p>
           </div>
 
           <div className="flex items-center gap-4 text-xs text-[#64748B]">
             <div>
-              <p className="text-[10px] uppercase tracking-wider">24h High</p>
-              <p className="text-white font-semibold">${currentCrypto.high24h.toFixed(4)}</p>
+              <p className="text-[10px] uppercase tracking-wider">Source</p>
+              <p className="text-white font-semibold">Live FX Feed</p>
             </div>
             <div className="w-px h-6 bg-white/10" />
             <div>
-              <p className="text-[10px] uppercase tracking-wider">24h Low</p>
-              <p className="text-white font-semibold">${currentCrypto.low24h.toFixed(4)}</p>
+              <p className="text-[10px] uppercase tracking-wider">Updated</p>
+              <p className="text-white font-semibold">{liveUpdatedAt ? new Date(liveUpdatedAt).toLocaleTimeString('en-US', { hour12: false }) : '—'}</p>
             </div>
             <div className="w-px h-6 bg-white/10" />
             <div>
-              <p className="text-[10px] uppercase tracking-wider">24h Volume</p>
-              <p className="text-white font-semibold">{currentCrypto.volume24h}</p>
+              <p className="text-[10px] uppercase tracking-wider">Points</p>
+              <p className="text-white font-semibold">{chartSeries.length}</p>
             </div>
           </div>
         </div>
@@ -474,30 +534,32 @@ export default function DashboardPage() {
         {/* Large Market Chart */}
         <div className="h-64 sm:h-72 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={currentCrypto.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <AreaChart data={chartSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="cryptoMarketGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={colors.primary} stopOpacity={0.45} />
                   <stop offset="100%" stopColor={colors.primary} stopOpacity={0.0} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="time" stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} dy={5} />
+              <XAxis dataKey="time" stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} dy={5} minTickGap={40} />
               <YAxis 
-                domain={['dataMin - 0.001', 'dataMax + 0.001']} 
+                domain={['dataMin * 0.9999', 'dataMax * 1.0001']} 
                 stroke="#64748B" 
                 fontSize={10} 
                 tickLine={false} 
                 axisLine={false} 
-                tickFormatter={(val) => `$${val.toFixed(4)}`} 
+                tickFormatter={(val) => `${MARKET_PAIRS.find(p => p.id === selectedMarket)?.symbol || '$'}${val.toLocaleString(undefined, { maximumFractionDigits: 4 })}`} 
+                width={70}
               />
               <Tooltip 
                 cursor={{ stroke: '#3B82F6', strokeDasharray: '4 4', strokeWidth: 1.5 }}
                 content={({ active, payload }: any) => {
                   if (active && payload && payload.length) {
+                    const pair = MARKET_PAIRS.find(p => p.id === selectedMarket)
                     return (
                       <div className="bg-[#181F32] border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
-                        <p className="font-bold text-white text-sm">${payload[0].value?.toFixed(4)}</p>
-                        <p className="text-[10px] text-[#94A3B8] mt-0.5">{selectedCrypto}/USD · {payload[0].payload.time}</p>
+                        <p className="font-bold text-white text-sm">{pair?.symbol}{(payload[0].value)?.toLocaleString(undefined, { maximumFractionDigits: pair?.decimals ?? 4 })}</p>
+                        <p className="text-[10px] text-[#94A3B8] mt-0.5">{pair?.label} · {payload[0].payload.time}</p>
                       </div>
                     )
                   }
@@ -511,7 +573,8 @@ export default function DashboardPage() {
                 strokeWidth={2.5} 
                 fill="url(#cryptoMarketGradient)" 
                 activeDot={{ r: 6, fill: colors.primary, stroke: '#ffffff', strokeWidth: 2 }}
-                animationDuration={1800}
+                animationDuration={800}
+                isAnimationActive={chartSeries.length < 20}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -609,27 +672,16 @@ export default function DashboardPage() {
             <div className="flex justify-between items-start">
               <div>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase tracking-wider flex items-center gap-1 w-max">
-                  <Trophy className="w-3 h-3" /> Peak Referral Rewards
+                  <Trophy className="w-3 h-3" /> Referral Rewards
                 </span>
-                <h3 className="font-extrabold text-white text-lg tracking-tight mt-1.5">Invite & Earn USD Cashbacks</h3>
+                <h3 className="font-extrabold text-white text-lg tracking-tight mt-1.5">Invite Friends, Earn Cashbacks</h3>
               </div>
-              <span className="text-2xl font-black text-amber-400 font-mono">$128.50</span>
+              <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[#64748B]/15 text-[#94A3B8] border border-[#64748B]/30">Coming Soon</span>
             </div>
 
             <p className="text-xs text-[#94A3B8] leading-relaxed">
-              Earn <strong className="text-white">0.3% fee cashback</strong> on every transaction made by your invited friends. Instant automatic wallet payout!
+              Invite friends to SureXend and earn cashback when they transact. Reward rates and payout details are being finalized — check back soon.
             </p>
-
-            <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <p className="text-[10px] text-[#64748B] uppercase">Active Invites</p>
-                <p className="font-extrabold text-white text-sm mt-0.5">12 Friends</p>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <p className="text-[10px] text-[#64748B] uppercase">Lifetime Earned</p>
-                <p className="font-extrabold text-emerald-400 text-sm mt-0.5">$128.50 USD</p>
-              </div>
-            </div>
           </div>
 
           <div className="pt-4 relative z-10">
@@ -708,7 +760,7 @@ export default function DashboardPage() {
                   <div className="text-right">
                     {swap ? (
                       <>
-                        <p className="text-sm font-bold text-amber-400">
+                        <p className="text-sm font-bold text-emerald-400">
                           +{currencySymbol(swap.to)}{formatAmount(swap.toAmount)} {swap.to}
                         </p>
                         <p className="text-xs text-[#94A3B8] mt-0.5">
@@ -716,8 +768,8 @@ export default function DashboardPage() {
                         </p>
                       </>
                     ) : (
-                      <p className={`text-sm font-bold ${isSend ? 'text-red-400' : isReceive ? 'text-emerald-400' : 'text-amber-400'}`}>
-                        {isSend ? '-' : '+'}${tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
+                      <p className={`text-sm font-bold ${isSend ? 'text-red-400' : isReceive ? 'text-emerald-400' : 'text-emerald-400'}`}>
+                        {isSend ? '-' : '+'}${tx.amount} {tx.currency || 'USD'}
                       </p>
                     )}
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${
@@ -909,7 +961,7 @@ export default function DashboardPage() {
                   <ChevronRight className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-all flex-shrink-0" />
                 </div>
 
-                {/* OPTION 2: Deposit Crypto (USDT / USDC) */}
+                {/* OPTION 2: Deposit Crypto (USDC) */}
                 <Link
                   href="/app/receive"
                   onClick={() => setShowFundModal(false)}
@@ -921,10 +973,10 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-white text-sm sm:text-base group-hover:text-amber-400 transition-colors">
-                        Deposit Crypto (USDT / USDC)
+                        Deposit Crypto (USDC)
                       </h4>
                       <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
-                        Get deposit addresses for Ethereum, Polygon, Solana, BSC, Base, and other chains
+                        Get deposit addresses for Ethereum, Polygon, Solana, Base, and other chains
                       </p>
                     </div>
                   </div>
@@ -987,7 +1039,7 @@ export default function DashboardPage() {
                 <div className="h-px bg-white/5" />
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Account Name</span>
-                  <span className="text-sm font-bold text-white">SureXend / Alex Johnson</span>
+                  <span className="text-sm font-bold text-white">SureXend / {profile?.firstName || 'User'} {profile?.lastName || ''}</span>
                 </div>
               </div>
 

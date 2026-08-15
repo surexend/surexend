@@ -25,6 +25,13 @@ export class RegisterDto {
 
   @IsString()
   @IsOptional()
+  @Matches(/^[a-zA-Z0-9_]{3,20}$/, {
+    message: 'SureX tag must be 3-20 characters (letters, numbers, underscores)',
+  })
+  surexTag?: string;
+
+  @IsString()
+  @IsOptional()
   referralCode?: string;
 }
 

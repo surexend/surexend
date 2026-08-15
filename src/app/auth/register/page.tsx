@@ -15,6 +15,12 @@ import { useTheme } from '@/context/ThemeContext'
 const registerSchema = z.object({
   firstName: z.string().min(2, 'First name is required'),
   lastName: z.string().min(2, 'Last name is required'),
+  surexTag: z.string()
+    .optional()
+    .or(z.literal(''))
+    .refine(v => !v || /^[a-zA-Z0-9_]{3,20}$/.test(v.replace(/^@/, '')), {
+      message: '3-20 characters, letters, numbers or underscores',
+    }),
   email: z.string().email('Invalid email address'),
   phone: z.string().min(10, 'Invalid phone number'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -65,6 +71,7 @@ export default function RegisterPage() {
       await authAPI.register({
         firstName: data.firstName,
         lastName: data.lastName,
+        surexTag: data.surexTag?.trim() || undefined,
         email: data.email,
         phone: '+234' + data.phone.replace(/^0+/, ''),
         password: data.password,
@@ -134,6 +141,24 @@ export default function RegisterPage() {
               </div>
               {errors.lastName && <p className="text-[#EF4444] text-sm mt-1">{errors.lastName.message}</p>}
             </div>
+          </div>
+
+          <div>
+            <div className="relative flex">
+              <div className="flex items-center px-4 bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.1)] border-r-0 rounded-l-xl text-white">
+                <span className="text-sm font-bold">@</span>
+              </div>
+              <div className="relative flex-1">
+                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] w-5 h-5 pointer-events-none z-10" />
+                <input
+                  {...register('surexTag')}
+                  placeholder="SureX Tag (e.g. emmanuel.surexend)"
+                  className={`input-field input-field-${variant} input-has-icon-left rounded-l-none`}
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-[#64748B] mt-1">Your @tag is how friends send you money instantly, free. Optional — we'll auto-create one if you skip it.</p>
+            {errors.surexTag && <p className="text-[#EF4444] text-sm mt-1">{errors.surexTag.message}</p>}
           </div>
 
           <div>

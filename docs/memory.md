@@ -64,6 +64,64 @@ wallet never shows the funds.
 5. Docs drift when work happens without updating them. Always commit doc
    updates with the code changes.
 
+## Homepage launch batch + SureX Tag system (2026-08-15)
+
+### Decisions taken (product owner)
+1. **Notifications**: bell drawer = transactions + security (like Cash
+   App/Coinbase). Backend now creates SEND notifications on successful sends
+   (crypto + tag); DEPOSIT (deposit-monitor), SWAP (conversions), LOGIN already
+   existed.
+2. **SureX Tag**: users CHOOSE their tag at registration (field on the register
+   form, `@handle`, 3-20 chars letters/numbers/underscore, unique). Auto-fallback
+   to `firstname.lastname` when skipped so every user always has a resolvable tag.
+3. **EU Invoice element on dashboard removed** (dashboard link only). The
+   `/app/invoice` page + Invoice nav item remain for now.
+4. **USDC is the main coin** — USDT removed from all dashboard/banner/balance/
+   chart/fund-modal wording.
+
+### SureX Tag system (new feature)
+- `User.surexTag String? @unique` added to `backend/prisma/schema.prisma`
+  (pushed via `prisma db push` on deploy).
+- `RegisterDto.surexTag` optional + `@Matches(/^[a-zA-Z0-9_]{3,20}$/)`.
+- `auth.service.register` normalizes (strip `@`, lowercase), throws
+  "already taken", fallback-generates `firstname.lastname`.
+- `users.service.getProfile` lazy-backfills a tag for pre-tag users
+  (`firstname.lastname`, numeric suffix if taken).
+- **`POST /wallets/send` with `network: 'SUREX_TAG'`** →
+  `WalletsService.sendToSurexTag`: resolves tag, requires spendable USDC,
+  zero-fee internal transfer (debit sender / credit recipient `usdcBalance`),
+  writes SEND (sender) + RECEIVE (recipient) COMPLETED txs sharing one
+  `TAG-<ts>-<rand>` reference, and fires SEND + DEPOSIT notifications.
+  No chain hop, no CCTP, no fee.
+- Frontend registration page has the @-prefixed SureX Tag input. Dashboard +
+  sidebar + profile now render the real profile name + `@surexTag` (no more
+  hardcoded "Alex"/"@alex_xend").
+
+### Dashboard (src/app/app/dashboard/page.tsx) launch polish
+- **Welcome bar**: real `profile.firstName` + `@surexTag`. EU Invoice link removed.
+- **Market ticker**: USDC/USD (pegged) + USD→8 local currencies. Live rates from
+  `https://open.er-api.com/v6/latest/USD` (fallback static AFRICAN_CURRENCIES rates
+  if the feed is down). BTC/ETH/SOL/USDT removed.
+- **Balance card**: "USD Crypto Balance (USDC)" wording only.
+- **AUTO wallet ordering fixed**: compares local balance converted to USD
+  (`local / rate`) vs USD balance — so $39 ranks above 5,000 NGN (≈$3.33).
+- **Market chart**: pair dropdown (USDC/USD + every local currency) instead of
+  USDT/USDC tabs. Live rolling series appended every 30s (real points, not mock).
+  Shows Source/Updated/Points stats instead of fake 24h high/low/volume.
+- **Cash flow chart**: only COMPLETED money movement counts — RECEIVE/
+  REFERRAL_EARNING = money in, SEND/BILL_PAYMENT = money out. CONVERT excluded
+  (internal). Non-USD legs converted to USD value. This fixed the fake
+  "$2,401.10 in".
+- **Referral card**: now "Coming Soon", no fake $128.50 / 12 friends / 0.3%.
+- **CONVERT swap amount**: emerald/green on homepage (was amber), matching the
+  history page.
+
+### Testing notes
+- `npx tsc -p tsconfig.json --noEmit` (backend) and temp `tsconfig.check.json`
+  (frontend) both pass; `npx next build` passes.
+- Live FX feed requires network access; offline it gracefully falls back to the
+  same static rates the conversion engine uses, so no UI breaks.
+
 ## Historical decisions & corrections (kept for context)
 - CCTP forwarder (`useForwarder: true`) chosen over self-mint/relayer wallets
   because the product owner rejected creating/funding gas wallets per chain.
