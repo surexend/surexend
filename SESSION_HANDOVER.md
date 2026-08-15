@@ -4,6 +4,11 @@
 > It fully reconstructs the context. Read it, then confirm to the user:
 > "Context loaded. I know the project, what's been built, what's pending, and the verification commands."
 
+> **IMPORTANT**: Living documentation now lives in `docs/` — `prd.md`,
+> `architecture.md`, `project_plan.md`, `memory.md`. `SESSION_HANDOVER.md` is the
+> quick-start prompt; the docs are the source of truth. Keep all of them updated
+> in the same commit as the work.
+
 ---
 
 ## ROLE
@@ -97,9 +102,48 @@ Symptom: receive page toast "Server error. Please try again later." (fires on AN
 - New `/app/kyc` page: status card + feature-lock list (crypto requires KYC; airtime/data/bills always available) + note that testing skips verification.
 - **PLANNED FOR LAUNCH (user's stated intent)**: use an EXTERNAL KYC provider (e.g. Smile Identity — config block `app.smileIdentity` already exists) that handles verification and reports back; then set user status to VERIFIED (or leave UNVERIFIED with a clear failure message). At launch, ALL crypto operations require KYC; only airtime/data/bills work without it. This is NOT required during testing.
 
+## CURRENT STATE — CROSS-CHAIN SEND (verified 2026-08-15)
+
+### Send path WORKS end-to-end (testnet). Verified on-chain:
+- 4 USDC CCTP send → Sepolia mint **2.440392** to `0x06b141...`
+  (tx `0x9f3a3f2e...`, block 11483979).
+- Live test 2 USDC → Sepolia mint **2.000000** (tx `0x4a102a...`, block 11484952).
+- **`0x06b141...` currently holds 4.440392 USDC on ETH-SEPOLIA** (queried live).
+- Fee collector gets the difference (e.g. 1.559608 from the 4 USDC send).
+
+### "Circle Console shows 0 USDC + two transactions" is NORMAL (not a bug):
+- CCTP from a Circle wallet = ERC20 approve + burn = two outbound txs, both
+  reported by Circle's feed as 0-amount contract executions (USDC goes INTO the
+  bridge contract, not a wallet).
+- The real credit is a MINT on the destination chain to the recipient address.
+- Circle Console only shows balances for entity-managed wallets; an external
+  recipient address is never shown in Console, but the mint tx proves delivery.
+
+### THE big user-facing issue: testnet vs mainnet
+- Whole stack is TESTNET (`TEST_*` key; `ETHEREUM → Ethereum_Sepolia`).
+- Recipients viewing their wallet on MAINNET see 0, because testnet USDC lives
+  on the destination TESTNET chain. The funds ARE at the recipient address on
+  the testnet chain.
+- **OPEN ACTION**: confirm with product owner whether this build is meant as
+  sandbox (then tell recipients to check the testnet network in MetaMask, e.g.
+  Sepolia + USDC `0x1c7D4B...`) or must be mainnet (then change key + mapping).
+
+### Golden rule for this repo (learned the hard way):
+Never assert an explanation without verifying on-chain receipts. Mint/transfer
+hashes are the ground truth. See `docs/memory.md` for the "mistakes not to
+repeat" list.
+
 ## COMMITS SO FAR (main, all pushed to origin)
 
-- `c2c7b80` — Fix PIN confirm mismatch bug; add testing default PIN (0000)  ← HEAD
+- `2bb2d3a` — fix: settle CCTP fee via history sync and webhook settlement paths
+- `3e9ffaa` — fix: surface and charge CCTP forwarder relay fee on cross-chain sends
+- `8b7b97d` — fix: complete CCTP sends from amount-less Circle steps, correct Arc network labels
+- `cee2b73` — feat: add Monad network, dedup pending->completed send rows, per-chain explorer links
+- `6c7201b` — feat: native Arc->Arc sends, de-block balance endpoint, throttle reconcile/history sync, drop CCTP from UI
+- `fbe3834` — fix: auto CCTP send from Arc, drop second destination-network picker, 4-digit PIN consistency, instant balance loads
+- `1302ebf` — feat: derive ARC-TESTNET wallets at every displayed EVM address via circle derive-by-address
+- `da21667` — fix: retry eth_getLogs with backoff on transient testnet RPC rate limits
+- `c2c7b80` — Fix PIN confirm mismatch bug; add testing default PIN (0000)
 - `2c6b66a` — Fix receive-page 500, simplify KYC to verified/unverified, zero conversion fees, add PIN setup page
 - `500609f` — real flags on mobile, sticky search, CFA country lists, all 42 African currencies
 - `e3d7172` — resilient getBalance, all African currencies with searchable picker, cross-platform flags, no fake balances
@@ -108,17 +152,22 @@ Symptom: receive page toast "Server error. Please try again later." (fires on AN
 
 ## KEY FILES
 
+- `docs/prd.md`, `docs/architecture.md`, `docs/project_plan.md`, `docs/memory.md` — living documentation (source of truth)
 - `backend/src/config/configuration.ts` — all env config + `testing` block
 - `backend/src/common/guards/pin.guard.ts` — PIN validation with testing fallback
-- `backend/src/wallets/wallets.service.ts` — getBalance (~75), getDepositAddress (~426), sendCrypto (~543)
+- `backend/src/wallets/wallets.service.ts` — getBalance, getDepositAddress, sendCrypto → sendCrossChainFromArc, syncCircleHistory, estimateSendFee
+- `backend/src/wallets/cctp.service.ts` — CCTP bridge + fee estimate (NETWORK_TO_CHAIN is all testnet)
+- `backend/src/wallets/wallets.controller.ts` — GET /wallets/cctp-fee, POST /wallets/send
+- `backend/src/webhooks/webhooks.service.ts` — outbound settlement (amount + fee, usdcBalance refund, PENDING guard)
 - `backend/src/conversions/conversions.service.ts` — execute, computeConversion (fee=0)
 - `backend/src/bills/bills.service.ts` — purchaseBill (PIN testing fallback)
 - `backend/src/users/users.service.ts` — getProfile (pinSet), getKycStatus, setupPin, changePin
 - `backend/src/common/currency.constants.ts` — 42 currencies, countries arrays
 - `src/lib/api.ts` — ALL API clients + mocks (AFRICAN_CURRENCIES, walletAPI, conversionAPI, userAPI, billAPI, etc.)
 - `src/components/CurrencyFlag.tsx`
-- `src/app/app/convert/page.tsx`, `receive/page.tsx`, `send/page.tsx`, `withdraw/page.tsx`, `bills/page.tsx`, `dashboard/page.tsx`, `history/page.tsx`, `profile/page.tsx`, `kyc/page.tsx`, `settings/change-pin/page.tsx`, `referrals/page.tsx`
+- `src/app/app/send/page.tsx`, `convert/page.tsx`, `receive/page.tsx`, `withdraw/page.tsx`, `bills/page.tsx`, `dashboard/page.tsx`, `history/page.tsx`, `profile/page.tsx`, `kyc/page.tsx`, `settings/change-pin/page.tsx`, `referrals/page.tsx`
 - `src/app/page.tsx` (marketing), `next.config.ts`, `.env.local`, `backend/.env.example`
+- `backend/scripts/*.js` — live-test + diagnostic scripts (some untracked; run via railway)
 
 ## WORKING STYLE NOTES
 
@@ -127,5 +176,6 @@ Symptom: receive page toast "Server error. Please try again later." (fires on AN
 - When a fix touches the deployed DB schema assumptions, use defensive selects (see RECEIVE PAGE section).
 - Never invent fake balances; always surface real data. Mock fallbacks in api.ts are acceptable for the live-backend-unavailable case but should mirror real shapes.
 - When asked about opencode/this tool: consult https://opencode.ai docs via web fetch.
-- Do NOT create docs/READMEs unless explicitly requested.
+- Do NOT create new docs unless explicitly requested — BUT keep the existing `docs/` set + `SESSION_HANDOVER.md` updated whenever state changes, and commit them in the same commit as the work.
+- NEVER assert a root cause without on-chain verification (mint/transfer receipts). See `docs/memory.md` "mistakes not to repeat".
 - Respect the user's launch plan: external KYC provider, crypto requires KYC at launch, custom PIN mandatory at launch, remove testing flags.
