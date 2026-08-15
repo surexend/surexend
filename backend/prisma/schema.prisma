@@ -63,9 +63,11 @@ model WalletAddress {
   id        String   @id @default(uuid())
   walletId  String
   network   String
-  address   String   @unique
+  address   String
   createdAt DateTime @default(now())
   wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([network, address])
 }
 
 enum TransactionType {
