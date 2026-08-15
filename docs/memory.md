@@ -42,10 +42,14 @@ wallet never shows the funds.
 - The send itself WORKS: recipient address holds the full amount on the
   destination testnet chain.
 
-### Action needed
-- Product owner must confirm the intended target: sandbox (testnet) or
-  mainnet. If sandbox: recipients must add the destination testnet network to
-  MetaMask (e.g. Sepolia + USDC contract `0x1c7D4B...`) and check there.
+### Decision (2026-08-15): TESTNET for now
+- Product owner confirmed: **the build runs on testnet (sandbox) for now.**
+  Mainnet is the future target, not current.
+- Consequence: recipients must view the destination TESTNET network (e.g.
+  ETH-SEPOLIA + USDC `0x1c7D4B...`) to see sent USDC. Funds on mainnet will
+  not show testnet USDC — that is expected, not a bug.
+- TODO before mainnet: swap to production Circle key, change
+  `NETWORK_TO_CHAIN` to mainnet chains, remove testing flags, re-verify.
 
 ## Mistakes I must not repeat (lessons)
 1. Never insist on an explanation without verifying on-chain. Every "it

@@ -29,11 +29,12 @@ source of truth.
   is because the wallet is viewed on mainnet (or a different chain) — testnet
   USDC lives on the testnet chain.
 
-### The big open question (customer-facing)
-Recipients expect to see USDC in their MetaMask wallets. Because the whole
-stack is testnet, they must view the SAME address on the DESTINATION TESTNET
-network (e.g. ETH-SEPOLIA) to see the funds. Product owner must confirm this
-is the intended behavior (sandbox) vs. the expectation of real mainnet USDC.
+### Decision (2026-08-15): TESTNET for now
+Product owner confirmed: **the build runs on testnet (sandbox) for now.**
+Recipients must view the SAME address on the DESTINATION TESTNET network
+(e.g. ETH-SEPOLIA + USDC `0x1c7D4B...`) to see sent USDC. This resolves the
+"can receive but can't send" investigation — sending works; the confusion was
+mainnet-vs-testnet. Mainnet is the future target (see Phase 3).
 
 ## Phases
 
