@@ -50,7 +50,8 @@ export default function SendPage() {
   const { data: balanceData, isFetching } = useQuery({
     queryKey: ['sendBalance'],
     queryFn: walletAPI.getBalance,
-    retry: false
+    retry: false,
+    staleTime: 30000,
   })
   const sendableBalance = Math.max(0, (balanceData?.usdBalance ?? 0) - (balanceData?.lockedBalance ?? 0))
 

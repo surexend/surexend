@@ -118,10 +118,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               height: '70vmax',
               borderRadius: '50%',
               background: `radial-gradient(circle at 30% 30%, rgba(${colors.glowRgb}, 0.10), transparent 60%)`,
-              filter: 'blur(90px)',
+              filter: 'blur(60px)',
               top: '-15%',
               left: '-10%',
               opacity: 0.7,
+              willChange: 'transform',
             }}
             animate={{ x: [0, 40, -20, 0], y: [0, -30, 15, 0] }}
             transition={{ duration: 28, repeat: Infinity, ease: 'easeInOut' }}
@@ -133,10 +134,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               height: '60vmax',
               borderRadius: '50%',
               background: `radial-gradient(circle at 60% 60%, rgba(96, 165, 250, 0.08), transparent 60%)`,
-              filter: 'blur(80px)',
+              filter: 'blur(60px)',
               bottom: '-15%',
               right: '-10%',
               opacity: 0.6,
+              willChange: 'transform',
             }}
             animate={{ x: [0, -30, 20, 0], y: [0, 25, -15, 0] }}
             transition={{ duration: 32, repeat: Infinity, ease: 'easeInOut', delay: 6 }}

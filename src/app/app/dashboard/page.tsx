@@ -129,13 +129,15 @@ export default function DashboardPage() {
   const { data: balanceData, isLoading: isLoadingBalance } = useQuery({
     queryKey: ['balance'],
     queryFn: walletAPI.getBalance,
-    retry: false
+    retry: false,
+    staleTime: 30000,
   })
 
   const { data: profile } = useQuery({
     queryKey: ['profile'],
     queryFn: userAPI.getProfile,
-    retry: false
+    retry: false,
+    staleTime: 60000,
   })
 
   // Persisted wallet preference: 'AUTO' (highest balance) | 'USD' | 'LOCAL'
@@ -182,7 +184,8 @@ export default function DashboardPage() {
   const { data: txData, isLoading: isLoadingTx } = useQuery({
     queryKey: ['recentTransactions'],
     queryFn: () => transactionAPI.getHistory({ limit: 100 }),
-    retry: false
+    retry: false,
+    staleTime: 30000,
   })
 
   const list = Array.isArray(txData) ? txData : (txData?.transactions || [])

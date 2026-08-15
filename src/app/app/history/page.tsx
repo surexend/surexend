@@ -238,89 +238,109 @@ function FilterPanel({ filters, setFilters, accentHex, accentRgb, onClose }: {
     CONVERT: 'Converted', BILL_PAYMENT: 'Bills', REFERRAL_EARNING: 'Referral'
   }
 
+  // Mobile: full-height bottom sheet above the nav bar (z-[70] beats nav z-50)
+  // with its own internal scroll + sticky action bar so Reset/Apply are always
+  // reachable. Desktop: a self-contained dropdown with the same scroll+sticky.
   return (
     <motion.div
-      className="fixed inset-x-0 bottom-0 z-50 sm:absolute sm:top-12 sm:right-0 sm:bottom-auto sm:inset-x-auto sm:w-72"
-      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+      className="fixed inset-0 z-[70] flex items-end sm:items-start sm:justify-end sm:pr-3 sm:pt-14 sm:inset-auto"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
     >
-      <div className="bg-[#0F1629] rounded-t-3xl sm:rounded-2xl p-5 border border-white/8"
-        style={{ boxShadow: '0 -20px 60px rgba(0,0,0,0.6)' }}>
-        <div className="flex items-center justify-between mb-5">
-          <h4 className="text-white font-semibold">Filter Transactions</h4>
-          <button onClick={onClose} className="text-[#64748B] hover:text-white">
+      {/* Mobile backdrop only */}
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm sm:hidden" onClick={onClose} />
+
+      <motion.div
+        className="relative w-full sm:w-80 max-h-[82vh] sm:max-h-[70vh] bg-[#0F1629] rounded-t-3xl sm:rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden sm:shadow-2xl"
+        style={{ boxShadow: '0 -20px 60px rgba(0,0,0,0.6)' }}
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 40, opacity: 0 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+      >
+        {/* Header + drag handle */}
+        <div className="flex items-center justify-between px-5 pt-3 pb-3 border-b border-white/8 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Filter size={14} style={{ color: accentHex }} />
+            <h4 className="text-white font-semibold text-sm">Filter Transactions</h4>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        {/* Type filter */}
-        <div className="mb-4">
-          <p className="text-[#64748B] text-xs mb-2">Transaction Type</p>
-          <div className="flex flex-wrap gap-2">
-            {types.map(t => (
-              <button key={t}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                style={local.type === t ? {
-                  background: `rgba(${accentRgb}, 0.15)`,
-                  color: accentHex, border: `1px solid rgba(${accentRgb}, 0.3)`
-                } : {
-                  background: 'rgba(255,255,255,0.04)',
-                  color: '#94A3B8', border: '1px solid rgba(255,255,255,0.06)'
-                }}
-                onClick={() => setLocal({ ...local, type: t })}
-              >
-                {typeLabels[t]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Year */}
-        <div className="mb-3">
-          <p className="text-[#64748B] text-xs mb-2">Year</p>
-          <div className="flex gap-2 flex-wrap">
-            {years.map(y => (
-              <button key={y}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                style={local.year === y ? {
-                  background: `rgba(${accentRgb}, 0.15)`,
-                  color: accentHex, border: `1px solid rgba(${accentRgb}, 0.3)`
-                } : {
-                  background: 'rgba(255,255,255,0.04)',
-                  color: '#94A3B8', border: '1px solid rgba(255,255,255,0.06)'
-                }}
-                onClick={() => setLocal({ ...local, year: local.year === y ? null : y, month: null, week: null, day: null })}
-              >
-                {y}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Month (only if year selected) */}
-        {local.year && (
-          <div className="mb-3">
-            <p className="text-[#64748B] text-xs mb-2">Month</p>
-            <div className="grid grid-cols-4 gap-2">
-              {months.map((m, i) => (
-                <button key={m}
-                  className="py-1.5 rounded-lg text-xs font-medium transition-all"
-                  style={local.month === i + 1 ? {
+        {/* Scrollable filter body */}
+        <div className="overflow-y-auto px-5 py-4 flex-1 min-h-0">
+          {/* Type filter */}
+          <div className="mb-4">
+            <p className="text-[#64748B] text-xs mb-2">Transaction Type</p>
+            <div className="flex flex-wrap gap-2">
+              {types.map(t => (
+                <button key={t}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                  style={local.type === t ? {
                     background: `rgba(${accentRgb}, 0.15)`,
                     color: accentHex, border: `1px solid rgba(${accentRgb}, 0.3)`
                   } : {
                     background: 'rgba(255,255,255,0.04)',
                     color: '#94A3B8', border: '1px solid rgba(255,255,255,0.06)'
                   }}
-                  onClick={() => setLocal({ ...local, month: local.month === i + 1 ? null : i + 1, week: null, day: null })}
+                  onClick={() => setLocal({ ...local, type: t })}
                 >
-                  {m}
+                  {typeLabels[t]}
                 </button>
               ))}
             </div>
           </div>
-        )}
 
-        <div className="flex gap-3 mt-5">
+          {/* Year */}
+          <div className="mb-3">
+            <p className="text-[#64748B] text-xs mb-2">Year</p>
+            <div className="flex gap-2 flex-wrap">
+              {years.map(y => (
+                <button key={y}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                  style={local.year === y ? {
+                    background: `rgba(${accentRgb}, 0.15)`,
+                    color: accentHex, border: `1px solid rgba(${accentRgb}, 0.3)`
+                  } : {
+                    background: 'rgba(255,255,255,0.04)',
+                    color: '#94A3B8', border: '1px solid rgba(255,255,255,0.06)'
+                  }}
+                  onClick={() => setLocal({ ...local, year: local.year === y ? null : y, month: null, week: null, day: null })}
+                >
+                  {y}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Month (only if year selected) */}
+          {local.year && (
+            <div className="mb-3">
+              <p className="text-[#64748B] text-xs mb-2">Month</p>
+              <div className="grid grid-cols-4 gap-2">
+                {months.map((m, i) => (
+                  <button key={m}
+                    className="py-1.5 rounded-lg text-xs font-medium transition-all"
+                    style={local.month === i + 1 ? {
+                      background: `rgba(${accentRgb}, 0.15)`,
+                      color: accentHex, border: `1px solid rgba(${accentRgb}, 0.3)`
+                    } : {
+                      background: 'rgba(255,255,255,0.04)',
+                      color: '#94A3B8', border: '1px solid rgba(255,255,255,0.06)'
+                    }}
+                    onClick={() => setLocal({ ...local, month: local.month === i + 1 ? null : i + 1, week: null, day: null })}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sticky action bar — always visible */}
+        <div className="flex gap-3 px-5 py-4 border-t border-white/8 bg-[#0F1629] flex-shrink-0">
           <button
             className="flex-1 py-3 rounded-xl text-sm text-[#94A3B8] border border-white/08 hover:text-white transition-colors"
             onClick={() => { setLocal({ year: null, month: null, week: null, day: null, type: 'ALL' }); setFilters({ year: null, month: null, week: null, day: null, type: 'ALL' }); onClose() }}
@@ -328,14 +348,14 @@ function FilterPanel({ filters, setFilters, accentHex, accentRgb, onClose }: {
             Reset
           </button>
           <button
-            className="flex-1 py-3 rounded-xl text-sm font-bold"
-            style={{ background: `rgba(${accentRgb}, 0.15)`, color: accentHex }}
+            className="flex-1 py-3 rounded-xl text-sm font-bold text-black"
+            style={{ background: accentHex }}
             onClick={() => { setFilters(local); onClose() }}
           >
-            Apply
+            Apply Filters
           </button>
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   )
 }
@@ -346,6 +366,8 @@ function TransactionDetailModal({
 }: { tx: any; onClose: () => void; accentHex: string; accentRgb: string }) {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [details, setDetails] = useState<any>(tx)
+  const [downloading, setDownloading] = useState<'pdf' | 'png' | null>(null)
+  const receiptRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let active = true
@@ -368,6 +390,46 @@ function TransactionDetailModal({
       setCopiedField(field)
       setTimeout(() => setCopiedField(null), 1500)
     } catch { /* ignore */ }
+  }
+
+  // Capture the receipt DOM node and export it as a PDF or PNG. The receipt is
+  // rendered at 2x so the file stays crisp. PDF uses jsPDF, image uses a direct
+  // canvas download. html2canvas/jsPDF are lazy-loaded only on demand so the
+  // history route itself stays light.
+  const downloadReceipt = async (format: 'pdf' | 'png') => {
+    const node = receiptRef.current
+    if (!node || downloading) return
+    setDownloading(format)
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
+      const canvas = await html2canvas(node, {
+        scale: 2,
+        backgroundColor: '#0B1120',
+        useCORS: true,
+        logging: false,
+        windowWidth: 560,
+      })
+      const refSlug = (details?.reference || details?.id || 'receipt').replace(/[^a-zA-Z0-9_-]/g, '')
+      if (format === 'png') {
+        const link = document.createElement('a')
+        link.href = canvas.toDataURL('image/png')
+        link.download = `surexend-receipt-${refSlug}.png`
+        link.click()
+      } else {
+        const img = canvas.toDataURL('image/png')
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [canvas.width, canvas.height] })
+        pdf.addImage(img, 'PNG', 0, 0, canvas.width, canvas.height)
+        pdf.save(`surexend-receipt-${refSlug}.pdf`)
+      }
+      toast.success(`Receipt downloaded as ${format.toUpperCase()}`)
+    } catch {
+      toast.error('Failed to generate receipt. Please try again.')
+    } finally {
+      setDownloading(null)
+    }
   }
 
   const typeUpper = (details?.type || '').toUpperCase()
@@ -416,19 +478,28 @@ function TransactionDetailModal({
     return 'bg-amber-500/10 text-amber-400 border-amber-500/20'
   }
 
-  const rows: { label: string; value: string; copyable?: string; mono?: boolean }[] = swap
+  const statusLabel = (s: string) => {
+    const u = (s || '').toUpperCase()
+    if (u === 'COMPLETED') return 'Completed'
+    if (u === 'FAILED') return 'Failed'
+    return 'Pending'
+  }
+
+  // Receipt rows: swap (CONVERT) shows both legs; everything else shows the
+  // standard money-movement fields with copyable addresses/hashes.
+  const rows: { label: string; value: string; copyable?: string; mono?: boolean; accent?: boolean }[] = swap
     ? [
         { label: 'You swapped', value: `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from}` },
-        { label: 'You received', value: `+${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}` },
+        { label: 'You received', value: `+${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}`, accent: true },
         ...(swap.rate ? [{ label: 'Rate', value: `1 ${swap.from} = ${formatAmount(swap.rate, 6)} ${swap.to}` }] : []),
-        { label: 'Fee', value: `$${(details?.fee || 0)}` },
+        { label: 'Fee', value: `$${(details?.fee || 0).toFixed(2)}` },
         { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
         { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
       ]
     : [
         { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
-        { label: 'Amount', value: `${sign}${symbol}${details?.amount}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}` },
-        { label: 'Fee', value: `$${(details?.fee || 0)}` },
+        { label: 'Amount', value: `${sign}${symbol}${formatAmount(Number(details?.amount || 0))}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}`, accent: true },
+        { label: 'Fee', value: `$${(details?.fee || 0).toFixed(2)}` },
         { label: 'Network', value: displayNetwork },
         { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
         ...(meta.sourceAddress ? [{ label: 'From Address', value: meta.sourceAddress, copyable: meta.sourceAddress, mono: true }] : []),
@@ -444,34 +515,74 @@ function TransactionDetailModal({
         onClick={onClose} />
       <div className="fixed inset-0 z-[90] flex items-end sm:items-center sm:justify-center pointer-events-none">
       <motion.div
-        className="w-full sm:w-[460px] sm:max-w-[94vw] max-h-[88vh] overflow-y-auto sm:rounded-2xl rounded-t-2xl pointer-events-auto"
+        className="w-full sm:w-[520px] sm:max-w-[94vw] max-h-[92vh] overflow-y-auto sm:rounded-2xl rounded-t-2xl pointer-events-auto"
         initial={{ opacity: 0, y: 80 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 80 }}
         transition={{ type: 'spring', damping: 28, stiffness: 320 }}
       >
-        <div className="bg-[#0F1629] sm:border border-white/10 shadow-2xl p-5 sm:p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: `rgba(${accentRgb}, 0.14)` }}>
-                {isCredit
-                  ? <ArrowDownLeft size={18} style={{ color: '#10B981' }} />
-                  : typeUpper === 'CONVERT'
-                    ? <RefreshCw size={18} style={{ color: '#F59E0B' }} />
-                    : <ArrowUpRight size={18} style={{ color: '#EF4444' }} />}
-              </div>
-              <div>
-                <h3 className="text-white font-bold text-sm">{typeLabel[typeUpper] || 'Transaction'}</h3>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusColor(details?.status)}`}>
-                  {(details?.status || 'PENDING').toUpperCase()}
-                </span>
-              </div>
+        {/* ── RECEIPT ── */}
+        <div
+          ref={receiptRef}
+          className="bg-[#0B1120] p-6 sm:p-8"
+          style={{ fontFamily: 'var(--font-dm), sans-serif' }}
+        >
+          {/* Receipt top accent */}
+          <div className="h-1.5 rounded-full mb-6" style={{ background: `linear-gradient(90deg, ${accentHex}, transparent)` }} />
+
+          {/* Brand header */}
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <img
+                src="/logo-mark-plain.png"
+                alt="SureXend"
+                className="w-6 h-6 object-contain"
+                style={{ filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.35))' }}
+              />
+              <span className="font-extrabold text-white tracking-widest text-sm">
+                SURE<span style={{ color: accentHex }}>X</span>END
+              </span>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white transition-colors">
-              <X size={18} />
-            </button>
+            <span className="text-[9px] uppercase tracking-[0.25em] text-[#475569] font-bold">Receipt</span>
+          </div>
+          <p className="text-[10px] text-[#64748B] mb-6">{typeLabel[typeUpper] || 'Transaction'} · {displayNetwork}</p>
+
+          {/* Status */}
+          <div className="flex items-center justify-between mb-5">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border ${statusColor(details?.status)}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${(details?.status || '').toUpperCase() === 'COMPLETED' ? 'bg-emerald-400' : (details?.status || '').toUpperCase() === 'FAILED' ? 'bg-red-400' : 'bg-amber-400'}`} />
+              {statusLabel(details?.status)}
+            </span>
+            <span className="text-[10px] text-[#475569] font-medium">
+              {new Date(details?.createdAt || details?.date || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+            </span>
+          </div>
+
+          {/* Amount */}
+          <div className="text-center py-5 mb-4 rounded-2xl bg-white/[0.03] border border-white/5 relative overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, transparent, ${accentHex}, transparent)` }} />
+            <p className="text-[9px] uppercase tracking-[0.25em] text-[#64748B] font-bold mb-1.5">
+              {swap ? 'You received' : 'Amount'}
+            </p>
+            {swap ? (
+              <>
+                <p className="text-5xl font-black tracking-tight text-emerald-400 leading-none">
+                  {currencySymbol(swap.to)}{formatAmount(swap.toAmount)}
+                </p>
+                <p className="text-[#94A3B8] text-xs mt-2">
+                  {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from} → {swap.to}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className={`text-5xl font-black tracking-tight ${amtColor} leading-none`}>
+                  {sign}{symbol}{formatAmount(Number(details?.amount || 0))}
+                </p>
+                <p className="text-[#94A3B8] text-xs mt-2">
+                  {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {displayNetwork}
+                </p>
+              </>
+            )}
           </div>
 
           {/* Failure explanation */}
@@ -487,46 +598,32 @@ function TransactionDetailModal({
             </div>
           )}
 
-          {/* Amount */}
-          <div className="text-center py-6 mb-5 bg-white/[0.03] border border-white/5 rounded-xl">
-            <p className="text-[10px] uppercase tracking-widest text-[#64748B] font-bold mb-1.5">
-              {swap ? 'Swap' : 'Amount'}
-            </p>
-            {swap ? (
-              <>
-                <p className="text-4xl font-extrabold tracking-tight text-emerald-400">
-                  {currencySymbol(swap.to)}{formatAmount(swap.toAmount)}
-                </p>
-                <p className="text-[#94A3B8] text-xs mt-1.5">
-                  {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from} → {swap.to}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className={`text-4xl font-extrabold tracking-tight ${amtColor}`}>
-                  {sign}{symbol}{details?.amount}
-                </p>
-                <p className="text-[#94A3B8] text-xs mt-1.5">
-                  {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {displayNetwork}
-                </p>
-              </>
-            )}
+          {/* Dashed separator */}
+          <div className="flex items-center gap-2 my-5 opacity-40">
+            <div className="flex-1 border-t border-dashed border-white/15" />
+            <span className="text-[#64748B] text-[10px]">●</span>
+            <div className="flex-1 border-t border-dashed border-white/15" />
           </div>
 
           {/* Detail rows */}
-          <div className="space-y-3.5">
+          <div className="space-y-3">
             {rows.map((row) => (
-              <div key={row.label} className="flex items-start justify-between gap-3 pb-2.5 border-b border-white/[0.05] last:border-0 last:pb-0">
-                <span className="text-[#94A3B8] text-xs font-medium mt-0.5 flex-shrink-0">{row.label}</span>
+              <div key={row.label} className="flex items-start justify-between gap-3">
+                <span className="text-[#64748B] text-[11px] font-medium mt-0.5 flex-shrink-0">{row.label}</span>
                 <span className="flex items-center gap-2 min-w-0 justify-end flex-1">
-                  <span className={`text-white text-xs font-medium text-right break-all ${row.mono ? 'font-mono' : ''}`}>{row.value}</span>
+                  <span
+                    className={`text-right text-[11px] font-semibold break-all ${row.mono ? 'font-mono text-[10px]' : ''} ${row.accent ? '' : 'text-white'}`}
+                    style={row.accent ? { color: accentHex } : undefined}
+                  >
+                    {row.value}
+                  </span>
                   {row.copyable && (
                     <button
                       onClick={() => copy(row.label, row.copyable!)}
-                      className="text-[#64748B] hover:text-white transition-colors flex-shrink-0"
+                      className="text-[#475569] hover:text-white transition-colors flex-shrink-0"
                       title="Copy"
                     >
-                      {copiedField === row.label ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                      {copiedField === row.label ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                     </button>
                   )}
                 </span>
@@ -536,16 +633,54 @@ function TransactionDetailModal({
 
           {/* Explorer link */}
           {explorerUrl && (
-            <a
-              href={explorerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-5 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white transition-all"
-            >
-              <ExternalLink size={14} style={{ color: accentHex }} />
-              View on {explorerNetwork} Explorer
-            </a>
+            <div className="mt-5 pt-4 border-t border-white/5">
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white transition-all"
+              >
+                <ExternalLink size={13} style={{ color: accentHex }} />
+                View on {explorerNetwork} Explorer
+              </a>
+            </div>
           )}
+
+          {/* Receipt footer */}
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5">
+            <p className="text-[9px] text-[#475569] font-medium">Powered by SureXend</p>
+            <p className="text-[9px] text-[#475569] font-mono font-semibold">
+              {details?.reference || '—'}
+            </p>
+          </div>
+        </div>
+
+        {/* ── Action bar (not captured in download) ── */}
+        <div className="bg-[#0F1629] border-t border-white/10 px-4 py-4 sm:px-6 grid grid-cols-3 gap-2.5 sm:gap-3">
+          <button
+            onClick={onClose}
+            className="py-3 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.04] text-[#94A3B8] hover:bg-white/[0.08] hover:text-white transition-all active:scale-[0.98]"
+          >
+            Close
+          </button>
+          <button
+            onClick={() => downloadReceipt('png')}
+            disabled={!!downloading}
+            className="py-3 rounded-xl text-xs font-bold border transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
+            style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: '#94A3B8' }}
+          >
+            {downloading === 'png' ? <Download size={14} className="animate-pulse" /> : <Download size={14} />}
+            Image
+          </button>
+          <button
+            onClick={() => downloadReceipt('pdf')}
+            disabled={!!downloading}
+            className="py-3 rounded-xl text-xs font-bold transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5 text-black shadow-lg"
+            style={{ background: accentHex }}
+          >
+            {downloading === 'pdf' ? <Download size={14} className="animate-pulse" /> : <FileText size={14} />}
+            PDF
+          </button>
         </div>
       </motion.div>
       </div>

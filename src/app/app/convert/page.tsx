@@ -33,11 +33,13 @@ export default function ConvertPage() {
   const { data: balanceData, refetch: refetchBalance } = useQuery({
     queryKey: ['balance'],
     queryFn: walletAPI.getBalance,
+    staleTime: 30000,
   })
 
   const { data: currenciesData } = useQuery({
     queryKey: ['currencies'],
     queryFn: conversionAPI.getCurrencies,
+    staleTime: 60000,
   })
 
   const localCurrencies = useMemo(() => {
@@ -197,8 +199,16 @@ export default function ConvertPage() {
 
                 {/* Bal + presets */}
                 <div className="flex items-center gap-1 flex-wrap justify-end">
-                  <span className="text-[10px] text-[#64748B] font-medium mr-1 flex items-center gap-1">
-                    <Wallet className="w-3 h-3" /> Bal: {fromSymbol}{fromBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold border shadow-sm"
+                    style={{
+                      background: `rgba(${colors.glowRgb}, 0.12)`,
+                      borderColor: `rgba(${colors.glowRgb}, 0.35)`,
+                      color: '#FFFFFF',
+                    }}
+                  >
+                    <Wallet className="w-3.5 h-3.5" style={{ color: colors.primary }} />
+                    Bal: {fromSymbol}{fromBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </span>
                   {[25, 50, 75, 100].map((pct) => (
                     <button
@@ -256,8 +266,16 @@ export default function ConvertPage() {
                   <span className="font-extrabold text-sm text-white">{toCode}</span>
                   <ChevronDown className="w-4 h-4 text-[#64748B]" />
                 </button>
-                <span className="text-[11px] text-[#64748B] flex items-center gap-1">
-                  <Wallet className="w-3 h-3" /> Bal: {toSymbol}{getAssetBalance(toCode).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold border shadow-sm"
+                  style={{
+                    background: `rgba(${colors.glowRgb}, 0.12)`,
+                    borderColor: `rgba(${colors.glowRgb}, 0.35)`,
+                    color: '#FFFFFF',
+                  }}
+                >
+                  <Wallet className="w-3.5 h-3.5" style={{ color: colors.primary }} />
+                  Bal: {toSymbol}{getAssetBalance(toCode).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </span>
               </div>
 
@@ -424,7 +442,9 @@ export default function ConvertPage() {
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <p className="text-xs font-bold text-emerald-400">{isUsd ? 'Crypto balance' : `1 USD = ${asset.symbol}${assetRate.toLocaleString()}`}</p>
-                          <p className="text-[10px] text-[#64748B]">Bal: {asset.symbol}{balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                          <p className="text-[11px] font-bold text-white">
+                            Bal: {asset.symbol}{balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </p>
                         </div>
                         {isSelected && (
                           <div className="w-5 h-5 rounded-full flex items-center justify-center text-black" style={{ background: colors.primary }}>
