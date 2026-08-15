@@ -537,7 +537,7 @@ function TransactionDetailModal({
                 src="/logo-mark-plain.png"
                 alt="SureXend"
                 className="w-6 h-6 object-contain"
-                style={{ filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.35))' }}
+                style={{ filter: 'brightness(0) invert(1)', opacity: 0.9 }}
               />
               <span className="font-extrabold text-white tracking-widest text-sm">
                 SURE<span style={{ color: accentHex }}>X</span>END

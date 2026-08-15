@@ -27,6 +27,10 @@ const MARKET_PAIRS = [
   })),
 ]
 
+// Local-currency pairs for the "USD → local currency" chart dropdown.
+// USDC/USD gets its own dedicated card, so it's excluded here.
+const LOCAL_PAIRS = MARKET_PAIRS.filter(p => p.id !== 'USDC')
+
 const LIVE_RATES_URL = 'https://open.er-api.com/v6/latest/USD'
 
 // Fallback rate source (same figures the app uses for conversions) so the UI
@@ -49,7 +53,7 @@ export default function DashboardPage() {
   const [selectedLocalCurrency, setSelectedLocalCurrency] = useState('NGN')
   const [showLocalCurrencyPicker, setShowLocalCurrencyPicker] = useState(false)
   const [localCurrencySearch, setLocalCurrencySearch] = useState('')
-  const [selectedMarket, setSelectedMarket] = useState<string>('USDC')
+  const [selectedMarket, setSelectedMarket] = useState<string>('NGN')
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
   const [showSendModal, setShowSendModal] = useState(false)
   const [showFundModal, setShowFundModal] = useState(false)
@@ -105,7 +109,7 @@ export default function DashboardPage() {
 
   const rateFor = (code: string) => code === 'USDC' ? 1 : (liveRates[code] ?? fallbackRate(code))
 
-  // Chart series for the currently selected market pair.
+  // Chart series for the currently selected local market pair.
   const chartSeries = useMemo(() => {
     const pair = MARKET_PAIRS.find(p => p.id === selectedMarket)
     const series = rateSeries[selectedMarket]
@@ -120,6 +124,20 @@ export default function DashboardPage() {
     }
     return series
   }, [selectedMarket, rateSeries, rateFor, liveRates])
+
+  // USDC/USD series for its own dedicated chart (pegged at 1.0000).
+  const usdcSeries = useMemo(() => {
+    const series = rateSeries['USDC']
+    const current = 1
+    if (!series || series.length === 0) {
+      const now = new Date()
+      return Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(now.getTime() - (12 - i) * 5000)
+        return { time: d.toLocaleTimeString('en-US', { hour12: false }), value: current }
+      })
+    }
+    return series
+  }, [rateSeries])
 
   useEffect(() => {
     const saved = localStorage.getItem('surexend_user_avatar')
@@ -433,156 +451,227 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      {/* 🟢 LIVE MARKET CHART (USDC/USD + USD → local currencies) */}
-      <motion.div 
-        className="glass-card p-4 sm:p-6 relative overflow-hidden"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.2 }}
-      >
-        {/* Top bar with market pair selector & timeframes */}
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4 pb-4 border-b border-white/5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#64748B] font-medium mr-1">Market:</span>
-            {/* Pair dropdown: USDC/USD + every local currency */}
-            <div className="relative">
-              <button
-                onClick={() => setShowMarketPicker(!showMarketPicker)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-white/10 text-white border border-white/20 shadow-lg"
-                style={{ color: colors.primary }}
-              >
-                <Coins className="w-3.5 h-3.5" />
-                {MARKET_PAIRS.find(p => p.id === selectedMarket)?.label || 'USDC/USD'}
-                <ChevronDown className="w-3 h-3" />
-              </button>
-              <AnimatePresence>
-                {showMarketPicker && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    className="absolute left-0 top-full mt-2 z-30 w-60 max-h-72 overflow-y-auto rounded-2xl glass-card p-1.5 border border-white/10 shadow-2xl"
-                  >
-                    {MARKET_PAIRS.map((pair) => (
-                      <button
-                        key={pair.id}
-                        onClick={() => { setSelectedMarket(pair.id); setShowMarketPicker(false) }}
-                        className={`w-full px-3 py-2 rounded-xl text-left flex items-center justify-between transition-all ${
-                          selectedMarket === pair.id ? 'bg-white/10 text-white' : 'text-[#94A3B8] hover:text-white hover:bg-white/5'
-                        }`}
-                      >
-                        <span className="text-xs font-bold flex items-center gap-2">
-                          {pair.id === 'USDC' ? <Coins className="w-3.5 h-3.5" /> : <span className="text-[11px]"><CurrencyFlag countryCode={AFRICAN_CURRENCIES.find(c => c.code === pair.id)?.countryCode} emoji={AFRICAN_CURRENCIES.find(c => c.code === pair.id)?.flag} size={16} /></span>}
-                          {pair.label}
-                        </span>
-                        <span className="text-[11px] text-[#64748B]">{pair.symbol}{(rateFor(pair.id)).toLocaleString(undefined, { maximumFractionDigits: pair.decimals })}</span>
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+      {/* 🟢 LIVE MARKETS — USDC/USD card + USD→local currency card */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* USDC/USD chart (own card, pegged) */}
+        <motion.div 
+          className="glass-card p-4 sm:p-6 relative overflow-hidden"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+        >
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4 pb-4 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
+                <Coins className="w-4 h-4" style={{ color: colors.primary }} />
+              </span>
+              <div>
+                <p className="text-white font-bold text-sm leading-tight">USDC/USD</p>
+                <p className="text-[10px] text-[#64748B]">USD Coin · Stablecoin</p>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.2)] w-max">
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[#10B981]" /> Live
+            </span>
+          </div>
+
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <div>
+              <span className="text-3xl font-extrabold text-white tracking-tight">$1.0000</span>
+              <p className="text-[10px] text-[#64748B] mt-0.5 font-medium">1 USD = $1.00 USDC · pegged</p>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
+              <p className="text-white font-semibold">{liveUpdatedAt ? new Date(liveUpdatedAt).toLocaleTimeString('en-US', { hour12: false }) : '—'}</p>
             </div>
           </div>
 
-          {/* Timeframes */}
-          <div className="flex items-center gap-1 bg-[#121827] p-1 rounded-xl border border-white/5 self-start sm:self-auto">
-            {(['1D', '1W', '1M', '1Y'] as const).map((tf) => (
-              <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                  timeframe === tf ? 'bg-white/10 text-white' : 'text-[#64748B] hover:text-white'
-                }`}
-              >
-                {tf}
-              </button>
-            ))}
+          <div className="h-44 sm:h-48 w-full pt-1">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={usdcSeries} margin={{ top: 6, right: 6, left: -24, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="usdcGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10B981" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#10B981" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="time" stroke="#64748B" fontSize={9} tickLine={false} axisLine={false} dy={5} minTickGap={45} />
+                <YAxis
+                  domain={['dataMin * 0.999999', 'dataMax * 1.000001']}
+                  stroke="#64748B"
+                  fontSize={9}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(val) => `$${val.toFixed(4)}`}
+                  width={52}
+                />
+                <Tooltip
+                  cursor={{ stroke: '#10B981', strokeDasharray: '4 4', strokeWidth: 1.5 }}
+                  content={({ active, payload }: any) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-[#181F32] border border-white/10 p-2.5 rounded-xl shadow-2xl">
+                          <p className="font-bold text-white text-xs">$1.0000</p>
+                          <p className="text-[9px] text-[#94A3B8] mt-0.5">USDC/USD · {payload[0]?.payload?.time}</p>
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  fill="url(#usdcGradient)"
+                  activeDot={{ r: 5, fill: '#10B981', stroke: '#ffffff', strokeWidth: 2 }}
+                  animationDuration={800}
+                  isAnimationActive={usdcSeries.length < 20}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Live price stats banner */}
-        <div className="flex flex-wrap items-baseline justify-between gap-4 mb-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                {selectedMarket === 'USDC' ? '$1.0000' : `${MARKET_PAIRS.find(p => p.id === selectedMarket)?.symbol || '$'}${rateFor(selectedMarket).toFixed(MARKET_PAIRS.find(p => p.id === selectedMarket)?.decimals ?? 2)}`}
-              </span>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-0.5 bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.2)]">
+        {/* USD → local currency chart with its own dropdown */}
+        <motion.div 
+          className="glass-card p-4 sm:p-6 relative overflow-hidden"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+        >
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4 pb-4 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              {/* Local currency dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowMarketPicker(!showMarketPicker)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-white/10 text-white border border-white/20 shadow-lg"
+                  style={{ color: colors.primary }}
+                >
+                  <span className="text-[11px]"><CurrencyFlag countryCode={AFRICAN_CURRENCIES.find(c => c.code === selectedMarket)?.countryCode} emoji={AFRICAN_CURRENCIES.find(c => c.code === selectedMarket)?.flag} size={16} /></span>
+                  {LOCAL_PAIRS.find(p => p.id === selectedMarket)?.label || 'NGN/USD'}
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                <AnimatePresence>
+                  {showMarketPicker && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      className="absolute left-0 top-full mt-2 z-30 w-64 max-h-72 overflow-y-auto rounded-2xl glass-card p-1.5 border border-white/10 shadow-2xl"
+                    >
+                      {LOCAL_PAIRS.map((pair) => (
+                        <button
+                          key={pair.id}
+                          onClick={() => { setSelectedMarket(pair.id); setShowMarketPicker(false) }}
+                          className={`w-full px-3 py-2 rounded-xl text-left flex items-center justify-between transition-all ${
+                            selectedMarket === pair.id ? 'bg-white/10 text-white' : 'text-[#94A3B8] hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          <span className="text-xs font-bold flex items-center gap-2">
+                            <span className="text-[11px]"><CurrencyFlag countryCode={AFRICAN_CURRENCIES.find(c => c.code === pair.id)?.countryCode} emoji={AFRICAN_CURRENCIES.find(c => c.code === pair.id)?.flag} size={16} /></span>
+                            {pair.label}
+                          </span>
+                          <span className="text-[11px] text-[#64748B]">{pair.symbol}{(rateFor(pair.id)).toLocaleString(undefined, { maximumFractionDigits: pair.decimals })}</span>
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.2)] w-max">
                 <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[#10B981]" /> Live
               </span>
             </div>
-            <p className="text-xs text-[#64748B] mt-0.5 font-medium">
-              {MARKET_PAIRS.find(p => p.id === selectedMarket)?.name} · 1 USD = {MARKET_PAIRS.find(p => p.id === selectedMarket)?.symbol}{(rateFor(selectedMarket)).toLocaleString(undefined, { maximumFractionDigits: MARKET_PAIRS.find(p => p.id === selectedMarket)?.decimals ?? 2 })} {selectedMarket}
-            </p>
+
+            {/* Timeframes */}
+            <div className="flex items-center gap-1 bg-[#121827] p-1 rounded-xl border border-white/5 self-start sm:self-auto">
+              {(['1D', '1W', '1M', '1Y'] as const).map((tf) => (
+                <button
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                    timeframe === tf ? 'bg-white/10 text-white' : 'text-[#64748B] hover:text-white'
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex items-center gap-4 text-xs text-[#64748B]">
+          <div className="flex items-baseline justify-between gap-3 mb-3">
             <div>
-              <p className="text-[10px] uppercase tracking-wider">Source</p>
-              <p className="text-white font-semibold">Live FX Feed</p>
+              <span className="text-3xl font-extrabold text-white tracking-tight">
+                {`${LOCAL_PAIRS.find(p => p.id === selectedMarket)?.symbol || ''}${rateFor(selectedMarket).toLocaleString(undefined, { maximumFractionDigits: LOCAL_PAIRS.find(p => p.id === selectedMarket)?.decimals ?? 2 })}`}
+              </span>
+              <p className="text-[10px] text-[#64748B] mt-0.5 font-medium">
+                {LOCAL_PAIRS.find(p => p.id === selectedMarket)?.name} · 1 USD = {LOCAL_PAIRS.find(p => p.id === selectedMarket)?.symbol}{(rateFor(selectedMarket)).toLocaleString(undefined, { maximumFractionDigits: LOCAL_PAIRS.find(p => p.id === selectedMarket)?.decimals ?? 2 })} {selectedMarket}
+              </p>
             </div>
-            <div className="w-px h-6 bg-white/10" />
-            <div>
-              <p className="text-[10px] uppercase tracking-wider">Updated</p>
-              <p className="text-white font-semibold">{liveUpdatedAt ? new Date(liveUpdatedAt).toLocaleTimeString('en-US', { hour12: false }) : '—'}</p>
-            </div>
-            <div className="w-px h-6 bg-white/10" />
-            <div>
-              <p className="text-[10px] uppercase tracking-wider">Points</p>
-              <p className="text-white font-semibold">{chartSeries.length}</p>
+            <div className="flex items-center gap-4 text-[10px] text-[#64748B]">
+              <div className="text-right">
+                <p className="uppercase tracking-wider text-[9px]">Points</p>
+                <p className="text-white font-semibold">{chartSeries.length}</p>
+              </div>
+              <div className="w-px h-5 bg-white/10" />
+              <div className="text-right">
+                <p className="uppercase tracking-wider text-[9px]">Updated</p>
+                <p className="text-white font-semibold">{liveUpdatedAt ? new Date(liveUpdatedAt).toLocaleTimeString('en-US', { hour12: false }) : '—'}</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Large Market Chart */}
-        <div className="h-64 sm:h-72 w-full pt-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="cryptoMarketGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={colors.primary} stopOpacity={0.45} />
-                  <stop offset="100%" stopColor={colors.primary} stopOpacity={0.0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="time" stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} dy={5} minTickGap={40} />
-              <YAxis 
-                domain={['dataMin * 0.9999', 'dataMax * 1.0001']} 
-                stroke="#64748B" 
-                fontSize={10} 
-                tickLine={false} 
-                axisLine={false} 
-                tickFormatter={(val) => `${MARKET_PAIRS.find(p => p.id === selectedMarket)?.symbol || '$'}${val.toLocaleString(undefined, { maximumFractionDigits: 4 })}`} 
-                width={70}
-              />
-              <Tooltip 
-                cursor={{ stroke: '#3B82F6', strokeDasharray: '4 4', strokeWidth: 1.5 }}
-                content={({ active, payload }: any) => {
-                  if (active && payload && payload.length) {
-                    const pair = MARKET_PAIRS.find(p => p.id === selectedMarket)
-                    return (
-                      <div className="bg-[#181F32] border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
-                        <p className="font-bold text-white text-sm">{pair?.symbol}{(payload[0].value)?.toLocaleString(undefined, { maximumFractionDigits: pair?.decimals ?? 4 })}</p>
-                        <p className="text-[10px] text-[#94A3B8] mt-0.5">{pair?.label} · {payload[0].payload.time}</p>
-                      </div>
-                    )
-                  }
-                  return null
-                }}
-              />
-              <Area 
-                type="monotone" 
-                dataKey="value" 
-                stroke={colors.primary} 
-                strokeWidth={2.5} 
-                fill="url(#cryptoMarketGradient)" 
-                activeDot={{ r: 6, fill: colors.primary, stroke: '#ffffff', strokeWidth: 2 }}
-                animationDuration={800}
-                isAnimationActive={chartSeries.length < 20}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </motion.div>
+          <div className="h-44 sm:h-48 w-full pt-1">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartSeries} margin={{ top: 6, right: 6, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="localMarketGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={colors.primary} stopOpacity={0.45} />
+                    <stop offset="100%" stopColor={colors.primary} stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="time" stroke="#64748B" fontSize={9} tickLine={false} axisLine={false} dy={5} minTickGap={45} />
+                <YAxis
+                  domain={['dataMin * 0.9999', 'dataMax * 1.0001']}
+                  stroke="#64748B"
+                  fontSize={9}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(val) => `${LOCAL_PAIRS.find(p => p.id === selectedMarket)?.symbol || ''}${val.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                  width={56}
+                />
+                <Tooltip
+                  cursor={{ stroke: colors.primary, strokeDasharray: '4 4', strokeWidth: 1.5 }}
+                  content={({ active, payload }: any) => {
+                    if (active && payload && payload.length) {
+                      const pair = LOCAL_PAIRS.find(p => p.id === selectedMarket)
+                      return (
+                        <div className="bg-[#181F32] border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
+                          <p className="font-bold text-white text-sm">{pair?.symbol}{(payload[0]?.value)?.toLocaleString(undefined, { maximumFractionDigits: pair?.decimals ?? 2 })}</p>
+                          <p className="text-[10px] text-[#94A3B8] mt-0.5">{pair?.label} · {payload[0]?.payload?.time}</p>
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke={colors.primary}
+                  strokeWidth={2.5}
+                  fill="url(#localMarketGradient)"
+                  activeDot={{ r: 6, fill: colors.primary, stroke: '#ffffff', strokeWidth: 2 }}
+                  animationDuration={800}
+                  isAnimationActive={chartSeries.length < 20}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+      </div>
 
       {/* 📊 SECOND ROW: CASH FLOW (MONEY IN vs MONEY OUT) & REFERRALS */}
       <div className="grid md:grid-cols-2 gap-6">
