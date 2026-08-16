@@ -164,6 +164,10 @@ repeat" list.
 ## COMMITS SO FAR (main, all pushed to origin)
 
 - (pending) — homepage launch batch + SureX Tag system (see below)
+- `7a5f1f4` — feat: real live market charts (backend proxy: Yahoo/CoinGecko/FloatRates) for every currency + premium receipt redesign (variant-aware real logo)
+- `00cc60f` — revert(dashboard): restore single combined market chart with one dropdown (user rejected two-card split)
+- `c2d9233` — feat: split dashboard markets into two cards; fix receipt logo (reverted dashboard part in 00cc60f)
+- `30caa6d` — fix(schema): WalletAddress unique must be per network, not global
 - `22dbba3`, `fe7a788` — docs: PRD/architecture/project plan/memory + testnet decision
 - `2bb2d3a` — fix: settle CCTP fee via history sync and webhook settlement paths
 - `3e9ffaa` — fix: surface and charge CCTP forwarder relay fee on cross-chain sends
