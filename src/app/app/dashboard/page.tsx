@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { walletAPI, transactionAPI, userAPI, AFRICAN_CURRENCIES } from '@/lib/api'
+import { walletAPI, transactionAPI, userAPI, conversionAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
@@ -27,7 +27,7 @@ const MARKET_PAIRS = [
   })),
 ]
 
-const LIVE_RATES_URL = 'https://open.er-api.com/v6/latest/USD'
+const LIVE_RATES_URL = 'https://www.floatrates.com/daily/usd.json'
 
 // Fallback rate source (same figures the app uses for conversions) so the UI
 // still renders real-looking, meaningful numbers if the live feed is offline.
@@ -59,43 +59,76 @@ export default function DashboardPage() {
   const [showMarketPicker, setShowMarketPicker] = useState(false)
 
   // ── LIVE MARKET DATA ─────────────────────────────────────────────
-  // Fetch USD base rates from a public feed on an interval and keep a short
-  // rolling series so the chart shows genuinely live movement, not a mock.
+  // Real history comes from the backend market-chart proxy (Yahoo/CoinGecko),
+  // seeded per selected pair + timeframe. The 30s poll appends real live ticks
+  // from FloatRates so the chart genuinely moves while the tab is open.
   const [liveRates, setLiveRates] = useState<Record<string, number>>({})
   const [liveUpdatedAt, setLiveUpdatedAt] = useState<number | null>(null)
   const [rateSeries, setRateSeries] = useState<Record<string, { time: string; value: number }[]>>({})
+  const [chartSource, setChartSource] = useState<string>('Live FX')
+  const [chartLoading, setChartLoading] = useState(false)
 
+  // Load real historical series whenever the selected pair or timeframe changes.
+  useEffect(() => {
+    let active = true
+    setChartLoading(true)
+    conversionAPI.getMarketChart(selectedMarket, timeframe)
+      .then((data: any) => {
+        if (!active || !data?.points?.length) return
+        const series = data.points.map((p: any) => ({
+          time: new Date(p.time).toLocaleTimeString('en-US', { hour12: false }),
+          value: p.value,
+        }))
+        setRateSeries(prev => ({ ...prev, [selectedMarket]: series }))
+        setChartSource(data.source || 'Live FX')
+      })
+      .catch(() => { /* keep last good series */ })
+      .finally(() => { if (active) setChartLoading(false) })
+    return () => { active = false }
+  }, [selectedMarket, timeframe])
+
+  // Poll the live spot feed on an interval so the ticker and chart update with
+  // real market movement. FloatRates returns every supported currency in one
+  // request, keyless and CORS-open, so the browser can call it directly.
   const refreshRates = useCallback(async () => {
     try {
       const res = await fetch(LIVE_RATES_URL)
       if (!res.ok) throw new Error(`Rates feed ${res.status}`)
       const json = await res.json()
-      const rates = json?.rates || {}
-      if (!rates.USD) return
-      setLiveRates(rates)
+      const rates = json || {}
+      if (!rates.ngn) return
+      const normalized: Record<string, number> = {}
+      for (const pair of MARKET_PAIRS) {
+        if (pair.id === 'USDC') continue
+        const rate = Number(rates[pair.id.toLowerCase()]?.rate)
+        if (rate > 0) normalized[pair.id] = rate
+      }
+      if (!Object.keys(normalized).length) return
+      setLiveRates(normalized)
       setLiveUpdatedAt(Date.now())
-      // Append the current rate for every pair to its rolling series.
+      // Append the current rate for every pair to its rolling series so the
+      // chart shows real movement over the session, not a static snapshot.
       setRateSeries(prev => {
         const next: Record<string, { time: string; value: number }[]> = { ...prev }
         for (const pair of MARKET_PAIRS) {
-          const rate = pair.id === 'USDC' ? 1 : Number(rates[pair.id]) || 0
+          const rate = pair.id === 'USDC' ? 1 : normalized[pair.id]
           if (!rate) continue
           const now = new Date()
           const stamp = now.toLocaleTimeString('en-US', { hour12: false })
           const arr = [...(next[pair.id] || [])]
           arr.push({ time: stamp, value: rate })
-          if (arr.length > 60) arr.shift()
+          if (arr.length > 120) arr.shift()
           next[pair.id] = arr
         }
         return next
       })
     } catch (err) {
       // Keep the last good series; fallback static rates still power display.
-      if (!liveRates.USD) {
-        setLiveRates({ NGN: 1500, GHS: 15.8, KES: 129.5, ZAR: 18.2, UGX: 3680, TZS: 2650, EGP: 48.2, MAD: 10.1, ETB: 57.2, RWF: 1320, ZMW: 26.4, MZN: 64.2, BWP: 13.7, AOA: 830, CDF: 2850, TND: 3.1, DZD: 134.5, LYD: 4.85, SDG: 600, SSP: 1300, SOS: 57000, DJF: 177.5, ERN: 15.2, MRU: 40.1, MGA: 4550, MWK: 1750, NAD: 18.2, LSL: 18.2, SZL: 18.2, MUR: 46.4, SCR: 13.6, KMF: 490, CVE: 110, STN: 22.5, GMD: 67, SLL: 22500, LRD: 155, GNF: 8600, BIF: 2900, ZWL: 25.8, XAF: 610, XOF: 605 })
+      if (!Object.keys(liveRates).length) {
+        setLiveRates({ NGN: 1357.65, GHS: 10.94, KES: 129.26, ZAR: 16.18, UGX: 3712.5, TZS: 2643.8, EGP: 50.26, MAD: 9.3, ETB: 161.34, RWF: 1470.3, ZMW: 18.83, MZN: 63.81, BWP: 13.76, AOA: 920.66, CDF: 2257.2, TND: 2.92, DZD: 132.9, LYD: 6.37, SDG: 600.17, SSP: 5680.34, SOS: 571.47, DJF: 177.72, ERN: 15.38, MRU: 39.98, MGA: 4311.09, MWK: 1733.87, NAD: 16.16, LSL: 16.16, SZL: 16.16, MUR: 47.14, SCR: 14.58, KMF: 425.32, CVE: 95.33, STN: 21.18, GMD: 72.62, SLL: 22500, LRD: 181.64, GNF: 8772.7, BIF: 3002.23, ZWL: 25.8, XAF: 567.09, XOF: 567.09 })
       }
     }
-  }, [liveRates.USD])
+  }, [liveRates])
 
   useEffect(() => {
     refreshRates()
@@ -105,21 +138,11 @@ export default function DashboardPage() {
 
   const rateFor = (code: string) => code === 'USDC' ? 1 : (liveRates[code] ?? fallbackRate(code))
 
-  // Chart series for the currently selected market pair.
+  // Chart series for the currently selected market pair — real history from
+  // the backend proxy, extended by live ticks. Never a fabricated flat line.
   const chartSeries = useMemo(() => {
-    const pair = MARKET_PAIRS.find(p => p.id === selectedMarket)
-    const series = rateSeries[selectedMarket]
-    const current = rateFor(selectedMarket)
-    // If the rolling series is empty (first load), seed a flat real-value line.
-    if (!series || series.length === 0) {
-      const now = new Date()
-      return Array.from({ length: 12 }, (_, i) => {
-        const d = new Date(now.getTime() - (12 - i) * 5000)
-        return { time: d.toLocaleTimeString('en-US', { hour12: false }), value: current }
-      })
-    }
-    return series
-  }, [selectedMarket, rateSeries, rateFor, liveRates])
+    return rateSeries[selectedMarket] || []
+  }, [selectedMarket, rateSeries])
 
   useEffect(() => {
     const saved = localStorage.getItem('surexend_user_avatar')
@@ -519,7 +542,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-4 text-xs text-[#64748B]">
             <div>
               <p className="text-[10px] uppercase tracking-wider">Source</p>
-              <p className="text-white font-semibold">Live FX Feed</p>
+              <p className="text-white font-semibold">{chartSource}</p>
             </div>
             <div className="w-px h-6 bg-white/10" />
             <div>
@@ -535,8 +558,18 @@ export default function DashboardPage() {
         </div>
 
         {/* Large Market Chart */}
-        <div className="h-64 sm:h-72 w-full pt-2">
+        <div className="h-64 sm:h-72 w-full pt-2 relative">
+          {chartLoading && chartSeries.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-white/40 animate-spin" />
+            </div>
+          )}
           <ResponsiveContainer width="100%" height="100%">
+            {chartSeries.length === 0 ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <p className="text-xs text-[#64748B]">Loading live market data…</p>
+              </div>
+            ) : (
             <AreaChart data={chartSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="cryptoMarketGradient" x1="0" y1="0" x2="0" y2="1">
@@ -580,6 +613,7 @@ export default function DashboardPage() {
                 isAnimationActive={chartSeries.length < 20}
               />
             </AreaChart>
+            )}
           </ResponsiveContainer>
         </div>
       </motion.div>

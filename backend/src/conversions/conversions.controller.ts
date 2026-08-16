@@ -19,6 +19,14 @@ export class ConversionsController {
     return this.conversionsService.getRates(currency);
   }
 
+  @Get('market-chart')
+  async getMarketChart(
+    @Query('currency') currency: string,
+    @Query('timeframe') timeframe: string,
+  ) {
+    return this.conversionsService.getMarketChart(currency, timeframe);
+  }
+
   @Post('preview')
   async preview(@Body() dto: PreviewConversionDto) {
     return this.conversionsService.preview(dto.from, dto.to, dto.amount);

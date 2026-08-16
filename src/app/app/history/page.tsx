@@ -362,8 +362,8 @@ function FilterPanel({ filters, setFilters, accentHex, accentRgb, onClose }: {
 
 // ── Transaction Detail Modal ───────────────────────────────────────────────
 function TransactionDetailModal({
-  tx, onClose, accentHex, accentRgb
-}: { tx: any; onClose: () => void; accentHex: string; accentRgb: string }) {
+  tx, onClose, accentHex, accentRgb, variant = 'gold'
+}: { tx: any; onClose: () => void; accentHex: string; accentRgb: string; variant?: 'gold' | 'lemon' }) {
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [details, setDetails] = useState<any>(tx)
   const [downloading, setDownloading] = useState<'pdf' | 'png' | null>(null)
@@ -438,10 +438,6 @@ function TransactionDetailModal({
   const sign = isCredit ? '+' : isDebit ? '-' : ''
   const amtColor = isCredit ? 'text-emerald-400' : isDebit ? 'text-red-400' : 'text-[#64748B]'
   const symbol = details?.currency === 'NGN' ? '₦' : details?.currency === 'GHS' ? 'GH₵' : details?.currency === 'KES' ? 'KSh' : '$'
-  const typeLabel: Record<string, string> = {
-    SEND: 'Send', RECEIVE: 'Receive', CONVERT: 'Convert',
-    BILL_PAYMENT: 'Bill Payment', REFERRAL_EARNING: 'Referral Rewards',
-  }
 
   const meta = details?.metadata || {}
   // A send's on-chain hash ALWAYS lives on Arc: same-chain sends are native Arc
@@ -524,32 +520,30 @@ function TransactionDetailModal({
         {/* ── RECEIPT ── */}
         <div
           ref={receiptRef}
-          className="bg-[#0B1120] p-6 sm:p-8"
+          className="bg-[#0B1120] px-7 py-8"
           style={{ fontFamily: 'var(--font-dm), sans-serif' }}
         >
-          {/* Receipt top accent */}
-          <div className="h-1.5 rounded-full mb-6" style={{ background: `linear-gradient(90deg, ${accentHex}, transparent)` }} />
-
           {/* Brand header */}
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
               <img
-                src="/logo-mark-plain.png"
+                src={variant === 'gold' ? '/logo-mark-gold.png' : '/logo-mark-plain.png'}
                 alt="SureXend"
-                className="w-6 h-6 object-contain"
-                style={{ filter: 'brightness(0) invert(1)', opacity: 0.9 }}
+                className={`w-7 h-7 object-contain ${variant === 'gold' ? 'gold-logo-glow' : 'lemon-logo-glow'}`}
               />
-              <span className="font-extrabold text-white tracking-widest text-sm">
+              <span className="font-extrabold text-white tracking-widest text-base leading-none">
                 SURE<span style={{ color: accentHex }}>X</span>END
               </span>
             </div>
-            <span className="text-[9px] uppercase tracking-[0.25em] text-[#475569] font-bold">Receipt</span>
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[#475569] font-bold">Official Receipt</p>
+              <p className="text-[9px] text-[#334155] mt-0.5 font-medium">{displayNetwork}</p>
+            </div>
           </div>
-          <p className="text-[10px] text-[#64748B] mb-6">{typeLabel[typeUpper] || 'Transaction'} · {displayNetwork}</p>
 
-          {/* Status */}
-          <div className="flex items-center justify-between mb-5">
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border ${statusColor(details?.status)}`}>
+          {/* Status + date */}
+          <div className="flex items-center justify-between mt-6">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${statusColor(details?.status)}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${(details?.status || '').toUpperCase() === 'COMPLETED' ? 'bg-emerald-400' : (details?.status || '').toUpperCase() === 'FAILED' ? 'bg-red-400' : 'bg-amber-400'}`} />
               {statusLabel(details?.status)}
             </span>
@@ -559,26 +553,26 @@ function TransactionDetailModal({
           </div>
 
           {/* Amount */}
-          <div className="text-center py-5 mb-4 rounded-2xl bg-white/[0.03] border border-white/5 relative overflow-hidden">
-            <div className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, transparent, ${accentHex}, transparent)` }} />
-            <p className="text-[9px] uppercase tracking-[0.25em] text-[#64748B] font-bold mb-1.5">
+          <div className="mt-5 text-center px-6 py-7 rounded-2xl bg-white/[0.03] border border-white/5 relative overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, transparent, ${accentHex}, transparent)` }} />
+            <p className="text-[9px] uppercase tracking-[0.25em] text-[#64748B] font-bold mb-2">
               {swap ? 'You received' : 'Amount'}
             </p>
             {swap ? (
               <>
-                <p className="text-5xl font-black tracking-tight text-emerald-400 leading-none">
+                <p className="text-4xl font-black tracking-tight text-emerald-400 leading-none">
                   {currencySymbol(swap.to)}{formatAmount(swap.toAmount)}
                 </p>
-                <p className="text-[#94A3B8] text-xs mt-2">
+                <p className="text-[#94A3B8] text-xs mt-2.5">
                   {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from} → {swap.to}
                 </p>
               </>
             ) : (
               <>
-                <p className={`text-5xl font-black tracking-tight ${amtColor} leading-none`}>
+                <p className={`text-4xl font-black tracking-tight ${amtColor} leading-none`}>
                   {sign}{symbol}{formatAmount(Number(details?.amount || 0))}
                 </p>
-                <p className="text-[#94A3B8] text-xs mt-2">
+                <p className="text-[#94A3B8] text-xs mt-2.5">
                   {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {displayNetwork}
                 </p>
               </>
@@ -587,7 +581,7 @@ function TransactionDetailModal({
 
           {/* Failure explanation */}
           {(details?.status || '').toUpperCase() === 'FAILED' && (
-            <div className="mb-4 flex items-start gap-2.5 p-3.5 rounded-xl bg-red-500/[0.08] border border-red-500/25">
+            <div className="mt-4 flex items-start gap-2.5 p-3.5 rounded-xl bg-red-500/[0.08] border border-red-500/25">
               <XCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-red-400 text-xs font-bold mb-0.5">Transaction Failed</p>
@@ -598,17 +592,10 @@ function TransactionDetailModal({
             </div>
           )}
 
-          {/* Dashed separator */}
-          <div className="flex items-center gap-2 my-5 opacity-40">
-            <div className="flex-1 border-t border-dashed border-white/15" />
-            <span className="text-[#64748B] text-[10px]">●</span>
-            <div className="flex-1 border-t border-dashed border-white/15" />
-          </div>
-
           {/* Detail rows */}
-          <div className="space-y-3">
+          <div className="mt-7 space-y-4">
             {rows.map((row) => (
-              <div key={row.label} className="flex items-start justify-between gap-3">
+              <div key={row.label} className="flex items-start justify-between gap-4">
                 <span className="text-[#64748B] text-[11px] font-medium mt-0.5 flex-shrink-0">{row.label}</span>
                 <span className="flex items-center gap-2 min-w-0 justify-end flex-1">
                   <span
@@ -633,12 +620,12 @@ function TransactionDetailModal({
 
           {/* Explorer link */}
           {explorerUrl && (
-            <div className="mt-5 pt-4 border-t border-white/5">
+            <div className="mt-7 pt-5 border-t border-white/5">
               <a
                 href={explorerUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white transition-all"
+                className="flex items-center justify-center gap-2 py-3 rounded-xl text-[11px] font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white transition-all"
               >
                 <ExternalLink size={13} style={{ color: accentHex }} />
                 View on {explorerNetwork} Explorer
@@ -647,8 +634,11 @@ function TransactionDetailModal({
           )}
 
           {/* Receipt footer */}
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5">
-            <p className="text-[9px] text-[#475569] font-medium">Powered by SureXend</p>
+          <div className="mt-6 pt-5 border-t border-white/5 flex items-center justify-between">
+            <div>
+              <p className="text-[9px] text-[#475569] font-medium">Powered by SureXend</p>
+              <p className="text-[9px] text-[#334155] mt-0.5">Verified digital transaction record</p>
+            </div>
             <p className="text-[9px] text-[#475569] font-mono font-semibold">
               {details?.reference || '—'}
             </p>
@@ -988,6 +978,7 @@ export default function HistoryPage() {
           onClose={() => setSelectedTx(null)}
           accentHex={accentHex}
           accentRgb={accentRgb}
+          variant={variant}
         />
       )}
     </div>

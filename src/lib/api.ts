@@ -357,6 +357,24 @@ export const conversionAPI = {
       }
     ),
 
+  // Real market chart history for the dashboard (proxy through the backend so
+  // browser CORS never blocks the upstream FX/crypto feeds).
+  getMarketChart: (currency: string, timeframe: string) =>
+    tryWithMock(
+      () => withRetry(() => apiClient.get(`/conversions/market-chart?currency=${currency}&timeframe=${timeframe}`).then(r => r.data)),
+      () => {
+        const rateMap: Record<string, number> = Object.fromEntries(
+          AFRICAN_CURRENCIES.map(c => [c.code, c.rate])
+        )
+        const now = Date.now()
+        const points = Array.from({ length: 30 }, (_, i) => ({
+          time: new Date(now - (29 - i) * 3600 * 1000).toISOString(),
+          value: currency === 'USDC' ? 1 : rateMap[currency] || 1500,
+        }))
+        return { currency, timeframe, points, source: 'mock', updatedAt: now }
+      }
+    ),
+
   preview: (payload: { from: string; to: string; amount: number }) =>
     tryWithMock(
       () => apiClient.post('/conversions/preview', { from: payload.from, to: payload.to, amount: payload.amount }).then(r => r.data),

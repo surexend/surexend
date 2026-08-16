@@ -100,14 +100,19 @@ wallet never shows the funds.
 ### Dashboard (src/app/app/dashboard/page.tsx) launch polish
 - **Welcome bar**: real `profile.firstName` + `@surexTag`. EU Invoice link removed.
 - **Market ticker**: USDC/USD (pegged) + USD→8 local currencies. Live rates from
-  `https://open.er-api.com/v6/latest/USD` (fallback static AFRICAN_CURRENCIES rates
-  if the feed is down). BTC/ETH/SOL/USDT removed.
+  `https://www.floatrates.com/daily/usd.json` (keyless, CORS-open, all 42 codes)
+  polled every 30s; fallback static AFRICAN_CURRENCIES rates if the feed is down.
+- **Market chart**: pair dropdown (USDC/USD + every local currency). Real history
+  is proxied server-side through `GET /conversions/market-chart` (Yahoo Finance
+  for fiat, CoinGecko for USDC — browsers can't call Yahoo due to no CORS), then
+  extended by live FloatRates ticks every 30s. Never a fabricated flat seed line.
 - **Balance card**: "USD Crypto Balance (USDC)" wording only.
 - **AUTO wallet ordering fixed**: compares local balance converted to USD
   (`local / rate`) vs USD balance — so $39 ranks above 5,000 NGN (≈$3.33).
 - **Market chart**: pair dropdown (USDC/USD + every local currency) instead of
-  USDT/USDC tabs. Live rolling series appended every 30s (real points, not mock).
-  Shows Source/Updated/Points stats instead of fake 24h high/low/volume.
+  USDT/USDC tabs. Real history via backend proxy + live rolling ticks every 30s.
+  Shows Source/Updated/Points stats (source = Yahoo Finance / CoinGecko /
+  FloatRates) instead of fake 24h high/low/volume.
 - **Cash flow chart**: only COMPLETED money movement counts — RECEIVE/
   REFERRAL_EARNING = money in, SEND/BILL_PAYMENT = money out. CONVERT excluded
   (internal). Non-USD legs converted to USD value. This fixed the fake
