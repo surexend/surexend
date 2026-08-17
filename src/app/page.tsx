@@ -242,7 +242,7 @@ export default function LandingPage() {
       {/* ── Full-screen loading animation ─────────────────────────────── */}
       <AnimatePresence>
         {showLoader && (
-          <SurexendLoader fullScreen />
+          <SurexendLoader fullScreen duration={1000} />
         )}
       </AnimatePresence>
 
@@ -258,7 +258,7 @@ export default function LandingPage() {
           }}
           initial={{ y: -80, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 2.9, duration: 0.5 }}
+          transition={{ delay: 0, duration: 0.5 }}
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
             {/* Logo */}
@@ -426,7 +426,7 @@ export default function LandingPage() {
               }}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 3.0, duration: 0.5 }}
+              transition={{ delay: 0.1, duration: 0.5 }}
             >
               <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: accentHex }} />
               <span className="text-xs font-semibold tracking-wide" style={{ color: accentHex }}>
@@ -440,7 +440,7 @@ export default function LandingPage() {
               style={{ fontSize: 'clamp(2.5rem, 7vw, 5rem)' }}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 3.1, duration: 0.6 }}
+              transition={{ delay: 0.2, duration: 0.6 }}
             >
               Your Crypto,
               <br />
@@ -455,7 +455,7 @@ export default function LandingPage() {
               style={{ fontSize: 'clamp(1rem, 2.5vw, 1.2rem)' }}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 3.2, duration: 0.5 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
             >
               Send USDT to anyone. Withdraw to any African bank. Pay bills, buy airtime, and spend your stablecoins like the cash in your pocket — instantly.
             </motion.p>
@@ -465,7 +465,7 @@ export default function LandingPage() {
               className="flex flex-col xs:flex-row gap-4 w-full xs:w-auto mb-12"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 3.3, duration: 0.5 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
             >
               <Link href="/auth/login">
                 <button
@@ -487,7 +487,7 @@ export default function LandingPage() {
               className="flex flex-wrap items-center justify-center gap-6"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 3.4, duration: 0.5 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
             >
               {['No Download Needed', 'Instant Withdrawals', '24/7 Support', 'Bank-Level Security'].map(text => (
                 <div key={text} className="flex items-center gap-2 text-[#94A3B8] text-sm font-medium">
@@ -503,7 +503,7 @@ export default function LandingPage() {
             className="mt-12 sm:mt-16 relative w-full max-w-[320px] sm:max-w-[350px] mx-auto z-20 px-2"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 3.5 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
           >
             {/* Realistic device frame */}
             <div className="relative mx-auto select-none">
