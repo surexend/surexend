@@ -238,5 +238,9 @@ wallet never shows the funds.
   Console link in the app sidebar when profile.role === 'ADMIN'.
 - To activate an admin on prod: `node scripts/make-admin.js <email>` (default
   demo@surexend.com) — role field auto-creates via prestart `prisma db push`.
+- PROD NOTE: the Railway image ships dist/ only (no scripts/), so the script
+  can't run there. Instead use ADMIN_EMAILS: set
+  `ADMIN_EMAILS=demo@surexend.com` in Railway env, redeploy once (main.ts
+  promotes matching users on boot, idempotently), then remove the var.
 - Next up per user: VTU/bills depth (real airtime/data top-up flows), then
   domain migration at launch-prep.

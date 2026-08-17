@@ -282,5 +282,8 @@ repeat" list.
   sidebar Admin Console link. MAKE DEMO AN ADMIN ON PROD:
   `node scripts/make-admin.js demo@surexend.com` (run in Railway shell after
   deploy so `prisma db push` has added the role column).
+  UPDATE: scripts/ is NOT in the Railway image (dist/ only), so on prod use
+  `ADMIN_EMAILS=demo@surexend.com` in Railway env -> redeploy -> main.ts
+  promotes matching users on boot (idempotent) -> then remove the var.
 - Next: VTU/airtime depth + integration batch, then domain migration at
   launch-prep.
