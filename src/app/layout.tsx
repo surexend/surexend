@@ -22,9 +22,17 @@ const BRAND_VARIANT = process.env.NEXT_PUBLIC_BRAND_VARIANT || 'gold'
 export const metadata: Metadata = {
   title: 'SureXend — Your Crypto, Finally Useful in Africa',
   description: 'Send money, pay bills, buy airtime, and withdraw to any African bank account using USDT and USDC. Africa\'s premier stablecoin spending platform.',
-  keywords: ['crypto africa', 'USDT nigeria', 'stablecoin', 'send money africa', 'crypto to bank', 'airtime crypto', 'surexend'],
+  keywords: ['crypto africa', 'USDT nigeria', 'stablecoin', 'send money africa', 'crypto to bank', 'airtime crypto', 'buy airtime with crypto', 'sell USDT for naira', 'pay bills with crypto', 'crypto to naira', 'surexend'],
   authors: [{ name: 'SureXend' }],
   creator: 'SureXend',
+  alternates: {
+    canonical: 'https://surexend.com',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, 'max-snippet': -1, 'max-image-preview': 'large', 'max-video-preview': -1 },
+  },
   metadataBase: new URL('https://surexend.com'),
   openGraph: {
     title: 'SureXend — Your Crypto, Finally Useful in Africa',
@@ -75,6 +83,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-startup-image" href="/splash/splash-2048x2732.png" media="(device-width: 1024px) and (device-height: 1366px)" />
         <link rel="apple-touch-startup-image" href="/splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px)" />
         <link rel="apple-touch-startup-image" href="/splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px)" />
+        {/* Structured data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@graph': [
+                {
+                  '@type': 'Organization',
+                  name: 'SureXend',
+                  url: 'https://surexend.com',
+                  logo: 'https://surexend.com/logo-mark-gold.png',
+                  description: "Africa's premier stablecoin spending platform. Send money, pay bills, buy airtime, and withdraw to any African bank account using USDT and USDC.",
+                },
+                {
+                  '@type': 'WebSite',
+                  name: 'SureXend',
+                  url: 'https://surexend.com',
+                  description: 'Buy airtime with crypto, sell USDT for naira, pay bills with crypto, and send money across Africa using USDT and USDC.',
+                },
+              ],
+            }),
+          }}
+        />
       </head>
       <body className="bg-[#060A15] text-white font-dm antialiased">
         {/* Anti-white-screen-of-death mobile resilience */}

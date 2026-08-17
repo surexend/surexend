@@ -997,6 +997,67 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ── FAQ ────────────────────────────────────────────────────── */}
+        <section id="faq" className="py-24 px-4 sm:px-6 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <div className="max-w-3xl mx-auto">
+            <motion.div
+              className="text-center mb-12"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <p className="text-sm font-semibold tracking-widest uppercase mb-4" style={{ color: accentHex }}>Answers</p>
+              <h2 className="font-inter font-black text-white mb-4" style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)' }}>
+                Frequently Asked Questions
+              </h2>
+              <p className="text-[#94A3B8] max-w-xl mx-auto">Everything about buying airtime with crypto, converting USDT to naira, and paying bills with stablecoins in Africa.</p>
+            </motion.div>
+            <div className="flex flex-col gap-3">
+              {[
+                { q: 'What is SureXend?', a: 'SureXend is a stablecoin spending platform for Africa. It lets you send money, buy airtime and data, pay electricity and TV bills, and convert USDT/USDC to local currencies and bank accounts — your crypto finally useful as everyday money.' },
+                { q: 'How do I buy airtime with crypto (USDT) in Nigeria?', a: 'Deposit USDT or USDC into your SureXend wallet, go to Bills, and choose Airtime. Top up any Nigerian network instantly — MTN, Airtel, Glo, and 9mobile — directly from your stablecoin balance. No card or bank transfer needed.' },
+                { q: 'Can I sell USDT and withdraw to my Nigerian bank account?', a: 'Yes. Convert your USDT or USDC to naira inside SureXend and withdraw to any Nigerian bank account. Funds move fast and you always see the live rate before you confirm.' },
+                { q: 'Can I pay electricity and TV bills with crypto?', a: 'Yes. Pay electricity bills for IKEDC, EKEDC, AEDC, PHEDC, BEDC and more, plus DSTV, GOtv, StarTimes and internet subscriptions (Smile, Spectranet, Swift) — all settled from your USDT/USDC balance.' },
+                { q: 'How fast are crypto to naira conversions?', a: 'Conversions and transfers are near-instant. You lock in the live rate at the moment of confirmation and your recipient receives the funds in minutes, not days.' },
+                { q: 'Which cryptocurrencies and countries does SureXend support?', a: 'SureXend supports USDT and USDC on leading networks. The platform is built for Africa and is expanding across Nigeria, Ghana, Kenya and more countries.' },
+              ].map(({ q, a }, i) => (
+                <motion.details
+                  key={q}
+                  className="liquid-glass rounded-2xl border border-white/10 open:border-white/20 group"
+                  style={{ borderColor: `rgba(${accentRgb}, 0.15)` }}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.06 }}
+                >
+                  <summary className="flex items-center justify-between cursor-pointer select-none list-none px-5 py-4">
+                    <span className="text-white font-semibold text-sm sm:text-base">{q}</span>
+                    <ChevronDown size={18} className="text-[#64748B] group-open:rotate-180 transition-transform flex-shrink-0" style={{ color: accentHex }} />
+                  </summary>
+                  <p className="px-5 pb-5 text-[#94A3B8] text-sm leading-relaxed">{a}</p>
+                </motion.details>
+              ))}
+            </div>
+          </div>
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'FAQPage',
+                mainEntity: [
+                  { '@type': 'Question', name: 'What is SureXend?', acceptedAnswer: { '@type': 'Answer', text: 'SureXend is a stablecoin spending platform for Africa. It lets you send money, buy airtime and data, pay electricity and TV bills, and convert USDT/USDC to local currencies and bank accounts.' } },
+                  { '@type': 'Question', name: 'How do I buy airtime with crypto (USDT) in Nigeria?', acceptedAnswer: { '@type': 'Answer', text: 'Deposit USDT or USDC into your SureXend wallet, go to Bills, and choose Airtime. Top up MTN, Airtel, Glo, and 9mobile instantly from your stablecoin balance.' } },
+                  { '@type': 'Question', name: 'Can I sell USDT and withdraw to my Nigerian bank account?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Convert your USDT or USDC to naira inside SureXend and withdraw to any Nigerian bank account with a live rate before you confirm.' } },
+                  { '@type': 'Question', name: 'Can I pay electricity and TV bills with crypto?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Pay IKEDC, EKEDC, AEDC, PHEDC, BEDC electricity bills plus DSTV, GOtv, StarTimes and internet subscriptions from your USDT/USDC balance.' } },
+                  { '@type': 'Question', name: 'How fast are crypto to naira conversions?', acceptedAnswer: { '@type': 'Answer', text: 'Conversions and transfers are near-instant. You lock in the live rate at confirmation and funds arrive in minutes.' } },
+                  { '@type': 'Question', name: 'Which cryptocurrencies and countries does SureXend support?', acceptedAnswer: { '@type': 'Answer', text: 'SureXend supports USDT and USDC on leading networks and is expanding across Nigeria, Ghana, Kenya and more African countries.' } },
+                ],
+              }),
+            }}
+          />
+        </section>
+
         <footer className="border-t py-16 px-4 sm:px-6 relative z-10" style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}>
           <div className="max-w-7xl mx-auto">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-10 mb-12">
