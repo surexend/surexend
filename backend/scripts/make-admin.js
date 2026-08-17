@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const p = new PrismaClient();
 
-const EMAIL = process.argv[2] || 'demo@surexend.com';
+const EMAIL = process.argv[2] || 'surexendofficial@gmail.com';
 
 (async () => {
   const user = await p.user.findUnique({ where: { email: EMAIL }, select: { id: true, role: true } });

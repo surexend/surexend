@@ -297,3 +297,47 @@ Commit `7ca4652`. Product owner: "we want to be live, do everything needed."
   Suspense (useSearchParams CSR bailout). Pushed to main.
 - Next: set GOOGLE_CLIENT_ID/SECRET + confirm VTPASS keys on Railway; deposit
   integration approval still pending (manual crediting is the live path now).
+
+## 2026-08-17 (round 6) - launch batch 2: speed, SEO, SMS out, admin at sign-in
+Commits `3de502c` (realistic phone mockup: titanium frame, buttons, bezel,
+dynamic island), `a2b01a1` (SEO: sitemap.xml, robots.txt disallow /app + /admin,
+canonical + Organization/WebSite JSON-LD, opengraph-image 1200x630, FAQ +
+FAQPage JSON-LD on landing), `75b9b4b` (perf: splash loader 1000ms, hero delays
+0-0.6s - the old 3.2s+ waits were the "slowness"), `855c11d` (SMS OTP removed:
+sendOTPSMS + Termii config + axios import deleted; email OTP via Resend is the
+only verification channel), `253e606` (ADMIN by email at sign-in:
+ensureAdminIfListed() in auth.service.ts promotes ADMIN_EMAILS matches on
+login/verifyLoginOtp/googleCallback; generateTokens returns role; demo scripts
+repointed to surexendofficial@gmail.com).
+- GOOGLE OAuth is LIVE (user configured client id/secret on Railway). Redirect
+  URI must be `https://surexend.com/api/v1/auth/google/callback` (apex
+  308-redirects to www; the /api/v1 proxy serves the callback).
+- ADMIN_EMAILS=surexendofficial@gmail.com is the desired admin config (user
+  changed it; demo@surexend.com "doesn't exist"). Not yet applied on Railway.
+
+## 2026-08-17 (round 7) - Smartspeed Telecom VTU: real airtime + data (all bundles)
+- Provider token provided by user; `SMARTSPEED_API_TOKEN` read from env
+  (base URL default https://www.smartspeedtelecom.com/api). Token is in
+  backend/.env (gitignored) for local runs; MUST be added to Railway env.
+- Network IDs confirmed from live catalog: MTN=1, GLO=2, 9MOBILE=3, AIRTEL=4.
+  Airtime VTU discounts: MTN 96.5%, GLO 90%, AIRTEL 97%, 9MOBILE 98% (shown on
+  the airtime provider list; app charges face value, discount is margin).
+- Live plan catalog (cached 10 min in memory from GET /api/user/): MTN 73,
+  GLO 27, AIRTEL 43, 9MOBILE 14 plans = {code:dataplan_id, name:plan,
+  validity:month_validate, amount:plan_amount, planType:plan_type}. Frontend
+  bills page now shows ALL plans grouped by plan type (scrollable), not 8.
+- bills.service.ts rewritten to Smartspeed: providers (airtime/data) live from
+  catalog; getDataPlans maps catalog; purchaseBill posts /api/topup/
+  {network,mobile_number,amount,Ported_number:false,airtime_type:'VTU'} or
+  /api/data/ {network,mobile_number,plan,Ported_number:false}; refunds USDT and
+  marks FAILED on any error (DRF-style detail/error detection, 60s timeout);
+  ref prefix SS-. Other categories (electricity/tv/internet) rejected with
+  "not available yet" at purchase. validateMeter now hits Smartspeed
+  /validatemeter.
+- RESPONSE SHAPES NOT DOCUMENTED: success = HTTP 2xx + no detail/error/failed
+  status (defensive; verify with a real small purchase). Smartspeed account
+  balance is only ~NGN 40 - user must fund it to test purchases.
+- Builds: nest build + next build both green.
+- NEXT DEPLOY ACTION: add SMARTSPEED_API_TOKEN to Railway + redeploy; set
+  ADMIN_EMAILS=surexendofficial@gmail.com on Railway; fund the Smartspeed
+  account; verify a small real topup/data purchase end-to-end.

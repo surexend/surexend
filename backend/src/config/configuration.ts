@@ -25,6 +25,10 @@ export default registerAs('app', () => ({
     secretKey: process.env.VTPASS_SECRET_KEY,
     baseUrl: process.env.VTPASS_BASE_URL,
   },
+  smartspeed: {
+    apiKey: process.env.SMARTSPEED_API_TOKEN,
+    baseUrl: process.env.SMARTSPEED_BASE_URL || 'https://www.smartspeedtelecom.com/api',
+  },
   yellowCard: {
     apiKey: process.env.YELLOW_CARD_API_KEY,
     secret: process.env.YELLOW_CARD_SECRET,

@@ -293,7 +293,11 @@ export default function BillsPage() {
                       </div>
                       <div className="flex-1">
                         <p className="text-white font-medium text-sm">{provider.name}</p>
-                        <p className="text-[#64748B] text-xs">{provider.code}</p>
+                        <p className="text-[#64748B] text-xs">
+                          {selectedCategory === 'airtime' && provider.discount
+                            ? `${provider.discount}% discount`
+                            : provider.code}
+                        </p>
                       </div>
                       <ChevronRight size={16} className="text-[#64748B]" />
                     </motion.button>
@@ -349,26 +353,42 @@ export default function BillsPage() {
                   {!plans ? (
                     <div className="skeleton h-40 rounded-xl" />
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {plans.slice(0, 8).map((plan: any) => (
-                        <button key={plan.code}
-                          className="p-4 rounded-xl text-left border transition-all"
-                          style={selectedPlan?.code === plan.code ? {
-                            background: `rgba(${accentRgb}, 0.1)`,
-                            borderColor: `rgba(${accentRgb}, 0.4)`,
-                          } : {
-                            background: '#0F1629',
-                            borderColor: 'rgba(255,255,255,0.06)',
-                          }}
-                          onClick={() => setSelectedPlan(plan)}
-                        >
-                          <p className="text-white text-xs font-bold">{plan.name}</p>
-                          <p className="text-[#64748B] text-xs">{plan.validity}</p>
-                          <p className="font-bold mt-1 text-sm" style={{ color: accentHex }}>
-                            ₦{plan.amount?.toLocaleString()}
-                          </p>
-                        </button>
-                      ))}
+                    <div className="space-y-4 max-h-[52vh] overflow-y-auto pr-1">
+                      {(() => {
+                        const groups: Record<string, any[]> = {}
+                        plans.forEach((plan: any) => {
+                          const g = plan.planType || 'OTHER'
+                          ;(groups[g] = groups[g] || []).push(plan)
+                        })
+                        return Object.entries(groups).map(([type, list]) => (
+                          <div key={type}>
+                            <p className="text-[#64748B] text-[10px] font-bold uppercase tracking-widest mb-2 px-1">
+                              {type.replace(/_/g, ' ')}
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {list.map((plan: any) => (
+                                <button key={plan.code}
+                                  className="p-4 rounded-xl text-left border transition-all"
+                                  style={selectedPlan?.code === plan.code ? {
+                                    background: `rgba(${accentRgb}, 0.1)`,
+                                    borderColor: `rgba(${accentRgb}, 0.4)`,
+                                  } : {
+                                    background: '#0F1629',
+                                    borderColor: 'rgba(255,255,255,0.06)',
+                                  }}
+                                  onClick={() => setSelectedPlan(plan)}
+                                >
+                                  <p className="text-white text-xs font-bold">{plan.name}</p>
+                                  <p className="text-[#64748B] text-[10px] leading-tight mt-0.5">{plan.validity}</p>
+                                  <p className="font-bold mt-1 text-sm" style={{ color: accentHex }}>
+                                    ₦{plan.amount?.toLocaleString()}
+                                  </p>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      })()}
                     </div>
                   )}
                 </div>

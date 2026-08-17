@@ -5,10 +5,9 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { ConversionsService } from '../conversions/conversions.service';
 import * as bcrypt from 'bcryptjs';
 import axios from 'axios';
-import * as crypto from 'crypto';
 
-// VTPass service IDs per category. `code` IS the VTPass serviceID used for
-// variations lookups and /pay calls (e.g. MTN-Data for data plans).
+// Static provider lists for categories not yet wired to Smartspeed (electricity,
+// tv, internet). Airtime and data are served live from the Smartspeed catalog.
 const PROVIDERS: Record<string, { code: string; name: string }[]> = {
   airtime: [
     { code: 'MTN', name: 'MTN Nigeria' },
@@ -42,9 +41,16 @@ const PROVIDERS: Record<string, { code: string; name: string }[]> = {
   ],
 };
 
+const NETWORK_ORDER = ['MTN', 'GLO', 'AIRTEL', '9MOBILE'];
+
+// Fallback network IDs in case the catalog does not carry them (Smartspeed IDs).
+const FALLBACK_NETWORK_IDS: Record<string, number> = { MTN: 1, GLO: 2, '9MOBILE': 3, AIRTEL: 4 };
+
 @Injectable()
 export class BillsService {
   private readonly logger = new Logger(BillsService.name);
+  private readonly CATALOG_TTL = 10 * 60 * 1000;
+  private catalogCache: { data: any; fetchedAt: number } | null = null;
 
   constructor(
     private prisma: PrismaService,
@@ -53,63 +59,165 @@ export class BillsService {
     private conversionsService: ConversionsService,
   ) {}
 
-  private getVtpassHeaders() {
-    const apiKey = this.configService.get('app.vtpass.apiKey');
-    const secretKey = this.configService.get('app.vtpass.secretKey');
-    const publicKey = this.configService.get('app.vtpass.publicKey');
-    return {
-      'api-key': apiKey,
-      'secret-key': secretKey,
-      'public-key': publicKey,
-    };
+  // ── Smartspeed plumbing ─────────────────────────────────────────────────
+
+  private smartspeedBaseUrl() {
+    return this.configService.get<string>('app.smartspeed.baseUrl');
   }
+
+  private smartspeedHeaders() {
+    const apiKey = this.configService.get<string>('app.smartspeed.apiKey');
+    if (!apiKey) {
+      throw new BadRequestException('Smartspeed is not configured. Set SMARTSPEED_API_TOKEN.');
+    }
+    return { 'Content-Type': 'application/json', Authorization: `Token ${apiKey}` };
+  }
+
+  private async fetchCatalog(force = false): Promise<any> {
+    if (!force && this.catalogCache && Date.now() - this.catalogCache.fetchedAt < this.CATALOG_TTL) {
+      return this.catalogCache.data;
+    }
+    const response = await axios.get(`${this.smartspeedBaseUrl()}/user/`, {
+      headers: this.smartspeedHeaders(),
+      timeout: 20000,
+    });
+    this.catalogCache = { data: response.data, fetchedAt: Date.now() };
+    return response.data;
+  }
+
+  private normaliseNetwork(name: string): string {
+    const n = (name || '').toUpperCase();
+    if (n.includes('MTN')) return 'MTN';
+    if (n.includes('AIRTEL')) return 'AIRTEL';
+    if (n.includes('GLO')) return 'GLO';
+    if (n.includes('9MOBILE') || n.includes('ETISALAT')) return '9MOBILE';
+    return n;
+  }
+
+  private networkDisplayName(network: string): string {
+    switch (network) {
+      case 'MTN': return 'MTN Nigeria';
+      case 'AIRTEL': return 'Airtel Nigeria';
+      case 'GLO': return 'Globacom';
+      case '9MOBILE': return '9mobile (Etisalat)';
+      default: return network;
+    }
+  }
+
+  private dataplansKey(network: string): string {
+    const known: Record<string, string> = { MTN: 'MTN_PLAN', GLO: 'GLO_PLAN', AIRTEL: 'AIRTEL_PLAN', '9MOBILE': '9MOBILE_PLAN' };
+    return known[network] || `${network}_PLAN`;
+  }
+
+  private networkIdMap(catalog: any): Record<string, number> {
+    const map: Record<string, number> = {};
+    const dataplans = catalog?.Dataplans || {};
+    for (const [key, section] of Object.entries<any>(dataplans)) {
+      const arr = Array.isArray(section) ? section : section?.ALL;
+      if (Array.isArray(arr) && arr.length && arr[0]?.network) {
+        map[this.normaliseNetwork(arr[0].plan_network || key)] = Number(arr[0].network);
+      }
+    }
+    return map;
+  }
+
+  private resolveNetworkId(catalog: any, provider: string): number | null {
+    const net = this.normaliseNetwork(provider);
+    const fromCatalog = this.networkIdMap(catalog)[net];
+    return fromCatalog || FALLBACK_NETWORK_IDS[net] || null;
+  }
+
+  // Smartspeed returns 2xx with an error object on failures (DRF style), so we
+  // only treat a response as failed when it carries an explicit error signal.
+  private isFailed(body: any): boolean {
+    if (body == null) return false;
+    if (typeof body === 'string') {
+      const t = body.toLowerCase();
+      return t.includes('error') || t.includes('insufficient') || t.includes('failed');
+    }
+    if (body.detail) return true;
+    if (body.error) return true;
+    if (body.success === false) return true;
+    const status = (body.Status ?? body.status ?? '').toString().toLowerCase();
+    return !!status && (status.includes('fail') || status.includes('error'));
+  }
+
+  private errorMessage(body: any): string {
+    if (body == null) return 'Unknown provider error';
+    if (typeof body === 'string') return body.slice(0, 300);
+    if (body.detail) return typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+    if (body.error) return typeof body.error === 'string' ? body.error : JSON.stringify(body.error);
+    if (body.message) return String(body.message);
+    if (body.Status || body.status) return `Provider returned status: ${body.Status || body.status}`;
+    return 'Unknown provider error';
+  }
+
+  // ── Catalog / lookups ───────────────────────────────────────────────────
 
   async getProviders(type: string, country: string) {
     const category = (type || 'airtime').toLowerCase();
-    const list = PROVIDERS[category] || PROVIDERS.airtime;
+    if (category === 'airtime' || category === 'data') {
+      const catalog = await this.fetchCatalog();
+      const networkIds = this.networkIdMap(catalog);
+      const topups = catalog?.topuppercentage || {};
+      const networks: any[] = [];
+      for (const net of NETWORK_ORDER) {
+        const discount = category === 'airtime' ? parseFloat(topups[net]?.VTU) || null : null;
+        if (category === 'airtime' && discount == null && !topups[net]) continue;
+        if (category === 'data' && !networkIds[net] && !catalog?.Dataplans?.[this.dataplansKey(net)]) continue;
+        networks.push({
+          code: net,
+          name: this.networkDisplayName(net),
+          country: country || 'NG',
+          networkId: networkIds[net] || FALLBACK_NETWORK_IDS[net],
+          ...(discount != null ? { discount } : {}),
+        });
+      }
+      return networks;
+    }
+    const list = PROVIDERS[category] || [];
     return list.map((p) => ({ ...p, country: country || 'NG' }));
   }
 
   async getDataPlans(provider: string) {
     if (!provider) throw new BadRequestException('Provider is required');
-    const baseUrl = this.configService.get('app.vtpass.baseUrl');
-    try {
-      const response = await axios.get(`${baseUrl}/service-variations?serviceID=${provider}`, {
-        headers: this.getVtpassHeaders(),
-        timeout: 15000,
-      });
-      const variations: any[] = response.data?.content?.variations || [];
-      return variations
-        .map((v: any) => ({
-          code: v.variation_code,
-          name: v.name || v.variation_name,
-          amount: parseFloat(v.variation_amount),
-          validity: (v.name || '').match(/(\d+\s*(?:day|week|month|year)s?)/i)?.[0] || '',
-        }))
-        .filter((p: any) => p.code && Number.isFinite(p.amount) && p.amount > 0)
-        .sort((a: any, b: any) => a.amount - b.amount);
-    } catch (error) {
-      this.logger.error(`VTPass variations error: ${(error as Error).message}`);
-      throw new BadRequestException('Could not fetch data plans');
+    const net = this.normaliseNetwork(provider);
+    if (!FALLBACK_NETWORK_IDS[net]) {
+      throw new BadRequestException(`Unknown network provider: ${provider}`);
     }
+    const catalog = await this.fetchCatalog();
+    const section = catalog?.Dataplans?.[this.dataplansKey(net)];
+    const plans: any[] = Array.isArray(section) ? section : section?.ALL || [];
+    if (!plans.length) throw new BadRequestException('No data plans available for this provider');
+    return plans
+      .map((p: any) => ({
+        code: String(p.dataplan_id ?? p.id),
+        name: p.plan || 'Data Plan',
+        validity: p.month_validate || '',
+        amount: parseFloat(p.plan_amount),
+        planType: p.plan_type || 'GIFTING',
+      }))
+      .filter((p) => p.code && Number.isFinite(p.amount) && p.amount > 0)
+      .sort((a, b) => a.amount - b.amount);
   }
 
   async validateMeter(meter: string, provider: string) {
-    const baseUrl = this.configService.get('app.vtpass.baseUrl');
     try {
-      const response = await axios.post(`${baseUrl}/merchant-verify`, {
-        billersCode: meter,
-        serviceID: provider,
-        type: 'prepaid', // or postpaid
-      }, {
-        headers: this.getVtpassHeaders(),
+      const response = await axios.get(`${this.smartspeedBaseUrl()}/validatemeter`, {
+        params: { meternumber: meter, disconame: provider, mtype: 1 },
+        headers: this.smartspeedHeaders(),
         timeout: 15000,
       });
-      return response.data;
+      const body = response.data;
+      if (this.isFailed(body)) throw new Error(this.errorMessage(body));
+      return body;
     } catch (error) {
+      this.logger.error(`Smartspeed meter validation error: ${(error as Error).message}`);
       throw new BadRequestException('Meter validation failed');
     }
   }
+
+  // ── Purchase ────────────────────────────────────────────────────────────
 
   async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin: string, planCode?: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -125,9 +233,16 @@ export class BillsService {
     }
 
     const category = (type || 'airtime').toLowerCase();
+    if (!['airtime', 'data'].includes(category)) {
+      throw new BadRequestException(`${category} is not available yet. Airtime and Data are live.`);
+    }
     if (category === 'data' && !planCode) {
       throw new BadRequestException('Please select a data plan');
     }
+
+    const catalog = await this.fetchCatalog();
+    const networkId = this.resolveNetworkId(catalog, provider);
+    if (!networkId) throw new BadRequestException(`Unknown network provider: ${provider}`);
 
     // Real NGN→USDT rate from the conversions service (live when YellowCard is
     // configured, static table otherwise) — never a hardcoded rate.
@@ -144,8 +259,7 @@ export class BillsService {
       throw new BadRequestException(`Insufficient balance. You need $${usdtAmount.toFixed(2)} USDT (${amount.toFixed(2)} NGN at ${rate} NGN/USD).`);
     }
 
-    const reference = `VTP-${Date.now()}${Math.floor(Math.random() * 1000)}`;
-    const baseUrl = this.configService.get('app.vtpass.baseUrl');
+    const reference = `SS-${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
     return this.prisma.$transaction(async (prisma) => {
       await prisma.wallet.update({
@@ -163,7 +277,7 @@ export class BillsService {
           usdtAmount,
           reference,
           status: 'PENDING',
-          metadata: planCode ? { planCode, rate } : { rate }
+          metadata: { networkId, rate, ...(planCode ? { planCode } : {}) }
         }
       });
 
@@ -179,43 +293,44 @@ export class BillsService {
       });
 
       try {
-        const payload: Record<string, unknown> = {
-          request_id: reference,
-          serviceID: provider,
-          billersCode: recipient,
-          phone: recipient,
-        };
-        if (category === 'data') {
-          payload.variation_code = planCode;
+        const payload: Record<string, unknown> = { Ported_number: false };
+        let endpoint: string;
+        if (category === 'airtime') {
+          endpoint = '/topup/';
+          payload.network = networkId;
           payload.amount = amount;
+          payload.mobile_number = recipient;
+          payload.airtime_type = 'VTU';
         } else {
-          payload.amount = amount;
+          endpoint = '/data/';
+          payload.network = networkId;
+          payload.mobile_number = recipient;
+          payload.plan = Number(planCode) || planCode;
         }
 
-        const vtpassResponse = await axios.post(`${baseUrl}/pay`, payload, {
-          headers: this.getVtpassHeaders(),
-          timeout: 20000,
+        const response = await axios.post(`${this.smartspeedBaseUrl()}${endpoint}`, payload, {
+          headers: this.smartspeedHeaders(),
+          timeout: 60000,
         });
 
-        const code = vtpassResponse.data?.code;
-        const description = vtpassResponse.data?.response_description || 'Unknown error';
-        if (code !== '000') {
-          throw new Error(`${description} (code ${code})`);
+        const body = response.data;
+        if (this.isFailed(body)) {
+          throw new Error(this.errorMessage(body));
         }
 
         await prisma.billPayment.update({
           where: { id: billPayment.id },
-          data: { status: 'COMPLETED', metadata: { ...(billPayment.metadata as object || {}), vtpass: vtpassResponse.data } }
+          data: { status: 'COMPLETED', metadata: { ...(billPayment.metadata as object || {}), smartspeed: body } }
         });
         await prisma.transaction.update({
           where: { id: transaction.id },
-          data: { status: 'COMPLETED', metadata: { ...(transaction.metadata as object || {}), vtpass: vtpassResponse.data } }
+          data: { status: 'COMPLETED', metadata: { ...(transaction.metadata as object || {}), smartspeed: body } }
         });
 
         return { ...billPayment, status: 'COMPLETED' };
       } catch (error) {
         const message = (error as Error).message;
-        this.logger.error(`VTPass purchase failed (${reference}): ${message}`);
+        this.logger.error(`Smartspeed purchase failed (${reference}): ${message}`);
 
         // Refund the USDT and mark both records FAILED — never keep funds for
         // a bill that was not delivered.

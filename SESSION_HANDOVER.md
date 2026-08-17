@@ -329,3 +329,34 @@ Commit 7ca4652 (pushed).
   VTPASS_SECRET_KEY/VTPASS_PUBLIC_KEY/VTPASS_BASE_URL on Railway; deposit
   integration approval still pending (manual crediting is the live path);
   change admin email via /admin/users/[id] now that email editing exists.
+
+Commit 253e606: admin-by-email promotion at sign-in (ensureAdminIfListed in
+auth.service.ts; generateTokens returns role). Demo scripts repointed to
+surexendofficial@gmail.com. Set ADMIN_EMAILS=surexendofficial@gmail.com on
+Railway + redeploy to activate.
+
+Commit 75b9b4b: perf (splash 1000ms, hero delays 0-0.6s). Commit 855c11d: SMS
+OTP removed (email OTP only). Commit a2b01a1: SEO files. Commit 3de502c:
+realistic phone mockup. Google OAuth LIVE - redirect_uri
+https://surexend.com/api/v1/auth/google/callback (no www).
+
+== ROUND 8: SMARTSPEED VTU (airtime + data, full catalog) ==
+- Provider: https://www.smartspeedtelecom.com/api. Auth header `Authorization:
+  Token <key>` + Content-Type application/json. Token in backend/.env
+  (gitignored) - ADD SMARTSPEED_API_TOKEN TO RAILWAY + redeploy.
+- Network IDs: MTN=1 GLO=2 9MOBILE=3 AIRTEL=4. Airtime VTU discounts:
+  MTN 96.5 GLO 90 AIRTEL 97 9MOBILE 98 (shown under airtime provider names;
+  app charges face value, discount is margin).
+- Catalog endpoint GET /api/user/ (cached 10 min in-memory) -> Dataplans
+  {NET}_PLAN.{ALL}[] = {dataplan_id,plan,plan_amount,month_validate,plan_type}.
+  Counts: MTN 73, GLO 27, AIRTEL 43, 9MOBILE 14.
+- bills.service.ts: providers + data-plans live; purchaseBill -> POST /topup/
+  {network,mobile_number,amount,Ported_number:false,airtime_type:"VTU"} or
+  POST /data/ {network,mobile_number,plan,Ported_number:false}; USDT deduction
+  + auto-refund on failure kept; ref prefix SS-. Non airtime/data rejected.
+- Success detection is defensive (no documented response examples): 2xx with
+  no `detail`/`error`/`success:false`/failed `Status` = COMPLETED. VERIFY with a
+  real small purchase once the account is funded (balance ~NGN 40 now).
+- Frontend bills page: all data plans grouped by planType in scrollable grid;
+  airtime providers show discount %. Mocks in api.ts updated to new shape.
+- Builds green (nest build, next build). Push to main -> Railway + Vercel.

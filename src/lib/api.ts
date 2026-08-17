@@ -502,10 +502,10 @@ export const billsAPI = {
     tryWithMock(
       () => apiClient.get(`/bills/providers?type=${type}&country=${country || 'NG'}`).then(r => r.data),
       () => [
-        { id: 'mtn', name: 'MTN Nigeria', logo: '📶' },
-        { id: 'airtel', name: 'Airtel Nigeria', logo: '🔴' },
-        { id: 'glo', name: 'Glo Nigeria', logo: '🟢' },
-        { id: '9mobile', name: '9mobile', logo: '💚' },
+        { code: 'MTN', name: 'MTN Nigeria', networkId: 1, discount: 96.5 },
+        { code: 'GLO', name: 'Globacom', networkId: 2, discount: 90 },
+        { code: '9MOBILE', name: '9mobile (Etisalat)', networkId: 3, discount: 98 },
+        { code: 'AIRTEL', name: 'Airtel Nigeria', networkId: 4, discount: 97 },
       ]
     ),
 
@@ -513,10 +513,10 @@ export const billsAPI = {
     tryWithMock(
       () => apiClient.get(`/bills/data-plans?provider=${provider}`).then(r => r.data),
       () => [
-        { code: 'data_1gb', name: '1GB Monthly Data', price: 300, usdtPrice: 0.2 },
-        { code: 'data_2.5gb', name: '2.5GB Monthly Data', price: 500, usdtPrice: 0.33 },
-        { code: 'data_10gb', name: '10GB Monthly Data', price: 2000, usdtPrice: 1.33 },
-        { code: 'data_20gb', name: '20GB Monthly Data', price: 3500, usdtPrice: 2.33 },
+        { code: '1', name: '1GB', validity: '30 Days', amount: 300, planType: 'GIFTING' },
+        { code: '2', name: '2.5GB', validity: '30 Days', amount: 500, planType: 'GIFTING' },
+        { code: '3', name: '10GB', validity: '30 Days', amount: 2000, planType: 'GIFTING' },
+        { code: '4', name: '20GB', validity: '30 Days', amount: 3500, planType: 'GIFTING' },
       ]
     ),
 
