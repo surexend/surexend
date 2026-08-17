@@ -51,7 +51,7 @@ function FeatureCard({
 }: { icon: any; title: string; desc: string; accent: string; delay?: number }) {
   return (
     <motion.div
-      className="glass-card p-6 group cursor-default"
+      className="liquid-glass p-6 group cursor-default"
       style={{ borderColor: `rgba(${accent}, 0.15)` }}
       initial={{ opacity: 0, y: 40 }}
       whileInView={{ opacity: 1, y: 0 }}
@@ -106,7 +106,7 @@ function TestimonialCard({ name, role, country, text, accent, delay = 0 }: {
 }) {
   return (
     <motion.div
-      className="glass-card p-6 flex flex-col gap-4"
+      className="liquid-glass p-6 flex flex-col gap-4"
       initial={{ opacity: 0, scale: 0.95 }}
       whileInView={{ opacity: 1, scale: 1 }}
       viewport={{ once: true }}
@@ -807,7 +807,7 @@ export default function LandingPage() {
                 transition={{ duration: 0.7 }}
               >
                 {/* Live conversion card */}
-                <div className="glass-card p-6 border border-white/10 rounded-2xl relative overflow-hidden">
+                <div className="liquid-glass p-6 border border-white/10 rounded-2xl relative overflow-hidden">
                   <div className="flex justify-between items-center mb-4">
                     <span className="text-xs font-bold text-[#64748B] tracking-wider uppercase">Live Conversion</span>
                   </div>
@@ -841,7 +841,7 @@ export default function LandingPage() {
                 </div>
 
                 {/* Bill payment activity card */}
-                <div className="glass-card p-6 border border-white/10 rounded-2xl">
+                <div className="liquid-glass p-6 border border-white/10 rounded-2xl">
                   <div className="flex justify-between items-center mb-4">
                     <span className="text-xs font-bold text-[#64748B] tracking-wider uppercase">Bill Payment</span>
                   </div>

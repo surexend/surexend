@@ -110,7 +110,7 @@ function StatementModal({
     <AnimatePresence>
       {open && (
         <>
-          <motion.div className="fixed inset-0 bg-black/60 z-[80] backdrop-blur-sm"
+          <motion.div className="fixed inset-0 liquid-backdrop z-[80]"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose} />
           <div className="fixed inset-0 z-[90] flex items-end sm:items-center sm:justify-center px-3 pb-20 sm:pb-0 pointer-events-none">
@@ -247,7 +247,7 @@ function FilterPanel({ filters, setFilters, accentHex, accentRgb, onClose }: {
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
     >
       {/* Mobile backdrop only */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm sm:hidden" onClick={onClose} />
+      <div className="absolute inset-0 liquid-backdrop sm:hidden" onClick={onClose} />
 
       <motion.div
         className="relative w-full sm:w-80 max-h-[82vh] sm:max-h-[70vh] bg-[#0F1629] rounded-t-3xl sm:rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden sm:shadow-2xl"
@@ -518,12 +518,13 @@ function TransactionDetailModal({
       ctx.closePath()
     }
 
-    const spaced = (text: string, f: string, x: number, y: number, color: string, gap = 2.5) => {
+    const spaced = (text: string, f: string, x: number, y: number, color: string, gap = 2.5, align: 'left' | 'center' | 'right' = 'left') => {
       const cv = document.createElement('canvas')
       const cx = cv.getContext('2d')!
       cx.font = f
       const widths = [...text].map(ch => cx.measureText(ch).width)
-      let sx = x
+      const total = widths.reduce((a, b) => a + b, 0) + gap * Math.max(0, text.length - 1)
+      let sx = align === 'right' ? x - total : align === 'center' ? x - total / 2 : x
       ctx.fillStyle = color
       ctx.font = f
       for (let i = 0; i < text.length; i++) {
@@ -551,7 +552,7 @@ function TransactionDetailModal({
     ctx.textAlign = 'right'
     ctx.font = `700 9px ${font}`
     ctx.fillStyle = '#475569'
-    spaced('OFFICIAL RECEIPT', `700 9px ${font}`, rightX, PY + 12, '#475569', 2.5)
+    spaced('OFFICIAL RECEIPT', `700 9px ${font}`, rightX, PY + 12, '#475569', 2.5, 'right')
     ctx.font = `500 9px ${font}`
     ctx.fillStyle = '#334155'
     ctx.fillText(displayNetwork, rightX, PY + 24)
@@ -596,7 +597,7 @@ function TransactionDetailModal({
     ctx.fillStyle = grad
     ctx.fillRect(PX, panelY, CW, 3)
     ctx.textAlign = 'center'
-    spaced(amountLabel, `700 9px ${font}`, W / 2, panelY + 26 + 11, '#64748B', 2.5)
+    spaced(amountLabel, `700 9px ${font}`, W / 2, panelY + 26 + 11, '#64748B', 2.5, 'center')
     ctx.font = `900 ${amountSize}px ${font}`
     ctx.fillStyle = amountColor
     ctx.fillText(amountValue, W / 2, panelY + 26 + 12 + 10 + amountSize)
@@ -1170,7 +1171,7 @@ export default function HistoryPage() {
                 </div>
 
                 {/* Transaction rows — matches home page Recent Transactions card style */}
-                <div className="glass-card rounded-2xl overflow-hidden">
+                <div className="liquid-glass rounded-2xl overflow-hidden">
                   {(txs as any[]).map((tx: any, idx: number) => {
                     const typeUpper = (tx.type || '').toUpperCase()
                     const isCredit = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING' || typeUpper === 'CONVERT'

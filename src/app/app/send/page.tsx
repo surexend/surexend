@@ -150,7 +150,7 @@ export default function SendPage() {
       <AnimatePresence mode="wait">
         {/* Step 1: Recipient Address or SureX Tag */}
         {step === 1 && (
-          <motion.div key="step1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }} className="glass-card p-6 space-y-6">
+          <motion.div key="step1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }} className="liquid-glass p-6 space-y-6">
             <div className="border-b border-white/10 pb-4">
               <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
                 <Send className="w-5 h-5" style={{ color: colors.primary }} /> Send Stablecoins
@@ -257,7 +257,7 @@ export default function SendPage() {
 
         {/* Step 2: Amount */}
         {step === 2 && (
-          <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="glass-card p-6 space-y-6">
+          <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="liquid-glass p-6 space-y-6">
             <button onClick={() => setStep(1)} className="text-[#94A3B8] hover:text-white text-xs font-semibold flex items-center gap-1">
               ← Back
             </button>
@@ -324,7 +324,7 @@ export default function SendPage() {
 
         {/* Step 3: Review */}
         {step === 3 && (
-          <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="glass-card p-6 space-y-6">
+          <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="liquid-glass p-6 space-y-6">
             <button onClick={() => setStep(2)} className="text-[#94A3B8] hover:text-white text-xs font-semibold flex items-center gap-1">
               ← Edit Amount
             </button>
@@ -367,7 +367,7 @@ export default function SendPage() {
 
         {/* Step 4: PIN Security */}
         {step === 4 && (
-          <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-6 text-center space-y-6">
+          <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="liquid-glass p-6 text-center space-y-6">
             <h2 className="text-xl font-extrabold text-white">Security Verification</h2>
             <p className="text-xs text-[#94A3B8]">Enter your 4-digit transaction PIN to authorize sending ${formData.amount} USD{cctpFee > 0 ? ` + $${cctpFee.toFixed(2)} network fee` : ''} (${(Number(formData.amount || 0) + cctpFee).toFixed(2)} USD total)</p>
 
@@ -394,7 +394,7 @@ export default function SendPage() {
 
         {/* Step 5: Success Screen */}
         {step === 5 && (
-          <motion.div key="step5" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-8 text-center space-y-6">
+          <motion.div key="step5" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="liquid-glass p-8 text-center space-y-6">
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-10 h-10" />
             </div>

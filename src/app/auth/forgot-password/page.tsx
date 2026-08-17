@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className={`w-full max-w-md p-8 glass-card-${variant} relative z-10`}
+        className={`w-full max-w-md p-8 liquid-glass relative z-10`}
       >
         <Link href="/auth/login" className="inline-flex items-center text-[#94A3B8] hover:text-white transition-colors mb-6">
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to login

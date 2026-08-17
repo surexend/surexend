@@ -115,12 +115,12 @@ export default function AISupportWidget() {
       {/* 💬 CHAT MODAL DRAWER */}
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 liquid-backdrop">
             <motion.div
               initial={{ opacity: 0, y: 100, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 100, scale: 0.95 }}
-              className="w-full sm:w-[420px] h-[85vh] sm:h-[600px] max-h-[90vh] bg-[#0F1629] border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden relative"
+              className="w-full sm:w-[420px] h-[85vh] sm:h-[600px] max-h-[90vh] liquid-glass-strong border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden relative"
             >
               {/* Header */}
               <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/40">

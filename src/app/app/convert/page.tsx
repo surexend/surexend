@@ -184,7 +184,7 @@ export default function ConvertPage() {
             </div>
 
             {/* FROM Card */}
-            <div className="glass-card p-4 rounded-2xl border border-white/10 space-y-3">
+            <div className="liquid-glass p-4 rounded-2xl border border-white/10 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 {/* Currency selector (FROM) */}
                 <button
@@ -254,7 +254,7 @@ export default function ConvertPage() {
             </div>
 
             {/* TO Card */}
-            <div className="glass-card p-4 rounded-2xl border border-white/10 space-y-3">
+            <div className="liquid-glass p-4 rounded-2xl border border-white/10 space-y-3">
               <div className="flex items-center justify-between">
                 {/* Currency selector (TO) */}
                 <button
@@ -312,7 +312,7 @@ export default function ConvertPage() {
 
         {/* ─── STEP 2: PIN ─── */}
         {step === 2 && (
-          <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="glass-card p-6 text-center space-y-6 rounded-2xl">
+          <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="liquid-glass p-6 text-center space-y-6 rounded-2xl">
             <button onClick={() => setStep(1)} className="text-[#94A3B8] hover:text-white text-xs font-semibold flex items-center gap-1">← Back</button>
             <h2 className="text-xl font-bold text-white">Enter 4-Digit PIN</h2>
             {process.env.NEXT_PUBLIC_TESTING_ENABLED === 'true' && (
@@ -341,7 +341,7 @@ export default function ConvertPage() {
 
         {/* ─── STEP 3: Success ─── */}
         {step === 3 && (
-          <motion.div key="step3" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-8 text-center space-y-6 rounded-2xl">
+          <motion.div key="step3" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="liquid-glass p-8 text-center space-y-6 rounded-2xl">
             <div className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-12 h-12 text-emerald-400" />
             </div>
@@ -351,7 +351,7 @@ export default function ConvertPage() {
                 {toSymbol}{(result?.receiveAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {toCode} has been added to your wallet.
               </p>
             </div>
-            <div className="glass-card p-4 rounded-xl border border-white/10 space-y-2 text-left">
+            <div className="liquid-glass p-4 rounded-xl border border-white/10 space-y-2 text-left">
               <div className="flex justify-between text-xs">
                 <span className="text-[#94A3B8]">Converted</span>
                 <span className="text-white font-bold">{fromSymbol}{(result?.amount || 0).toLocaleString()} {fromCode}</span>
@@ -375,13 +375,13 @@ export default function ConvertPage() {
       {/* ── Currency Picker Modal ── */}
       <AnimatePresence>
         {pickerTarget && (
-          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-[80] flex items-end justify-center liquid-backdrop">
             <motion.div
               initial={{ opacity: 0, y: 100 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 100 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-md glass-card rounded-t-3xl border-t border-white/15 shadow-2xl"
+              className="w-full max-w-md liquid-glass rounded-t-3xl border-t border-white/15 shadow-2xl"
               style={{ borderColor: `rgba(${colors.glowRgb},0.4)` }}
             >
               <div className="flex items-center justify-between p-4 border-b border-white/10">

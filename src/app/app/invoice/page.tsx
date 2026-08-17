@@ -89,7 +89,7 @@ export default function InvoicePage() {
 
       {/* Currency Selector */}
       <motion.div
-        className="glass-card p-4 sm:p-5 space-y-3"
+        className="liquid-glass p-4 sm:p-5 space-y-3"
         initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
       >
         <h3 className="font-bold text-white text-sm flex items-center gap-2">
@@ -119,7 +119,7 @@ export default function InvoicePage() {
 
       {/* Invoice Form */}
       <motion.div
-        className="glass-card p-4 sm:p-5 space-y-4"
+        className="liquid-glass p-4 sm:p-5 space-y-4"
         initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
       >
         <h3 className="font-bold text-white text-sm flex items-center gap-2 border-b border-white/5 pb-3">
@@ -177,7 +177,7 @@ export default function InvoicePage() {
 
       {/* Generated Bank Account Details */}
       <motion.div
-        className="glass-card p-4 sm:p-5 space-y-4"
+        className="liquid-glass p-4 sm:p-5 space-y-4"
         initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
       >
         {/* Card Header */}

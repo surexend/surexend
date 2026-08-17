@@ -125,7 +125,7 @@ export default function ReferralsPage() {
       </div>
 
       {/* Tier Badge & Progress Card */}
-      <div className="glass-card p-4 sm:p-5 rounded-2xl border border-white/10 space-y-3">
+      <div className="liquid-glass p-4 sm:p-5 rounded-2xl border border-white/10 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs text-[#94A3B8] font-medium">Your Cashback Tier</span>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold" style={{ background: tier.bg, color: tier.color, borderColor: `${tier.color}40` }}>
@@ -162,7 +162,7 @@ export default function ReferralsPage() {
 
       {/* 2-Column Stats Grid (Fixed layout - no overlapping glitch) */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="glass-card p-4 rounded-2xl border border-white/10 space-y-1">
+        <div className="liquid-glass p-4 rounded-2xl border border-white/10 space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-[#94A3B8] font-medium">Total Earned</span>
             <DollarSign className="w-4 h-4 text-emerald-400" />
@@ -171,7 +171,7 @@ export default function ReferralsPage() {
           <p className="text-[10px] text-emerald-400/80 font-medium">+${(stats?.thisMonthEarned || 0).toFixed(2)} this month</p>
         </div>
 
-        <div className="glass-card p-4 rounded-2xl border border-white/10 space-y-1">
+        <div className="liquid-glass p-4 rounded-2xl border border-white/10 space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-[#94A3B8] font-medium">Active Referrals</span>
             <Users className="w-4 h-4 text-blue-400" />
@@ -212,7 +212,7 @@ export default function ReferralsPage() {
               { step: '2', title: 'Friends Sign Up & Transact', desc: 'They register on SureXend and convert currency, pay bills, or send crypto.' },
               { step: '3', title: 'Earn Automatic USDC Cashbacks', desc: 'You get 0.3% to 0.6% fee cashback on every payment they make, settled directly in USDC.' },
             ].map(({ step, title, desc }) => (
-              <div key={step} className="glass-card p-3.5 rounded-2xl border border-white/10 flex items-start gap-3">
+              <div key={step} className="liquid-glass p-3.5 rounded-2xl border border-white/10 flex items-start gap-3">
                 <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5">
                   {step}
                 </div>
@@ -226,7 +226,7 @@ export default function ReferralsPage() {
         )}
 
         {activeTab === 'referrals' && (
-          <div className="glass-card p-4 rounded-2xl border border-white/10 text-center text-xs text-[#94A3B8] space-y-2">
+          <div className="liquid-glass p-4 rounded-2xl border border-white/10 text-center text-xs text-[#94A3B8] space-y-2">
             <p className="font-semibold text-white">Your Invited Friends (12 Active)</p>
             <div className="space-y-2 text-left pt-2">
               {['David K. (Nigeria)', 'Sarah M. (Kenya)', 'Kwame A. (Ghana)'].map((name, i) => (
@@ -245,7 +245,7 @@ export default function ReferralsPage() {
         )}
 
         {activeTab === 'earnings' && (
-          <div className="glass-card p-4 rounded-2xl border border-white/10 text-center text-xs text-[#94A3B8] space-y-2">
+          <div className="liquid-glass p-4 rounded-2xl border border-white/10 text-center text-xs text-[#94A3B8] space-y-2">
             <p className="font-semibold text-white">Monthly Cashback Settlement</p>
             <p className="text-[11px] text-[#64748B]">All cashbacks are automatically credited to your USDC balance on the 1st of every month.</p>
           </div>

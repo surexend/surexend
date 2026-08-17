@@ -278,6 +278,61 @@ body {
   pointer-events: none;
 }
 
+/* ── Liquid glass LIVING EDGE (animated gold/lemon ring) ────────────── */
+/* A thin arc of the brand accent travels endlessly around each glass
+   surface's edge. Rendered as a masked conic-gradient ring on a registered
+   custom property so it animates by interpolation; browsers without @property
+   simply show no ring (no breakage). Disabled under prefers-reduced-motion.
+   The painted area is just a 1.5px ring per surface, so mobile cost stays low. */
+
+@property --glass-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.liquid-glass::after,
+.liquid-glass-strong::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--glass-angle),
+    transparent 0deg 300deg,
+    var(--edge-glow, rgba(255, 215, 0, 0.9)) 330deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: glass-edge-flow 5s linear infinite;
+}
+
+@keyframes glass-edge-flow {
+  to { --glass-angle: 360deg; }
+}
+
+[data-variant="gold"] .liquid-glass::after,
+[data-variant="gold"] .liquid-glass-strong::after {
+  --edge-glow: rgba(255, 215, 0, 0.95);
+}
+
+[data-variant="lemon"] .liquid-glass::after,
+[data-variant="lemon"] .liquid-glass-strong::after {
+  --edge-glow: rgba(202, 255, 58, 0.95);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-glass::after,
+  .liquid-glass-strong::after {
+    animation: none;
+  }
+}
+
 /* Liquid-tinted backdrop for modals — refracts + deepens instead of flat black. */
 .liquid-backdrop {
   background: rgba(3, 7, 18, 0.45);

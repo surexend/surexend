@@ -196,7 +196,7 @@ export default function BridgePage() {
       </div>
 
       {/* Main Bridge Card */}
-      <div className="glass-card p-5 rounded-3xl border border-white/10 space-y-5">
+      <div className="liquid-glass p-5 rounded-3xl border border-white/10 space-y-5">
         
         {/* Wallet Connection */}
         <div className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.03] border border-white/5">
@@ -326,7 +326,7 @@ export default function BridgePage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="glass-card p-5 rounded-3xl border border-white/10 space-y-4"
+            className="liquid-glass p-5 rounded-3xl border border-white/10 space-y-4"
           >
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               {bridgeStatus === 'completed' ? (

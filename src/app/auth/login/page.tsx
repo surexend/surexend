@@ -58,7 +58,7 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className={`w-full max-w-md p-8 glass-card-${variant} relative z-10`}
+        className={`w-full max-w-md p-8 liquid-glass relative z-10`}
       >
         <div className="text-center mb-8">
           <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">

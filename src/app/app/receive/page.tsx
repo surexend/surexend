@@ -221,7 +221,7 @@ export default function ReceivePage() {
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.2 }}
-            className="glass-card p-5 rounded-3xl flex flex-col items-center gap-4 border border-white/10"
+            className="liquid-glass p-5 rounded-3xl flex flex-col items-center gap-4 border border-white/10"
           >
             {/* Chain info banner */}
             <div className="flex items-center gap-3 w-full p-3 rounded-2xl bg-white/[0.03] border border-white/8">
@@ -261,7 +261,7 @@ export default function ReceivePage() {
           </motion.div>
 
           {/* Address Card */}
-          <div className="glass-card p-4 rounded-2xl border border-white/10">
+          <div className="liquid-glass p-4 rounded-2xl border border-white/10">
             <p className="text-[10px] text-[#64748B] uppercase tracking-wider mb-2 font-bold">{network} Deposit Address</p>
             <p className="text-xs font-mono text-white break-all leading-relaxed bg-white/[0.03] p-3 rounded-xl border border-white/8 select-all">
               {isLoading ? 'Loading address...' : address}

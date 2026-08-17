@@ -22,7 +22,7 @@ function MenuSection({ title, children }: { title: string; children: React.React
   return (
     <div className="w-full mb-4">
       <p className="text-[#64748B] text-[11px] font-bold uppercase tracking-wider px-1 mb-2">{title}</p>
-      <div className="glass-card rounded-2xl border border-white/10 overflow-hidden">
+      <div className="liquid-glass rounded-2xl border border-white/10 overflow-hidden">
         {children}
       </div>
     </div>
@@ -149,7 +149,7 @@ export default function ProfilePage() {
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 py-4 sm:p-6 md:p-8 max-w-2xl mx-auto space-y-4 pb-28 sm:pb-32">
       {/* Sleek Single-Line Profile Header with Custom Avatar Upload */}
-      <div className="glass-card p-3.5 sm:p-5 rounded-2xl border border-white/10 flex items-center justify-between gap-3">
+      <div className="liquid-glass p-3.5 sm:p-5 rounded-2xl border border-white/10 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 truncate">
           {/* Clean Avatar Display */}
           <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-lg bg-[#1E2738] flex-shrink-0">
@@ -191,7 +191,7 @@ export default function ProfilePage() {
         animate={{ opacity: 1, y: 0 }} 
         transition={{ delay: 0.05 }}
       >
-        <div className="glass-card p-4 rounded-2xl border border-white/10 flex items-center justify-between">
+        <div className="liquid-glass p-4 rounded-2xl border border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
               <Tag className="w-5 h-5" />
@@ -336,7 +336,7 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showCurrencyPicker && (
           <>
-            <motion.div className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm"
+            <motion.div className="fixed inset-0 liquid-backdrop z-40"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowCurrencyPicker(false)} />
             <motion.div
@@ -423,7 +423,7 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showLogoutConfirm && (
           <>
-            <motion.div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
+            <motion.div className="fixed inset-0 liquid-backdrop z-40"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowLogoutConfirm(false)} />
             <motion.div

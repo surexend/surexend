@@ -290,12 +290,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {createPortal(
           <AnimatePresence>
             {showNotifications && (
-              <div className="fixed inset-0 z-[80] flex items-start justify-end p-2 sm:p-4 bg-black/75 backdrop-blur-md">
+              <div className="fixed inset-0 z-[80] flex items-start justify-end p-2 sm:p-4 liquid-backdrop">
                 <motion.div
                   initial={{ opacity: 0, x: 50, scale: 0.95 }}
                   animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 50, scale: 0.95 }}
-                className="glass-card w-[94vw] sm:w-96 max-h-[85vh] overflow-y-auto p-4 sm:p-5 relative rounded-3xl shadow-2xl border space-y-4"
+                className="liquid-glass-strong w-[94vw] sm:w-96 max-h-[85vh] overflow-y-auto p-4 sm:p-5 relative rounded-3xl shadow-2xl border space-y-4"
                 style={{ borderColor: colors.cardBorder }}
               >
                 <div className="flex items-center justify-between border-b border-white/10 pb-3">

@@ -262,7 +262,7 @@ export default function DashboardPage() {
   return (
     <div className="w-full max-w-full overflow-x-hidden px-4 py-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-6 pb-36 sm:pb-32">
       {/* 🟢 SLEEK SINGLE-LINE FINTECH USER BAR */}
-      <div className="flex items-center justify-between py-2 px-3.5 rounded-xl glass-card border border-white/10 text-xs">
+      <div className="flex items-center justify-between py-2 px-3.5 rounded-xl liquid-glass border border-white/10 text-xs">
         <div className="flex items-center gap-2 truncate">
           <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20 flex-shrink-0 shadow-md bg-[#1E2738]">
             {avatar ? (
@@ -484,7 +484,7 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, y: -6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
-                    className="absolute left-0 top-full mt-2 z-30 w-60 max-h-72 overflow-y-auto rounded-2xl glass-card p-1.5 border border-white/10 shadow-2xl"
+                    className="absolute left-0 top-full mt-2 z-30 w-60 max-h-72 overflow-y-auto rounded-2xl liquid-glass p-1.5 border border-white/10 shadow-2xl"
                   >
                     {MARKET_PAIRS.map((pair) => (
                       <button
@@ -824,13 +824,13 @@ export default function DashboardPage() {
 
       <AnimatePresence>
         {showSendModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 liquid-backdrop">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="glass-card w-[94vw] max-w-md max-h-[85vh] overflow-y-auto p-5 sm:p-6 relative rounded-3xl shadow-2xl border"
+              className="liquid-glass-strong w-[94vw] max-w-md max-h-[85vh] overflow-y-auto p-5 sm:p-6 relative rounded-3xl shadow-2xl border"
               style={{
                 borderColor: variant === 'gold' ? 'rgba(212, 160, 23, 0.4)' : 'rgba(181, 226, 61, 0.4)',
               }}
@@ -939,13 +939,13 @@ export default function DashboardPage() {
       {/* FUND CHOICE MODAL */}
       <AnimatePresence>
         {showFundModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 liquid-backdrop">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="glass-card w-[94vw] max-w-md max-h-[85vh] overflow-y-auto p-5 sm:p-6 relative rounded-3xl shadow-2xl border"
+              className="liquid-glass-strong w-[94vw] max-w-md max-h-[85vh] overflow-y-auto p-5 sm:p-6 relative rounded-3xl shadow-2xl border"
               style={{ borderColor: variant === "gold" ? "rgba(212, 160, 23, 0.4)" : "rgba(181, 226, 61, 0.4)" }}
             >
               {/* Header */}
@@ -1028,13 +1028,13 @@ export default function DashboardPage() {
       {/* ── VIRTUAL BANK ACCOUNT MODAL (Local Currency Deposit) ── */}
       <AnimatePresence>
         {showVBAModal && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 liquid-backdrop">
             <motion.div
               initial={{ opacity: 0, y: 60 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 60 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="glass-card w-full sm:w-[420px] rounded-t-3xl sm:rounded-3xl p-5 pb-8 sm:p-6 border border-emerald-500/30 shadow-2xl space-y-4"
+              className="liquid-glass-strong w-full sm:w-[420px] rounded-t-3xl sm:rounded-3xl p-5 pb-8 sm:p-6 border border-emerald-500/30 shadow-2xl space-y-4"
             >
               {/* Header */}
               <div className="flex items-center justify-between">
@@ -1102,13 +1102,13 @@ export default function DashboardPage() {
         {/* ── Local Currency Picker ── */}
         <AnimatePresence>
           {showLocalCurrencyPicker && (
-            <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/80 backdrop-blur-md">
+            <div className="fixed inset-0 z-[80] flex items-end justify-center liquid-backdrop">
               <motion.div
                 initial={{ opacity: 0, y: 100 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 100 }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="w-full max-w-md glass-card rounded-t-3xl border-t border-white/15 shadow-2xl"
+                className="w-full max-w-md liquid-glass rounded-t-3xl border-t border-white/15 shadow-2xl"
                 style={{ borderColor: `rgba(${colors.glowRgb},0.4)` }}
               >
                 <div className="flex items-center justify-between p-4 border-b border-white/10">

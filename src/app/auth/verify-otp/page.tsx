@@ -97,7 +97,7 @@ function VerifyOTPForm() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
-        className={`w-full max-w-md p-8 glass-card-${variant} relative z-10 text-center`}
+        className={`w-full max-w-md p-8 liquid-glass relative z-10 text-center`}
       >
         <div className="w-16 h-16 mx-auto rounded-full bg-[rgba(255,255,255,0.05)] flex items-center justify-center mb-6">
           <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -35,7 +35,7 @@ export default function KYCPage() {
         <button onClick={() => router.back()} className="text-[#94A3B8] hover:text-white text-sm font-semibold">← Back</button>
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6 rounded-2xl space-y-6">
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="liquid-glass p-6 rounded-2xl space-y-6">
         <div className="text-center">
           <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto" style={{ background: cfg.bg, border: `1px solid ${cfg.color}40` }}>
             <StatusIcon className="w-8 h-8" style={{ color: cfg.color }} />
