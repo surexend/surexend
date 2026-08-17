@@ -31,7 +31,8 @@ export class BillsController {
     @Body('recipient') recipient: string,
     @Body('amount') amount: number,
     @Body('pin') pin: string,
+    @Body('planCode') planCode?: string,
   ) {
-    return this.billsService.purchaseBill(user.id, type, provider, recipient, amount, pin);
+    return this.billsService.purchaseBill(user.id, type, provider, recipient, amount, pin, planCode);
   }
 }

@@ -1,8 +1,8 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseInterceptors, Req } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseInterceptors, Req, Get, Res, Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, VerifyOtpDto } from './dto/auth.dto';
 import { AuditLogInterceptor } from '../common/interceptors/audit-log.interceptor';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 
 @Controller('auth')
 @UseInterceptors(AuditLogInterceptor)
@@ -30,6 +30,39 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async resendOtp(@Body('identifier') identifier: string, @Body('type') type: string) {
     return this.authService.resendOtp(identifier, type);
+  }
+
+  @Get('google/config')
+  googleConfig() {
+    return { enabled: this.authService.googleEnabled() };
+  }
+
+  @Get('google')
+  googleAuth() {
+    return { url: this.authService.googleAuthUrl() };
+  }
+
+  @Get('google/callback')
+  async googleCallback(@Query('code') code: string, @Res() res: Response) {
+    const frontendUrl = this.authService.configFrontendUrl();
+    try {
+      const tokens = await this.authService.googleCallback(code);
+      return res.redirect(`${frontendUrl}/auth/oauth-callback?accessToken=${encodeURIComponent(tokens.accessToken)}&refreshToken=${encodeURIComponent(tokens.refreshToken)}`);
+    } catch (error: any) {
+      return res.redirect(`${frontendUrl}/auth/oauth-callback?error=${encodeURIComponent(error?.response?.data?.message || error?.message || 'Google sign-in failed')}`);
+    }
+  }
+
+  @Post('otp/request')
+  @HttpCode(HttpStatus.OK)
+  async requestLoginOtp(@Body('email') email: string) {
+    return this.authService.requestLoginOtp(email);
+  }
+
+  @Post('otp/verify-login')
+  @HttpCode(HttpStatus.OK)
+  async verifyLoginOtp(@Body() dto: { email: string; code: string }) {
+    return this.authService.verifyLoginOtp(dto);
   }
 
   @Post('refresh')

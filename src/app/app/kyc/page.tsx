@@ -8,10 +8,10 @@ import { useRouter } from 'next/navigation'
 import { Shield, ShieldCheck, Clock, XCircle } from 'lucide-react'
 
 const STATUS: Record<string, { label: string; color: string; bg: string; icon: any; desc: string }> = {
-  VERIFIED: { label: 'Verified', color: '#10B981', bg: 'rgba(16,185,129,0.1)', icon: ShieldCheck, desc: 'Your identity has been verified. All crypto features are unlocked.' },
-  PENDING: { label: 'Pending Review', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)', icon: Clock, desc: 'Your documents are being reviewed. This usually takes 24-48 hours.' },
-  REJECTED: { label: 'Verification Failed', color: '#EF4444', bg: 'rgba(239,68,68,0.1)', icon: XCircle, desc: 'We could not verify your identity. Please try again with clearer documents.' },
-  UNVERIFIED: { label: 'Unverified', color: '#EF4444', bg: 'rgba(239,68,68,0.1)', icon: Shield, desc: 'Crypto sends, receives, and conversions require identity verification. Airtime, data, and bill payments remain available.' },
+  VERIFIED: { label: 'Verified', color: '#10B981', bg: 'rgba(16,185,129,0.1)', icon: ShieldCheck, desc: 'Your identity has been verified. All features are available to you.' },
+  PENDING: { label: 'Pending Review', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)', icon: Clock, desc: 'Your documents are being reviewed. You can still use all features in the meantime.' },
+  REJECTED: { label: 'Verification Failed', color: '#EF4444', bg: 'rgba(239,68,68,0.1)', icon: XCircle, desc: 'We could not verify your identity. You can still use all features, but contact support if you need help.' },
+  UNVERIFIED: { label: 'Unverified', color: '#94A3B8', bg: 'rgba(148,163,184,0.1)', icon: Shield, desc: 'Identity verification is optional during launch. All features — send, convert, buy data & airtime — are available to you right now.' },
 }
 
 export default function KYCPage() {
@@ -54,8 +54,8 @@ export default function KYCPage() {
 
             <div className="space-y-2.5">
               {[
-                { label: 'Crypto Send, Receive & Convert', locked: status !== 'VERIFIED' },
-                { label: 'Withdraw to Local Bank', locked: status !== 'VERIFIED' },
+                { label: 'Crypto Send & Receive', locked: false },
+                { label: 'Convert & Swap', locked: false },
                 { label: 'Airtime, Data & Bill Payments', locked: false },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between px-4 py-3 rounded-xl border border-white/10 bg-white/5">
@@ -77,8 +77,8 @@ export default function KYCPage() {
               </button>
             ) : (
               <div className="rounded-xl border p-4 text-xs text-[#94A3B8] leading-relaxed" style={{ background: `rgba(${accentRgb}, 0.06)`, borderColor: `rgba(${accentRgb}, 0.2)` }}>
-                Identity verification is handled securely by our KYC provider. During testing, verification is skipped so you can
-                try all features freely. Full KYC verification will be required at launch for all crypto operations.
+                Identity verification is optional during launch — nothing is blocked if you skip it. You can verify anytime from
+                this page to enable higher limits later.
               </div>
             )}
           </>

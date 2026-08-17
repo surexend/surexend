@@ -199,6 +199,134 @@ export class AuthService {
     await this.notificationsService.sendOTPEmail(identifier, code);
   }
 
+  // ── Passwordless OTP login (email) ──────────────────────────────────────
+  async requestLoginOtp(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email: email?.toLowerCase().trim() } });
+    if (!user || !user.isActive) {
+      throw new BadRequestException('No active account found with this email');
+    }
+    await this.generateAndSendOtp(user.email, 'LOGIN');
+    return { message: 'One-time code sent to your email' };
+  }
+
+  async verifyLoginOtp(dto: { email: string; code: string }) {
+    const identifier = dto.email?.toLowerCase().trim();
+    const otpRecord = await this.prisma.otpCode.findFirst({
+      where: {
+        identifier,
+        code: dto.code,
+        type: 'LOGIN',
+        used: false,
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!otpRecord) {
+      throw new BadRequestException('Invalid or expired code');
+    }
+
+    await this.prisma.otpCode.update({ where: { id: otpRecord.id }, data: { used: true } });
+
+    const user = await this.prisma.user.findUnique({ where: { email: identifier } });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('No active account found with this email');
+    }
+
+    return this.generateTokens(user);
+  }
+
+  // ── Google OAuth ────────────────────────────────────────────────────────
+  googleEnabled(): boolean {
+    return Boolean(this.configService.get('app.google.clientId') && this.configService.get('app.google.clientSecret'));
+  }
+
+  configFrontendUrl(): string {
+    return this.configService.get<string>('app.frontendUrl') || 'http://localhost:3000';
+  }
+
+  googleAuthUrl(): string {
+    const clientId = this.configService.get<string>('app.google.clientId');
+    if (!clientId) throw new BadRequestException('Google OAuth is not configured');
+    const redirectUri = `${this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001'}/api/v1/auth/google/callback`;
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: 'openid email profile',
+      prompt: 'select_account',
+    });
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  async googleCallback(code: string): Promise<{ accessToken: string; refreshToken: string; user: any }> {
+    const clientId = this.configService.get<string>('app.google.clientId');
+    const clientSecret = this.configService.get<string>('app.google.clientSecret');
+    if (!clientId || !clientSecret) throw new BadRequestException('Google OAuth is not configured');
+    const redirectUri = `${this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001'}/api/v1/auth/google/callback`;
+
+    // 1. Exchange the authorization code for tokens
+    let tokenRes;
+    try {
+      tokenRes = await axios.post('https://oauth2.googleapis.com/token', new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }).toString(), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 });
+    } catch {
+      throw new BadRequestException('Google sign-in failed. Please try again.');
+    }
+
+    const accessToken = tokenRes.data?.access_token;
+    if (!accessToken) throw new BadRequestException('Google sign-in failed. Please try again.');
+
+    // 2. Fetch the user's profile
+    let profile;
+    try {
+      const profileRes = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 10000,
+      });
+      profile = profileRes.data;
+    } catch {
+      throw new BadRequestException('Could not fetch your Google profile. Please try again.');
+    }
+
+    const email: string = profile?.email?.toLowerCase().trim();
+    if (!email) throw new BadRequestException('Your Google account has no verified email.');
+
+    // 3. Find or create the user by email
+    let user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      const firstName = profile.given_name || email.split('@')[0] || 'Google';
+      const lastName = profile.family_name || 'User';
+      let surexTag = `${firstName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}.${lastName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
+      let tagTaken = await this.prisma.user.findUnique({ where: { surexTag } });
+      if (tagTaken) {
+        surexTag = `${surexTag}${Math.floor(Math.random() * 10000)}`;
+      }
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          phone: `google-${Math.floor(Math.random() * 100000000)}`, // placeholder; editable in admin console
+          passwordHash: await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10), // unusable password
+          firstName,
+          lastName,
+          surexTag,
+          referralCode: crypto.randomBytes(4).toString('hex').toUpperCase(),
+          wallet: { create: {} },
+        },
+      });
+    }
+
+    if (!user.isActive) throw new UnauthorizedException('This account is inactive');
+
+    const tokens = await this.generateTokens(user);
+    return { ...tokens, user: tokens.user };
+  }
+
   async resendOtp(identifier: string, type: string) {
     if (!identifier) {
       throw new BadRequestException('Identifier is required');

@@ -107,6 +107,7 @@ export default function ConvertPage() {
 
   const handleNext = () => {
     if (fromCode === toCode) { toast.error('Select different currencies to convert'); return }
+    if (fromCode === 'USD' && toCode !== 'USD') { toast.error('Crypto-to-local conversion is paused for now. Please contact support.'); return }
     if (!numAmount || numAmount <= 0) { toast.error('Enter an amount'); return }
     if (numAmount > fromBalance) { toast.error(`Insufficient balance in ${fromCode}`); return }
     setStep(2)
@@ -296,6 +297,12 @@ export default function ConvertPage() {
                 </span>
                 <span className="text-[10px] text-[#64748B]">Fee: {preview ? preview.feeUsd.toFixed(2) : '0.00'} USD</span>
               </div>
+
+              {fromCode === 'USD' && toCode !== 'USD' && (
+                <div className="mt-3 rounded-xl px-4 py-3 text-xs text-amber-300 border border-amber-500/30 bg-amber-500/10">
+                  Crypto-to-local (swap to naira) is paused for now. You can still send, buy data & airtime, and hold stablecoins.
+                </div>
+              )}
             </div>
 
             {/* CTA */}

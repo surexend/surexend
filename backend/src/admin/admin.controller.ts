@@ -3,6 +3,7 @@ import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,8 +32,13 @@ export class AdminController {
   }
 
   @Patch('users/:id')
-  updateUser(@Param('id') id: string, @Body() body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string }) {
+  updateUser(@Param('id') id: string, @Body() body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string; email?: string; phone?: string }) {
     return this.adminService.updateUser(id, body);
+  }
+
+  @Post('users/:id/credit')
+  creditBalance(@Param('id') id: string, @CurrentUser() admin: any, @Body() body: { amount: number; currency?: string; note?: string }) {
+    return this.adminService.creditBalance(id, admin.id, body);
   }
 
   @Get('transactions')

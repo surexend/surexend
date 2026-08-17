@@ -238,6 +238,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <span>{variant === 'gold' ? '🟡 Gold' : '🟢 Lemon'}</span>
               </button>
 
+              {profile?.role === 'ADMIN' && (
+                <Link
+                  href="/admin"
+                  className="p-2 rounded-xl hover:bg-white/5 text-amber-400 hover:text-amber-300 transition-colors active:scale-95"
+                  title="Admin Console"
+                >
+                  <ShieldCheck className="w-5 h-5" />
+                </Link>
+              )}
+
               {/* Notification Bell Button with badge & drawer */}
               <button 
                 onClick={() => { setShowNotifications(true); loadNotifications() }}

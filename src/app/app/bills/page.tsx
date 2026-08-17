@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
-import { billsAPI } from '@/lib/api'
+import { billsAPI, conversionAPI } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 import {
   Smartphone, Wifi, Zap, Tv, ChevronRight, ArrowLeft,
@@ -111,6 +111,14 @@ export default function BillsPage() {
     queryFn: () => billsAPI.getDataPlans(selectedProvider?.code),
     enabled: selectedCategory === 'data' && !!selectedProvider,
   })
+
+  // Live NGN→USD rate for the USDT estimate (never hardcoded)
+  const { data: rateInfo } = useQuery({
+    queryKey: ['ngn-rate'],
+    queryFn: () => conversionAPI.getRates('NGN'),
+    refetchInterval: 120000,
+  })
+  const ngntoUsdRate = rateInfo?.rate > 0 ? rateInfo.rate : 1500
 
   const validateMeter = async () => {
     if (!recipient || recipient.length < 10) return
@@ -405,9 +413,9 @@ export default function BillsPage() {
                 >
                   <p className="text-[#94A3B8] text-xs mb-1">Estimated cost</p>
                   <p className="text-white font-inter font-bold text-xl">
-                    ~{((selectedPlan?.amount || parseFloat(amount) || 0) / 1650).toFixed(4)} USDT
+                    ~{((selectedPlan?.amount || parseFloat(amount) || 0) / ngntoUsdRate).toFixed(4)} USDT
                   </p>
-                  <p className="text-[#64748B] text-xs mt-1">At current rate ₦1,650/$1</p>
+                  <p className="text-[#64748B] text-xs mt-1">At current rate ₦{Math.round(ngntoUsdRate).toLocaleString()}/$1</p>
                 </motion.div>
               )}
 

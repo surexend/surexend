@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { adminAPI } from '@/lib/api'
-import { ArrowLeft, Ban, CheckCircle2, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Ban, CheckCircle2, ShieldCheck, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -13,6 +13,15 @@ export default function AdminUserDetailPage() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [role, setRole] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+
+  // Manual deposit credit form
+  const [creditOpen, setCreditOpen] = useState(false)
+  const [creditAmount, setCreditAmount] = useState('')
+  const [creditCurrency, setCreditCurrency] = useState('USDT')
+  const [creditNote, setCreditNote] = useState('')
+  const [crediting, setCrediting] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -20,6 +29,8 @@ export default function AdminUserDetailPage() {
     adminAPI.getUser(String(id)).then((u: any) => {
       setData(u)
       setRole(u?.role || 'USER')
+      setEmail(u?.email || '')
+      setPhone(u?.phone || '')
     }).catch(() => setData(null)).finally(() => setLoading(false))
   }, [id])
 
@@ -29,10 +40,24 @@ export default function AdminUserDetailPage() {
   if (!data) return <p className="text-[#94A3B8] text-sm py-20 text-center">User not found.</p>
 
   const save = () => {
-    adminAPI.updateUser(String(id), { role }).then(() => toast.success('Saved')).catch(() => toast.error('Save failed'))
+    adminAPI.updateUser(String(id), { role, email, phone }).then(() => toast.success('Saved')).catch(() => toast.error('Save failed (email/phone may be in use)'))
   }
   const toggle = (body: any) => {
     adminAPI.updateUser(String(id), body).then(() => { toast.success('User updated'); setData((d: any) => ({ ...d, ...body })) }).catch(() => toast.error('Update failed'))
+  }
+  const credit = () => {
+    const amount = parseFloat(creditAmount)
+    if (!amount || amount <= 0) return toast.error('Enter a valid amount')
+    setCrediting(true)
+    adminAPI.creditUser(String(id), { amount, currency: creditCurrency, note: creditNote || undefined })
+      .then((res: any) => {
+        toast.success(`${amount} ${creditCurrency} credited (${res.reference})`)
+        setCreditOpen(false)
+        setCreditAmount(''); setCreditNote('')
+        adminAPI.getUser(String(id)).then(setData)
+      })
+      .catch((e: any) => toast.error(e?.response?.data?.message || 'Credit failed'))
+      .finally(() => setCrediting(false))
   }
   const w = data.wallet
   const fmt = (n: number) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
@@ -85,6 +110,39 @@ export default function AdminUserDetailPage() {
         </div>
       </div>
 
+      <div className="liquid-glass p-4 relative overflow-hidden">
+        {!creditOpen ? (
+          <button onClick={() => setCreditOpen(true)} className="flex items-center gap-2 text-xs text-emerald-400 font-semibold hover:text-emerald-300 transition-colors">
+            <Plus className="w-4 h-4" /> Credit wallet (manual deposit)
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-[#94A3B8]">Credit this wallet after confirming an off-platform deposit (USDT/USDC). Creates a completed RECEIVE transaction and notifies the user.</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Amount</span>
+                <input value={creditAmount} onChange={e => setCreditAmount(e.target.value)} type="number" min="0" step="any" placeholder="0.00" className="mt-1 w-36 bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
+              </label>
+              <label className="block">
+                <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Currency</span>
+                <select value={creditCurrency} onChange={e => setCreditCurrency(e.target.value)} className="mt-1 bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none">
+                  <option value="USDT">USDT</option>
+                  <option value="USDC">USDC</option>
+                </select>
+              </label>
+              <label className="block flex-1 min-w-[160px]">
+                <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Note</span>
+                <input value={creditNote} onChange={e => setCreditNote(e.target.value)} type="text" placeholder="e.g. Bank transfer 12/03" className="mt-1 w-full bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
+              </label>
+              <button onClick={credit} disabled={crediting} className="px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-semibold hover:bg-emerald-500/30 disabled:opacity-50">
+                {crediting ? 'Crediting…' : 'Credit'}
+              </button>
+              <button onClick={() => setCreditOpen(false)} className="px-3 py-2 rounded-lg bg-white/5 text-[#94A3B8] text-xs hover:bg-white/10">Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="liquid-glass p-5 relative overflow-hidden space-y-4">
           <h3 className="font-semibold text-sm text-white">Profile</h3>
@@ -114,8 +172,19 @@ export default function AdminUserDetailPage() {
                 <option value="USER">USER</option>
                 <option value="ADMIN">ADMIN</option>
               </select>
-              <button onClick={save} className="px-3 py-1 rounded-lg bg-white/10 text-xs text-white font-semibold hover:bg-white/15">Save</button>
             </div>
+          </div>
+
+          <div className="space-y-2 pt-1">
+            <label className="block">
+              <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Email</span>
+              <input value={email} onChange={e => setEmail(e.target.value)} type="email" className="mt-1 w-full bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
+            </label>
+            <label className="block">
+              <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Phone</span>
+              <input value={phone} onChange={e => setPhone(e.target.value)} type="text" className="mt-1 w-full bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
+            </label>
+            <button onClick={save} className="w-full px-3 py-2 rounded-lg bg-white/10 text-xs text-white font-semibold hover:bg-white/15">Save profile</button>
           </div>
         </div>
 

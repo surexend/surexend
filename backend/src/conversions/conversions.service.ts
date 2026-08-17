@@ -203,6 +203,14 @@ export class ConversionsService {
     };
   }
 
+  // Crypto-to-local (swap to naira) is paused at launch. Selling USDT/USDC
+  // for local currency is blocked until the payout integration is approved.
+  private assertConvertAllowed(fromCode: string, toCode: string) {
+    if (fromCode === 'USD' && toCode !== 'USD') {
+      throw new BadRequestException('Crypto-to-local conversion is paused for now. Please contact support for help with this.');
+    }
+  }
+
   async preview(from: string, to: string, amount: number) {
     const fromCode = (from || 'USD').toUpperCase();
     const toCode = (to || 'NGN').toUpperCase();
@@ -211,6 +219,7 @@ export class ConversionsService {
     if (!(fromCode === 'USD' || LOCAL_CODES.includes(fromCode))) throw new BadRequestException(`Unsupported currency: ${fromCode}`);
     if (!(toCode === 'USD' || LOCAL_CODES.includes(toCode))) throw new BadRequestException(`Unsupported currency: ${toCode}`);
     if (!amount || amount <= 0) throw new BadRequestException('Amount must be greater than zero');
+    this.assertConvertAllowed(fromCode, toCode);
 
     const fromRate = fromCode === 'USD' ? 1 : getLocalRate(fromCode);
     const toRate = toCode === 'USD' ? 1 : getLocalRate(toCode);
@@ -233,6 +242,7 @@ export class ConversionsService {
     if (fromCode === toCode) throw new BadRequestException('From and To currencies must be different');
     if (!(fromCode === 'USD' || LOCAL_CODES.includes(fromCode))) throw new BadRequestException(`Unsupported currency: ${fromCode}`);
     if (!(toCode === 'USD' || LOCAL_CODES.includes(toCode))) throw new BadRequestException(`Unsupported currency: ${toCode}`);
+    this.assertConvertAllowed(fromCode, toCode);
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 

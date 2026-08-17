@@ -244,9 +244,9 @@ export default function ProfilePage() {
               <Shield size={18} className="text-[#F59E0B]" />
             </div>
             <div className="flex-1">
-              <p className="text-white text-sm font-semibold">Complete Identity Verification</p>
+              <p className="text-white text-sm font-semibold">Identity Verification (Optional)</p>
               <p className="text-[#94A3B8] text-xs mt-0.5">
-                Verify your identity to unlock higher limits.
+                All features are available now. Verify to enable higher limits later.
               </p>
             </div>
             <button

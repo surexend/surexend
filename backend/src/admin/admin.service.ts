@@ -1,24 +1,37 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async getOverview() {
-    const [totalUsers, activeUsers, kycPending, totalTransactions, completedTransactions, transactionAgg, conversionAgg, recentUsers, recentTransactions] = await Promise.all([
+    const [totalUsers, activeUsers, kycPending, totalTransactions, completedTransactions, inAgg, outAgg, conversionAgg, recentUsers, recentTransactions] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { isActive: true, isBanned: false } }),
       this.prisma.user.count({ where: { kycStatus: 'PENDING' } }),
       this.prisma.transaction.count(),
       this.prisma.transaction.count({ where: { status: 'COMPLETED' } }),
+      // Money in: deposits + referral earnings only. Conversions and bill
+      // payments are cash OUT and are NOT counted here.
       this.prisma.transaction.aggregate({
-        where: { status: 'COMPLETED' },
+        where: { status: 'COMPLETED', type: { in: ['RECEIVE', 'REFERRAL_EARNING'] } },
+        _sum: { amount: true },
+      }),
+      // Money out: sends, withdrawals, conversions and bills (all cash leaving
+      // the platform). Each of these creates its own Transaction row, so this
+      // single aggregate is complete — conversions/bills are NOT double-counted.
+      this.prisma.transaction.aggregate({
+        where: { status: 'COMPLETED', type: { in: ['SEND', 'WITHDRAWAL', 'CONVERT', 'BILL_PAYMENT'] } },
         _sum: { amount: true, fee: true },
       }),
       this.prisma.conversion.aggregate({
         where: { status: 'COMPLETED' },
-        _sum: { usdtAmount: true, fee: true },
+        _sum: { fee: true },
       }),
       this.prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
@@ -56,9 +69,9 @@ export class AdminService {
       kycPending,
       totalTransactions,
       completedTransactions,
-      totalVolumeIn: (transactionAgg._sum.amount ?? 0),
-      totalVolumeOut: ((conversionAgg._sum.usdtAmount ?? 0) + (transactionAgg._sum.amount ?? 0)),
-      revenue: ((transactionAgg._sum.fee ?? 0) + (conversionAgg._sum.fee ?? 0)),
+      totalVolumeIn: (inAgg._sum.amount ?? 0),
+      totalVolumeOut: (outAgg._sum.amount ?? 0),
+      revenue: ((outAgg._sum.fee ?? 0) + (conversionAgg._sum.fee ?? 0)),
       signups: signups.reverse(),
       recentUsers: recentUsers.reverse(),
       recentTransactions,
@@ -147,16 +160,69 @@ export class AdminService {
     return { ...user, activity: { transactions, conversions, bills } };
   }
 
-  async updateUser(id: string, body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string }) {
+  async updateUser(id: string, body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string; email?: string; phone?: string }) {
     const data: Record<string, unknown> = {};
     if (typeof body.isActive === 'boolean') data.isActive = body.isActive;
     if (typeof body.isBanned === 'boolean') data.isBanned = body.isBanned;
     if (typeof body.kycTier === 'number') data.kycTier = body.kycTier;
     if (body.kycStatus && ['UNVERIFIED', 'PENDING', 'VERIFIED', 'REJECTED'].includes(body.kycStatus)) data.kycStatus = body.kycStatus;
     if (body.role && ['USER', 'ADMIN'].includes(body.role)) data.role = body.role;
+    if (body.email) data.email = body.email.toLowerCase().trim();
+    if (body.phone) data.phone = body.phone.trim();
 
-    const updated = await this.prisma.user.update({ where: { id }, data });
-    return { id: updated.id, role: updated.role, isActive: updated.isActive, isBanned: updated.isBanned, kycStatus: updated.kycStatus, kycTier: updated.kycTier };
+    try {
+      const updated = await this.prisma.user.update({ where: { id }, data });
+      return { id: updated.id, role: updated.role, email: updated.email, phone: updated.phone, isActive: updated.isActive, isBanned: updated.isBanned, kycStatus: updated.kycStatus, kycTier: updated.kycTier };
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        throw new Error('Email or phone is already in use');
+      }
+      throw error;
+    }
+  }
+
+  // Manual deposits: admin credits a user's stablecoin balance (USDT/USDC)
+  // after confirming an off-platform transfer, and the user gets a completed
+  // RECEIVE transaction + notification. The credit is attributed to the admin.
+  async creditBalance(userId: string, adminId: string, body: { amount: number; currency?: string; note?: string }) {
+    const amount = Number(body.amount);
+    if (!amount || amount <= 0) throw new Error('Amount must be greater than zero');
+    const currency = (body.currency || 'USDT').toUpperCase();
+    if (!['USDT', 'USDC'].includes(currency)) throw new Error('Currency must be USDT or USDC');
+
+    const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+    if (!wallet) throw new Error('Wallet not found');
+
+    const reference = `DEP-${Date.now()}${Math.floor(Math.random() * 1000)}`;
+
+    const result = await this.prisma.$transaction(async (prisma) => {
+      const field = currency === 'USDT' ? 'usdtBalance' : 'usdcBalance';
+      await prisma.wallet.update({ where: { userId }, data: { [field]: { increment: amount } } });
+      const transaction = await prisma.transaction.create({
+        data: {
+          userId,
+          type: 'RECEIVE',
+          status: 'COMPLETED',
+          amount,
+          fee: 0,
+          currency,
+          reference,
+          metadata: { channel: 'manual_deposit', creditedBy: adminId, note: body.note || 'Manual deposit' },
+        },
+      });
+      return transaction;
+    });
+
+    try {
+      await this.notificationsService.createNotification(userId, {
+        title: 'Deposit Received',
+        body: `${amount} ${currency} credited to your wallet${body.note ? ` (${body.note})` : ''}. Reference: ${reference}`,
+        type: 'DEPOSIT',
+        data: { reference, amount, currency },
+      });
+    } catch { /* notifications are best-effort */ }
+
+    return { reference, amount, currency, transactionId: result.id };
   }
 
   async listTransactions(query: { type?: string; status?: string; search?: string; page?: string; limit?: string }) {

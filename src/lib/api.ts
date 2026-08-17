@@ -130,7 +130,11 @@ apiClient.interceptors.response.use(
 
     // On 401, try to refresh the access token once and retry the request
     const isRefreshCall = config?.url?.includes('/auth/refresh')
-    if (error.response?.status === 401 && config && !config._retried && !isRefreshCall) {
+    // Login 401s (wrong password, inactive account) must NOT be swallowed by
+    // the refresh flow — let the login page surface the real message instead
+    // of a misleading "Session expired" toast.
+    const isAuthLoginCall = config?.url?.includes('/auth/login')
+    if (error.response?.status === 401 && config && !config._retried && !isRefreshCall && !isAuthLoginCall) {
       config._retried = true
       if (!refreshPromise) {
         refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null })
@@ -148,9 +152,9 @@ apiClient.interceptors.response.use(
 
     // Show user-friendly error toast (only for critical operations, using unique IDs to prevent duplicate spam)
     const status = error.response?.status
-    if (status === 401) {
+    if (status === 401 && !isAuthLoginCall) {
       toast.error('Session expired. Please login again.', { id: 'auth-error' })
-    } else if (status !== undefined && status >= 500) {
+    } else if (status !== undefined && status >= 500 && !isAuthLoginCall) {
       toast.error('Server error. Please try again later.', { id: 'server-error' })
     } else if (!error.response) {
       toast.error('Cannot connect to server. Please check your connection.', { id: 'network-error' })
@@ -212,6 +216,31 @@ export const authAPI = {
 
   resetPassword: (payload: { token: string; newPassword: string }) =>
     apiClient.post('/auth/reset-password', payload),
+
+  googleConfig: () =>
+    apiClient.get('/auth/google/config').then(r => r.data),
+
+  googleUrl: async () => {
+    const response = await apiClient.get('/auth/google')
+    return response.data?.url as string
+  },
+
+  requestLoginOtp: (email: string) =>
+    apiClient.post('/auth/otp/request', { email }),
+
+  verifyLoginOtp: async (payload: { email: string; code: string }) => {
+    const response = await apiClient.post('/auth/otp/verify-login', payload)
+    if (typeof window !== 'undefined' && response.data?.accessToken) {
+      storeTokens(response.data.accessToken, response.data.refreshToken)
+    }
+    return response
+  },
+
+  storeOAuthTokens: (accessToken: string, refreshToken?: string) => {
+    if (typeof window !== 'undefined') {
+      storeTokens(accessToken, refreshToken)
+    }
+  },
 }
 
 // ── Wallet API ────────────────────────────────────────────────────────────
@@ -669,8 +698,10 @@ export const adminAPI = {
   getUsers: (params?: { search?: string; kycStatus?: string; page?: number; limit?: number }) =>
     apiClient.get('/admin/users', { params }).then(r => r.data),
   getUser: (id: string) => apiClient.get(`/admin/users/${id}`).then(r => r.data),
-  updateUser: (id: string, body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string }) =>
+  updateUser: (id: string, body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string; email?: string; phone?: string }) =>
     apiClient.patch(`/admin/users/${id}`, body).then(r => r.data),
+  creditUser: (id: string, body: { amount: number; currency?: string; note?: string }) =>
+    apiClient.post(`/admin/users/${id}/credit`, body).then(r => r.data),
   getTransactions: (params?: { type?: string; status?: string; search?: string; page?: number; limit?: number }) =>
     apiClient.get('/admin/transactions', { params }).then(r => r.data),
   getKyc: (params?: { status?: string; page?: number; limit?: number }) =>
