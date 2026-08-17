@@ -1,15 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { adminAPI } from '@/lib/api'
-import { ArrowLeft, Ban, CheckCircle2, ShieldCheck, Plus } from 'lucide-react'
+import { ArrowLeft, Ban, CheckCircle2, ShieldCheck, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
 export default function AdminUserDetailPage() {
   const { id } = useParams()
+  const router = useRouter()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [role, setRole] = useState('')
@@ -44,6 +45,12 @@ export default function AdminUserDetailPage() {
   }
   const toggle = (body: any) => {
     adminAPI.updateUser(String(id), body).then(() => { toast.success('User updated'); setData((d: any) => ({ ...d, ...body })) }).catch(() => toast.error('Update failed'))
+  }
+  const handleDelete = () => {
+    if (!window.confirm(`Delete ${data?.firstName} ${data?.lastName} permanently? This removes their wallet, transactions and documents.`)) return
+    adminAPI.deleteUser(String(id))
+      .then(() => { toast.success('User deleted'); router.push('/admin/users') })
+      .catch((e: any) => toast.error(e?.response?.data?.message || 'Delete failed'))
   }
   const credit = () => {
     const amount = parseFloat(creditAmount)
@@ -85,6 +92,13 @@ export default function AdminUserDetailPage() {
           )}
           <button onClick={() => toggle({ isActive: !data.isActive })} className="px-3 py-2 rounded-xl bg-white/5 text-white text-xs font-semibold border border-white/10">
             {data.isActive ? 'Disable' : 'Enable'}
+          </button>
+          <button
+            onClick={handleDelete}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 text-red-400 text-xs font-semibold border border-red-500/20 hover:bg-red-500/20"
+            title="Permanently delete user"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Delete
           </button>
         </div>
       </div>

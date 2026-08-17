@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -39,6 +39,11 @@ export class AdminController {
   @Post('users/:id/credit')
   creditBalance(@Param('id') id: string, @CurrentUser() admin: any, @Body() body: { amount: number; currency?: string; note?: string }) {
     return this.adminService.creditBalance(id, admin.id, body);
+  }
+
+  @Delete('users/:id')
+  deleteUser(@Param('id') id: string, @CurrentUser() admin: any) {
+    return this.adminService.deleteUser(id, admin.id);
   }
 
   @Get('transactions')

@@ -1,6 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { getLocalRate } from '../common/currency.constants';
+
+// Normalize any recorded transaction amount to its USD value. Transactions
+// store `amount` in `currency` (e.g. CONVERT rows record the LOCAL amount, bill
+// rows record USDT) so a raw sum across currencies is meaningless — the admin
+// dashboard must sum in USD terms.
+function toUsd(amount: number, currency: string): number {
+  const code = (currency || 'USDT').toUpperCase();
+  if (code === 'USD' || code === 'USDT' || code === 'USDC') return amount;
+  const rate = getLocalRate(code);
+  return rate > 0 ? amount / rate : amount;
+}
 
 @Injectable()
 export class AdminService {
@@ -10,24 +22,23 @@ export class AdminService {
   ) {}
 
   async getOverview() {
-    const [totalUsers, activeUsers, kycPending, totalTransactions, completedTransactions, inAgg, outAgg, conversionAgg, recentUsers, recentTransactions] = await Promise.all([
+    const [totalUsers, activeUsers, kycPending, totalTransactions, completedTransactions, moneyIn, moneyOut, conversionFeeAgg, recentUsers, recentTransactions] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { isActive: true, isBanned: false } }),
       this.prisma.user.count({ where: { kycStatus: 'PENDING' } }),
       this.prisma.transaction.count(),
       this.prisma.transaction.count({ where: { status: 'COMPLETED' } }),
-      // Money in: deposits + referral earnings only. Conversions and bill
-      // payments are cash OUT and are NOT counted here.
-      this.prisma.transaction.aggregate({
+      // Money in: deposits + referral earnings only.
+      this.prisma.transaction.findMany({
         where: { status: 'COMPLETED', type: { in: ['RECEIVE', 'REFERRAL_EARNING'] } },
-        _sum: { amount: true },
+        select: { amount: true, currency: true },
       }),
       // Money out: sends, withdrawals, conversions and bills (all cash leaving
-      // the platform). Each of these creates its own Transaction row, so this
-      // single aggregate is complete — conversions/bills are NOT double-counted.
-      this.prisma.transaction.aggregate({
+      // the platform). Each creates its own Transaction row, so this list is
+      // complete — conversions/bills are NOT double-counted.
+      this.prisma.transaction.findMany({
         where: { status: 'COMPLETED', type: { in: ['SEND', 'WITHDRAWAL', 'CONVERT', 'BILL_PAYMENT'] } },
-        _sum: { amount: true, fee: true },
+        select: { amount: true, currency: true, fee: true },
       }),
       this.prisma.conversion.aggregate({
         where: { status: 'COMPLETED' },
@@ -44,6 +55,11 @@ export class AdminService {
         include: { user: { select: { firstName: true, lastName: true, email: true } } },
       }),
     ]);
+
+    // Sum every amount converted to USD (never a raw cross-currency sum).
+    const totalVolumeIn = moneyIn.reduce((acc, t) => acc + toUsd(t.amount, t.currency), 0);
+    const totalVolumeOut = moneyOut.reduce((acc, t) => acc + toUsd(t.amount, t.currency), 0);
+    const revenueFromTxs = moneyOut.reduce((acc, t) => acc + (t.fee || 0), 0);
 
     const since = new Date();
     since.setDate(since.getDate() - 6);
@@ -69,9 +85,9 @@ export class AdminService {
       kycPending,
       totalTransactions,
       completedTransactions,
-      totalVolumeIn: (inAgg._sum.amount ?? 0),
-      totalVolumeOut: (outAgg._sum.amount ?? 0),
-      revenue: ((outAgg._sum.fee ?? 0) + (conversionAgg._sum.fee ?? 0)),
+      totalVolumeIn,
+      totalVolumeOut,
+      revenue: (revenueFromTxs + (conversionFeeAgg._sum.fee ?? 0)),
       signups: signups.reverse(),
       recentUsers: recentUsers.reverse(),
       recentTransactions,
@@ -179,6 +195,23 @@ export class AdminService {
       }
       throw error;
     }
+  }
+
+  // Hard-delete a user (cascades wallet, transactions, kyc docs, notifications).
+  // Guardrails: can't delete yourself, and can't delete the last remaining admin.
+  async deleteUser(id: string, adminId: string) {
+    if (id === adminId) throw new BadRequestException('You cannot delete your own account');
+
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.role === 'ADMIN') {
+      const adminCount = await this.prisma.user.count({ where: { role: 'ADMIN' } });
+      if (adminCount <= 1) throw new BadRequestException('Cannot delete the last admin account');
+    }
+
+    await this.prisma.user.delete({ where: { id } });
+    return { message: 'User deleted', id };
   }
 
   // Manual deposits: admin credits a user's stablecoin balance (USDT/USDC)
