@@ -7,12 +7,45 @@ import { getLocalRate } from '../common/currency.constants';
 // Normalize any recorded transaction amount to its USD value. Transactions
 // store `amount` in `currency` (e.g. CONVERT rows record the LOCAL amount, bill
 // rows record USDT) so a raw sum across currencies is meaningless — the admin
-// dashboard must sum in USD terms.
-function toUsd(amount: number, currency: string): number {
+// dashboard must sum in USD terms. Live rates (same source the app uses) are
+// preferred so admin figures match what users see; the static table is the
+// reliable fallback when the rate feed is unreachable.
+function toUsd(amount: number, currency: string, liveRates?: Record<string, number>): number {
   const code = (currency || 'USDT').toUpperCase();
   if (code === 'USD' || code === 'USDT' || code === 'USDC') return amount;
-  const rate = getLocalRate(code);
+  const rate = liveRates?.[code] || getLocalRate(code);
   return rate > 0 ? amount / rate : amount;
+}
+
+const RATE_TTL_MS = 30 * 60 * 1000;
+let cachedRates: Record<string, number> | null = null;
+let cachedAt = 0;
+
+// Live USD rates from the same feed the user app uses (floatrates), cached
+// 30 min. Never throws: returns {} so the static table is used as fallback.
+async function getLiveRates(): Promise<Record<string, number>> {
+  const now = Date.now();
+  if (cachedRates && now - cachedAt < RATE_TTL_MS) return cachedRates;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch('https://www.floatrates.com/daily/usd.json', { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const json: Record<string, { rate?: number }> = await res.json();
+      const map: Record<string, number> = {};
+      for (const key of Object.keys(json)) {
+        const r = Number(json[key]?.rate);
+        if (r > 0) map[key.toUpperCase()] = r;
+      }
+      cachedRates = map;
+      cachedAt = now;
+      return map;
+    }
+  } catch {
+    // rate feed unavailable — fall back to static table
+  }
+  return cachedRates || {};
 }
 
 @Injectable()
@@ -72,8 +105,9 @@ export class AdminService {
       (t) => ['USDT', 'USDC', 'USD'].includes(String((t.metadata as any)?.from || t.currency || '').toUpperCase()),
     );
     const buyConverts = convertTxs.filter((t) => !sellConverts.includes(t));
-    const totalVolumeIn = [...moneyIn, ...buyConverts].reduce((acc, t) => acc + toUsd(t.amount, t.currency), 0);
-    const totalVolumeOut = [...moneyOut, ...sellConverts].reduce((acc, t) => acc + toUsd(t.amount, t.currency), 0);
+    const liveRates = await getLiveRates();
+    const totalVolumeIn = [...moneyIn, ...buyConverts].reduce((acc, t) => acc + toUsd(t.amount, t.currency, liveRates), 0);
+    const totalVolumeOut = [...moneyOut, ...sellConverts].reduce((acc, t) => acc + toUsd(t.amount, t.currency, liveRates), 0);
     const revenueFromTxs = moneyOut.reduce((acc, t) => acc + (t.fee || 0), 0);
 
     const since = new Date();

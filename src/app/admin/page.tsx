@@ -61,10 +61,12 @@ export default function AdminOverviewPage() {
         <div className="liquid-glass p-4 relative overflow-hidden">
           <p className="text-[10px] uppercase tracking-wider text-[#64748B] font-semibold flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> Volume In (USD)</p>
           <p className="text-2xl font-black text-emerald-400 mt-2">${fmt(data.totalVolumeIn)}</p>
+          <p className="text-[10px] text-[#64748B] mt-1">All users · all-time</p>
         </div>
         <div className="liquid-glass p-4 relative overflow-hidden">
           <p className="text-[10px] uppercase tracking-wider text-[#64748B] font-semibold flex items-center gap-1.5"><TrendingDown className="w-3.5 h-3.5 text-red-400" /> Volume Out (USD)</p>
           <p className="text-2xl font-black text-red-400 mt-2">${fmt(data.totalVolumeOut)}</p>
+          <p className="text-[10px] text-[#64748B] mt-1">All users · all-time</p>
         </div>
         <div className="liquid-glass p-4 relative overflow-hidden">
           <p className="text-[10px] uppercase tracking-wider text-[#64748B] font-semibold flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5 text-amber-400" /> Revenue (fees)</p>

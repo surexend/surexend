@@ -271,10 +271,10 @@ export default function DashboardPage() {
   }
 
   // Real 7-day cash flow (Money In vs Money Out) computed from transactions.
-  // Only true money movement counts: RECEIVE/REFERRAL_EARNING = money in,
-  // SEND/BILL_PAYMENT = money out. CONVERT is internal (USD ⇄ local) and is
-  // NOT money in or out, so it never inflates the totals. All figures are
-  // converted to USD so the chart never mixes currencies.
+  // RECEIVE/REFERRAL_EARNING = money in, SEND/BILL_PAYMENT = money out.
+  // CONVERT is classified by direction (buying crypto = fiat in, selling =
+  // fiat out) so it matches the admin dashboard. All figures are converted to
+  // USD so the chart never mixes currencies.
   const cashFlowData = useMemo(() => {
     const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     const result = labels.map(label => ({ day: label, moneyIn: 0, moneyOut: 0 }))
@@ -291,14 +291,19 @@ export default function DashboardPage() {
       const status = (tx.status || '').toUpperCase()
       if (status !== 'COMPLETED') continue
       const type = (tx.type || '').toUpperCase()
-      if (type === 'CONVERT') continue
       const rawAmt = Number(tx.amount) || 0
       // Convert any non-USD leg to USD value so totals are comparable.
       const currency = (tx.currency || 'USD').toUpperCase()
       const amt = currency === 'USD' || currency === 'USDC'
         ? rawAmt
         : rawAmt / rateFor(currency)
-      const isOut = type === 'SEND' || type === 'BILL_PAYMENT'
+      let isOut = type === 'SEND' || type === 'BILL_PAYMENT'
+      if (type === 'CONVERT') {
+        // Selling crypto (USD -> fiat) is money out; buying crypto (fiat -> USD)
+        // is money in — same rule as the admin dashboard.
+        const from = String(tx.metadata?.from || tx.currency || '').toUpperCase()
+        isOut = from === 'USDT' || from === 'USDC' || from === 'USD'
+      }
       if (isOut) result[idx].moneyOut += amt
       else result[idx].moneyIn += amt
     }
@@ -681,7 +686,7 @@ export default function DashboardPage() {
               <h3 className="font-semibold text-white text-base flex items-center gap-2">
                 <Activity className="w-4 h-4 text-[#10B981]" /> Cash Flow Movement
               </h3>
-              <p className="text-[11px] text-[#64748B]">Money In vs. Money Out (7 Days)</p>
+              <p className="text-[11px] text-[#64748B]">Money In vs. Money Out · Your account · last 7 days</p>
             </div>
             
             <div className="flex items-center gap-3 text-xs">
