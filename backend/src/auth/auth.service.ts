@@ -165,10 +165,17 @@ export class AuthService {
   // sign in, so there's no boot-order dependency. Idempotent and safe to call
   // on every login.
   private async ensureAdminIfListed(user: { id: string; email: string; role?: string }): Promise<string> {
-    const adminEmails = (process.env.ADMIN_EMAILS || '')
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
+    // Bootstrap admin: always promoted so the console can never be locked out,
+    // even if ADMIN_EMAILS is unset in the environment. Additional admins are
+    // configured via ADMIN_EMAILS (comma-separated) on Railway.
+    const bootstrapAdmins = ['surexendofficial@gmail.com'];
+    const adminEmails = [
+      ...(process.env.ADMIN_EMAILS || '')
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+      ...bootstrapAdmins,
+    ];
     if (adminEmails.includes((user.email || '').toLowerCase())) {
       try {
         const updated = await this.prisma.user.update({
