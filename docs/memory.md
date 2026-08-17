@@ -205,3 +205,38 @@ wallet never shows the funds.
   ASKS a focused question instead of a canned paragraph. Balance answers are
   fetched server-side from the user's own wallet and the model never sees them.
   New 'convert' action (convert card -> /conversions/execute with PIN).
+
+## 2026-08-17 (round 4) — readability pass + REAL USDC chart + receipt renderer fix + ADMIN DASHBOARD
+- GLASS READABILITY: the diamond lattice is now a soft, feathered hairline
+  (gradient peaks instead of hard bands) and --tile alpha dropped 0.10 -> 0.05,
+  so tiny text is easy to read while the texture still reads as premium.
+- USDC STRAIGHT LINE — real root cause: (a) when CoinGecko is rate-limited on
+  Railway the backend returned an empty series and the browser ticker drove
+  USDC with a hardcoded 1.0 -> a perfect flat line; (b) even with live data,
+  USDC only moves ~0.03%/day, which a percent-padded Y axis flattens to
+  invisible. FIXED: backend now returns a REAL `live` anchor (last CoinGecko
+  close, or simple-price fallback); the ticker uses that real ~0.9995 value
+  (never 1.0); an empty-history chart is SEEDED with the real anchor so it
+  still draws movement; and the Y axis ZOOMS into the data range for
+  near-constant series so the genuine wiggle is visible. Header shows the real
+  spot too. Live checks: CoinGecko market_chart (24 pts 1D) + simple price both
+  work from dev; Binance + Coinbase Exchange remain DNS-blocked.
+- RECEIPT "letters on each other" — REAL BUG found+fixed: the `spaced()` letter
+  helper drew every glyph while inheriting the outer `ctx.textAlign`
+  ('right'/'center'), so each letter was individually right/center-aligned and
+  ran into its neighbour (OFFICIAL RECEIPT, AMOUNT labels). Fixed in BOTH
+  `history/page.tsx` and `src/lib/receipt.ts` by forcing textAlign='left'
+  inside the loop and restoring it after. Swap sub-line now uses a centered
+  arrow chip (visible receipt) and clean single-space arrow (canvas).
+- ADMIN DASHBOARD (new): added `User.role` (String @default("USER")) +
+  `prisma db push` deploys it; `@Roles('ADMIN')` decorator + `RolesGuard`;
+  `admin` module (JwtAuthGuard + RolesGuard) with GET overview / users /
+  users/:id / transactions / kyc and PATCH users/:id + POST kyc/:id/decision
+  (approve raises kycTier forward-only). Frontend: `/admin` shell layout with
+  role guard (non-admins bounce to /app/dashboard), pages Overview / Users /
+  Transactions / KYC Review / user detail, `adminAPI` client, and an Admin
+  Console link in the app sidebar when profile.role === 'ADMIN'.
+- To activate an admin on prod: `node scripts/make-admin.js <email>` (default
+  demo@surexend.com) — role field auto-creates via prestart `prisma db push`.
+- Next up per user: VTU/bills depth (real airtime/data top-up flows), then
+  domain migration at launch-prep.

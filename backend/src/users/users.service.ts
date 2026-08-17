@@ -26,6 +26,7 @@ export class UsersService {
         defaultWallet: true,
         createdAt: true,
         isActive: true,
+        role: true,
         pin: true,
       }
     });

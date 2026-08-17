@@ -170,8 +170,8 @@ body {
   background-image:
     linear-gradient(115deg, transparent 28%, var(--sheen, rgba(255, 255, 255, 0.05)) 46%, transparent 64%),
     radial-gradient(120% 90% at 50% -15%, rgba(255, 255, 255, 0.12), transparent 55%),
-    linear-gradient(135deg, transparent 0 46.5%, var(--tile, rgba(255, 255, 255, 0.06)) 46.5% 48.5%, transparent 48.5% 100%),
-    linear-gradient(45deg, transparent 0 46.5%, var(--tile, rgba(255, 255, 255, 0.06)) 46.5% 48.5%, transparent 48.5% 100%),
+    linear-gradient(135deg, transparent 0 46%, var(--tile, rgba(255, 255, 255, 0.025)) 47.5%, transparent 49% 100%),
+    linear-gradient(45deg, transparent 0 46%, var(--tile, rgba(255, 255, 255, 0.025)) 47.5%, transparent 49% 100%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0.07));
   background-size: auto, auto, 34px 34px, 34px 34px, auto;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -232,8 +232,8 @@ body {
   background-image:
     linear-gradient(115deg, transparent 30%, var(--sheen, rgba(255, 255, 255, 0.04)) 48%, transparent 66%),
     radial-gradient(120% 90% at 50% -15%, rgba(255, 255, 255, 0.10), transparent 55%),
-    linear-gradient(135deg, transparent 0 46.5%, var(--tile, rgba(255, 255, 255, 0.045)) 46.5% 48.5%, transparent 48.5% 100%),
-    linear-gradient(45deg, transparent 0 46.5%, var(--tile, rgba(255, 255, 255, 0.045)) 46.5% 48.5%, transparent 48.5% 100%),
+    linear-gradient(135deg, transparent 0 46%, var(--tile, rgba(255, 255, 255, 0.02)) 47.5%, transparent 49% 100%),
+    linear-gradient(45deg, transparent 0 46%, var(--tile, rgba(255, 255, 255, 0.02)) 47.5%, transparent 49% 100%),
     linear-gradient(135deg, rgba(20, 28, 52, 0.88), rgba(12, 18, 36, 0.92));
   background-size: auto, auto, 38px 38px, 38px 38px, auto;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -290,7 +290,7 @@ body {
    --tile tints the faint diamond lattice that textures every glass block;
    content always renders above it (background layers sit under the box). */
 [data-variant="gold"] {
-  --tile: rgba(255, 215, 0, 0.10);
+  --tile: rgba(255, 215, 0, 0.05);
   --sheen: rgba(255, 215, 0, 0.06);
   --edge-soft: rgba(255, 215, 0, 0.10);
   --edge-mid: rgba(255, 215, 0, 0.32);
@@ -298,7 +298,7 @@ body {
 }
 
 [data-variant="lemon"] {
-  --tile: rgba(202, 255, 58, 0.10);
+  --tile: rgba(202, 255, 58, 0.05);
   --sheen: rgba(212, 255, 74, 0.06);
   --edge-soft: rgba(202, 255, 58, 0.10);
   --edge-mid: rgba(202, 255, 58, 0.32);

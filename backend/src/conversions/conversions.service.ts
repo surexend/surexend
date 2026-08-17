@@ -51,6 +51,7 @@ export class ConversionsService {
     } catch { /* cache is best-effort */ }
 
     let points: { time: string; value: number }[] = [];
+    let live: number | null = null;
     let source = 'Live FX';
 
     // USDC/USD — real crypto price history from CoinGecko.
@@ -69,6 +70,23 @@ export class ConversionsService {
       } catch (error) {
         this.logger.warn(`USDC market chart unavailable: ${(error as Error).message}`);
       }
+
+      // Always anchor a REAL live value so the dashboard never falls back to a
+      // hardcoded 1.0 for pegged USDC — even when history above failed.
+      try {
+        if (points.length) {
+          live = points[points.length - 1].value;
+        } else {
+          const spot = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+            params: { ids: 'usd-coin', vs_currencies: 'usd' },
+            timeout: 9000,
+          });
+          const v = Number(spot.data?.['usd-coin']?.usd);
+          if (v > 0) live = v;
+        }
+      } catch (error) {
+        this.logger.warn(`USDC live spot unavailable: ${(error as Error).message}`);
+      }
     } else {
       // Fiat currency — real history from Yahoo Finance (with a query1 retry,
       // since query2 rate-limits without a cookie from time to time).
@@ -81,6 +99,7 @@ export class ConversionsService {
       const fetched = await this.fetchYahooHistory(code, yahooRanges[tf]);
       if (fetched.length >= 2) {
         points = fetched;
+        live = fetched[fetched.length - 1].value;
         source = 'Yahoo Finance';
       } else {
         this.logger.warn(`Yahoo market chart unavailable for ${code}; serving live ticks only`);
@@ -92,7 +111,7 @@ export class ConversionsService {
     // the browser) fills the chart with genuine movement within seconds. A
     // "straight line" of identical fallback values is what previously made the
     // chart look broken after an upstream blip.
-    const payload = { currency: code, timeframe: tf, points, source, updatedAt: Date.now() };
+    const payload = { currency: code, timeframe: tf, points, live, source, updatedAt: Date.now() };
     try {
       await this.redis.set(cacheKey, JSON.stringify(payload), 'EX', 60);
     } catch { /* cache is best-effort */ }

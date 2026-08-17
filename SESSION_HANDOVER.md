@@ -267,3 +267,20 @@ repeat" list.
   domain (migration is a 10-minute DNS step at launch-prep; admin dashboard is
   core launch work: KYC review, monitoring, ops). Next session: admin dashboard
   brainstorm (Tier 1-3 previously proposed).
+
+## 2026-08-17 (round 4) — glass readability, real USDC chart, receipt fix, ADMIN BUILT
+- Glass: tile lattice feathered (gradient peaks) + alpha 0.10->0.05 -> tiny text
+  readable, texture still visible.
+- USDC chart: backend returns REAL `live` anchor (CoinGecko last close or
+  simple-price); ticker uses it (never 1.0); empty history is seeded with it;
+  Y axis zooms into near-constant series so the real ~0.03% wiggle shows.
+- Receipt: `spaced()` textAlign bug (letters colliding) fixed in history +
+  receipt.ts; swap arrow now a clean centered chip.
+- ADMIN DASHBOARD SHIPPED (backend + frontend): User.role field (db push),
+  @Roles('ADMIN') + RolesGuard, admin module (overview/users/transactions/
+  kyc/user-detail), /admin UI with role guard + 5 pages, adminAPI client,
+  sidebar Admin Console link. MAKE DEMO AN ADMIN ON PROD:
+  `node scripts/make-admin.js demo@surexend.com` (run in Railway shell after
+  deploy so `prisma db push` has added the role column).
+- Next: VTU/airtime depth + integration batch, then domain migration at
+  launch-prep.

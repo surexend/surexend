@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   ArrowUpRight, ArrowDownLeft, RefreshCw, Zap, Gift,
   Search, Filter, Download, ChevronDown, Calendar,
-  CheckCircle, XCircle, Clock, FileText, X, Copy, Check, Hash, ExternalLink
+  CheckCircle, XCircle, Clock, FileText, X, Copy, Check, Hash, ExternalLink, ArrowRight
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -462,7 +462,7 @@ function TransactionDetailModal({
       ? `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)}`
       : `${sign}${symbol}${formatAmount(Number(details?.amount || 0))}`
     const amountSub = swap
-      ? `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from}  →  ${swap.to}`
+      ? `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from} → ${swap.to}`
       : `${details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'}  ·  ${displayNetwork}`
 
     let amountSize = 40
@@ -525,12 +525,18 @@ function TransactionDetailModal({
       const widths = [...text].map(ch => cx.measureText(ch).width)
       const total = widths.reduce((a, b) => a + b, 0) + gap * Math.max(0, text.length - 1)
       let sx = align === 'right' ? x - total : align === 'center' ? x - total / 2 : x
+      // Each letter is drawn LEFT-aligned at its advance position. Without this,
+      // the glyphs inherit the outer ctx.textAlign (right/center) and are each
+      // drawn shifted into each other — the "letters on each other" bug.
+      const prevAlign = ctx.textAlign
+      ctx.textAlign = 'left'
       ctx.fillStyle = color
       ctx.font = f
       for (let i = 0; i < text.length; i++) {
         ctx.fillText(text[i], sx, y)
         sx += widths[i] + gap
       }
+      ctx.textAlign = prevAlign
     }
 
     // Header: logo + wordmark
@@ -854,8 +860,14 @@ function TransactionDetailModal({
                 <p className="text-4xl font-black tracking-tight text-white leading-none">
                   {currencySymbol(swap.to)}{formatAmount(swap.toAmount)}
                 </p>
-                <p className="text-[#94A3B8] text-xs mt-2.5">
-                  {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from} → {swap.to}
+                <p className="text-[#94A3B8] text-xs mt-2.5 flex items-center justify-center gap-2">
+                  <span className="flex items-center gap-1">
+                    {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from}
+                  </span>
+                  <span className="w-5 h-5 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center flex-shrink-0">
+                    <ArrowRight className="w-3 h-3 text-[#94A3B8]" />
+                  </span>
+                  <span>{swap.to}</span>
                 </p>
               </>
             ) : (

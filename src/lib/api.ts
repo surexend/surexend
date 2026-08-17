@@ -662,3 +662,19 @@ export const notificationsAPI = {
       () => ({ message: 'All notifications marked as read' })
     ),
 }
+
+// ── Admin API (requires the ADMIN role on the JWT) ──────────────────────
+export const adminAPI = {
+  getOverview: () => apiClient.get('/admin/overview').then(r => r.data),
+  getUsers: (params?: { search?: string; kycStatus?: string; page?: number; limit?: number }) =>
+    apiClient.get('/admin/users', { params }).then(r => r.data),
+  getUser: (id: string) => apiClient.get(`/admin/users/${id}`).then(r => r.data),
+  updateUser: (id: string, body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string }) =>
+    apiClient.patch(`/admin/users/${id}`, body).then(r => r.data),
+  getTransactions: (params?: { type?: string; status?: string; search?: string; page?: number; limit?: number }) =>
+    apiClient.get('/admin/transactions', { params }).then(r => r.data),
+  getKyc: (params?: { status?: string; page?: number; limit?: number }) =>
+    apiClient.get('/admin/kyc', { params }).then(r => r.data),
+  decideKyc: (id: string, body: { approve: boolean; reason?: string }) =>
+    apiClient.post(`/admin/kyc/${id}/decision`, body).then(r => r.data),
+}

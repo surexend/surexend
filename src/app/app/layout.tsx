@@ -180,6 +180,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="p-3 mt-auto">
+            {profile?.role === 'ADMIN' && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl mb-2 text-[#64748B] hover:text-white hover:bg-[rgba(255,255,255,0.03)] transition-all text-sm"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span className="text-sm font-medium">Admin Console</span>
+              </Link>
+            )}
             <div className="p-3 rounded-xl border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] flex items-center gap-3">
               <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20 flex-shrink-0 bg-[#1E2738]">
                 {avatar ? (

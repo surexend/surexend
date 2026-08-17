@@ -68,6 +68,11 @@ export default function DashboardPage() {
   const [chartSource, setChartSource] = useState<string>('Live FX')
   const [chartLoading, setChartLoading] = useState(false)
 
+  // Real live anchor per pair (from the backend market-chart response). Used to
+  // drive USDC ticks with its REAL price (~0.9995) instead of a hardcoded 1.0,
+  // which is what turned the pegged-pair chart into a perfectly flat line.
+  const liveSpotRef = useRef<Record<string, number | null>>({})
+
   // Load real historical series whenever the selected pair or timeframe changes.
   useEffect(() => {
     let active = true
@@ -78,8 +83,19 @@ export default function DashboardPage() {
         // Always surface the true source (even if history came back empty so
         // the backend fell back to live-only). No fabricated flat line.
         setChartSource(data?.source || 'Live FX')
-        if (!data?.points?.length) return
+        if (typeof data?.live === 'number' && data.live > 0) {
+          liveSpotRef.current[selectedMarket] = data.live
+        }
         const isLong = timeframe === '1M' || timeframe === '1Y'
+        if (!data?.points?.length) {
+          // No real history (upstream down) — seed the chart with the REAL live
+          // anchor so it still draws genuine movement, never a blank box.
+          const live = liveSpotRef.current[selectedMarket]
+          if (typeof live === 'number') {
+            setRateSeries(prev => ({ ...prev, [selectedMarket]: [{ time: new Date().toLocaleTimeString('en-US', { hour12: false }), value: live }] }))
+          }
+          return
+        }
         const series = data.points.map((p: any) => ({
           time: isLong
             ? new Date(p.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -120,7 +136,9 @@ export default function DashboardPage() {
       setRateSeries(prev => {
         const next: Record<string, { time: string; value: number }[]> = { ...prev }
         for (const pair of MARKET_PAIRS) {
-          const rate = pair.id === 'USDC' ? 1 : normalized[pair.id]
+          // USDC has no FloatRates quote — drive it from the real backend
+          // anchor (its actual ~0.9995 price), never a fabricated 1.0.
+          const rate = pair.id === 'USDC' ? (liveSpotRef.current['USDC'] ?? 1) : normalized[pair.id]
           if (!rate) continue
           const now = new Date()
           const stamp = now.toLocaleTimeString('en-US', { hour12: false })
@@ -156,6 +174,24 @@ export default function DashboardPage() {
   const chartSeries = useMemo(() => {
     return rateSeries[selectedMarket] || []
   }, [selectedMarket, rateSeries])
+
+  // Dynamic Y domain. Pegged pairs (USDC/USD) move only ~0.03%/day, so a
+  // percent-padded axis flattens the line into invisibility. For near-constant
+  // series we zoom into the data range so the REAL wiggle is visible instead of
+  // a boring straight line. Normal pairs keep the classic percent padding.
+  const chartYDomain = useMemo(() => {
+    const vals = chartSeries.map(d => d.value).filter(v => typeof v === 'number')
+    if (vals.length === 0) return (['auto', 'auto'] as unknown) as [number, number]
+    const dataMin = Math.min(...vals)
+    const dataMax = Math.max(...vals)
+    const range = dataMax - dataMin
+    const relRange = dataMax !== 0 ? range / Math.abs(dataMax) : 0
+    if (relRange < 0.002) {
+      const pad = Math.max(range * 0.4, 0.00005)
+      return [dataMin - pad, dataMax + pad]
+    }
+    return (['dataMin * 0.9999', 'dataMax * 1.0001'] as unknown) as [number, number]
+  }, [chartSeries])
 
   useEffect(() => {
     const saved = localStorage.getItem('surexend_user_avatar')
@@ -313,7 +349,7 @@ export default function DashboardPage() {
           animate={{ x: [0, -400] }}
           transition={{ repeat: Infinity, duration: 15, ease: 'linear' }}
         >
-          <span>USDC/USD: <strong className="text-white">$1.0000</strong> <span className="text-[#10B981]">pegged</span></span>
+          <span>USDC/USD: <strong className="text-white">${(liveSpotRef.current['USDC'] ?? 1).toFixed(4)}</strong> <span className="text-[#10B981]">pegged</span></span>
           {AFRICAN_CURRENCIES.slice(0, 8).map((c) => (
             <span key={c.code}>{c.code}/USD: <strong className="text-white">{c.symbol}{(rateFor(c.code)).toLocaleString(undefined, { maximumFractionDigits: c.rate >= 1000 ? 0 : 2 })}</strong> <span className="text-[#64748B]">live</span></span>
           ))}
@@ -541,7 +577,7 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center gap-3">
               <span className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                {selectedMarket === 'USDC' ? '$1.0000' : `${MARKET_PAIRS.find(p => p.id === selectedMarket)?.symbol || '$'}${rateFor(selectedMarket).toFixed(MARKET_PAIRS.find(p => p.id === selectedMarket)?.decimals ?? 2)}`}
+                {selectedMarket === 'USDC' ? `$${(liveSpotRef.current['USDC'] ?? 1).toFixed(4)}` : `${MARKET_PAIRS.find(p => p.id === selectedMarket)?.symbol || '$'}${rateFor(selectedMarket).toFixed(MARKET_PAIRS.find(p => p.id === selectedMarket)?.decimals ?? 2)}`}
               </span>
               <span className="text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-0.5 bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.2)]">
                 <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[#10B981]" /> Live
@@ -592,7 +628,7 @@ export default function DashboardPage() {
               </defs>
               <XAxis dataKey="time" stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} dy={5} minTickGap={40} />
               <YAxis 
-                domain={['dataMin * 0.9999', 'dataMax * 1.0001']} 
+                domain={chartYDomain} 
                 stroke="#64748B" 
                 fontSize={10} 
                 tickLine={false} 

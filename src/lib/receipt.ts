@@ -137,12 +137,15 @@ export async function renderReceiptCanvas(opts: {
     const widths = [...text].map(ch => cx.measureText(ch).width)
     const total = widths.reduce((a, b) => a + b, 0) + gap * Math.max(0, text.length - 1)
     let sx = align === 'right' ? x - total : align === 'center' ? x - total / 2 : x
+    const prevAlign = ctx.textAlign
+    ctx.textAlign = 'left'
     ctx.fillStyle = color
     ctx.font = f
     for (let i = 0; i < text.length; i++) {
       ctx.fillText(text[i], sx, y)
       sx += widths[i] + gap
     }
+    ctx.textAlign = prevAlign
   }
 
   // Header
