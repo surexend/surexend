@@ -394,12 +394,14 @@ function TransactionDetailModal({
     } catch { /* ignore */ }
   }
 
-  // Capture the receipt DOM node and export it as a PDF or PNG. The export uses a
-  // dedicated off-screen node (exportRef) with a flat, filter-free layout so
-  // html2canvas renders it pixel-perfect — no flexbox reflow glitches, no lost
-  // CSS filters, no copy buttons in the file. The logo is re-rendered through a
-  // canvas at export time so the lemon mark is correctly whitened (html2canvas
-  // ignores CSS filter). html2canvas/jsPDF are lazy-loaded on demand.
+  // Capture the receipt DOM node and export it as a PDF or PNG. html-to-image is
+  // used instead of html2canvas because it rasterizes the DOM through an SVG
+  // foreignObject, i.e. the BROWSER's own renderer — so web-font metrics and
+  // text wrapping are exact and no text can ever overlap, which html2canvas's
+  // re-implemented layout engine got wrong. We render a dedicated off-screen
+  // node (exportRef) with a flat, filter-free layout and no copy buttons. The
+  // lemon logo mark is pre-baked to a white silhouette via canvas so it is
+  // always correct. jsPDF is lazy-loaded only for the PDF path.
   const prepareExportLogo = async () => {
     const img = exportLogoRef.current
     if (!img) return
@@ -434,16 +436,18 @@ function TransactionDetailModal({
     if (!node || downloading) return
     setDownloading(format)
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import('html2canvas'),
+      const [{ toCanvas }, { jsPDF }] = await Promise.all([
+        import('html-to-image'),
         import('jspdf'),
       ])
       await prepareExportLogo()
-      const canvas = await html2canvas(node, {
-        scale: 2,
+      // Make sure the custom DM Sans web font is ready so the captured text
+      // uses its real metrics.
+      await document.fonts.ready
+      const canvas = await toCanvas(node, {
+        pixelRatio: 2,
         backgroundColor: '#0B1120',
-        useCORS: true,
-        logging: false,
+        cacheBust: true,
       })
       const refSlug = (details?.reference || details?.id || 'receipt').replace(/[^a-zA-Z0-9_-]/g, '')
       if (format === 'png') {
@@ -678,7 +682,7 @@ function TransactionDetailModal({
           </div>
         </div>
 
-        {/* ── EXPORT RECEIPT (off-screen, flat & filter-free for html2canvas) ── */}
+        {/* ── EXPORT RECEIPT (off-screen, flat & filter-free, browser-native capture) ── */}
         <div
           ref={exportRef}
           style={{
