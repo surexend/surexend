@@ -398,14 +398,14 @@ export const conversionAPI = {
       }
     ),
 
-  execute: (payload: { from: string; to: string; amount: number; pin: string }) =>
+  execute: (payload: { from: string; to: string; amount: number; pin: string }, headers?: Record<string, string>) =>
     tryWithMock(
       () => apiClient.post('/conversions/execute', {
         from: payload.from,
         to: payload.to,
         amount: payload.amount,
         pin: payload.pin,
-      }).then(r => r.data),
+      }, { headers }).then(r => r.data),
       () => ({
         success: true,
         reference: 'CNV-' + Math.random().toString(36).substring(2, 8).toUpperCase(),

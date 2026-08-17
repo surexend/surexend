@@ -5,11 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { X, Send, Bot, Sparkles, RefreshCw, ShieldCheck, Download, KeyRound } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { walletAPI, billsAPI, transactionAPI, supportAPI } from '@/lib/api'
+import { walletAPI, billsAPI, transactionAPI, supportAPI, conversionAPI } from '@/lib/api'
 import { renderReceiptCanvas, downloadReceiptFile } from '@/lib/receipt'
 
 interface AssistantAction {
-  type: 'send' | 'bill' | 'receipt' | null
+  type: 'send' | 'bill' | 'convert' | 'receipt' | null
   params: Record<string, any>
 }
 
@@ -37,6 +37,8 @@ const QUICK_QUESTIONS = [
 
 const SEND_NETWORKS = ['ARC', 'ETHEREUM', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'BASE', 'OPTIMISM', 'SOLANA', 'MONAD', 'BSC', 'BEP20']
 const BILL_TYPES = ['airtime', 'data', 'electricity', 'tv', 'cable', 'internet', 'water']
+const CONVERT_FROM = ['USD', 'USDT', 'USDC']
+const CONVERT_TO = ['NGN', 'GHS', 'KES', 'ZAR', 'UGX', 'TZS', 'EGP', 'MAD', 'ETB', 'RWF', 'XAF', 'XOF']
 
 const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
@@ -71,11 +73,13 @@ function ActionCard({
 
   const isSend = action.type === 'send'
   const isBill = action.type === 'bill'
+  const isConvert = action.type === 'convert'
   const isReceipt = action.type === 'receipt'
 
   const valid =
     (isSend && form.to && Number(form.amount) > 0 && SEND_NETWORKS.includes(form.network)) ||
-    (isBill && form.type && form.provider && form.recipient && Number(form.amount) > 0)
+    (isBill && form.type && form.provider && form.recipient && Number(form.amount) > 0) ||
+    (isConvert && form.from && form.to && form.from !== form.to && Number(form.amount) > 0)
 
   const inputCls = 'w-full px-3 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors'
   const labelCls = 'text-[10px] text-[#64748B] font-semibold uppercase tracking-wide mb-1 block'
@@ -98,6 +102,12 @@ function ActionCard({
           { 'X-Txn-Source': 'chat' },
         )
         onDone({ ok: true, text: `${String(form.provider).toUpperCase()} ${form.type} of ${Number(form.amount).toLocaleString()} paid to ${form.recipient}. Reference: ${r.reference}`, ref: r.reference })
+      } else if (isConvert) {
+        const r = await conversionAPI.execute(
+          { from: form.from, to: form.to, amount: Number(form.amount), pin },
+          { 'X-Txn-Source': 'chat' },
+        )
+        onDone({ ok: true, text: `Converted ${Number(form.amount).toLocaleString()} ${form.from} to ${form.to}${r.receiveAmount ? ` (${Number(r.receiveAmount).toLocaleString()} ${form.to})` : ''}. Reference: ${r.reference}`, ref: r.reference })
       }
       setPin('')
       setPinOpen(false)
@@ -136,12 +146,35 @@ function ActionCard({
       <div className="px-3 py-2 flex items-center gap-2 border-b border-white/5">
         <ShieldCheck className="w-3.5 h-3.5" style={{ color: `rgb(${accentRgb})` }} />
         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">
-          {isSend ? 'Send Crypto' : isBill ? 'Pay Bill' : 'Receipt'}
+          {isSend ? 'Send Crypto' : isBill ? 'Pay Bill' : isConvert ? 'Convert' : 'Receipt'}
         </span>
         <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">PIN required</span>
       </div>
 
       <div className="p-3 space-y-2">
+        {isConvert && (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className={labelCls}>From</span>
+                <select className={inputCls} value={form.from || 'USD'} onChange={e => set('from', e.target.value)}>
+                  {CONVERT_FROM.map(c => <option key={c} value={c} className="bg-[#0A0F1E]">{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <span className={labelCls}>To</span>
+                <select className={inputCls} value={form.to || 'NGN'} onChange={e => set('to', e.target.value)}>
+                  {CONVERT_TO.map(c => <option key={c} value={c} className="bg-[#0A0F1E]">{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <span className={labelCls}>Amount</span>
+              <input className={inputCls} type="number" min="0" value={form.amount || ''} onChange={e => set('amount', e.target.value)} placeholder="0.00" />
+            </div>
+          </>
+        )}
+
         {isReceipt && (
           <p className="text-[11px] text-gray-400">Download the receipt for your most recent transaction.</p>
         )}

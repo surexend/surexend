@@ -180,3 +180,28 @@ wallet never shows the funds.
 - Next security hardening: server-side idempotency for chat-driven sends,
   Redis-backed rate limiter (in-memory map is per-instance), UI amount caps
   matching the backend caps.
+
+## 2026-08-17 (later) — chart flat-line root cause + smoothness pass + receipts white + glass tile texture
+- CHART ROOT CAUSE (fixed): the dashboard "straight line" was NOT Yahoo — it
+  was the fallback that seeded 12 *identical* FloatRates values when Yahoo
+  intermittently rate-limited (query2 fails without a cookie). A flat series of
+  equal points renders as a horizontal line. Fix: backend now retries
+  query1/query2 and, when real history is truly unavailable, returns an EMPTY
+  series (source: Live FX) instead of fabricating a flat line; the dashboard's
+  live ticker fills the chart with genuine movement. Frontend also: source is
+  surfaced even when history is empty, 1M/1Y points use date labels, and once a
+  series has >=30 live ticks the tip is updated IN PLACE so long histories
+  don't scroll off into a short flat tail.
+- PERF: living-edge ring thinned 3px->2px; backdrop blur capped 22->18px (glass)
+  and 28->24px (strong), saturate 175/160->165/155 — visually near-identical,
+  meaningfully cheaper on mobile GPU. (No canvas/starfield anims exist in app.)
+- RECEIPT: amount text is now white (was green/red) everywhere — in-app receipt
+  view, canvas PNG/PDF export, and the chat receipt renderer.
+- GLASS TEXTURE: the barely-visible dot grid was replaced with a deliberate,
+  faint diamond LATTICE tiled every 34px (38px on sheets), tinted gold/lemon
+  via --tile. Content always renders above it (it's a background layer).
+- AI fallback is now a real intent parser: detects send/bill/convert/receipt/
+  balance, extracts amount/recipient/provider, and when a slot is missing it
+  ASKS a focused question instead of a canned paragraph. Balance answers are
+  fetched server-side from the user's own wallet and the model never sees them.
+  New 'convert' action (convert card -> /conversions/execute with PIN).

@@ -59,7 +59,7 @@ export class ConversionsService {
         const days = { '1D': 1, '1W': 7, '1M': 30, '1Y': 365 }[tf];
         const response = await axios.get('https://api.coingecko.com/api/v3/coins/usd-coin/market_chart', {
           params: { vs_currency: 'usd', days, interval: days <= 7 ? 'hourly' : 'daily' },
-          timeout: 8000,
+          timeout: 9000,
         });
         points = (response.data?.prices || []).map(([ts, v]: [number, number]) => ({
           time: new Date(ts).toISOString(),
@@ -70,54 +70,54 @@ export class ConversionsService {
         this.logger.warn(`USDC market chart unavailable: ${(error as Error).message}`);
       }
     } else {
-      // Fiat currency — real history from Yahoo Finance.
+      // Fiat currency — real history from Yahoo Finance (with a query1 retry,
+      // since query2 rate-limits without a cookie from time to time).
       const yahooRanges: Record<string, { range: string; interval: string }> = {
         '1D': { range: '1d', interval: '1h' },
         '1W': { range: '5d', interval: '1d' },
         '1M': { range: '1mo', interval: '1d' },
         '1Y': { range: '1y', interval: '1d' },
       };
-      const cfg = yahooRanges[tf];
-      try {
-        const response = await axios.get(`https://query2.finance.yahoo.com/v8/finance/chart/${code}=X`, {
-          params: { range: cfg.range, interval: cfg.interval },
-          headers: { 'User-Agent': 'Mozilla/5.0 (SureXend Market Feed)' },
-          timeout: 8000,
-        });
-        const result = response.data?.chart?.result?.[0];
-        const stamps: number[] = result?.timestamp || [];
-        const closes: (number | null)[] = result?.indicators?.quote?.[0]?.close || [];
-        points = stamps
-          .map((ts, i) => ({ time: new Date(ts * 1000).toISOString(), value: Number(closes[i]) }))
-          .filter((p) => Number.isFinite(p.value) && p.value > 0);
+      const fetched = await this.fetchYahooHistory(code, yahooRanges[tf]);
+      if (fetched.length >= 2) {
+        points = fetched;
         source = 'Yahoo Finance';
-      } catch (error) {
-        this.logger.warn(`Yahoo market chart unavailable for ${code}: ${(error as Error).message}`);
+      } else {
+        this.logger.warn(`Yahoo market chart unavailable for ${code}; serving live ticks only`);
       }
     }
 
-    // Fallback: if upstream history failed or was empty, seed from FloatRates
-    // live spot so the chart still shows a real, current rate.
-    if (points.length < 2) {
-      try {
-        const live = await axios.get('https://www.floatrates.com/daily/usd.json', { timeout: 6000 });
-        const rate = Number(live.data?.[code.toLowerCase()]?.rate);
-        if (Number.isFinite(rate) && rate > 0) {
-          const now = Date.now();
-          points = Array.from({ length: 12 }, (_, i) => ({
-            time: new Date(now - (11 - i) * 5 * 60 * 1000).toISOString(),
-            value: rate,
-          }));
-          source = 'FloatRates';
-        }
-      } catch { /* keep whatever we have */ }
-    }
-
+    // IMPORTANT: never fabricate a flat line. When real history is unavailable
+    // we return an empty series — the dashboard's live ticker (FloatRates, from
+    // the browser) fills the chart with genuine movement within seconds. A
+    // "straight line" of identical fallback values is what previously made the
+    // chart look broken after an upstream blip.
     const payload = { currency: code, timeframe: tf, points, source, updatedAt: Date.now() };
     try {
       await this.redis.set(cacheKey, JSON.stringify(payload), 'EX', 60);
     } catch { /* cache is best-effort */ }
     return payload;
+  }
+
+  private async fetchYahooHistory(code: string, cfg: { range: string; interval: string }) {
+    const domains = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com'];
+    for (const domain of domains) {
+      try {
+        const response = await axios.get(`https://${domain}/v8/finance/chart/${code}=X`, {
+          params: { range: cfg.range, interval: cfg.interval },
+          headers: { 'User-Agent': 'Mozilla/5.0 (SureXend Market Feed)' },
+          timeout: 9000,
+        });
+        const result = response.data?.chart?.result?.[0];
+        const stamps: number[] = result?.timestamp || [];
+        const closes: (number | null)[] = result?.indicators?.quote?.[0]?.close || [];
+        const points = stamps
+          .map((ts, i) => ({ time: new Date(ts * 1000).toISOString(), value: Number(closes[i]) }))
+          .filter((p) => Number.isFinite(p.value) && p.value > 0);
+        if (points.length >= 2) return points;
+      } catch { /* try next domain */ }
+    }
+    return [];
   }
 
   async getRates(currency: string) {

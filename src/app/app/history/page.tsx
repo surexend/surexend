@@ -457,7 +457,7 @@ function TransactionDetailModal({
     const dateTxt = new Date(details?.createdAt || details?.date || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
     const amountLabel = swap ? 'YOU RECEIVED' : 'AMOUNT'
-    const amountColor = swap ? '#34D399' : isCredit ? '#34D399' : isDebit ? '#F87171' : '#94A3B8'
+    const amountColor = '#ffffff'
     const amountValue = swap
       ? `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)}`
       : `${sign}${symbol}${formatAmount(Number(details?.amount || 0))}`
@@ -851,7 +851,7 @@ function TransactionDetailModal({
             </p>
             {swap ? (
               <>
-                <p className="text-4xl font-black tracking-tight text-emerald-400 leading-none">
+                <p className="text-4xl font-black tracking-tight text-white leading-none">
                   {currencySymbol(swap.to)}{formatAmount(swap.toAmount)}
                 </p>
                 <p className="text-[#94A3B8] text-xs mt-2.5">
@@ -860,7 +860,7 @@ function TransactionDetailModal({
               </>
             ) : (
               <>
-                <p className={`text-4xl font-black tracking-tight ${amtColor} leading-none`}>
+                <p className={`text-4xl font-black tracking-tight text-white leading-none`}>
                   {sign}{symbol}{formatAmount(Number(details?.amount || 0))}
                 </p>
                 <p className="text-[#94A3B8] text-xs mt-2.5">

@@ -29,7 +29,7 @@ import axios from 'axios';
 interface ChatMessage { role: 'AI' | 'USER'; content: string }
 
 export interface AssistantAction {
-  type: 'send' | 'bill' | 'receipt' | null;
+  type: 'send' | 'bill' | 'convert' | 'receipt' | null;
   params: Record<string, unknown>;
 }
 
@@ -38,6 +38,7 @@ const SEND_NETWORKS = ['ARC', 'ETHEREUM', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'B
 const MAX_CHAT_PER_MINUTE = 40;
 const MAX_CHAT_SEND_AMOUNT = 5000; // USDT from chat; larger amounts must use the app flow
 const MAX_CHAT_BILL_AMOUNT = 500000; // local currency; larger amounts must use the app flow
+const MAX_CHAT_CONVERT_AMOUNT = 50000; // USDT from chat
 
 const SYSTEM_PROMPT = `You are the SureXend assistant, an Africa-first stablecoin spending platform (USDT/USDC wallets, local fiat conversions with a 1.2% fee, bill payments, airtime/data, KYC tiers: T1 phone, T2 NIN/BVN, T3 passport). You help users navigate the app, explain fees, rates and security, and PREPARE actions.
 
@@ -56,6 +57,10 @@ For an ACTION, use exactly one of:
   Only if the user clearly asked to send USDT/crypto. Use a network from: ${SEND_NETWORKS.join(', ')}.
 - bill: {"type":"bill","params":{"type":"airtime|data|electricity|tv|cable|internet|water","provider":"e.g. mtn","recipient":"phone number or meter number","amount":<number local currency>}}
   Only if the user clearly asked to pay a bill/buy airtime/data.
+- convert: {"type":"convert","params":{"from":"USD","to":"NGN","amount":<number>}}
+  Only if the user clearly asked to convert/swap currencies. from/to are currency
+  codes (USD, USDT, USDC, NGN, GHS, KES, ZAR, UGX, MAD, ...). Default from=USD
+  when converting crypto to a local currency.
 - receipt: {"type":"receipt","params":{}}
   Only if the user asked for a receipt or proof of a transaction.
 Otherwise action.type must be null. Do not invent amounts or recipients the user did not state; if something is missing, set the field to null and ask for it in reply.`;
@@ -104,6 +109,13 @@ export class SupportService {
       params.amount = Number.isFinite(amount) && amount > 0 && amount <= MAX_CHAT_BILL_AMOUNT
         ? Math.round(amount * 100) / 100
         : null;
+    } else if (type === 'convert') {
+      const amount = Number(a?.params?.amount);
+      params.from = String(a?.params?.from || 'USD').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'USD';
+      params.to = String(a?.params?.to || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+      params.amount = Number.isFinite(amount) && amount > 0 && amount <= MAX_CHAT_CONVERT_AMOUNT
+        ? Math.round(amount * 1e6) / 1e6
+        : null;
     }
 
     return { type, params };
@@ -112,6 +124,16 @@ export class SupportService {
   async chat(userId: string, message: string, history: ChatMessage[] = []) {
     if (!message || !message.trim()) throw new BadRequestException('Message is required');
     this.enforceRateLimit(userId);
+
+    // Balance questions are answered from the user's OWN wallet, fetched
+    // server-side. This works in every mode (OpenAI/Gemini/local) and, most
+    // importantly, the model NEVER sees balance figures — it can't be tricked
+    // into leaking them.
+    const wantsBalance = /balance|how much (do i have|money)|wallet.*balance|available balance/i.test(message);
+    const alsoActs = /send|transfer|convert|pay/i.test(message);
+    if (wantsBalance && !alsoActs) {
+      return await this.replyWithBalance(userId);
+    }
 
     const apiKey = this.configService.get<string>('app.openai.apiKey');
 
@@ -137,7 +159,7 @@ export class SupportService {
       }
     }
 
-    return this.localFallback(message);
+    return this.localFallback(userId, message);
   }
 
   // ── OpenAI (preferred brain) ──────────────────────────────────────────────
@@ -200,25 +222,117 @@ export class SupportService {
     };
   }
 
-  // ── Local knowledge base (always available, no key required) ────────────
-  private localFallback(message: string): {
+  // ── Local knowledge base + intent parser (always available, no key) ─────
+  // Unlike a canned keyword bot, this detects the user's intent, extracts the
+  // slots it has, and when something is missing it ASKS for it — so it feels
+  // like a conversation, not a menu. When every required slot is present it
+  // returns a real proposal (send / bill / convert / receipt) exactly like the
+  // LLM path would.
+  private localFallback(userId: string, message: string): {
     response: string;
     escalate: boolean;
     action: AssistantAction;
   } {
     const lower = message.toLowerCase();
+    const amountMatch = lower.match(/\d+(?:[.,]\d+)?/);
+    const amount = amountMatch ? Number(amountMatch[0].replace(',', '.')) : null;
 
+    const currencyHint = (): string => {
+      if (/ngn|naira|₦/.test(lower)) return 'NGN';
+      if (/ghs|ghana|cedi|gh₵/.test(lower)) return 'GHS';
+      if (/kes|kenya|shilling/.test(lower)) return 'KES';
+      if (/zar|rand/.test(lower)) return 'ZAR';
+      if (/ugx|uganda/.test(lower)) return 'UGX';
+      return 'USD';
+    };
+
+    const human = /fraud|hack|stolen|compromised|scam|human|agent|real person/i.test(lower);
+    if (human) {
+      return {
+        response: 'This sounds serious — I have flagged it for a human agent who will reach out shortly. In the meantime, never share your PIN or recovery details with anyone.',
+        escalate: true,
+        action: { type: null, params: {} },
+      };
+    }
+
+    // ── Send ──
+    if (/send|transfer|move/.test(lower) && /usdt|usdc|crypto|send|transfer|money/.test(lower)) {
+      const tag = lower.match(/@[\w.-]{2,30}/);
+      const addr = lower.match(/0x[a-fA-F0-9]{10,}/);
+      const afterTo = lower.match(/(?:to|send to|transfer to)\s+([a-z0-9][a-z0-9 .-]{2,40})/);
+      const recipient = (tag?.[0] || addr?.[0] || afterTo?.[1] || '').trim();
+      if (!amount) {
+        return { response: 'How much would you like to send in USDT?', escalate: false, action: { type: null, params: {} } };
+      }
+      if (!recipient) {
+        return { response: 'Got it. Who should I send it to — an Xend tag (@name) or a wallet address?', escalate: false, action: { type: null, params: {} } };
+      }
+      return {
+        response: `Okay — sending ${amount} USDT to ${recipient}. Please review the card and approve with your PIN.`,
+        escalate: false,
+        action: { type: 'send', params: { to: recipient, amount, network: 'POLYGON' } },
+      };
+    }
+
+    // ── Bills ──
+    if (/airtime|data|dstv|gotv|startimes|electricity|meter|internet|water|bill/.test(lower)) {
+      const type = /airtime|recharge/.test(lower) ? 'airtime'
+        : /data/.test(lower) ? 'data'
+        : /electricity|meter|prepaid|postpaid/.test(lower) ? 'electricity'
+        : /dstv|gotv|startimes|cable/.test(lower) ? 'tv'
+        : /internet/.test(lower) ? 'internet'
+        : /water/.test(lower) ? 'water'
+        : null;
+      const provider = (lower.match(/mtn|airtel|glo|9mobile|dstv|gotv|startimes|ikeja|eko|phcn|abuja|iedc|water/) || [null])[0];
+      const recipient = (lower.match(/0\d{9,11}/) || [null])[0];
+      if (!type) {
+        return { response: 'Which bill would you like to pay — airtime, data, electricity, TV, internet or water?', escalate: false, action: { type: null, params: {} } };
+      }
+      if (!recipient) {
+        return { response: 'Sure — what is the phone or meter number?', escalate: false, action: { type: null, params: {} } };
+      }
+      if (!amount) {
+        return { response: 'How much would you like to pay?', escalate: false, action: { type: null, params: {} } };
+      }
+      return {
+        response: `Preparing your ${provider || type} ${type} payment of ${amount} to ${recipient}. Approve with your PIN on the card.`,
+        escalate: false,
+        action: { type: 'bill', params: { type, provider: provider || type, recipient, amount } },
+      };
+    }
+
+    // ── Convert ──
+    if (/convert|exchange|swap|how much (is|does)|to (ngn|naira|ghs|kes)/.test(lower)) {
+      const local = currencyHint();
+      const targetIsLocal = local !== 'USD';
+      const from = targetIsLocal ? 'USD' : 'NGN';
+      const to = targetIsLocal ? local : 'USD';
+      if (!amount) {
+        return { response: `How much would you like to convert${targetIsLocal ? ` to ${local}` : ''}?`, escalate: false, action: { type: null, params: {} } };
+      }
+      return {
+        response: `Converting ${amount} ${from} to ${to}. Review the card and approve with your PIN.`,
+        escalate: false,
+        action: { type: 'convert', params: { from, to, amount } },
+      };
+    }
+
+    // ── Receipt ──
+    if (/receipt|proof/.test(lower)) {
+      return {
+        response: 'Here you go — I can fetch a receipt for your most recent transaction. Pick a format below.',
+        escalate: false,
+        action: { type: 'receipt', params: {} },
+      };
+    }
+
+    // ── FAQ topics ──
     const kb: Array<[RegExp, string]> = [
       [/naira|convert|rate|usd.*ngn/, 'To convert USD to Naira (NGN), open the Conversion tab, enter your USD amount, pick NGN, choose your saved bank account and confirm with your 4-digit PIN. Funds typically arrive in under 2 minutes, with a 1.2% conversion fee shown live before you confirm.'],
       [/invoice|europe|euro|iban|sepa/, 'SureXend Invoices let you get paid from Europe (SEPA EUR, GBP, CHF, PLN, SEK…). Clients pay into your generated IBAN and the funds auto-convert to your USD wallet.'],
       [/fee|charge|cost/, 'Internal Xend Tag P2P transfers are free. Crypto withdrawals and fiat conversions are capped at 1.2%, with the exact rate shown before you confirm.'],
       [/deposit|fund|bank|top.?up/, 'You can fund your account two ways: 1) local transfers via your dedicated Virtual Bank Account, or 2) crypto — copy your USDC/USDT deposit address or scan the QR code in the Deposit section.'],
-      [/airtime|data|dstv|electricity|meter|bill|paybill/, 'You can pay bills from the Bills section or right here. Tell me what to pay — e.g. "pay MTN airtime of 500 naira to 08012345678" — and I will prepare a confirmation for you.'],
-      [/send|transfer.*(usdt|usdc|crypto)|send.*to/, 'You can send crypto right from the app. Tell me who to send to and the amount, e.g. "send 50 USDT to Chidi", and I will prepare a confirmation card for you. You will approve it with your 4-digit PIN.'],
-      [/receipt|proof/, 'I can fetch any transaction receipt for you. Say "download my receipt" or "show me the last receipt" and I will prepare it.'],
-      [/human|agent|real person|fraud|hack|stolen|scam/, 'This sounds serious — I have flagged it for a human agent who will reach out shortly. In the meantime, never share your PIN or recovery details with anyone.'],
     ];
-
     for (const [re, text] of kb) {
       if (re.test(lower)) {
         return { response: text, escalate: false, action: { type: null, params: {} } };
@@ -226,10 +340,36 @@ export class SupportService {
     }
 
     return {
-      response: 'I can help with conversions, deposits, invoices, bill payments, crypto sends and receipts. Try "send 20 USDT to Chidi", "pay DSTV", or "download my receipt".',
+      response: 'I can help you check your balance, send crypto, pay bills, convert currencies, or fetch a receipt. For example: "send 20 USDT to Chidi", "pay DSTV", "convert 100 to NGN", or "what is my balance?".',
       escalate: false,
       action: { type: null, params: {} },
     };
+  }
+
+  // Fetches the user's OWN wallet balances (server-side, explicit safe select)
+  // and formats a reply. The model never sees these numbers.
+  private async replyWithBalance(userId: string) {
+    let wallet: any = null;
+    try {
+      wallet = await this.prisma.wallet.findUnique({
+        where: { userId },
+        select: { usdtBalance: true, usdcBalance: true, localBalance: true, lockedBalance: true, pendingBalance: true },
+      });
+    } catch { /* wallet read is best-effort */ }
+
+    const usdt = Number(wallet?.usdtBalance || 0);
+    const usdc = Number(wallet?.usdcBalance || 0);
+    const local = Number(wallet?.localBalance || 0);
+    const pending = Number(wallet?.pendingBalance || 0);
+    const totalUsd = usdt + usdc;
+
+    const lines = [];
+    lines.push(`Your available crypto balance is ${totalUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT/USDC.`);
+    if (local > 0) lines.push(`You also have ${local.toLocaleString()} in your local wallet.`);
+    if (pending > 0) lines.push(`A pending balance of ${pending.toLocaleString()} is settling.`);
+    lines.push('Anything else — send, bills, conversions, receipts?');
+
+    return { response: lines.join(' '), escalate: false, action: { type: null, params: {} } };
   }
 
   async createTicket(userId: string, subject: string, category: string, message: string) {

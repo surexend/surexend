@@ -170,9 +170,10 @@ body {
   background-image:
     linear-gradient(115deg, transparent 28%, var(--sheen, rgba(255, 255, 255, 0.05)) 46%, transparent 64%),
     radial-gradient(120% 90% at 50% -15%, rgba(255, 255, 255, 0.12), transparent 55%),
-    radial-gradient(var(--dot, rgba(255, 255, 255, 0.05)) 1px, transparent 1.5px),
+    linear-gradient(135deg, transparent 0 46.5%, var(--tile, rgba(255, 255, 255, 0.06)) 46.5% 48.5%, transparent 48.5% 100%),
+    linear-gradient(45deg, transparent 0 46.5%, var(--tile, rgba(255, 255, 255, 0.06)) 46.5% 48.5%, transparent 48.5% 100%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0.07));
-  background-size: auto, auto, 26px 26px, auto;
+  background-size: auto, auto, 34px 34px, 34px 34px, auto;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 22px;
   box-shadow:
@@ -184,8 +185,8 @@ body {
 
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
   .liquid-glass {
-    -webkit-backdrop-filter: blur(22px) saturate(175%);
-    backdrop-filter: blur(22px) saturate(175%);
+    -webkit-backdrop-filter: blur(18px) saturate(165%);
+    backdrop-filter: blur(18px) saturate(165%);
   }
 }
 
@@ -231,9 +232,10 @@ body {
   background-image:
     linear-gradient(115deg, transparent 30%, var(--sheen, rgba(255, 255, 255, 0.04)) 48%, transparent 66%),
     radial-gradient(120% 90% at 50% -15%, rgba(255, 255, 255, 0.10), transparent 55%),
-    radial-gradient(var(--dot, rgba(255, 255, 255, 0.04)) 1px, transparent 1.5px),
+    linear-gradient(135deg, transparent 0 46.5%, var(--tile, rgba(255, 255, 255, 0.045)) 46.5% 48.5%, transparent 48.5% 100%),
+    linear-gradient(45deg, transparent 0 46.5%, var(--tile, rgba(255, 255, 255, 0.045)) 46.5% 48.5%, transparent 48.5% 100%),
     linear-gradient(135deg, rgba(20, 28, 52, 0.88), rgba(12, 18, 36, 0.92));
-  background-size: auto, auto, 28px 28px, auto;
+  background-size: auto, auto, 38px 38px, 38px 38px, auto;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
   box-shadow:
@@ -244,8 +246,8 @@ body {
 
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
   .liquid-glass-strong {
-    -webkit-backdrop-filter: blur(28px) saturate(160%);
-    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(155%);
+    backdrop-filter: blur(24px) saturate(155%);
   }
 }
 
@@ -284,9 +286,11 @@ body {
   pointer-events: none;
 }
 
-/* Brand accent tokens — inherited by every glass surface + its edge ring. */
+/* Brand accent tokens — inherited by every glass surface + its edge ring.
+   --tile tints the faint diamond lattice that textures every glass block;
+   content always renders above it (background layers sit under the box). */
 [data-variant="gold"] {
-  --dot: rgba(212, 160, 23, 0.10);
+  --tile: rgba(255, 215, 0, 0.10);
   --sheen: rgba(255, 215, 0, 0.06);
   --edge-soft: rgba(255, 215, 0, 0.10);
   --edge-mid: rgba(255, 215, 0, 0.32);
@@ -294,7 +298,7 @@ body {
 }
 
 [data-variant="lemon"] {
-  --dot: rgba(181, 226, 61, 0.10);
+  --tile: rgba(202, 255, 58, 0.10);
   --sheen: rgba(212, 255, 74, 0.06);
   --edge-soft: rgba(202, 255, 58, 0.10);
   --edge-mid: rgba(202, 255, 58, 0.32);
@@ -324,7 +328,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  padding: 3px;
+  padding: 2px;
   border-radius: inherit;
   background: conic-gradient(
     from var(--glass-angle),

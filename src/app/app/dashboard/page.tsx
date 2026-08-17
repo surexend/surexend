@@ -74,13 +74,19 @@ export default function DashboardPage() {
     setChartLoading(true)
     conversionAPI.getMarketChart(selectedMarket, timeframe)
       .then((data: any) => {
-        if (!active || !data?.points?.length) return
+        if (!active) return
+        // Always surface the true source (even if history came back empty so
+        // the backend fell back to live-only). No fabricated flat line.
+        setChartSource(data?.source || 'Live FX')
+        if (!data?.points?.length) return
+        const isLong = timeframe === '1M' || timeframe === '1Y'
         const series = data.points.map((p: any) => ({
-          time: new Date(p.time).toLocaleTimeString('en-US', { hour12: false }),
+          time: isLong
+            ? new Date(p.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : new Date(p.time).toLocaleTimeString('en-US', { hour12: false }),
           value: p.value,
         }))
         setRateSeries(prev => ({ ...prev, [selectedMarket]: series }))
-        setChartSource(data.source || 'Live FX')
       })
       .catch(() => { /* keep last good series */ })
       .finally(() => { if (active) setChartLoading(false) })
@@ -107,7 +113,10 @@ export default function DashboardPage() {
       setLiveRates(normalized)
       setLiveUpdatedAt(Date.now())
       // Append the current rate for every pair to its rolling series so the
-      // chart shows real movement over the session, not a static snapshot.
+      // chart shows real movement over the session. Once a series has enough
+      // live ticks (>= 30) we update the tip IN PLACE instead of growing
+      // forever — long histories (e.g. 1Y) stay intact and the line still
+      // moves, instead of the history scrolling off into a short flat tail.
       setRateSeries(prev => {
         const next: Record<string, { time: string; value: number }[]> = { ...prev }
         for (const pair of MARKET_PAIRS) {
@@ -116,8 +125,12 @@ export default function DashboardPage() {
           const now = new Date()
           const stamp = now.toLocaleTimeString('en-US', { hour12: false })
           const arr = [...(next[pair.id] || [])]
-          arr.push({ time: stamp, value: rate })
-          if (arr.length > 120) arr.shift()
+          if (arr.length >= 30 && arr.length > 0) {
+            arr[arr.length - 1] = { time: stamp, value: rate }
+          } else {
+            arr.push({ time: stamp, value: rate })
+            if (arr.length > 120) arr.shift()
+          }
           next[pair.id] = arr
         }
         return next

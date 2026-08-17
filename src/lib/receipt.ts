@@ -78,7 +78,7 @@ export async function renderReceiptCanvas(opts: {
   const isDebit = statusU !== 'FAILED' && ['SEND', 'BILL_PAYMENT', 'CONVERT', 'WITHDRAWAL'].includes((tx?.type || '').toUpperCase())
   const symbol = tx?.currency === 'NGN' ? '₦' : tx?.currency === 'GHS' ? 'GH₵' : tx?.currency === 'KES' ? 'KSh' : '$'
   const amountValue = `${isDebit ? '-' : ''}${symbol}${Number(tx?.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-  const amountColor = statusU === 'FAILED' ? '#F87171' : isDebit ? '#F87171' : '#34D399'
+  const amountColor = '#ffffff'
   const amountSub = tx?.currency && tx?.currency !== 'USDT' ? `${tx.currency} · ${meta.network || 'ARC'}` : `US Dollar · ${meta.network || 'ARC'}`
   const amountStr = Number(tx?.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
 

@@ -248,3 +248,22 @@ repeat" list.
   to Vercel's (`ns1.vercel-dns.com` / `ns2.vercel-dns.com`) and let Vercel
   manage DNS. Keep the old site's records until the new one resolves to avoid
   downtime; remove them after.
+
+## 2026-08-17 (round 3) — chart fix, smoothness, white receipts, glass tiles, smarter fallback
+- Chart straight-line bug: Yahoo intermittently 429s -> old fallback forged 12
+  equal FloatRates points = horizontal line. Now: backend retries query1/query2,
+  and on total failure returns an empty series (never fabricate a flat line);
+  dashboard live ticker supplies real movement; 1M/1Y date labels; live tip
+  updates in place after 30 ticks so history doesn't scroll away.
+- Smoothness: ring 2px; blur 18/24px saturate 165/155.
+- Receipts: amount is white in-app + all downloads (history + chat renderer).
+- Glass: faint diamond lattice tile pattern (--tile, gold/lemon) replaces the
+  invisible dot grid; content stays above it.
+- Assistant fallback: real intent parser (send/bill/convert/receipt/balance)
+  that asks clarifying questions; balance answered server-side (model never
+  sees it); new convert action card (PIN -> /conversions/execute). Real brain
+  still activates by adding OPENAI_API_KEY only.
+- Recommendation recorded: build the ADMIN DASHBOARD before migrating the
+  domain (migration is a 10-minute DNS step at launch-prep; admin dashboard is
+  core launch work: KYC review, monitoring, ops). Next session: admin dashboard
+  brainstorm (Tier 1-3 previously proposed).
