@@ -294,7 +294,7 @@ export default function ProfilePage() {
         </MenuSection>
 
         <MenuSection title="Preferences">
-          <MenuItem icon={Bell} label="Notifications" value="Push, email, SMS"
+          <MenuItem icon={Bell} label="Notifications" value="Push, email"
             accentHex={accentHex} accentRgb={accentRgb}
             onClick={() => router.push('/app/settings/notifications')} />
           <MenuItem icon={Globe} label="Currency Display"

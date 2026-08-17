@@ -909,7 +909,7 @@ export default function LandingPage() {
                 </div>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[
-                    { icon: Lock, title: '2FA on All Withdrawals', desc: 'Google Authenticator or SMS OTP required for every withdrawal.' },
+                    { icon: Lock, title: '2FA on All Withdrawals', desc: 'One-time password (OTP) verification required for every withdrawal.' },
                     { icon: Shield, title: 'AES-256 Encryption', desc: 'All sensitive data encrypted at rest and in transit.' },
                     { icon: Clock, title: 'Real-Time Fraud Detection', desc: 'AI-powered anomaly detection flags suspicious activity instantly.' },
                     { icon: Globe, title: 'Identity Verification', desc: 'Verify once to unlock higher transaction limits. Your funds stay protected with bank-grade security.' },

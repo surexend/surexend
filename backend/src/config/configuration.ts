@@ -56,9 +56,6 @@ export default registerAs('app', () => ({
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   },
-  termii: {
-    apiKey: process.env.TERMII_API_KEY,
-  },
   circle: {
     apiKey: process.env.CIRCLE_API_KEY,
     entitySecret: process.env.CIRCLE_ENTITY_SECRET,

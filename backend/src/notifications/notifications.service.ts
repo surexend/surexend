@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
-import axios from 'axios';
 import * as admin from 'firebase-admin';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -65,24 +64,6 @@ export class NotificationsService {
       });
     } catch (error) {
       this.logger.error(`Failed to send OTP email: ${error.message}`);
-    }
-  }
-
-  async sendOTPSMS(phone: string, code: string) {
-    const apiKey = this.configService.get('app.termii.apiKey');
-    if (!apiKey) return;
-
-    try {
-      await axios.post('https://api.ng.termii.com/api/sms/send', {
-        to: phone,
-        from: 'SureXend',
-        sms: `Your SureXend verification code is ${code}. It expires in 10 minutes.`,
-        type: 'plain',
-        channel: 'generic',
-        api_key: apiKey,
-      });
-    } catch (error) {
-      this.logger.error(`Failed to send OTP SMS: ${error.message}`);
     }
   }
 
