@@ -213,3 +213,38 @@ repeat" list.
 - Do NOT create new docs unless explicitly requested — BUT keep the existing `docs/` set + `SESSION_HANDOVER.md` updated whenever state changes, and commit them in the same commit as the work.
 - NEVER assert a root cause without on-chain verification (mint/transfer receipts). See `docs/memory.md` "mistakes not to repeat".
 - Respect the user's launch plan: external KYC provider, crypto requires KYC at launch, custom PIN mandatory at launch, remove testing flags.
+
+## 2026-08-17 — AI assistant "ready" + domain migration next
+
+### AI assistant (chat transactions, maximum security)
+- Security model: **the AI only proposes, it never executes.** `POST /support/chat`
+  returns a validated `action` (send/bill/receipt); the client shows a
+  confirmation card + inline 4-digit PIN pad; execution goes through the normal
+  guarded endpoints (`wallets/send` with PinGuard, `bills/purchase`) carrying an
+  `X-Txn-Source: chat` audit header. Prompt injection at worst yields a proposal
+  the victim still must approve with a PIN. Server re-validates all fields,
+  caps chat amounts (send <= 5000 USDT, bill <= 500000), allowlists bill types +
+  networks, rate-limits 40 msgs/min/user.
+- Keys optional: OPENAI_API_KEY (gpt-4o-mini, preferred) -> GEMINI_API_KEY
+  (legacy) -> local knowledge base. **To activate the real brain later: add
+  OPENAI_API_KEY to Railway env — zero code change.**
+- Files: `backend/src/support/support.service.ts` (+`openai.apiKey` in
+  `configuration.ts`), `src/components/AISupportWidget.tsx`,
+  `src/lib/receipt.ts` (new canvas renderer), `src/lib/api.ts` (chat action
+  passthrough + optional headers on send/purchase).
+- Next: Redis-backed rate limiter, server-side idempotency, tighten UI amount
+  caps, then switch widget to OpenAI streaming once key lands.
+
+### Domain migration (Namecheap -> Vercel) — what to ask for
+- Need from whoever owns the Namecheap account: **account login (or DNS
+  management access)** and the domain's **renewal/expiry status** (a domain
+  locked for transfer or expiring soon needs renewing first).
+- The actual registrar does NOT need to move to Vercel — keep the domain
+  registered at Namecheap (cheap) and just point its DNS at Vercel. No EPP code
+  / unlock needed for that. (EPP code + unlock only matter if transferring the
+  registration away from Namecheap entirely.)
+- In Vercel: add the domain to the project (Domains tab), then at Namecheap set
+  the DNS record (A record -> `76.76.21.21`) or point Namecheap's nameservers
+  to Vercel's (`ns1.vercel-dns.com` / `ns2.vercel-dns.com`) and let Vercel
+  manage DNS. Keep the old site's records until the new one resolves to avoid
+  downtime; remove them after.

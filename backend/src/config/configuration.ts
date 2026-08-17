@@ -40,6 +40,9 @@ export default registerAs('app', () => ({
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
   },
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY,
+  },
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID,
     privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),

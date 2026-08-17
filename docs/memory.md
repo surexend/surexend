@@ -155,3 +155,28 @@ wallet never shows the funds.
 - Live backend actions: `npx railway run --service surexend node scripts/...`
   (backend dir).
 - Diagnostic scripts live in `backend/scripts/` (some untracked).
+
+## 2026-08-17 — AI assistant: "brain only, hands never"
+- Reworked `backend/src/support/support.service.ts`. The AI can only PROPOSE an
+  action; it never executes money moves. A proposed `action` (send / bill /
+  receipt) comes back as a strictly validated object, the client renders a
+  confirmation card, and the user approves with a 4-digit PIN before execution
+  through the EXISTING guarded endpoints (`wallets/send` PinGuard,
+  `bills/purchase`). No new execution surface = no new attack surface.
+- Security layers beyond confirm+PIN: user text is DATA never instructions
+  (prompt-injection rule), server-side re-validation of every proposed field
+  (finite amounts capped: send <= 5000 USDT, bill <= 500000 local; bill types
+  allowlisted; network allowlist; string length caps), per-user rate limit
+  (40 msgs/min, in-memory), no balances/secrets/PINs ever sent to the model,
+  `X-Txn-Source: chat` audit header on in-chat execution calls, model API key
+  lives only in backend env.
+- Keys optional, read in order: OPENAI_API_KEY (gpt-4o-mini, preferred) ->
+  GEMINI_API_KEY (legacy) -> built-in knowledge base. "Ready" today: dropping
+  OPENAI_API_KEY into Railway env activates the real brain with no code change.
+- Frontend `AISupportWidget.tsx` now calls the real endpoint, renders editable
+  send/bill/receipt action cards + inline PIN pad, executes via `walletAPI.send`
+  / `billsAPI.purchase`, and downloads receipts via new self-contained canvas
+  renderer `src/lib/receipt.ts` (no DOM capture, same approach as history page).
+- Next security hardening: server-side idempotency for chat-driven sends,
+  Redis-backed rate limiter (in-memory map is per-instance), UI amount caps
+  matching the backend caps.

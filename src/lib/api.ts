@@ -246,14 +246,14 @@ export const walletAPI = {
       }
     ),
 
-  send: (payload: { address: string; amount: number; network: string; pin: string }) =>
+  send: (payload: { address: string; amount: number; network: string; pin: string }, headers?: Record<string, string>) =>
     tryWithMock(
       () => apiClient.post('/wallets/send', {
         toAddress: payload.address,
         amount: payload.amount,
         network: payload.network,
         pin: payload.pin,
-      }, { timeout: 180000 }).then(r => r.data),
+      }, { timeout: 180000, headers }).then(r => r.data),
       () => ({
         success: true,
         reference: 'TX-' + Math.random().toString(36).substring(2, 9).toUpperCase(),
@@ -494,9 +494,9 @@ export const billsAPI = {
   purchase: (payload: {
     type: string; provider: string; recipient: string;
     amount?: number; planCode?: string; pin: string
-  }) =>
+  }, headers?: Record<string, string>) =>
     tryWithMock(
-      () => apiClient.post('/bills/purchase', payload).then(r => r.data),
+      () => apiClient.post('/bills/purchase', payload, { headers }).then(r => r.data),
       () => ({
         success: true,
         reference: 'VTP-' + Math.random().toString(36).substring(2, 9).toUpperCase(),
