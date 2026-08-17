@@ -310,14 +310,14 @@ export const walletAPI = {
     tryWithMock(
       () => apiClient.get('/wallets/networks').then(r => r.data),
       () => [
-        { id: 'ETHEREUM', name: 'Ethereum (ERC20)', fee: '2.5 USDT', minDeposit: '10 USDT', speed: '~1 minute' },
-        { id: 'POLYGON', name: 'Polygon (Amoy/POS)', fee: '0.1 USDT', minDeposit: '1 USDT', speed: '~10 seconds' },
-        { id: 'AVALANCHE', name: 'Avalanche C-Chain', fee: '0.2 USDT', minDeposit: '1 USDT', speed: '~5 seconds' },
-        { id: 'ARBITRUM', name: 'Arbitrum One', fee: '0.15 USDT', minDeposit: '1 USDT', speed: '~10 seconds' },
-        { id: 'BASE', name: 'Base', fee: '0.1 USDT', minDeposit: '1 USDT', speed: '~5 seconds' },
-        { id: 'OPTIMISM', name: 'Optimism', fee: '0.1 USDT', minDeposit: '1 USDT', speed: '~5 seconds' },
-        { id: 'SOLANA', name: 'Solana', fee: '0.05 USDT', minDeposit: '1 USDT', speed: '~10 seconds' },
-        { id: 'BSC', name: 'BNB Smart Chain (BEP20)', fee: '0.2 USDT', minDeposit: '1 USDT', speed: '~15 seconds' },
+        { id: 'ETHEREUM', name: 'Ethereum (ERC20)', fee: '2.5 USDC', minDeposit: '10 USDC', speed: '~1 minute' },
+        { id: 'POLYGON', name: 'Polygon (Amoy/POS)', fee: '0.1 USDC', minDeposit: '1 USDC', speed: '~10 seconds' },
+        { id: 'AVALANCHE', name: 'Avalanche C-Chain', fee: '0.2 USDC', minDeposit: '1 USDC', speed: '~5 seconds' },
+        { id: 'ARBITRUM', name: 'Arbitrum One', fee: '0.15 USDC', minDeposit: '1 USDC', speed: '~10 seconds' },
+        { id: 'BASE', name: 'Base', fee: '0.1 USDC', minDeposit: '1 USDC', speed: '~5 seconds' },
+        { id: 'OPTIMISM', name: 'Optimism', fee: '0.1 USDC', minDeposit: '1 USDC', speed: '~5 seconds' },
+        { id: 'SOLANA', name: 'Solana', fee: '0.05 USDC', minDeposit: '1 USDC', speed: '~10 seconds' },
+        { id: 'BSC', name: 'BNB Smart Chain (BEP20)', fee: '0.2 USDC', minDeposit: '1 USDC', speed: '~15 seconds' },
       ]
     ),
 }
@@ -329,11 +329,11 @@ export const transactionAPI = {
       () => apiClient.get('/transactions', { params }).then(r => r.data),
       () => ({
         transactions: [
-          { id: 'tx_1', type: 'send', amount: 150, currency: 'USDT', status: 'completed', recipient: 'TYvj...G5h', date: new Date().toISOString() },
-          { id: 'tx_2', type: 'receive', amount: 500, currency: 'USDT', status: 'completed', sender: '0x71...76F', date: new Date(Date.now() - 86400000).toISOString() },
-          { id: 'tx_3', type: 'convert', amount: 100, currency: 'USDT', fiatAmount: 150000, fiatCurrency: 'NGN', status: 'completed', date: new Date(Date.now() - 172800000).toISOString() },
+          { id: 'tx_1', type: 'send', amount: 150, currency: 'USDC', status: 'completed', recipient: 'TYvj...G5h', date: new Date().toISOString() },
+          { id: 'tx_2', type: 'receive', amount: 500, currency: 'USDC', status: 'completed', sender: '0x71...76F', date: new Date(Date.now() - 86400000).toISOString() },
+          { id: 'tx_3', type: 'convert', amount: 100, currency: 'USDC', fiatAmount: 150000, fiatCurrency: 'NGN', status: 'completed', date: new Date(Date.now() - 172800000).toISOString() },
           { id: 'tx_4', type: 'bill_payment', amount: 2000, currency: 'NGN', provider: 'MTN Airtime', status: 'completed', date: new Date(Date.now() - 259200000).toISOString() },
-          { id: 'tx_5', type: 'receive', amount: 1200, currency: 'USDT', status: 'completed', sender: 'Binance Deposit', date: new Date(Date.now() - 432000000).toISOString() },
+          { id: 'tx_5', type: 'receive', amount: 1200, currency: 'USDC', status: 'completed', sender: 'Binance Deposit', date: new Date(Date.now() - 432000000).toISOString() },
         ],
         total: 5,
         page: params.page || 1,
@@ -347,7 +347,7 @@ export const transactionAPI = {
         id,
         type: 'send',
         amount: 150,
-        currency: 'USDT',
+        currency: 'USDC',
         status: 'completed',
         reference: 'SXR-8829103',
         recipient: 'TYvj6H3xKk89Nq4P5W8zM1A2bC3dE4fG5h',
@@ -573,9 +573,9 @@ export const referralAPI = {
       () => apiClient.get(`/referrals?page=${page}&limit=${limit}`).then(r => r.data),
       () => ({
         referrals: [
-          { id: 'ref_1', name: 'Emmanuel A.', date: '2026-08-01', status: 'ACTIVE', earned: '10.00 USDT' },
-          { id: 'ref_2', name: 'Chidimma O.', date: '2026-08-03', status: 'ACTIVE', earned: '8.50 USDT' },
-          { id: 'ref_3', name: 'Kwame M.', date: '2026-08-05', status: 'PENDING', earned: '0.00 USDT' },
+          { id: 'ref_1', name: 'Emmanuel A.', date: '2026-08-01', status: 'ACTIVE', earned: '10.00 USDC' },
+          { id: 'ref_2', name: 'Chidimma O.', date: '2026-08-03', status: 'ACTIVE', earned: '8.50 USDC' },
+          { id: 'ref_3', name: 'Kwame M.', date: '2026-08-05', status: 'PENDING', earned: '0.00 USDC' },
         ],
         total: 3
       })
@@ -644,7 +644,7 @@ export const userAPI = {
   getKYCStatus: () =>
     tryWithMock(
       () => apiClient.get('/users/kyc').then(r => r.data),
-      () => ({ status: 'VERIFIED', isVerified: true, limits: { dailyWithdrawal: '50,000 USDT' } })
+      () => ({ status: 'VERIFIED', isVerified: true, limits: { dailyWithdrawal: '50,000 USDC' } })
     ),
 
   submitKYC: (payload: FormData) =>
@@ -665,7 +665,7 @@ export const supportAPI = {
   chat: (payload: { message: string; sessionId?: string; history?: any[] }) =>
     tryWithMock(
       () => apiClient.post('/support/chat', { message: payload.message, history: payload.history || [] }).then(r => r.data),
-      () => ({ response: "Hello! I am your SureXend AI Assistant. I can help you guide through instant USDT transfers, bank withdrawals, or bill payments!", escalate: false })
+      () => ({ response: "Hello! I am your SureXend AI Assistant. I can help you guide through instant USDC transfers, bank withdrawals, or bill payments!", escalate: false })
     ),
 
   createTicket: (payload: { subject: string; message: string; category: string }) =>

@@ -22,8 +22,8 @@ const BRAND_VARIANT = process.env.NEXT_PUBLIC_BRAND_VARIANT || 'gold'
 
 export const metadata: Metadata = {
   title: 'SureXend — Your Crypto, Finally Useful in Africa',
-  description: 'Send money, pay bills, buy airtime, and withdraw to any African bank account using USDT and USDC. Africa\'s premier stablecoin spending platform.',
-  keywords: ['crypto africa', 'USDT nigeria', 'stablecoin', 'send money africa', 'crypto to bank', 'airtime crypto', 'buy airtime with crypto', 'sell USDT for naira', 'pay bills with crypto', 'crypto to naira', 'surexend'],
+  description: 'Send money, pay bills, buy airtime, and withdraw to any African bank account using USDC. Africa\'s premier stablecoin spending platform.',
+  keywords: ['crypto africa', 'USDC nigeria', 'stablecoin', 'send money africa', 'crypto to bank', 'airtime crypto', 'buy airtime with crypto', 'sell USDC for naira', 'pay bills with crypto', 'crypto to naira', 'surexend'],
   authors: [{ name: 'SureXend' }],
   creator: 'SureXend',
   alternates: {
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://surexend.com'),
   openGraph: {
     title: 'SureXend — Your Crypto, Finally Useful in Africa',
-    description: 'Send money, pay bills, buy airtime, and withdraw to any African bank account using USDT and USDC.',
+    description: 'Send money, pay bills, buy airtime, and withdraw to any African bank account using USDC.',
     url: 'https://surexend.com',
     siteName: 'SureXend',
     type: 'website',
@@ -96,13 +96,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   name: 'SureXend',
                   url: 'https://surexend.com',
                   logo: 'https://surexend.com/logo-mark-gold.png',
-                  description: "Africa's premier stablecoin spending platform. Send money, pay bills, buy airtime, and withdraw to any African bank account using USDT and USDC.",
+                  description: "Africa's premier stablecoin spending platform. Send money, pay bills, buy airtime, and withdraw to any African bank account using USDC.",
                 },
                 {
                   '@type': 'WebSite',
                   name: 'SureXend',
                   url: 'https://surexend.com',
-                  description: 'Buy airtime with crypto, sell USDT for naira, pay bills with crypto, and send money across Africa using USDT and USDC.',
+                  description: 'Buy airtime with crypto, sell USDC for naira, pay bills with crypto, and send money across Africa using USDC.',
                 },
               ],
             }),

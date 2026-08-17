@@ -25,7 +25,7 @@ const QUICK_REPLIES = [
   'How do I withdraw to my bank?',
   'Why is my transaction pending?',
   'How does the referral program work?',
-  'How to buy airtime with USDT?',
+  'How to buy airtime with USDC?',
   'What are the fees?',
   'How do I verify my account (KYC)?',
 ]

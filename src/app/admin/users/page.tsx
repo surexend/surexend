@@ -76,7 +76,7 @@ export default function AdminUsersPage() {
                   <tr className="text-[#64748B] text-[10px] uppercase tracking-wider">
                     <th className="py-2 pr-3">User</th>
                     <th className="py-2 pr-3">Contact</th>
-                    <th className="py-2 pr-3">Wallets (USDT/USDC)</th>
+                    <th className="py-2 pr-3">Wallets (USDC)</th>
                     <th className="py-2 pr-3">KYC</th>
                     <th className="py-2 pr-3">Status</th>
                     <th className="py-2 pr-3">Joined</th>

@@ -231,7 +231,7 @@ export default function ReceivePage() {
 
   const handleShare = () => {
     if (navigator.share) {
-      navigator.share({ title: 'My SureXend USDT Address', text: `My USDT (${network}) address:\n${address}` }).catch(console.error)
+      navigator.share({ title: 'My SureXend USDC Address', text: `My USDC (${network}) address:\n${address}` }).catch(console.error)
     } else {
       copyToClipboard()
     }
@@ -244,13 +244,13 @@ export default function ReceivePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-extrabold text-white">Receive Crypto</h1>
-          <p className="text-xs text-[#64748B] mt-0.5">Deposit USDT or USDC to your wallet</p>
+          <p className="text-xs text-[#64748B] mt-0.5">Deposit USDC to your wallet</p>
         </div>
         <span
           className="px-2.5 py-1 rounded-full text-[10px] font-bold border"
           style={{ color: colors.primary, borderColor: `rgba(${colors.glowRgb},0.4)`, background: `rgba(${colors.glowRgb},0.1)` }}
         >
-          USDT / USDC
+          USDC
         </span>
       </div>
 
@@ -367,7 +367,7 @@ export default function ReceivePage() {
         <div>
           <p className="text-xs font-semibold text-red-400 mb-0.5">Important</p>
           <p className="text-[11px] text-[#94A3B8] leading-relaxed">
-            Only send <strong className="text-white">USDT</strong> to this address via the <strong className="text-white">{activeNet.sublabel}</strong>. Sending any other asset or network will result in <strong className="text-red-400">permanent loss</strong>.
+            Only send <strong className="text-white">USDC</strong> to this address via the <strong className="text-white">{activeNet.sublabel}</strong>. Sending any other asset or network will result in <strong className="text-red-400">permanent loss</strong>.
           </p>
         </div>
       </div>

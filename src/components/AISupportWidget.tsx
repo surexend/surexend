@@ -30,14 +30,14 @@ const QUICK_QUESTIONS = [
   'How do European Invoices work?',
   'What are the withdrawal fees?',
   'How do I deposit local currency?',
-  'Send 50 USDT to Chidi',
+  'Send 50 USDC to Chidi',
   'Pay my DSTV bill',
   'Download my receipt',
 ]
 
 const SEND_NETWORKS = ['ARC', 'ETHEREUM', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'BASE', 'OPTIMISM', 'SOLANA', 'MONAD', 'BSC', 'BEP20']
 const BILL_TYPES = ['airtime', 'data', 'electricity', 'tv', 'cable', 'internet', 'water']
-const CONVERT_FROM = ['USD', 'USDT', 'USDC']
+const CONVERT_FROM = ['USD', 'USDC']
 const CONVERT_TO = ['NGN', 'GHS', 'KES', 'ZAR', 'UGX', 'TZS', 'EGP', 'MAD', 'ETB', 'RWF', 'XAF', 'XOF']
 
 const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -95,7 +95,7 @@ function ActionCard({
           { address: form.to, amount: Number(form.amount), network: form.network, pin },
           { 'X-Txn-Source': 'chat' },
         )
-        onDone({ ok: true, text: `Sent ${Number(form.amount).toLocaleString()} USDT to ${form.to}. Reference: ${r.reference}`, ref: r.reference })
+        onDone({ ok: true, text: `Sent ${Number(form.amount).toLocaleString()} USDC to ${form.to}. Reference: ${r.reference}`, ref: r.reference })
       } else if (isBill) {
         const r = await billsAPI.purchase(
           { type: form.type, provider: form.provider, recipient: form.recipient, amount: Number(form.amount), pin },
@@ -187,7 +187,7 @@ function ActionCard({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <span className={labelCls}>Amount (USDT)</span>
+                <span className={labelCls}>Amount (USDC)</span>
                 <input className={inputCls} type="number" min="0" value={form.amount || ''} onChange={e => set('amount', e.target.value)} placeholder="0.00" />
               </div>
               <div>
@@ -504,7 +504,7 @@ export default function AISupportWidget() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Ask anything, or try: 'send 50 USDT to Chidi'"
+                  placeholder="Ask anything, or try: 'send 50 USDC to Chidi'"
                   className="flex-1 py-3 px-4 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors"
                 />
                 <button

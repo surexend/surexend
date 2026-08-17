@@ -112,7 +112,7 @@ export default function BillsPage() {
     enabled: selectedCategory === 'data' && !!selectedProvider,
   })
 
-  // Live NGN→USD rate for the USDT estimate (never hardcoded)
+  // Live NGN→USD rate for the USDC estimate (never hardcoded)
   const { data: rateInfo } = useQuery({
     queryKey: ['ngn-rate'],
     queryFn: () => conversionAPI.getRates('NGN'),
@@ -424,7 +424,7 @@ export default function BillsPage() {
                 </div>
               )}
 
-              {/* USDT equivalent */}
+              {/* USDC equivalent */}
               {(amount || selectedPlan) && (() => {
                 const effectiveNgn = selectedCategory === 'airtime' && (selectedProvider?.sellMarkup || 0) > 0
                   ? (parseFloat(amount) || 0) * (1 + (selectedProvider.sellMarkup || 0) / 100)
@@ -437,7 +437,7 @@ export default function BillsPage() {
                   >
                     <p className="text-[#94A3B8] text-xs mb-1">Estimated cost</p>
                     <p className="text-white font-inter font-bold text-xl">
-                      ~{(effectiveNgn / ngntoUsdRate).toFixed(4)} USDT
+                      ~{(effectiveNgn / ngntoUsdRate).toFixed(4)} USDC
                     </p>
                     <p className="text-[#64748B] text-xs mt-1">At current rate ₦{Math.round(ngntoUsdRate).toLocaleString()}/$1</p>
                     {selectedCategory === 'airtime' && (selectedProvider?.sellMarkup || 0) > 0 && (

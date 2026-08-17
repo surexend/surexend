@@ -49,7 +49,7 @@ function DetailModal({ id, onClose }: { id: string; onClose: () => void }) {
       { label: 'Recipient', value: bill.recipient },
       { label: 'Paid (NGN)', value: `₦${Number(bill.amount || 0).toLocaleString()}` },
       ...(bill.type === 'data' && meta.planName ? [{ label: 'Plan', value: `${meta.planName}${meta.planValidity ? ` · ${meta.planValidity}` : ''}` }] : []),
-      ...(meta.rate ? [{ label: 'Rate', value: `₦${meta.rate} / USDT` }] : []),
+      ...(meta.rate ? [{ label: 'Rate', value: `₦${meta.rate} / USDC` }] : []),
     ] : []),
     ...(meta.costPrice != null ? [{ label: 'Service cost (NGN)', value: `₦${meta.costPrice.toLocaleString()}` }] : []),
     ...(meta.sellPrice != null ? [{ label: 'Sell price (NGN)', value: `₦${meta.sellPrice.toLocaleString()}` }] : []),

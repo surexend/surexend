@@ -93,11 +93,11 @@ export default function WithdrawPage() {
 
   const handleNext = () => {
     if (numUsdt < 5) {
-      toast.error('Minimum withdrawal is 5 USDT')
+      toast.error('Minimum withdrawal is 5 USDC')
       return
     }
     if (numUsdt > availableUsdt) {
-      toast.error('Insufficient USDT balance')
+      toast.error('Insufficient USDC balance')
       return
     }
     setStep('bank')
@@ -120,7 +120,7 @@ export default function WithdrawPage() {
         </Link>
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight">Withdraw to Bank</h1>
-          <p className="text-xs text-[#64748B]">Convert USDT to local currency & payout to your bank</p>
+          <p className="text-xs text-[#64748B]">Convert USDC to local currency & payout to your bank</p>
         </div>
       </div>
 
@@ -155,8 +155,8 @@ export default function WithdrawPage() {
             {/* Amount Input */}
             <div className="bg-[#121827] p-5 rounded-2xl border border-white/5 space-y-3">
               <div className="flex justify-between items-center text-xs font-semibold text-[#94A3B8]">
-                <span>Withdraw Amount (USDT)</span>
-                <span>Available: <strong className="text-white">{availableUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</strong></span>
+                <span>Withdraw Amount (USDC)</span>
+                <span>Available: <strong className="text-white">{availableUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC</strong></span>
               </div>
               <div className="relative">
                 <input
@@ -179,11 +179,11 @@ export default function WithdrawPage() {
                 <div className="pt-3 border-t border-white/5 space-y-2 text-xs">
                   <div className="flex justify-between text-[#94A3B8]">
                     <span>Exchange Rate</span>
-                    <span className="text-white font-medium">1 USDT = {selectedFiat.symbol}{selectedFiat.rate.toLocaleString()}</span>
+                    <span className="text-white font-medium">1 USDC = {selectedFiat.symbol}{selectedFiat.rate.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-[#94A3B8]">
                     <span>Network Fee</span>
-                    <span className="text-white font-medium">{feeUsdt} USDT</span>
+                    <span className="text-white font-medium">{feeUsdt} USDC</span>
                   </div>
                   <div className="flex justify-between text-sm font-bold pt-2 border-t border-white/5">
                     <span className="text-white">You Receive</span>

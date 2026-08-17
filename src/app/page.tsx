@@ -208,7 +208,7 @@ export default function LandingPage() {
     { val: 99.9, suffix: '%', label: 'Uptime' },
   ]
   const features = [
-    { icon: Send, title: 'Instant Transfers', desc: 'Send USDT/USDC to anyone in Africa or worldwide. Instant settlement, zero delays.', delay: 0 },
+    { icon: Send, title: 'Instant Transfers', desc: 'Send USDC to anyone in Africa or worldwide. Instant settlement, zero delays.', delay: 0 },
     { icon: RefreshCw, title: 'Crypto to Bank', desc: 'Convert your stablecoins to naira, cedi, shillings, or any African currency — directly to your bank account.', delay: 0.1 },
     { icon: Smartphone, title: 'Airtime & Data', desc: 'Top up any Nigerian network — MTN, Airtel, Glo, 9mobile. Expanding to all of Africa.', delay: 0.2 },
     { icon: CreditCard, title: 'Pay Bills', desc: 'Electricity, DSTV, GOtv, water bills — pay everything in seconds from your stablecoin wallet.', delay: 0.3 },
@@ -220,16 +220,16 @@ export default function LandingPage() {
   const steps = [
     { title: 'Create your account', desc: 'Sign up in under 2 minutes. Email, phone, done. No lengthy forms.' },
     { title: 'Verify your identity (KYC)', desc: 'Quick, Africa-native identity verification. Supports NIN, Ghana Card, Kenyan ID, and more.' },
-    { title: 'Deposit USDT or USDC', desc: 'Receive your unique wallet address. Send stablecoins from any exchange — Binance, Bybit, OKX.' },
+    { title: 'Deposit USDC', desc: 'Receive your unique wallet address. Send stablecoins from any exchange — Binance, Bybit, OKX.' },
     { title: 'Spend like cash', desc: 'Send money, pay bills, convert to fiat, buy airtime. Your crypto is now everyday money.' },
   ]
   const testimonials = [
-    { name: 'Adaeze O.', role: 'Freelancer', country: 'Lagos, Nigeria', text: 'I get paid in USDT from my clients abroad. SureXend lets me pay my rent and buy data without ever visiting a bank. This is the future.' },
+    { name: 'Adaeze O.', role: 'Freelancer', country: 'Lagos, Nigeria', text: 'I get paid in USDC from my clients abroad. SureXend lets me pay my rent and buy data without ever visiting a bank. This is the future.' },
     { name: 'Kwame A.', role: 'E-commerce Seller', country: 'Accra, Ghana', text: 'Converting crypto to GHS used to take 2 days on P2P. With SureXend it hits my account in minutes. Changed my business completely.' },
-    { name: 'Fatima M.', role: 'Remote Worker', country: 'Nairobi, Kenya', text: 'The referral program alone is paying my internet bill every month. And paying bills with USDT? Absolute game changer.' },
+    { name: 'Fatima M.', role: 'Remote Worker', country: 'Nairobi, Kenya', text: 'The referral program alone is paying my internet bill every month. And paying bills with USDC? Absolute game changer.' },
   ]
   const faqs = [
-    { q: 'What cryptocurrencies does SureXend support?', a: 'SureXend supports USDT (Tether) and USDC on multiple networks — TRC-20 (Tron), BEP-20 (BNB Chain), and Polygon. These stablecoins are pegged to the US Dollar, so your balance never loses value to crypto volatility.' },
+    { q: 'What cryptocurrencies does SureXend support?', a: 'SureXend supports USDC (Circle) on leading networks. USDC is pegged to the US Dollar, so your balance never loses value to crypto volatility.' },
     { q: 'Which African countries can I withdraw to?', a: 'We currently support bank withdrawals to Nigeria, Ghana, Kenya, South Africa, Uganda, Tanzania, Rwanda, and Senegal, with more countries being added monthly.' },
     { q: 'How long does a crypto-to-bank withdrawal take?', a: 'Most withdrawals complete within 5–15 minutes. In rare cases of bank delays, it can take up to 2 hours. We always show you the estimated time before you confirm.' },
     { q: 'Is my money safe?', a: 'Yes. We use bank-level AES-256 encryption, mandatory 2FA for withdrawals, and real-time fraud detection. We never hold your private keys — your wallet is non-custodial for incoming crypto.' },
@@ -457,7 +457,7 @@ export default function LandingPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.5 }}
             >
-              Send USDT to anyone. Withdraw to any African bank. Pay bills, buy airtime, and spend your stablecoins like the cash in your pocket — instantly.
+              Send USDC to anyone. Withdraw to any African bank. Pay bills, buy airtime, and spend your stablecoins like the cash in your pocket — instantly.
             </motion.p>
 
             {/* CTA buttons */}
@@ -574,9 +574,9 @@ export default function LandingPage() {
                   {/* Live Rates Ticker (Exact PWA Component) */}
                   <div className="w-full overflow-hidden bg-white/[0.03] border border-white/5 rounded-lg py-1.5 flex items-center text-[9px]">
                     <div className="flex whitespace-nowrap gap-4 px-2 font-medium">
-                      <span className="text-[#94A3B8]">USDT/NGN: <span style={{ color: accentHex }}>₦1,500</span></span>
+                      <span className="text-[#94A3B8]">USDC/NGN: <span style={{ color: accentHex }}>₦1,500</span></span>
                       <span className="text-[#94A3B8]">BTC/USD: <span style={{ color: accentHex }}>$65,420</span></span>
-                      <span className="text-[#94A3B8]">USDT/GHS: <span style={{ color: accentHex }}>₵13.5</span></span>
+                      <span className="text-[#94A3B8]">USDC/GHS: <span style={{ color: accentHex }}>₵13.5</span></span>
                     </div>
                   </div>
 
@@ -593,7 +593,7 @@ export default function LandingPage() {
                       <span className="text-[#94A3B8] text-[10px] font-medium flex items-center gap-1">
                         Total Balance 👁️
                       </span>
-                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/10 text-white font-semibold">USDT</span>
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/10 text-white font-semibold">USDC</span>
                     </div>
                     <div className="text-white font-inter font-bold text-2xl tracking-tight">$2,450.75</div>
                     <div className="text-[11px] font-semibold mt-1" style={{ color: accentHex }}>
@@ -622,12 +622,12 @@ export default function LandingPage() {
                   <div className="rounded-xl p-3 bg-white/[0.03] border border-white/10 space-y-2">
                     <div className="flex justify-between items-center text-[9px] font-bold text-[#64748B] tracking-wider uppercase">
                       <span>Live Conversion</span>
-                      <span className="text-[#F59E0B] font-semibold">1 USDT = ₦1,598</span>
+                      <span className="text-[#F59E0B] font-semibold">1 USDC = ₦1,598</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <div>
                         <p className="text-[8px] text-[#94A3B8]">You send</p>
-                        <p className="font-bold text-white text-xs">100 USDT</p>
+                        <p className="font-bold text-white text-xs">100 USDC</p>
                       </div>
                       <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[#F59E0B]">
                         <RefreshCw size={10} />
@@ -829,7 +829,7 @@ export default function LandingPage() {
                   <div className="flex items-center justify-between my-2">
                     <div>
                       <p className="text-xs text-[#94A3B8] mb-1">You send</p>
-                      <p className="font-inter font-bold text-2xl text-white">100 USDT</p>
+                      <p className="font-inter font-bold text-2xl text-white">100 USDC</p>
                     </div>
                     <motion.div
                       className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center"
@@ -848,7 +848,7 @@ export default function LandingPage() {
                     className="mt-4 pt-4 text-xs flex justify-between items-center text-[#94A3B8]"
                     style={{ borderTop: `1px solid rgba(${accentRgb}, 0.15)` }}
                   >
-                    <span>Rate: <span style={{ color: accentHex }} className="font-semibold">1 USDT = ₦1,598 NGN</span></span>
+                    <span>Rate: <span style={{ color: accentHex }} className="font-semibold">1 USDC = ₦1,598 NGN</span></span>
                     <span className="text-[11px] text-[#64748B] flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" /> Updated 2s ago
                     </span>
@@ -1010,16 +1010,16 @@ export default function LandingPage() {
               <h2 className="font-inter font-black text-white mb-4" style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)' }}>
                 Frequently Asked Questions
               </h2>
-              <p className="text-[#94A3B8] max-w-xl mx-auto">Everything about buying airtime with crypto, converting USDT to naira, and paying bills with stablecoins in Africa.</p>
+              <p className="text-[#94A3B8] max-w-xl mx-auto">Everything about buying airtime with crypto, converting USDC to naira, and paying bills with stablecoins in Africa.</p>
             </motion.div>
             <div className="flex flex-col gap-3">
               {[
-                { q: 'What is SureXend?', a: 'SureXend is a stablecoin spending platform for Africa. It lets you send money, buy airtime and data, pay electricity and TV bills, and convert USDT/USDC to local currencies and bank accounts — your crypto finally useful as everyday money.' },
-                { q: 'How do I buy airtime with crypto (USDT) in Nigeria?', a: 'Deposit USDT or USDC into your SureXend wallet, go to Bills, and choose Airtime. Top up any Nigerian network instantly — MTN, Airtel, Glo, and 9mobile — directly from your stablecoin balance. No card or bank transfer needed.' },
-                { q: 'Can I sell USDT and withdraw to my Nigerian bank account?', a: 'Yes. Convert your USDT or USDC to naira inside SureXend and withdraw to any Nigerian bank account. Funds move fast and you always see the live rate before you confirm.' },
-                { q: 'Can I pay electricity and TV bills with crypto?', a: 'Yes. Pay electricity bills for IKEDC, EKEDC, AEDC, PHEDC, BEDC and more, plus DSTV, GOtv, StarTimes and internet subscriptions (Smile, Spectranet, Swift) — all settled from your USDT/USDC balance.' },
+                { q: 'What is SureXend?', a: 'SureXend is a stablecoin spending platform for Africa. It lets you send money, buy airtime and data, pay electricity and TV bills, and convert USDC to local currencies and bank accounts — your crypto finally useful as everyday money.' },
+                { q: 'How do I buy airtime with crypto (USDC) in Nigeria?', a: 'Deposit USDC into your SureXend wallet, go to Bills, and choose Airtime. Top up any Nigerian network instantly — MTN, Airtel, Glo, and 9mobile — directly from your stablecoin balance. No card or bank transfer needed.' },
+                { q: 'Can I sell USDC and withdraw to my Nigerian bank account?', a: 'Yes. Convert your USDC or USDC to naira inside SureXend and withdraw to any Nigerian bank account. Funds move fast and you always see the live rate before you confirm.' },
+                { q: 'Can I pay electricity and TV bills with crypto?', a: 'Yes. Pay electricity bills for IKEDC, EKEDC, AEDC, PHEDC, BEDC and more, plus DSTV, GOtv, StarTimes and internet subscriptions (Smile, Spectranet, Swift) — all settled from your USDC balance.' },
                 { q: 'How fast are crypto to naira conversions?', a: 'Conversions and transfers are near-instant. You lock in the live rate at the moment of confirmation and your recipient receives the funds in minutes, not days.' },
-                { q: 'Which cryptocurrencies and countries does SureXend support?', a: 'SureXend supports USDT and USDC on leading networks. The platform is built for Africa and is expanding across Nigeria, Ghana, Kenya and more countries.' },
+                { q: 'Which cryptocurrencies and countries does SureXend support?', a: 'SureXend supports USDC on leading networks. The platform is built for Africa and is expanding across Nigeria, Ghana, Kenya and more countries.' },
               ].map(({ q, a }, i) => (
                 <motion.details
                   key={q}
@@ -1046,12 +1046,12 @@ export default function LandingPage() {
                 '@context': 'https://schema.org',
                 '@type': 'FAQPage',
                 mainEntity: [
-                  { '@type': 'Question', name: 'What is SureXend?', acceptedAnswer: { '@type': 'Answer', text: 'SureXend is a stablecoin spending platform for Africa. It lets you send money, buy airtime and data, pay electricity and TV bills, and convert USDT/USDC to local currencies and bank accounts.' } },
-                  { '@type': 'Question', name: 'How do I buy airtime with crypto (USDT) in Nigeria?', acceptedAnswer: { '@type': 'Answer', text: 'Deposit USDT or USDC into your SureXend wallet, go to Bills, and choose Airtime. Top up MTN, Airtel, Glo, and 9mobile instantly from your stablecoin balance.' } },
-                  { '@type': 'Question', name: 'Can I sell USDT and withdraw to my Nigerian bank account?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Convert your USDT or USDC to naira inside SureXend and withdraw to any Nigerian bank account with a live rate before you confirm.' } },
-                  { '@type': 'Question', name: 'Can I pay electricity and TV bills with crypto?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Pay IKEDC, EKEDC, AEDC, PHEDC, BEDC electricity bills plus DSTV, GOtv, StarTimes and internet subscriptions from your USDT/USDC balance.' } },
+                  { '@type': 'Question', name: 'What is SureXend?', acceptedAnswer: { '@type': 'Answer', text: 'SureXend is a stablecoin spending platform for Africa. It lets you send money, buy airtime and data, pay electricity and TV bills, and convert USDC to local currencies and bank accounts.' } },
+                  { '@type': 'Question', name: 'How do I buy airtime with crypto (USDC) in Nigeria?', acceptedAnswer: { '@type': 'Answer', text: 'Deposit USDC into your SureXend wallet, go to Bills, and choose Airtime. Top up MTN, Airtel, Glo, and 9mobile instantly from your stablecoin balance.' } },
+                  { '@type': 'Question', name: 'Can I sell USDC and withdraw to my Nigerian bank account?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Convert your USDC or USDC to naira inside SureXend and withdraw to any Nigerian bank account with a live rate before you confirm.' } },
+                  { '@type': 'Question', name: 'Can I pay electricity and TV bills with crypto?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Pay IKEDC, EKEDC, AEDC, PHEDC, BEDC electricity bills plus DSTV, GOtv, StarTimes and internet subscriptions from your USDC balance.' } },
                   { '@type': 'Question', name: 'How fast are crypto to naira conversions?', acceptedAnswer: { '@type': 'Answer', text: 'Conversions and transfers are near-instant. You lock in the live rate at confirmation and funds arrive in minutes.' } },
-                  { '@type': 'Question', name: 'Which cryptocurrencies and countries does SureXend support?', acceptedAnswer: { '@type': 'Answer', text: 'SureXend supports USDT and USDC on leading networks and is expanding across Nigeria, Ghana, Kenya and more African countries.' } },
+                  { '@type': 'Question', name: 'Which cryptocurrencies and countries does SureXend support?', acceptedAnswer: { '@type': 'Answer', text: 'SureXend supports USDC on leading networks and is expanding across Nigeria, Ghana, Kenya and more African countries.' } },
                 ],
               }),
             }}
