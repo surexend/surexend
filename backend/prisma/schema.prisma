@@ -256,3 +256,21 @@ model FeeConfig {
   minAmount  Float  @default(0.0)
   maxAmount  Float?
 }
+
+// Admin-controlled pricing overrides for billed services (Smartspeed).
+// - data: planCode = Smartspeed dataplan_id. A row with empty planCode is the
+//   network-wide auto margin %; a row with a planCode and sellPrice is a
+//   per-plan override. Sell price = override ?? cost * (1 + margin/100) ?? cost.
+// - airtime: planCode always empty; marginPct is the markup added on top of the
+//   face value the user enters. Sell price = face * (1 + margin/100).
+model ServicePricing {
+  id        String   @id @default(uuid())
+  category  String   // 'data' | 'airtime'
+  provider  String   // MTN | GLO | AIRTEL | 9MOBILE
+  planCode  String   @default("")
+  costPrice Float?   // data: provider cost (info only; refreshed from catalog)
+  sellPrice Float?   // data: admin override for this plan
+  marginPct Float?   // data: network auto-margin; airtime: markup on face value
+  updatedAt DateTime @default(now())
+  @@unique([category, provider, planCode])
+}

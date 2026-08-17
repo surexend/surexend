@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BillsService } from '../bills/bills.service';
 import { getLocalRate } from '../common/currency.constants';
 
 // Normalize any recorded transaction amount to its USD value. Transactions
@@ -19,6 +20,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly billsService: BillsService,
   ) {}
 
   async getOverview() {
@@ -334,5 +336,40 @@ export class AdminService {
     });
 
     return { id: document.id, status: newStatus, userId: document.userId };
+  }
+
+  // ── Service pricing (sell prices / margins) ─────────────────────────────
+
+  async getPricing() {
+    return this.billsService.getPricingView();
+  }
+
+  async setAirtimePricing(provider: string, marginPct: number) {
+    return this.billsService.setAirtimeMargin(provider, marginPct);
+  }
+
+  async setDataMargin(provider: string, marginPct: number) {
+    return this.billsService.setDataNetworkMargin(provider, marginPct);
+  }
+
+  async setDataPlanPrice(provider: string, planCode: string, sellPrice: number | null) {
+    return this.billsService.setDataPlanPrice(provider, planCode, sellPrice);
+  }
+
+  // Full transaction record for the admin (any user), with the linked bill
+  // payment when it is a BILL_PAYMENT (invoice details for support/debugging).
+  async getTransactionDetail(id: string) {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id },
+      include: { user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, surexTag: true } } },
+    });
+    if (!transaction) throw new NotFoundException('Transaction not found');
+
+    let bill = null;
+    if ((transaction.type || '').toUpperCase() === 'BILL_PAYMENT') {
+      bill = await this.prisma.billPayment.findFirst({ where: { reference: transaction.reference } });
+    }
+
+    return { ...transaction, invoiceNumber: transaction.reference, bill };
   }
 }

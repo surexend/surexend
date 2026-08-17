@@ -160,6 +160,11 @@ export class BillsService {
       const catalog = await this.fetchCatalog();
       const networkIds = this.networkIdMap(catalog);
       const topups = catalog?.topuppercentage || {};
+      let margins: Record<string, number> = {};
+      if (category === 'airtime') {
+        const rows = await this.prisma.servicePricing.findMany({ where: { category: 'airtime' } });
+        for (const r of rows) margins[r.provider] = r.marginPct || 0;
+      }
       const networks: any[] = [];
       for (const net of NETWORK_ORDER) {
         const discount = category === 'airtime' ? parseFloat(topups[net]?.VTU) || null : null;
@@ -171,6 +176,7 @@ export class BillsService {
           country: country || 'NG',
           networkId: networkIds[net] || FALLBACK_NETWORK_IDS[net],
           ...(discount != null ? { discount } : {}),
+          ...(category === 'airtime' ? { sellMarkup: margins[net] || 0 } : {}),
         });
       }
       return networks;
@@ -189,16 +195,154 @@ export class BillsService {
     const section = catalog?.Dataplans?.[this.dataplansKey(net)];
     const plans: any[] = Array.isArray(section) ? section : section?.ALL || [];
     if (!plans.length) throw new BadRequestException('No data plans available for this provider');
+
+    // Apply admin pricing: per-plan override wins, then the network auto-margin,
+    // else the raw provider cost. `amount` is always the SELL price the app shows.
+    const rows = await this.prisma.servicePricing.findMany({ where: { category: 'data', provider: net } });
+    const netMargin = rows.find((r) => r.planCode === '')?.marginPct || 0;
+    const planCodeKey = (p: any) => String(p.dataplan_id ?? p.id);
+
     return plans
-      .map((p: any) => ({
-        code: String(p.dataplan_id ?? p.id),
-        name: p.plan || 'Data Plan',
-        validity: p.month_validate || '',
-        amount: parseFloat(p.plan_amount),
-        planType: p.plan_type || 'GIFTING',
-      }))
+      .map((p: any) => {
+        const cost = parseFloat(p.plan_amount);
+        const override = rows.find((r) => r.planCode === planCodeKey(p))?.sellPrice;
+        const sell = override != null
+          ? override
+          : netMargin > 0
+            ? Math.round(cost * (1 + netMargin / 100))
+            : cost;
+        return {
+          code: planCodeKey(p),
+          name: p.plan || 'Data Plan',
+          validity: p.month_validate || '',
+          amount: sell,
+          costPrice: cost,
+          planType: p.plan_type || 'GIFTING',
+        };
+      })
       .filter((p) => p.code && Number.isFinite(p.amount) && p.amount > 0)
       .sort((a, b) => a.amount - b.amount);
+  }
+
+  // Price for a single plan at purchase time (authoritative — never trusts the
+  // client amount). Returns the sell price and, when applicable, the network
+  // auto-margin that produced it.
+  private async getDataPlanSellPrice(provider: string, planCode: string, cost: number): Promise<{ sellPrice: number; marginPct: number | null }> {
+    const net = this.normaliseNetwork(provider);
+    const rows = await this.prisma.servicePricing.findMany({ where: { category: 'data', provider: net } });
+    const override = rows.find((r) => r.planCode === String(planCode))?.sellPrice;
+    if (override != null) return { sellPrice: override, marginPct: null };
+    const margin = rows.find((r) => r.planCode === '')?.marginPct || 0;
+    if (margin > 0) return { sellPrice: Math.round(cost * (1 + margin / 100)), marginPct: margin };
+    return { sellPrice: cost, marginPct: null };
+  }
+
+  private async getAirtimeMargin(provider: string): Promise<number> {
+    const net = this.normaliseNetwork(provider);
+    const row = await this.prisma.servicePricing.findFirst({ where: { category: 'airtime', provider: net, planCode: '' } });
+    return row?.marginPct || 0;
+  }
+
+  private planCost(catalog: any, planCode: string): number {
+    const sections = catalog?.Dataplans || {};
+    for (const section of Object.values<any>(sections)) {
+      const arr = Array.isArray(section) ? section : section?.ALL || [];
+      const p = arr.find((x: any) => String(x.dataplan_id ?? x.id) === String(planCode));
+      if (p) return parseFloat(p.plan_amount);
+    }
+    return 0;
+  }
+
+  private planMeta(catalog: any, planCode: string): { name: string; validity: string } | null {
+    const sections = catalog?.Dataplans || {};
+    for (const section of Object.values<any>(sections)) {
+      const arr = Array.isArray(section) ? section : section?.ALL || [];
+      const p = arr.find((x: any) => String(x.dataplan_id ?? x.id) === String(planCode));
+      if (p) return { name: p.plan || 'Data Plan', validity: p.month_validate || '' };
+    }
+    return null;
+  }
+
+  // ── Admin pricing ───────────────────────────────────────────────────────
+
+  // Full pricing view for the admin console: airtime networks (cost % + markup)
+  // and every data plan per network (cost vs sell).
+  async getPricingView() {
+    const catalog = await this.fetchCatalog();
+    const networkIds = this.networkIdMap(catalog);
+    const topups = catalog?.topuppercentage || {};
+
+    const airtime: any[] = [];
+    for (const net of NETWORK_ORDER) {
+      const costPercent = parseFloat(topups[net]?.VTU);
+      if (costPercent == null) continue;
+      const row = await this.prisma.servicePricing.findFirst({ where: { category: 'airtime', provider: net, planCode: '' } });
+      airtime.push({
+        provider: net,
+        name: this.networkDisplayName(net),
+        networkId: networkIds[net] || FALLBACK_NETWORK_IDS[net],
+        costPercent,
+        markupPercent: row?.marginPct || 0,
+      });
+    }
+
+    const data: any[] = [];
+    for (const net of NETWORK_ORDER) {
+      if (!catalog?.Dataplans?.[this.dataplansKey(net)]) continue;
+      const rows = await this.prisma.servicePricing.findMany({ where: { category: 'data', provider: net } });
+      const marginRow = rows.find((r) => r.planCode === '');
+      data.push({
+        provider: net,
+        name: this.networkDisplayName(net),
+        networkId: networkIds[net] || FALLBACK_NETWORK_IDS[net],
+        marginPct: marginRow?.marginPct || 0,
+        plans: await this.getDataPlans(net),
+      });
+    }
+
+    return { airtime, data };
+  }
+
+  async setAirtimeMargin(provider: string, marginPct: number) {
+    const net = this.normaliseNetwork(provider);
+    const pct = Math.max(0, Number(marginPct) || 0);
+    await this.prisma.servicePricing.upsert({
+      where: { category_provider_planCode: { category: 'airtime', provider: net, planCode: '' } },
+      create: { category: 'airtime', provider: net, planCode: '', marginPct: pct },
+      update: { marginPct: pct },
+    });
+    return { provider: net, markupPercent: pct };
+  }
+
+  async setDataNetworkMargin(provider: string, marginPct: number) {
+    const net = this.normaliseNetwork(provider);
+    const pct = Math.max(0, Number(marginPct) || 0);
+    await this.prisma.servicePricing.upsert({
+      where: { category_provider_planCode: { category: 'data', provider: net, planCode: '' } },
+      create: { category: 'data', provider: net, planCode: '', marginPct: pct },
+      update: { marginPct: pct },
+    });
+    return { provider: net, marginPct: pct };
+  }
+
+  // Per-plan sell price override. sellPrice null/<=0 removes the override and
+  // falls back to the network auto-margin (or raw cost).
+  async setDataPlanPrice(provider: string, planCode: string, sellPrice: number | null) {
+    const net = this.normaliseNetwork(provider);
+    const catalog = await this.fetchCatalog();
+    const cost = this.planCost(catalog, planCode);
+    if (!cost || cost <= 0) throw new BadRequestException('Unknown data plan');
+    if (sellPrice == null || Number(sellPrice) <= 0) {
+      await this.prisma.servicePricing.deleteMany({ where: { category: 'data', provider: net, planCode: String(planCode) } });
+      return { provider: net, planCode: String(planCode), sellPrice: null };
+    }
+    const price = Math.round(Number(sellPrice));
+    await this.prisma.servicePricing.upsert({
+      where: { category_provider_planCode: { category: 'data', provider: net, planCode: String(planCode) } },
+      create: { category: 'data', provider: net, planCode: String(planCode), costPrice: cost, sellPrice: price },
+      update: { sellPrice: price, costPrice: cost },
+    });
+    return { provider: net, planCode: String(planCode), sellPrice: price, costPrice: cost };
   }
 
   async validateMeter(meter: string, provider: string) {
@@ -244,11 +388,33 @@ export class BillsService {
     const networkId = this.resolveNetworkId(catalog, provider);
     if (!networkId) throw new BadRequestException(`Unknown network provider: ${provider}`);
 
+    // Resolve pricing server-side — the client amount is never trusted.
+    let chargeAmount = amount;      // NGN charged to the user (sell price)
+    let providerAmount = amount;    // face value / provider cost sent upstream
+    let costPrice: number | null = null;
+    let marginPct: number | null = null;
+    let planMeta: { name: string; validity: string } | null = null;
+
+    if (category === 'data') {
+      const cost = this.planCost(catalog, planCode as string);
+      if (!cost || cost <= 0) throw new BadRequestException('Invalid data plan');
+      const pricing = await this.getDataPlanSellPrice(provider, planCode as string, cost);
+      chargeAmount = pricing.sellPrice;
+      costPrice = cost;
+      marginPct = pricing.marginPct;
+      providerAmount = cost;
+      planMeta = this.planMeta(catalog, planCode as string);
+    } else {
+      marginPct = await this.getAirtimeMargin(provider);
+      chargeAmount = marginPct > 0 ? Math.round(amount * (1 + marginPct / 100)) : amount;
+      providerAmount = amount;
+    }
+
     // Real NGN→USDT rate from the conversions service (live when YellowCard is
     // configured, static table otherwise) — never a hardcoded rate.
     const rateInfo = await this.conversionsService.getRates('NGN');
     const rate = rateInfo.rate > 0 ? rateInfo.rate : 1500;
-    const usdtAmount = amount / rate;
+    const usdtAmount = chargeAmount / rate;
 
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId },
@@ -256,10 +422,23 @@ export class BillsService {
     });
     if (!wallet) throw new BadRequestException('Wallet not found');
     if ((wallet.usdtBalance || 0) < usdtAmount) {
-      throw new BadRequestException(`Insufficient balance. You need $${usdtAmount.toFixed(2)} USDT (${amount.toFixed(2)} NGN at ${rate} NGN/USD).`);
+      throw new BadRequestException(`Insufficient balance. You need $${usdtAmount.toFixed(2)} USDT (${chargeAmount.toFixed(2)} NGN at ${rate} NGN/USD).`);
     }
 
     const reference = `SS-${Date.now()}${Math.floor(Math.random() * 1000)}`;
+
+    const billMeta: any = {
+      networkId,
+      rate,
+      sellPrice: chargeAmount,
+    };
+    if (costPrice != null) billMeta.costPrice = costPrice;
+    if (marginPct != null) billMeta.marginPct = marginPct;
+    if (planCode) {
+      billMeta.planCode = planCode;
+      billMeta.planName = planMeta?.name || null;
+      billMeta.planValidity = planMeta?.validity || null;
+    }
 
     return this.prisma.$transaction(async (prisma) => {
       await prisma.wallet.update({
@@ -273,11 +452,11 @@ export class BillsService {
           type: category,
           provider,
           recipient,
-          amount,
+          amount: chargeAmount,
           usdtAmount,
           reference,
           status: 'PENDING',
-          metadata: { networkId, rate, ...(planCode ? { planCode } : {}) }
+          metadata: billMeta
         }
       });
 
@@ -289,7 +468,7 @@ export class BillsService {
         fee: 0,
         currency: 'USDT',
         reference: billPayment.reference,
-        metadata: { provider, recipient, rate, ...(planCode ? { planCode } : {}) }
+        metadata: { provider, recipient, rate, ...(planCode ? { planCode, planName: planMeta?.name || null, planValidity: planMeta?.validity || null } : {}) }
       });
 
       try {

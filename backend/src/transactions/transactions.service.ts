@@ -96,6 +96,13 @@ export class TransactionsService {
       throw new NotFoundException('Transaction not found');
     }
 
-    return transaction;
+    // Attach the linked bill payment (provider, recipient, plan, provider ref)
+    // so the invoice view shows the full detail for BILL_PAYMENT transactions.
+    let bill = null;
+    if ((transaction.type || '').toUpperCase() === 'BILL_PAYMENT') {
+      bill = await this.prisma.billPayment.findFirst({ where: { userId, reference: transaction.reference } });
+    }
+
+    return { ...transaction, invoiceNumber: transaction.reference, bill };
   }
 }

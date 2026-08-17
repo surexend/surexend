@@ -425,19 +425,29 @@ export default function BillsPage() {
               )}
 
               {/* USDT equivalent */}
-              {(amount || selectedPlan) && (
-                <motion.div
-                  className="rounded-xl p-4 border"
-                  style={{ background: `rgba(${accentRgb}, 0.06)`, borderColor: `rgba(${accentRgb}, 0.15)` }}
-                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                >
-                  <p className="text-[#94A3B8] text-xs mb-1">Estimated cost</p>
-                  <p className="text-white font-inter font-bold text-xl">
-                    ~{((selectedPlan?.amount || parseFloat(amount) || 0) / ngntoUsdRate).toFixed(4)} USDT
-                  </p>
-                  <p className="text-[#64748B] text-xs mt-1">At current rate ₦{Math.round(ngntoUsdRate).toLocaleString()}/$1</p>
-                </motion.div>
-              )}
+              {(amount || selectedPlan) && (() => {
+                const effectiveNgn = selectedCategory === 'airtime' && (selectedProvider?.sellMarkup || 0) > 0
+                  ? (parseFloat(amount) || 0) * (1 + (selectedProvider.sellMarkup || 0) / 100)
+                  : (selectedPlan?.amount || parseFloat(amount) || 0)
+                return (
+                  <motion.div
+                    className="rounded-xl p-4 border"
+                    style={{ background: `rgba(${accentRgb}, 0.06)`, borderColor: `rgba(${accentRgb}, 0.15)` }}
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  >
+                    <p className="text-[#94A3B8] text-xs mb-1">Estimated cost</p>
+                    <p className="text-white font-inter font-bold text-xl">
+                      ~{(effectiveNgn / ngntoUsdRate).toFixed(4)} USDT
+                    </p>
+                    <p className="text-[#64748B] text-xs mt-1">At current rate ₦{Math.round(ngntoUsdRate).toLocaleString()}/$1</p>
+                    {selectedCategory === 'airtime' && (selectedProvider?.sellMarkup || 0) > 0 && (
+                      <p className="text-[#94A3B8] text-[10px] mt-1">
+                        Includes {selectedProvider.sellMarkup}% markup (₦{effectiveNgn.toLocaleString()} total)
+                      </p>
+                    )}
+                  </motion.div>
+                )
+              })()}
 
               <motion.button
                 className="w-full py-4 rounded-xl font-bold text-black"

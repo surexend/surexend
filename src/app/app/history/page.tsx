@@ -778,8 +778,12 @@ function TransactionDetailModal({
     return 'Pending'
   }
 
-  // Receipt rows: swap (CONVERT) shows both legs; everything else shows the
-  // standard money-movement fields with copyable addresses/hashes.
+  // Receipt rows: swap (CONVERT) shows both legs; bills show the full invoice
+  // (service, recipient, plan, paid amount, provider reference); everything
+  // else shows the standard money-movement fields with copyable addresses.
+  const isBill = typeUpper === 'BILL_PAYMENT'
+  const bill = details?.bill || null
+  const billMeta = meta
   const rows: { label: string; value: string; copyable?: string; mono?: boolean; accent?: boolean }[] = swap
     ? [
         { label: 'You swapped', value: `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from}` },
@@ -789,7 +793,20 @@ function TransactionDetailModal({
         { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
         { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
       ]
-    : [
+    : isBill
+      ? [
+          { label: 'Invoice No', value: details?.reference || '—', copyable: details?.reference, mono: true, accent: true },
+          { label: 'Service', value: `${bill?.provider || billMeta.provider || 'Bill'} ${bill?.type === 'data' ? 'Data' : 'Airtime'}` },
+          { label: 'Recipient', value: bill?.recipient || '—', copyable: bill?.recipient, mono: true },
+          ...(bill?.type === 'data' && billMeta.planName ? [{ label: 'Plan', value: `${billMeta.planName}${billMeta.planValidity ? ` · ${billMeta.planValidity}` : ''}` }] : []),
+          { label: 'Amount Paid', value: `₦${formatAmount(Number(bill?.amount ?? details?.amount ?? 0))}`, accent: true },
+          { label: 'USDT', value: `$${formatAmount(Number(details?.amount || 0))}` },
+          ...(billMeta.rate ? [{ label: 'Rate', value: `₦${formatAmount(billMeta.rate)} / USDT` }] : []),
+          ...(meta.smartspeed?.reference ? [{ label: 'Provider Ref', value: meta.smartspeed.reference, copyable: meta.smartspeed.reference, mono: true }] : []),
+          ...(meta.error ? [{ label: 'Error', value: meta.error }] : []),
+          { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
+        ]
+      : [
         { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
         { label: 'Amount', value: `${sign}${symbol}${formatAmount(Number(details?.amount || 0))}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}`, accent: true },
         { label: 'Fee', value: `$${(details?.fee || 0).toFixed(2)}` },

@@ -360,3 +360,21 @@ https://surexend.com/api/v1/auth/google/callback (no www).
 - Frontend bills page: all data plans grouped by planType in scrollable grid;
   airtime providers show discount %. Mocks in api.ts updated to new shape.
 - Builds green (nest build, next build). Push to main -> Railway + Vercel.
+
+== ROUND 9: ADMIN PRICING ENGINE + FULL INVOICES ==
+- ServicePricing model (auto db push on deploy): category/provider/planCode/
+  costPrice/sellPrice/marginPct, @@unique([category,provider,planCode]).
+- Sell-price engine: data = per-plan override ?? cost*(1+network margin) ?? cost;
+  airtime = face*(1+markup%). Server-side always (client amount never trusted).
+  getDataPlans returns amount=SELL + costPrice; providers return sellMarkup.
+- Admin /admin/pricing: airtime markup% per network (₦100->₦X preview), data
+  network tabs + auto-margin Apply-to-all + per-plan cost|sell|profit table.
+  Endpoints: GET /admin/pricing; PUT /admin/pricing/airtime, /data-margin,
+  /data. AdminModule imports BillsModule; AdminService injects BillsService.
+- Invoices: getTransactionById attaches BillPayment + invoiceNumber=reference.
+  History receipt modal shows bill rows (Invoice No, Service, Recipient, Plan,
+  Amount Paid, USDT, Rate, Provider Ref). Admin transactions rows clickable ->
+  DetailModal via GET /admin/transactions/:id (cost/sell/margin/provider ref).
+- bill metadata now stores costPrice/marginPct/sellPrice/planName/planValidity.
+- Builds green. Next deploy: SMARTSPEED_API_TOKEN + ADMIN_EMAILS on Railway,
+  fund Smartspeed, real purchase test.

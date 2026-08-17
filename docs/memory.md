@@ -341,3 +341,32 @@ repointed to surexendofficial@gmail.com).
 - NEXT DEPLOY ACTION: add SMARTSPEED_API_TOKEN to Railway + redeploy; set
   ADMIN_EMAILS=surexendofficial@gmail.com on Railway; fund the Smartspeed
   account; verify a small real topup/data purchase end-to-end.
+
+## 2026-08-17 (round 8) - admin pricing engine + full transaction invoices
+- ServicePricing model (prisma, auto-created on Railway via prestart db push):
+  category ('data'|'airtime'), provider, planCode ('' = network-level row),
+  costPrice, sellPrice (per-plan override), marginPct (data auto-margin /
+  airtime markup on face value). @@unique([category, provider, planCode]).
+- SELL-PRICE ENGINE (bills.service): data sell = per-plan override ?? cost*(1 +
+  network margin/100) ?? cost. Airtime sell = face value * (1 + markup/100).
+  getDataPlans returns {amount: SELL, costPrice}; providers include
+  sellMarkup. purchaseBill resolves prices SERVER-SIDE (client amount never
+  trusted), stores costPrice/marginPct/sellPrice/planName/planValidity in
+  bill metadata; airtime still sends face value upstream, user charged markup.
+- ADMIN PRICING UI: /admin/pricing (new nav item). Airtime: per-network
+  markup% + "₦100 → ₦X" preview. Data: network tabs, per-network "auto margin
+  %" Apply-to-all, per-plan sell-price table (Service cost | Your sell |
+  Profit) with Save/Reset (blank+Reset reverts to auto). Endpoints:
+  GET /admin/pricing; PUT /admin/pricing/airtime {provider,marginPct};
+  PUT /admin/pricing/data-margin {provider,marginPct};
+  PUT /admin/pricing/data {provider,planCode,sellPrice|null}. AdminService now
+  injects BillsService (BillsModule imported by AdminModule).
+- TRANSACTION INVOICES: transactions.service.getTransactionById now attaches
+  linked BillPayment + invoiceNumber=reference. User history receipt modal
+  shows bill rows for BILL_PAYMENT (Invoice No, Service, Recipient, Plan,
+  Amount Paid ₦, USDT, Rate, Provider Ref, Error). Admin transactions page:
+  rows clickable -> DetailModal (GET /admin/transactions/:id) with full record
+  incl service cost/sell/margin and provider ref.
+- Builds green (nest build + next build). Prisma client regenerated locally.
+- NEXT DEPLOY ACTION: none new beyond round 7 (SMARTSPEED_API_TOKEN +
+  ADMIN_EMAILS on Railway, fund Smartspeed account, test a real purchase).

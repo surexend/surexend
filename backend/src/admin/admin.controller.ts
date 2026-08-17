@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -65,5 +65,34 @@ export class AdminController {
   @Post('kyc/:id/decision')
   decideKyc(@Param('id') id: string, @Body() body: { approve: boolean; reason?: string }) {
     return this.adminService.decideKyc(id, body);
+  }
+
+  // ── Service pricing ─────────────────────────────────────────────────────
+
+  @Get('pricing')
+  getPricing() {
+    return this.adminService.getPricing();
+  }
+
+  @Put('pricing/airtime')
+  setAirtimePricing(@Body() body: { provider: string; marginPct: number }) {
+    return this.adminService.setAirtimePricing(body.provider, body.marginPct);
+  }
+
+  @Put('pricing/data-margin')
+  setDataMargin(@Body() body: { provider: string; marginPct: number }) {
+    return this.adminService.setDataMargin(body.provider, body.marginPct);
+  }
+
+  @Put('pricing/data')
+  setDataPlanPrice(@Body() body: { provider: string; planCode: string; sellPrice: number | null }) {
+    return this.adminService.setDataPlanPrice(body.provider, body.planCode, body.sellPrice);
+  }
+
+  // ── Transaction detail (any user) ───────────────────────────────────────
+
+  @Get('transactions/:id')
+  getTransactionDetail(@Param('id') id: string) {
+    return this.adminService.getTransactionDetail(id);
   }
 }
