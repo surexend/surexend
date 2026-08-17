@@ -24,7 +24,7 @@ export class AdminService {
   ) {}
 
   async getOverview() {
-    const [totalUsers, activeUsers, kycPending, totalTransactions, completedTransactions, moneyIn, moneyOut, conversionFeeAgg, recentUsers, recentTransactions] = await Promise.all([
+    const [totalUsers, activeUsers, kycPending, totalTransactions, completedTransactions, moneyIn, convertTxs, moneyOut, conversionFeeAgg, recentUsers, recentTransactions] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { isActive: true, isBanned: false } }),
       this.prisma.user.count({ where: { kycStatus: 'PENDING' } }),
@@ -35,11 +35,18 @@ export class AdminService {
         where: { status: 'COMPLETED', type: { in: ['RECEIVE', 'REFERRAL_EARNING'] } },
         select: { amount: true, currency: true },
       }),
-      // Money out: sends, withdrawals, conversions and bills (all cash leaving
-      // the platform). Each creates its own Transaction row, so this list is
-      // complete — conversions/bills are NOT double-counted.
+      // All conversions, so direction is classified below (buy crypto =
+      // fiat in, sell crypto = fiat out). Fetching them apart avoids treating
+      // every CONVERT as money out.
       this.prisma.transaction.findMany({
-        where: { status: 'COMPLETED', type: { in: ['SEND', 'WITHDRAWAL', 'CONVERT', 'BILL_PAYMENT'] } },
+        where: { status: 'COMPLETED', type: 'CONVERT' },
+        select: { amount: true, currency: true, fee: true, metadata: true },
+      }),
+      // Money out: sends, withdrawals and bills (cash leaving the platform).
+      // Each creates its own Transaction row, so this list is complete — bills
+      // are NOT double-counted.
+      this.prisma.transaction.findMany({
+        where: { status: 'COMPLETED', type: { in: ['SEND', 'WITHDRAWAL', 'BILL_PAYMENT'] } },
         select: { amount: true, currency: true, fee: true },
       }),
       this.prisma.conversion.aggregate({
@@ -59,8 +66,14 @@ export class AdminService {
     ]);
 
     // Sum every amount converted to USD (never a raw cross-currency sum).
-    const totalVolumeIn = moneyIn.reduce((acc, t) => acc + toUsd(t.amount, t.currency), 0);
-    const totalVolumeOut = moneyOut.reduce((acc, t) => acc + toUsd(t.amount, t.currency), 0);
+    // A conversion is money OUT only when USD-family is sold for fiat; buying
+    // crypto (fiat -> USD) is money IN (fiat received by the platform).
+    const sellConverts = convertTxs.filter(
+      (t) => ['USDT', 'USDC', 'USD'].includes(String((t.metadata as any)?.from || t.currency || '').toUpperCase()),
+    );
+    const buyConverts = convertTxs.filter((t) => !sellConverts.includes(t));
+    const totalVolumeIn = [...moneyIn, ...buyConverts].reduce((acc, t) => acc + toUsd(t.amount, t.currency), 0);
+    const totalVolumeOut = [...moneyOut, ...sellConverts].reduce((acc, t) => acc + toUsd(t.amount, t.currency), 0);
     const revenueFromTxs = moneyOut.reduce((acc, t) => acc + (t.fee || 0), 0);
 
     const since = new Date();
