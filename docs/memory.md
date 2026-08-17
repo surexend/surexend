@@ -1,6 +1,6 @@
 # SureXend — Session Memory
 
-Last updated: 2026-08-15
+Last updated: 2026-08-17
 
 > Purpose: persistent, honest memory across sessions. Whenever something is
 > discovered, corrected, or decided, record it here in the same commit as the
@@ -244,3 +244,56 @@ wallet never shows the funds.
   promotes matching users on boot, idempotently), then remove the var.
 - Next up per user: VTU/bills depth (real airtime/data top-up flows), then
   domain migration at launch-prep.
+
+## 2026-08-17 (round 5) — launch batch: auth (Google+OTP), honest admin, VTU real, swaps paused
+Commit `7ca4652`. Product owner: "we want to be live, do everything needed."
+- LOGIN ERROR FIX: `src/lib/api.ts` interceptor swallowed every 401 — including
+  the login endpoint — so wrong passwords showed a misleading "Session expired"
+  toast. `/auth/login` 401s now skip the refresh flow and the login page shows
+  the real backend message ("Invalid credentials"). 401 "Session expired" toast
+  also suppressed for login calls.
+- GOOGLE OAuth (env-ready): backend `GET /auth/google` (authorize URL, returns
+  `{url}`), `GET /auth/google/config` (`{enabled}`), `GET /auth/google/callback`
+  (exchanges code, fetches profile, finds-or-creates user by email, redirects
+  to `/auth/oauth-callback?accessToken=..&refreshToken=..`). New users get a
+  random (unusable) passwordHash + `google-<n>` placeholder phone (editable in
+  admin console). Redirect URI = `<frontendUrl>/api/v1/auth/google/callback`
+  (works because the Next rewrite proxies the API path). Activation: set
+  GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET in Railway env — no code change.
+  Frontend: Google buttons wired on login + register (hidden until config
+  returns enabled), new `/auth/oauth-callback` page stores tokens and redirects.
+- PASSWORDLESS OTP LOGIN: `POST /auth/otp/request {email}` (sends LOGIN OTP via
+  Resend; requires an existing active account) + `POST /auth/otp/verify-login
+  {email,code}` (issues tokens). Login page has a "Sign in with a code" inline
+  flow (request -> 6-digit input -> verify). Register OTP flow unchanged.
+- ADMIN CONSOLE: (1) mobile access — ShieldCheck button in the app header on
+  ALL viewports when role==='ADMIN' (previously desktop sidebar only).
+  (2) HONEST NUMBERS — overview totalVolumeIn = completed RECEIVE +
+  REFERRAL_EARNING only; totalVolumeOut = completed SEND + WITHDRAWAL + CONVERT
+  + BILL_PAYMENT (no more double-counting conversions/bills); revenue =
+  transaction.fee + conversion.fee. (3) Email + phone now editable via
+  PATCH /admin/users/:id (unique-checked, surfaces "already in use").
+  (4) MANUAL DEPOSITS: `POST /admin/users/:id/credit {amount,currency,note}`
+  credits USDT/USDC balance, creates a COMPLETED RECEIVE tx (ref `DEP-<ts>`),
+  notifies the user. Admin user-detail page has the credit form.
+- SWAP TO NAIRA PAUSED (per owner): conversions `preview` + `execute` reject
+  USD -> LOCAL with "Crypto-to-local conversion is paused for now." Convert
+  page shows an amber banner and blocks Continue for that direction. LOCAL ->
+  USD (buy crypto) still works.
+- VTU (bills) — real VTPass integration fixes: getProviders returns real
+  VTPass service IDs per category (airtime MTN/AIRTEL/GLO/9MOBILE; data
+  MTN-Data/AIRTEL-Data/GLO-Data/9MOBILE-Data; electricity IKEDC/EKEDC/PHEDC/
+  AEDC/BEDC/KAEDCO; tv DSTV/GOTV/STARTIMES; internet SMILE/SPECTRANET/SWIFT).
+  getDataPlans parses VTPass variations into {code,name,amount,validity}.
+  purchaseBill now takes planCode, uses the REAL NGN rate via
+  ConversionsService.getRates (never the old hardcoded 1500), sends
+  variation_code for data, marks FAILED + REFUNDS USDT when VTPass is not code
+  '000' (or errors), and only returns COMPLETED on success. BillsModule imports
+  ConversionsModule. Bills page estimate now uses the live rate, not 1650.
+- KYC INEFFECTIVE (per owner): /app/kyc + profile banner reworded — everything
+  "Available", identity verification is optional during launch, nothing is
+  blocked. Backend already had no KYC gating.
+- Builds: `nest build` + `next build` both green. /auth/login wrapped in
+  Suspense (useSearchParams CSR bailout). Pushed to main.
+- Next: set GOOGLE_CLIENT_ID/SECRET + confirm VTPASS keys on Railway; deposit
+  integration approval still pending (manual crediting is the live path now).

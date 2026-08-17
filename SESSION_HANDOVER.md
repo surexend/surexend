@@ -287,3 +287,45 @@ repeat" list.
   promotes matching users on boot (idempotent) -> then remove the var.
 - Next: VTU/airtime depth + integration batch, then domain migration at
   launch-prep.
+
+## 2026-08-17 (round 5) - launch batch: auth (Google+OTP), honest admin, VTU real, swaps paused
+Commit 7ca4652 (pushed).
+- LOGIN ERROR FIX: api.ts interceptor no longer swallows /auth/login 401s; the
+  login page now shows the real backend message ("Invalid credentials"). The
+  misleading "Session expired" toast + refresh flow is skipped for login calls.
+- GOOGLE OAUTH (env-ready, zero code change to activate): set GOOGLE_CLIENT_ID +
+  GOOGLE_CLIENT_SECRET on Railway. Endpoints: GET /auth/google (returns {url}),
+  GET /auth/google/config ({enabled}), GET /auth/google/callback (exchange ->
+  find-or-create user by email -> redirect to /auth/oauth-callback?accessToken=
+  ..&refreshToken=..). New Google users: random unusable passwordHash +
+  google-<n> placeholder phone (editable in admin console). Google buttons on
+  login + register only render when config says enabled. New frontend page:
+  /auth/oauth-callback (stores tokens, redirects to dashboard).
+- PASSWORDLESS OTP LOGIN: POST /auth/otp/request {email} (LOGIN OTP via Resend,
+  requires existing active account) + POST /auth/otp/verify-login {email,code}
+  (issues tokens). Login page has an inline "Sign in with a code" flow.
+- ADMIN: (1) mobile access - ShieldCheck header button on all viewports when
+  role==='ADMIN'. (2) honest overview - totalVolumeIn = completed RECEIVE +
+  REFERRAL_EARNING; totalVolumeOut = SEND+WITHDRAWAL+CONVERT+BILL_PAYMENT;
+  revenue = tx.fee + conversion.fee (no double counting). (3) email + phone
+  editable via PATCH /admin/users/:id. (4) MANUAL DEPOSITS: POST
+  /admin/users/:id/credit {amount,currency,note} -> credits USDT/USDC, creates
+  COMPLETED RECEIVE tx (DEP-<ts>), notifies user; UI form on user detail page.
+- SWAP TO NAIRA PAUSED: conversions preview + execute reject USD -> LOCAL
+  ("paused for now"); convert page shows amber banner + blocks that direction.
+  LOCAL -> USD (buy crypto) still works.
+- VTU REAL: providers now return real VTPass service IDs per category (airtime
+  MTN/AIRTEL/GLO/9MOBILE; data *-Data; electricity IKEDC/EKEDC/PHEDC/AEDC/BEDC/
+  KAEDCO; tv DSTV/GOTV/STARTIMES; internet SMILE/SPECTRANET/SWIFT). data-plans
+  parses VTPass variations into {code,name,amount,validity}. purchaseBill takes
+  planCode, uses the REAL NGN rate (ConversionsService.getRates - never the old
+  hardcoded 1500), sends variation_code for data, FAILED + REFUNDS USDT on any
+  non-'000'/error from VTPass. Bills page estimate uses the live rate.
+- KYC INEFFECTIVE (owner decision): /app/kyc + profile banner reworded -
+  everything "Available", verification optional during launch, nothing blocked.
+- Builds green: nest build + next build (login page wrapped in Suspense for
+  useSearchParams CSR bailout). Note: next.config.ts has ignoreBuildErrors.
+- NEXT DEPLOY ACTIONS: set GOOGLE_CLIENT_ID/SECRET + confirm VTPASS_API_KEY/
+  VTPASS_SECRET_KEY/VTPASS_PUBLIC_KEY/VTPASS_BASE_URL on Railway; deposit
+  integration approval still pending (manual crediting is the live path);
+  change admin email via /admin/users/[id] now that email editing exists.
