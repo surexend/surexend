@@ -99,6 +99,11 @@ export class AuthService {
 
     const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isMatch) {
+      // Google-created accounts have a random unusable password, so a failed
+      // password here means the user must sign in via Google instead.
+      if (user.phone.startsWith('google-')) {
+        throw new UnauthorizedException('This account was created with Google. Click "Continue with Google" to sign in.');
+      }
       throw new UnauthorizedException('Invalid credentials');
     }
 

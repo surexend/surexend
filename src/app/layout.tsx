@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, DM_Sans } from 'next/font/google'
+import { Toaster } from 'react-hot-toast'
 import './globals.css'
 import { ThemeProvider } from '@/context/ThemeContext'
 import PWAInstallPrompt from '@/components/PWAInstallPrompt'
@@ -114,6 +115,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           {children}
           <PWAInstallPrompt />
+          <Toaster position="top-center" toastOptions={{ style: { background: '#0F1629', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
         </ThemeProvider>
       </body>
     </html>
