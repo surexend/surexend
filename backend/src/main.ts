@@ -16,9 +16,10 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   // Admin bootstrap — promote accounts listed in ADMIN_EMAILS (comma-separated)
-  // on every boot. Idempotent; safer than a shell script that can't reach the
-  // container filesystem (the production image ships dist/ only). Set e.g.
-  // ADMIN_EMAILS=demo@surexend.com,ops@surexend.com in Railway, redeploy, then
+  // on every boot. Also promoted live at sign-in (see auth.service
+  // ensureAdminIfListed), so the moment a listed account logs in it becomes
+  // ADMIN — no boot-order dependency. Set e.g.
+  // ADMIN_EMAILS=surexendofficial@gmail.com in Railway, redeploy, then
   // remove the var once promoted.
   const prisma = app.get(PrismaService);
   const adminEmails = (process.env.ADMIN_EMAILS || '')

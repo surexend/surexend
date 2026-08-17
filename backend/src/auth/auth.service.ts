@@ -140,6 +140,7 @@ export class AuthService {
       this.logger.error(`Failed to record login notification: ${err.message}`);
     }
 
+    user.role = await this.ensureAdminIfListed(user);
     return this.generateTokens(user);
   }
 
@@ -153,6 +154,29 @@ export class AuthService {
     if (ua.includes('windows')) return 'Windows';
     if (ua.includes('linux')) return 'Linux';
     return userAgent.slice(0, 40);
+  }
+
+  // Promote accounts listed in ADMIN_EMAILS (comma-separated) the moment they
+  // sign in, so there's no boot-order dependency. Idempotent and safe to call
+  // on every login.
+  private async ensureAdminIfListed(user: { id: string; email: string; role?: string }): Promise<string> {
+    const adminEmails = (process.env.ADMIN_EMAILS || '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    if (adminEmails.includes((user.email || '').toLowerCase())) {
+      try {
+        const updated = await this.prisma.user.update({
+          where: { id: user.id },
+          data: { role: 'ADMIN' },
+          select: { role: true },
+        });
+        return updated.role;
+      } catch {
+        // Fall through and keep whatever role they already had
+      }
+    }
+    return user.role || 'USER';
   }
 
   async generateTokens(user: any) {
@@ -177,7 +201,8 @@ export class AuthService {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        kycStatus: user.kycStatus
+        kycStatus: user.kycStatus,
+        role: user.role,
       }
     };
   }
@@ -233,6 +258,7 @@ export class AuthService {
       throw new UnauthorizedException('No active account found with this email');
     }
 
+    user.role = await this.ensureAdminIfListed(user);
     return this.generateTokens(user);
   }
 
@@ -323,6 +349,7 @@ export class AuthService {
 
     if (!user.isActive) throw new UnauthorizedException('This account is inactive');
 
+    user.role = await this.ensureAdminIfListed(user);
     const tokens = await this.generateTokens(user);
     return { ...tokens, user: tokens.user };
   }
