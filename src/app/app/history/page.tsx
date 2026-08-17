@@ -368,6 +368,8 @@ function TransactionDetailModal({
   const [details, setDetails] = useState<any>(tx)
   const [downloading, setDownloading] = useState<'pdf' | 'png' | null>(null)
   const receiptRef = useRef<HTMLDivElement>(null)
+  const exportRef = useRef<HTMLDivElement>(null)
+  const exportLogoRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
     let active = true
@@ -392,12 +394,43 @@ function TransactionDetailModal({
     } catch { /* ignore */ }
   }
 
-  // Capture the receipt DOM node and export it as a PDF or PNG. The receipt is
-  // rendered at 2x so the file stays crisp. PDF uses jsPDF, image uses a direct
-  // canvas download. html2canvas/jsPDF are lazy-loaded only on demand so the
-  // history route itself stays light.
+  // Capture the receipt DOM node and export it as a PDF or PNG. The export uses a
+  // dedicated off-screen node (exportRef) with a flat, filter-free layout so
+  // html2canvas renders it pixel-perfect — no flexbox reflow glitches, no lost
+  // CSS filters, no copy buttons in the file. The logo is re-rendered through a
+  // canvas at export time so the lemon mark is correctly whitened (html2canvas
+  // ignores CSS filter). html2canvas/jsPDF are lazy-loaded on demand.
+  const prepareExportLogo = async () => {
+    const img = exportLogoRef.current
+    if (!img) return
+    try {
+      const src = variant === 'gold' ? '/logo-mark-gold.png' : '/logo-mark-plain.png'
+      const srcImg = new Image()
+      srcImg.src = src
+      await srcImg.decode()
+      if (variant === 'gold') {
+        img.src = src
+      } else {
+        const c = document.createElement('canvas')
+        c.width = srcImg.naturalWidth * 2
+        c.height = srcImg.naturalHeight * 2
+        const ctx = c.getContext('2d')
+        if (ctx) {
+          ctx.filter = 'brightness(0) invert(1)'
+          ctx.drawImage(srcImg, 0, 0, c.width, c.height)
+          img.src = c.toDataURL('image/png')
+        } else {
+          img.src = src
+        }
+      }
+      await img.decode()
+    } catch {
+      img.src = variant === 'gold' ? '/logo-mark-gold.png' : '/logo-mark-plain.png'
+    }
+  }
+
   const downloadReceipt = async (format: 'pdf' | 'png') => {
-    const node = receiptRef.current
+    const node = exportRef.current || receiptRef.current
     if (!node || downloading) return
     setDownloading(format)
     try {
@@ -405,12 +438,12 @@ function TransactionDetailModal({
         import('html2canvas'),
         import('jspdf'),
       ])
+      await prepareExportLogo()
       const canvas = await html2canvas(node, {
         scale: 2,
         backgroundColor: '#0B1120',
         useCORS: true,
         logging: false,
-        windowWidth: 560,
       })
       const refSlug = (details?.reference || details?.id || 'receipt').replace(/[^a-zA-Z0-9_-]/g, '')
       if (format === 'png') {
@@ -642,6 +675,125 @@ function TransactionDetailModal({
             <p className="text-[9px] text-[#475569] font-mono font-semibold">
               {details?.reference || '—'}
             </p>
+          </div>
+        </div>
+
+        {/* ── EXPORT RECEIPT (off-screen, flat & filter-free for html2canvas) ── */}
+        <div
+          ref={exportRef}
+          style={{
+            position: 'fixed', top: 0, left: -10000, zIndex: -1,
+            width: 420, background: '#0B1120', padding: '36px 32px',
+            fontFamily: 'var(--font-dm), sans-serif', pointerEvents: 'none',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <img ref={exportLogoRef} alt="SureXend" width={32} height={32}
+                style={{ width: 32, height: 32, objectFit: 'contain' }} />
+              <span style={{ fontWeight: 800, letterSpacing: 3, fontSize: 16, color: '#ffffff', lineHeight: 1 }}>
+                SURE<span style={{ color: accentHex }}>X</span>END
+              </span>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 9, letterSpacing: 2.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Official Receipt</div>
+              <div style={{ fontSize: 9, color: '#334155', marginTop: 2, fontWeight: 500 }}>{displayNetwork}</div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 22 }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 999,
+              fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+              background: (details?.status || '').toUpperCase() === 'COMPLETED' ? 'rgba(16,185,129,0.10)' : (details?.status || '').toUpperCase() === 'FAILED' ? 'rgba(239,68,68,0.10)' : 'rgba(245,158,11,0.10)',
+              color: (details?.status || '').toUpperCase() === 'COMPLETED' ? '#34D399' : (details?.status || '').toUpperCase() === 'FAILED' ? '#F87171' : '#FBBF24',
+              border: '1px solid ' + ((details?.status || '').toUpperCase() === 'COMPLETED' ? 'rgba(16,185,129,0.25)' : (details?.status || '').toUpperCase() === 'FAILED' ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)'),
+            }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: 999,
+                background: (details?.status || '').toUpperCase() === 'COMPLETED' ? '#34D399' : (details?.status || '').toUpperCase() === 'FAILED' ? '#F87171' : '#FBBF24',
+              }} />
+              {statusLabel(details?.status)}
+            </span>
+            <span style={{ fontSize: 10, color: '#475569', fontWeight: 500 }}>
+              {new Date(details?.createdAt || details?.date || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+            </span>
+          </div>
+
+          <div style={{
+            textAlign: 'center', padding: '26px 24px', marginTop: 18, borderRadius: 16,
+            border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)',
+            position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, transparent, ${accentHex}, transparent)` }} />
+            <div style={{ fontSize: 9, letterSpacing: 2.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 10 }}>
+              {swap ? 'You received' : 'Amount'}
+            </div>
+            {swap ? (
+              <>
+                <div style={{ fontSize: 40, fontWeight: 900, letterSpacing: -1, lineHeight: 1, color: '#34D399' }}>
+                  {currencySymbol(swap.to)}{formatAmount(swap.toAmount)}
+                </div>
+                <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 10 }}>
+                  {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from} → {swap.to}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{
+                  fontSize: 40, fontWeight: 900, letterSpacing: -1, lineHeight: 1,
+                  color: isCredit ? '#34D399' : isDebit ? '#F87171' : '#94A3B8',
+                }}>
+                  {sign}{symbol}{formatAmount(Number(details?.amount || 0))}
+                </div>
+                <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 10 }}>
+                  {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {displayNetwork}
+                </div>
+              </>
+            )}
+          </div>
+
+          {(details?.status || '').toUpperCase() === 'FAILED' && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 14, padding: '13px 14px', borderRadius: 12, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+              <div style={{ fontSize: 11, color: '#F87171', fontWeight: 700, marginBottom: 3 }}>Transaction Failed</div>
+              <div style={{ fontSize: 11, color: '#FDA4AF', lineHeight: 1.55 }}>
+                {errorReason || 'This transaction was not completed. The sent amount (if any) has been refunded to your available balance.'}
+              </div>
+            </div>
+          )}
+
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 24, paddingTop: 20 }}>
+            {rows.map((row) => (
+              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, padding: '6px 0' }}>
+                <span style={{ fontSize: 11, color: '#64748B', fontWeight: 500, flexShrink: 0, paddingTop: 2 }}>{row.label}</span>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, textAlign: 'right', wordBreak: 'break-all', maxWidth: '62%',
+                  color: row.accent ? accentHex : '#ffffff',
+                  fontFamily: row.mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : 'inherit',
+                }}>
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {explorerUrl && (
+            <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '12px 0', borderRadius: 12, border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.04)', fontSize: 11, fontWeight: 700, color: '#ffffff' }}>
+                <span style={{ color: accentHex, fontSize: 13 }}>↗</span>
+                View on {explorerNetwork} Explorer
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 24, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+            <div>
+              <div style={{ fontSize: 9, color: '#475569', fontWeight: 500 }}>Powered by SureXend</div>
+              <div style={{ fontSize: 9, color: '#334155', marginTop: 3 }}>Verified digital transaction record</div>
+            </div>
+            <div style={{ fontSize: 9, color: '#475569', fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {details?.reference || '—'}
+            </div>
           </div>
         </div>
 
