@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { WalletsService } from './wallets.service';
+import { LocalFundingService } from './local-funding.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PinGuard } from '../common/guards/pin.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -7,11 +8,20 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 @Controller('wallets')
 @UseGuards(JwtAuthGuard)
 export class WalletsController {
-  constructor(private readonly walletsService: WalletsService) {}
+  constructor(
+    private readonly walletsService: WalletsService,
+    private readonly localFundingService: LocalFundingService,
+  ) {}
 
   @Get('balance')
   async getBalance(@CurrentUser() user: any) {
     return this.walletsService.getBalance(user.id);
+  }
+
+  // Dedicated bank account for funding the local-currency wallet by transfer.
+  @Get('local-funding/account')
+  async getLocalFundingAccount(@CurrentUser() user: any) {
+    return this.localFundingService.getOrCreateAccount(user.id);
   }
 
   @Get('deposit-address')

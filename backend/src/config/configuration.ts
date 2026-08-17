@@ -29,6 +29,12 @@ export default registerAs('app', () => ({
     apiKey: process.env.SMARTSPEED_API_TOKEN,
     baseUrl: process.env.SMARTSPEED_BASE_URL || 'https://www.smartspeedtelecom.com/api',
   },
+  bills: {
+    // Safety guard: users can only buy bills once they have a real deposit, so
+    // testnet/empty balances can never spend real naira at Smartspeed. Disable
+    // with BILLS_REQUIRE_FUNDING=false.
+    requireFunding: process.env.BILLS_REQUIRE_FUNDING !== 'false',
+  },
   yellowCard: {
     apiKey: process.env.YELLOW_CARD_API_KEY,
     secret: process.env.YELLOW_CARD_SECRET,

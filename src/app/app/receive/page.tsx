@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Copy, Share2, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Copy, Share2, AlertTriangle, CheckCircle2, Landmark } from 'lucide-react'
 import QRCode from 'qrcode'
 import toast from 'react-hot-toast'
 import { walletAPI } from '@/lib/api'
@@ -127,6 +127,74 @@ const NETWORKS = [
   { id: 'MONAD' as const, label: 'Monad', sublabel: 'Monad Testnet', color: '#836EF9', Logo: MonadLogo },
   { id: 'ARC' as const, label: 'Arc', sublabel: 'Arc L1 Network', color: '#FF5E00', Logo: ArcLogo },
 ]
+
+function BankFundingCard() {
+  const { colors } = useTheme()
+  const [copied, setCopied] = useState(false)
+  const { data, isLoading } = useQuery({
+    queryKey: ['localFundingAccount'],
+    queryFn: () => walletAPI.getLocalFundingAccount(),
+    retry: false,
+  })
+
+  const copyNum = () => {
+    if (!data?.account?.accountNumber) return
+    navigator.clipboard.writeText(data.account.accountNumber)
+    setCopied(true)
+    toast.success('Account number copied!')
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="liquid-glass p-4 rounded-3xl border border-white/10 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Landmark className="w-4 h-4" style={{ color: colors.primary }} />
+          <h2 className="text-sm font-extrabold text-white">Fund Local Currency</h2>
+        </div>
+        <span className="px-2 py-1 rounded-full text-[10px] font-bold border" style={{ color: colors.primary, borderColor: `rgba(${colors.glowRgb},0.4)`, background: `rgba(${colors.glowRgb},0.1)` }}>
+          Bank Transfer
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="h-16 bg-white/[0.03] rounded-xl animate-pulse" />
+      ) : data?.configured && data?.account ? (
+        <>
+          <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+            Send money to this account and your <strong className="text-white">NGN wallet</strong> is credited automatically.
+          </p>
+          <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-4 space-y-2">
+            <div>
+              <p className="text-[9px] uppercase tracking-wider text-[#64748B] font-bold">Account Name</p>
+              <p className="text-sm font-bold text-white">{data.account.accountName}</p>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[9px] uppercase tracking-wider text-[#64748B] font-bold">Account Number</p>
+                <p className="text-base font-black text-white tracking-wider">{data.account.accountNumber}</p>
+              </div>
+              <button onClick={copyNum} className="px-3 py-2 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-colors">
+                {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-white" />}
+              </button>
+            </div>
+            <div>
+              <p className="text-[9px] uppercase tracking-wider text-[#64748B] font-bold">Bank</p>
+              <p className="text-sm font-semibold text-white">{data.account.bankName}</p>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-start gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8">
+          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+            {data?.message || 'Bank deposits are being set up. Contact support to fund your local wallet for now.'}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function ReceivePage() {
   const { variant, colors } = useTheme()
@@ -289,6 +357,9 @@ export default function ReceivePage() {
           </div>
         </>
       )}
+
+      {/* Fund local currency via bank transfer */}
+      <BankFundingCard />
 
       {/* Warning */}
       <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-red-500/8 border border-red-500/20">

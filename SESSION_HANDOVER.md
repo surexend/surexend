@@ -378,3 +378,22 @@ https://surexend.com/api/v1/auth/google/callback (no www).
 - bill metadata now stores costPrice/marginPct/sellPrice/planName/planValidity.
 - Builds green. Next deploy: SMARTSPEED_API_TOKEN + ADMIN_EMAILS on Railway,
   fund Smartspeed, real purchase test.
+
+== ROUND 10: BILLS SAFETY GUARD + BANK-TRANSFER LOCAL FUNDING ==
+- Bills blocked for accounts with zero completed RECEIVE deposit (guard in
+  purchaseBill, toggle BILLS_REQUIRE_FUNDING=false). Prevents testnet/empty
+  balances spending real naira at Smartspeed.
+- New VirtualAccount model + LocalFundingService (wallets module):
+  GET /wallets/local-funding/account creates a Flutterwave VNUBAN permanent
+  virtual account; returns {configured:false} when FLUTTERWAVE_SECRET_KEY unset
+  so UI falls back to manual instructions.
+- Flutterwave webhook charge.completed (bank transfer) -> processBankTransfer
+  Deposit credits localBalances (NGN) + RECEIVE tx (channel bank_transfer) +
+  notification, deduped by DEP-FLW-<id>.
+- Receive page shows "Fund Local Currency" bank card (account number copy /
+  bank / account name) when configured.
+- DEPLOY NEEDS: FLUTTERWAVE_PUBLIC_KEY, FLUTTERWAVE_SECRET_KEY,
+  FLUTTERWAVE_WEBHOOK_HASH on Railway + webhook URL set to
+  https://surexend.com/api/v1/webhooks/flutterwave in Flutterwave dashboard.
+- Only real-money links today: Smartspeed wallet (bills) + manual deposits +
+  bank transfer webhook. Crypto deposits/sends are TESTNET until Circle mainnet.

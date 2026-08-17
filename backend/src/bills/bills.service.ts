@@ -366,6 +366,19 @@ export class BillsService {
   async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin: string, planCode?: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
+    // Safety guard: bills spend REAL naira at Smartspeed, so only allow
+    // accounts that have been funded with at least one completed deposit.
+    // Prevents testnet/empty balances from spending the platform's money.
+    const requireFunding = this.configService.get<boolean>('app.bills.requireFunding') ?? true;
+    if (requireFunding && user) {
+      const funded = await this.prisma.transaction.count({
+        where: { userId, type: 'RECEIVE', status: 'COMPLETED' },
+      });
+      if (!funded) {
+        throw new BadRequestException('Fund your wallet first before paying bills. Go to Receive to fund your local currency wallet.');
+      }
+    }
+
     // Testing mode: accept the default PIN if the user hasn't set a custom one yet
     const testing = this.configService.get<{ enabled: boolean; defaultPin: string }>('app.testing');
     if ((!user || !user.pin) && testing?.enabled) {

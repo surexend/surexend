@@ -17,6 +17,17 @@ export class WebhooksService {
   ) {}
 
   async processFlutterwave(payload: any) {
+    // Bank-transfer deposits to a user's virtual account arrive as
+    // charge.completed with a transfer/account payment type.
+    if (payload.event === 'charge.completed') {
+      const data = payload.data || {};
+      const paymentType = String(data.payment_type || data?.meta?.payment_type || '').toLowerCase();
+      if (paymentType.includes('transfer') || paymentType.includes('account')) {
+        await this.processBankTransferDeposit(data);
+      }
+      return;
+    }
+
     if (payload.event === 'transfer.completed') {
       const reference = payload.data.reference;
       
@@ -60,6 +71,85 @@ export class WebhooksService {
         );
       }
     }
+  }
+
+  // Credits a user's local-currency wallet when money lands on their dedicated
+  // Flutterwave virtual account. Deduplicated by the Flutterwave payment id so
+  // a retried webhook can never double-credit.
+  async processBankTransferDeposit(data: any) {
+    const flwId = data.id || data.flw_ref || data.tx_ref;
+    if (!flwId) return;
+
+    const reference = `DEP-FLW-${flwId}`;
+    const existing = await this.prisma.transaction.findUnique({ where: { reference } });
+    if (existing) {
+      this.logger.log(`Bank deposit ${reference} already processed.`);
+      return;
+    }
+
+    // Match the user via the virtual account reference (tx_ref / product_id
+    // are both our reference on Flutterwave's side).
+    const candidates = [data.tx_ref, data.meta?.product_id, data.meta?.productId, data.flw_ref]
+      .filter(Boolean)
+      .map((r) => String(r));
+    const virtualAccount = await this.prisma.virtualAccount.findFirst({
+      where: { isActive: true, OR: candidates.map((r) => ({ reference: r })) },
+    });
+    if (!virtualAccount) {
+      this.logger.warn(`Bank transfer deposit for unknown virtual account: ${flwId}`);
+      return;
+    }
+
+    const amount = parseFloat(data.amount);
+    if (!amount || amount <= 0) return;
+    const currency = (data.currency || 'NGN').toUpperCase();
+
+    await this.prisma.$transaction(async (prisma) => {
+      // Credit the per-currency local balance (defensive against a missing
+      // localBalances column, mirroring the conversions service).
+      let localBalances: Record<string, number> = {};
+      try {
+        const wallet = await prisma.wallet.findUnique({
+          where: { userId: virtualAccount.userId },
+          select: { localBalances: true, localBalance: true },
+        });
+        const parsed = wallet?.localBalances as any;
+        if (parsed && typeof parsed === 'object') localBalances = { ...parsed };
+        if ((wallet?.localBalance || 0) > 0 && !localBalances['NGN']) localBalances['NGN'] = wallet.localBalance;
+      } catch { /* ignore */ }
+
+      localBalances[currency] = (localBalances[currency] || 0) + amount;
+
+      try {
+        await prisma.wallet.update({
+          where: { userId: virtualAccount.userId },
+          data: { localBalances },
+        });
+      } catch {
+        await prisma.wallet.update({
+          where: { userId: virtualAccount.userId },
+          data: { localBalance: localBalances['NGN'] || 0 },
+        });
+      }
+
+      await this.transactionsService.createTransaction(prisma, {
+        userId: virtualAccount.userId,
+        type: 'RECEIVE',
+        status: 'COMPLETED',
+        amount,
+        fee: 0,
+        currency,
+        reference,
+        metadata: { channel: 'bank_transfer', provider: 'FLUTTERWAVE', flwId, bankName: virtualAccount.bankName },
+      });
+    });
+
+    await this.notificationsService.createNotification(virtualAccount.userId, {
+      title: 'Local Deposit Received',
+      body: `${amount.toLocaleString()} ${currency} credited to your wallet. Reference: ${reference}`,
+      type: 'DEPOSIT',
+      data: { reference, amount, currency, channel: 'bank_transfer' },
+    });
   }
 
   async processVtpass(payload: any) {

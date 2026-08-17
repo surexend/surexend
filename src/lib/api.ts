@@ -251,6 +251,12 @@ export const walletAPI = {
       () => ({ usdt: 0, fiat: 0, rate: 1500, locked: 0, pending: 0, usdBalance: 0, ngnBalance: 0, localBalances: { NGN: 0 } })
     ),
 
+  getLocalFundingAccount: () =>
+    tryWithMock(
+      () => apiClient.get('/wallets/local-funding/account').then(r => r.data),
+      () => ({ configured: false, message: 'Bank deposits are being set up. Contact support to fund your local wallet for now.' })
+    ),
+
   getDepositAddress: (network: 'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'MONAD' | 'BSC' | 'BEP20' | 'ARC') =>
     tryWithMock(
       () => apiClient.get(`/wallets/deposit-address?network=${network}`).then(r => r.data),

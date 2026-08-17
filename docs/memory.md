@@ -370,3 +370,32 @@ repointed to surexendofficial@gmail.com).
 - Builds green (nest build + next build). Prisma client regenerated locally.
 - NEXT DEPLOY ACTION: none new beyond round 7 (SMARTSPEED_API_TOKEN +
   ADMIN_EMAILS on Railway, fund Smartspeed account, test a real purchase).
+
+## 2026-08-17 (round 9) - bills safety guard + bank-transfer local funding
+- BILLS SAFETY: purchaseBill now blocks accounts with ZERO completed RECEIVE
+  deposits ("Fund your wallet first..."). Toggle: BILLS_REQUIRE_FUNDING=false.
+  Stops testnet/empty balances spending real naira at Smartspeed.
+- LOCAL FUNDING (bank transfer): VirtualAccount model (userId, provider
+  FLUTTERWAVE, reference unique, accountNumber/Name/Bank/code). New
+  LocalFundingService in wallets module -> GET /wallets/local-funding/account
+  creates a Flutterwave VNUBAN permanent virtual account (POST
+  /v3/virtual-account-numbers with email/tx_ref/phone/names/narration). If
+  FLUTTERWAVE_SECRET_KEY missing -> { configured:false } and the UI falls back
+  to "contact support" manual message.
+- WEBHOOK: Flutterwave charge.completed with transfer/account payment_type ->
+  processBankTransferDeposit credits localBalances (per-currency JSON, legacy
+  localBalance fallback) + RECEIVE transaction (currency=NGN, channel
+  bank_transfer) + notification. Dedup via DEP-FLW-<flwId> unique reference.
+  Match user by VirtualAccount.reference in {tx_ref, meta.product_id, flw_ref}.
+- FRONTEND: Receive page shows "Fund Local Currency (Bank Transfer)" card with
+  account name/number (copy button)/bank when configured; helpful message when
+  not. walletAPI.getLocalFundingAccount added.
+- REQ: FLUTTERWAVE_SECRET_KEY + FLUTTERWAVE_WEBHOOK_HASH + FLUTTERWAVE_PUBLIC_KEY
+  on Railway. Set webhook URL https://surexend.com/api/v1/webhooks/flutterwave in
+  the Flutterwave dashboard (verif-hash header checked). VNUBAN needs a
+  Flutterwave business account (BVN may be required by Flutterwave).
+- Balance model: user USDT/USDC/NGN are ledger numbers (manual deposits +
+  bank_transfer webhook). Only REAL-money links: Smartspeed wallet (bills) and
+  eventually Flutterwave payouts. Crypto on-chain = TESTNET now (Circle TEST_ key
+  + testnet RPC), so on-chain tokens are worthless; manual deposits + bank
+  transfer are the only real funding paths until mainnet is configured.
