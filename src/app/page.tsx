@@ -505,26 +505,34 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 3.5 }}
           >
-            {/* Outer phone shell */}
-            <div
-              className="relative rounded-[46px] p-3 mx-auto backdrop-blur-xl"
-              style={{
-                background: 'linear-gradient(145deg, rgba(255,255,255,0.15), rgba(255,255,255,0.03))',
-                border: '1.5px solid rgba(255,255,255,0.18)',
-                boxShadow: `0 35px 90px rgba(0,0,0,0.85), 0 0 60px rgba(${accentRgb}, 0.2)`,
-              }}
-            >
-              {/* Dynamic Island Notch */}
-              <div className="absolute top-5 left-1/2 -translate-x-1/2 w-24 h-4.5 bg-black rounded-full z-40 flex items-center justify-between px-2.5">
-                <div className="w-2 h-2 rounded-full bg-white/20" />
-                <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
-              </div>
+            {/* Realistic device frame */}
+            <div className="relative mx-auto select-none">
+              {/* Physical side buttons */}
+              <div className="absolute -left-1 top-[118px] h-7 w-[3px] rounded-l-sm bg-gradient-to-b from-[#4a4a4e] to-[#1c1c1e]" />
+              <div className="absolute -left-1 top-[160px] h-7 w-[3px] rounded-l-sm bg-gradient-to-b from-[#4a4a4e] to-[#1c1c1e]" />
+              <div className="absolute -left-1 top-[205px] h-11 w-[3px] rounded-l-sm bg-gradient-to-b from-[#3f3f42] to-[#151517]" />
+              <div className="absolute -right-1 top-[140px] h-16 w-[3px] rounded-r-sm bg-gradient-to-b from-[#4a4a4e] to-[#1c1c1e]" />
 
-              {/* PWA Phone Screen */}
-              <div 
-                className="rounded-[36px] bg-[#060A15] overflow-hidden pt-6 relative border border-white/10 flex flex-col justify-between select-none"
-                style={{ height: 540 }}
+              {/* Titanium device body */}
+              <div
+                className="relative rounded-[52px] p-[10px]"
+                style={{
+                  background: 'linear-gradient(145deg, #2e2e31 0%, #0b0b0d 28%, #414145 52%, #0b0b0d 78%, #2e2e31 100%)',
+                  boxShadow: `0 40px 90px rgba(0,0,0,0.85), 0 0 70px rgba(${accentRgb}, 0.18), inset 0 0 0 1px rgba(255,255,255,0.12), inset 0 2px 4px rgba(255,255,255,0.16)`,
+                }}
               >
+                {/* Inner black bezel */}
+                <div className="rounded-[44px] bg-black p-[2px]">
+                  {/* Screen */}
+                  <div
+                    className="rounded-[42px] bg-[#060A15] overflow-hidden pt-8 relative border border-white/10 flex flex-col justify-between select-none w-full"
+                    style={{ height: 552 }}
+                  >
+                    {/* Dynamic Island with camera sensor */}
+                    <div className="absolute top-3 left-1/2 -translate-x-1/2 w-[96px] h-[30px] bg-black rounded-full z-40 flex items-center justify-between px-3">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#141416] ring-1 ring-white/10" />
+                      <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+                    </div>
                 {/* Content scroll area inside phone */}
                 <div className="p-3.5 space-y-3 overflow-y-auto no-scrollbar">
                   {/* Status Bar */}
@@ -683,7 +691,14 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
+              </div>
             </div>
+
+            {/* Glass reflection */}
+            <div className="pointer-events-none absolute inset-[10px] rounded-[44px] overflow-hidden">
+              <div className="absolute inset-y-0 left-1/4 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/[0.09] to-transparent" />
+            </div>
+          </div>
 
             {/* Phone glow */}
             <div
