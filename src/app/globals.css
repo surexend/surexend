@@ -159,6 +159,135 @@ body {
   transform: translateZ(0);
 }
 
+/* ── Liquid Glass Design System ───────────────────────────────────────── */
+/* Apple-style translucent surfaces: higher translucency + colour saturation
+   boost + a specular top edge that catches light. Each surface keeps its own
+   compositing layer and the blur radius is capped so mobile GPU cost stays low.
+   @supports fallbacks keep it looking premium even without backdrop-filter. */
+
+.liquid-glass {
+  position: relative;
+  background:
+    radial-gradient(120% 90% at 50% -15%, rgba(255, 255, 255, 0.12), transparent 55%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0.07));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 18px 44px rgba(0, 0, 0, 0.38);
+  transform: translateZ(0);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .liquid-glass {
+    -webkit-backdrop-filter: blur(22px) saturate(175%);
+    backdrop-filter: blur(22px) saturate(175%);
+  }
+}
+
+/* No backdrop-filter support: solid premium gradient so nothing looks broken. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .liquid-glass {
+    background: linear-gradient(135deg, #161E36, #0D1426 55%, #111A2E);
+  }
+}
+
+/* Specular top hairline — the light-catching edge of liquid glass. */
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  pointer-events: none;
+}
+
+[data-variant="gold"] .liquid-glass {
+  border-color: rgba(212, 160, 23, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 1px 0 rgba(255, 215, 0, 0.08),
+    0 18px 48px rgba(0, 0, 0, 0.42),
+    0 0 24px rgba(212, 160, 23, 0.06);
+}
+
+[data-variant="lemon"] .liquid-glass {
+  border-color: rgba(181, 226, 61, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 1px 0 rgba(212, 255, 74, 0.10),
+    0 18px 48px rgba(0, 0, 0, 0.42),
+    0 0 24px rgba(181, 226, 61, 0.06);
+}
+
+/* Denser variant for sheets/modals where content needs readability. */
+.liquid-glass-strong {
+  background:
+    radial-gradient(120% 90% at 50% -15%, rgba(255, 255, 255, 0.10), transparent 55%),
+    linear-gradient(135deg, rgba(20, 28, 52, 0.88), rgba(12, 18, 36, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 24px 60px rgba(0, 0, 0, 0.5);
+  transform: translateZ(0);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .liquid-glass-strong {
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    backdrop-filter: blur(28px) saturate(160%);
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .liquid-glass-strong {
+    background: linear-gradient(135deg, #141B30, #0C1224);
+  }
+}
+
+[data-variant="gold"] .liquid-glass-strong {
+  border-color: rgba(212, 160, 23, 0.30);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 1px 0 rgba(255, 215, 0, 0.08),
+    0 24px 64px rgba(0, 0, 0, 0.52),
+    0 0 28px rgba(212, 160, 23, 0.07);
+}
+
+[data-variant="lemon"] .liquid-glass-strong {
+  border-color: rgba(181, 226, 61, 0.30);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 1px 0 rgba(212, 255, 74, 0.10),
+    0 24px 64px rgba(0, 0, 0, 0.52),
+    0 0 28px rgba(181, 226, 61, 0.07);
+}
+
+.liquid-glass-strong::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 6%;
+  right: 6%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  pointer-events: none;
+}
+
+/* Liquid-tinted backdrop for modals — refracts + deepens instead of flat black. */
+.liquid-backdrop {
+  background: rgba(3, 7, 18, 0.45);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .liquid-backdrop { background: rgba(3, 7, 18, 0.8); }
+}
+
 
 
 /* ── Gradient text utility ─────────────────────────────────────────────── */

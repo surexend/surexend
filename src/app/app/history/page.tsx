@@ -539,12 +539,12 @@ function TransactionDetailModal({
   if (typeof document === 'undefined') return null
   return createPortal(
     <AnimatePresence>
-      <motion.div className="fixed inset-0 bg-black/70 z-[80] backdrop-blur-sm"
+      <motion.div className="fixed inset-0 liquid-backdrop z-[80]"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose} />
       <div className="fixed inset-0 z-[90] flex items-end sm:items-center sm:justify-center pointer-events-none">
       <motion.div
-        className="w-full sm:w-[520px] sm:max-w-[94vw] max-h-[92vh] overflow-y-auto sm:rounded-2xl rounded-t-2xl pointer-events-auto"
+        className="w-full sm:w-[520px] sm:max-w-[94vw] max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl pointer-events-auto liquid-glass-strong"
         initial={{ opacity: 0, y: 80 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 80 }}
@@ -553,7 +553,7 @@ function TransactionDetailModal({
         {/* ── RECEIPT ── */}
         <div
           ref={receiptRef}
-          className="bg-[#0B1120] px-7 py-8"
+          className="px-7 py-8"
           style={{ fontFamily: 'var(--font-dm), sans-serif' }}
         >
           {/* Brand header */}
@@ -798,7 +798,7 @@ function TransactionDetailModal({
         </div>
 
         {/* ── Action bar (not captured in download) ── */}
-        <div className="bg-[#0F1629] border-t border-white/10 px-4 py-4 sm:px-6 grid grid-cols-3 gap-2.5 sm:gap-3">
+        <div className="border-t border-white/10 px-4 py-4 sm:px-6 grid grid-cols-3 gap-2.5 sm:gap-3">
           <button
             onClick={onClose}
             className="py-3 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.04] text-[#94A3B8] hover:bg-white/[0.08] hover:text-white transition-all active:scale-[0.98]"

@@ -309,7 +309,7 @@ export default function DashboardPage() {
 
       {/* Balance Card */}
       <motion.div 
-        className="glass-card p-4 sm:p-6 relative overflow-hidden"
+        className="liquid-glass p-4 sm:p-6 relative overflow-hidden"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
@@ -458,7 +458,7 @@ export default function DashboardPage() {
 
       {/* 🟢 LIVE MARKET CHART (USDC/USD + USD → local currencies) */}
       <motion.div 
-        className="glass-card p-4 sm:p-6 relative overflow-hidden"
+        className="liquid-glass p-4 sm:p-6 relative overflow-hidden"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.2 }}
@@ -622,7 +622,7 @@ export default function DashboardPage() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Money In vs Money Out Cash Flow Chart */}
         <motion.div 
-          className="glass-card p-4 sm:p-5 relative overflow-hidden"
+          className="liquid-glass p-4 sm:p-5 relative overflow-hidden"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.25 }}
@@ -735,7 +735,7 @@ export default function DashboardPage() {
 
       {/* Recent Transactions */}
       <motion.div 
-        className="glass-card p-5"
+        className="liquid-glass p-5 relative overflow-hidden"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.3 }}
