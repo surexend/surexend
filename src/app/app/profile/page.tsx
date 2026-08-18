@@ -218,28 +218,29 @@ export default function ProfilePage() {
       </motion.div>
 
       {/* ⬛ BLACK TICK MEMBERSHIP & LEADERBOARD CARD (REAL — NO FAKE NUMBERS) */}
-      <div className="glass-card py-3 px-4 rounded-2xl border border-white/10 flex items-center justify-between gap-2 bg-black/50 text-xs">
-        <div className="flex items-center gap-2.5 truncate">
-          {/* Black Verified Tick — every member has it */}
-          <div className="w-7 h-7 rounded-full bg-black border border-white/30 flex items-center justify-center text-white font-black text-[13px] shadow-md flex-shrink-0">
-            ✓
+      <div className="glass-card py-3 px-4 rounded-2xl border border-white/10 bg-black/50 text-xs">
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Black Verified Tick — every member has it */}
+            <div className="w-7 h-7 rounded-full bg-black border border-white/30 flex items-center justify-center text-white font-black text-[13px] shadow-md flex-shrink-0">
+              ✓
+            </div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-extrabold text-white text-xs truncate">Black Tick Member</span>
+              {isGolden && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D4A017]/15 text-[#D4A017] border border-[#D4A017]/30 flex-shrink-0">
+                  <VerifiedCheckmark size={10} variant={isGold ? 'gold' : 'lemon'} /> Top 5
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 truncate">
-            <span className="font-extrabold text-white text-xs truncate">Black Tick Member</span>
-            {isGolden && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D4A017]/15 text-[#D4A017] border border-[#D4A017]/30 flex-shrink-0">
-                <VerifiedCheckmark size={10} variant={isGold ? 'gold' : 'lemon'} /> Top 5 Leaderboard
-              </span>
-            )}
-          </div>
+          <button
+            onClick={() => router.push('/app/campaigns')}
+            className="w-full flex items-center justify-center gap-1 px-3 py-2 rounded-xl text-[11px] font-bold bg-white/5 hover:bg-white/10 text-[#B5E23D] border border-white/10 transition-all active:scale-95"
+          >
+            <Award size={12} /> View Leaderboard
+          </button>
         </div>
-
-        <button
-          onClick={() => router.push('/app/campaigns')}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white/5 hover:bg-white/10 text-[#B5E23D] border border-white/10 flex-shrink-0 transition-all active:scale-95"
-        >
-          <Award size={12} /> View Leaderboard
-        </button>
       </div>
 
       {/* KYC completion banner (if not verified) */}

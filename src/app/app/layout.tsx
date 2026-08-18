@@ -37,6 +37,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [avatar, setAvatar] = useState<string | null>(null)
   const [notifications, setNotifications] = useState<any[]>([])
   const [profile, setProfile] = useState<any>(null)
+  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -73,6 +74,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!token) {
       router.push('/auth/login')
     }
+
+    // Most users are on mobile: keep the background static there — it removes
+    // GPU-heavy blur compositing that causes backdrop-filter tearing on phones.
+    const mq = window.matchMedia('(max-width: 767px)')
+    setIsMobile(mq.matches)
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
   }, [router])
 
   // Service worker registration + forced update check so stale bundles don't stick
@@ -111,9 +120,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <Toaster position="top-center" toastOptions={{ style: { background: '#0F1629', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
       <div className="flex h-screen overflow-hidden bg-[var(--app-bg)] relative">
-        {/* Ambient morphing mesh background — the "morphe" (static in lite mode) */}
+        {/* Ambient morphing mesh background — the "morphe" (static in lite mode & on mobile) */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-          {lite ? (
+          {(lite || isMobile) ? (
             <>
               <div className="absolute rounded-full" style={{ width: '70vmax', height: '70vmax', borderRadius: '50%', background: `radial-gradient(circle at 30% 30%, rgba(${colors.glowRgb}, 0.10), transparent 60%)`, filter: 'blur(60px)', top: '-15%', left: '-10%', opacity: 0.7 }} />
               <div className="absolute rounded-full" style={{ width: '60vmax', height: '60vmax', borderRadius: '50%', background: `radial-gradient(circle at 60% 60%, rgba(96, 165, 250, 0.08), transparent 60%)`, filter: 'blur(60px)', bottom: '-15%', right: '-10%', opacity: 0.6 }} />

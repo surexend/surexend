@@ -612,3 +612,31 @@ html.lite-mode *::after {
   animation-iteration-count: 1 !important;
   transition-duration: 0.15s !important;
 }
+
+/* ── MOBILE HARDENING ──────────────────────────────────────────────────── */
+/* On phones, Android Chrome's backdrop-filter can tear into glitchy bands
+   when it sits over the big blurred gradient blobs. We already keep the
+   background static on small screens; this gives every glass surface an
+   opaque-ish base too, so nothing can bleed through weirdly. */
+@media (max-width: 767px) {
+  .liquid-glass {
+    background-color: rgba(11, 17, 34, 0.9);
+    background-image: none;
+  }
+  .liquid-glass-strong {
+    background-color: rgba(9, 14, 29, 0.95);
+    background-image: none;
+  }
+  .liquid-backdrop {
+    background: rgba(3, 7, 18, 0.86);
+  }
+  .glass-card {
+    background: linear-gradient(135deg, rgba(16, 23, 42, 0.97), rgba(21, 29, 51, 0.95));
+  }
+  [data-variant="gold"] .glass-card {
+    background: linear-gradient(135deg, rgba(212, 160, 23, 0.10), rgba(16, 23, 42, 0.97));
+  }
+  [data-variant="lemon"] .glass-card {
+    background: linear-gradient(135deg, rgba(181, 226, 61, 0.10), rgba(16, 23, 42, 0.97));
+  }
+}
