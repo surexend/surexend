@@ -109,12 +109,6 @@ export default function BillsPage() {
   })
   const realNgn = walletBal?.realNgn ?? walletBal?.ngnBalance ?? 0
 
-  // Admin kill switch — if bills are paused, show a fun message instead.
-  const { data: billsStatus } = useQuery({
-    queryKey: ['bill-status'],
-    queryFn: () => billsAPI.getStatus(),
-  })
-
   const { data: providers } = useQuery({
     queryKey: ['bill-providers', selectedCategory],
     queryFn: () => billsAPI.getProviders(selectedCategory as any, 'NG'),
@@ -223,14 +217,6 @@ export default function BillsPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 pt-4">
-        {billsStatus && !billsStatus.enabled ? (
-          <motion.div className="flex flex-col items-center justify-center text-center py-24 px-6"
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            <span className="text-5xl mb-5">😴</span>
-            <h2 className="text-white font-inter font-bold text-xl mb-2">Bills are napping</h2>
-            <p className="text-[#94A3B8] text-sm max-w-xs leading-relaxed">{billsStatus.message}</p>
-          </motion.div>
-        ) : (
         <AnimatePresence mode="wait">
           {/* STEP 1: Categories (4-Column Grid matching Images 2 & 3) */}
           {step === 'categories' && (
@@ -644,7 +630,6 @@ export default function BillsPage() {
           )}
 
         </AnimatePresence>
-        )}
       </div>
     </div>
   )

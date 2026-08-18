@@ -303,7 +303,7 @@ export class BillsService {
       });
     }
 
-    return { billsEnabled: (await this.getBillsStatus()).enabled, airtime, data };
+    return { airtime, data };
   }
 
   async setAirtimeMargin(provider: string, marginPct: number) {
@@ -364,29 +364,6 @@ export class BillsService {
     return { provider: net, planCode: code, enabled };
   }
 
-  // ── Global bills / VTU kill switch ──────────────────────────────────────
-
-  private get billsEnabledKey() { return 'bills.enabled'; }
-
-  private billsDisabledMessage(): string {
-    return 'Bills are having a little nap right now 😴 — try again soon!';
-  }
-
-  async setBillsEnabled(enabled: boolean) {
-    await this.prisma.setting.upsert({
-      where: { key: this.billsEnabledKey },
-      create: { key: this.billsEnabledKey, value: { enabled: !!enabled } },
-      update: { value: { enabled: !!enabled } },
-    });
-    return { enabled: !!enabled };
-  }
-
-  async getBillsStatus(): Promise<{ enabled: boolean; message: string }> {
-    const row = await this.prisma.setting.findUnique({ where: { key: this.billsEnabledKey } });
-    const enabled = row?.value && (row.value as any)?.enabled === true;
-    return { enabled, message: this.billsDisabledMessage() };
-  }
-
   async validateMeter(meter: string, provider: string) {
     try {
       const response = await axios.get(`${this.smartspeedBaseUrl()}/validatemeter`, {
@@ -407,10 +384,6 @@ export class BillsService {
 
   async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin: string, planCode?: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-
-    // Global kill switch: admin can pause all bills/VTU at once.
-    const status = await this.getBillsStatus();
-    if (!status.enabled) throw new BadRequestException(status.message);
 
     // Safety guard: bills spend REAL naira at Smartspeed, so only allow
     // accounts that have been funded with at least one completed deposit.

@@ -504,12 +504,6 @@ export const bankAPI = {
 
 // ── Bills API ─────────────────────────────────────────────────────────────
 export const billsAPI = {
-  getStatus: () =>
-    tryWithMock(
-      () => apiClient.get('/bills/status').then(r => r.data),
-      () => ({ enabled: true, message: '' })
-    ),
-
   getProviders: (type: 'airtime' | 'data' | 'electricity' | 'tv' | 'water', country?: string) =>
     tryWithMock(
       () => apiClient.get(`/bills/providers?type=${type}&country=${country || 'NG'}`).then(r => r.data),
@@ -730,8 +724,6 @@ export const adminAPI = {
     apiClient.put('/admin/pricing/data', { provider, planCode, sellPrice }).then(r => r.data),
   setDataPlanEnabled: (provider: string, planCode: string, enabled: boolean) =>
     apiClient.put('/admin/pricing/data-disable', { provider, planCode, enabled }).then(r => r.data),
-  setBillsEnabled: (enabled: boolean) =>
-    apiClient.put('/admin/pricing/bills-toggle', { enabled }).then(r => r.data),
   getKyc: (params?: { status?: string; page?: number; limit?: number }) =>
     apiClient.get('/admin/kyc', { params }).then(r => r.data),
   decideKyc: (id: string, body: { approve: boolean; reason?: string }) =>

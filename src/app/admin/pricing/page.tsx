@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { adminAPI } from '@/lib/api'
-import { Search, RefreshCw, Check, X, TrendingUp, TrendingDown, BadgePercent, Loader2, Power } from 'lucide-react'
+import { Search, RefreshCw, Check, X, TrendingUp, TrendingDown, BadgePercent, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const NETWORK_COLORS: Record<string, string> = {
@@ -91,16 +91,6 @@ export default function AdminPricingPage() {
     } catch { toast.error('Failed to save plan price') } finally { setSavingKey(null) }
   }
 
-  const toggleBills = async () => {
-    const next = !data?.billsEnabled
-    setSavingKey('bills')
-    try {
-      await adminAPI.setBillsEnabled(next)
-      toast.success(next ? 'Bills & VTU are LIVE' : 'Bills & VTU paused (users see a fun message)')
-      load()
-    } catch { toast.error('Failed to toggle bills') } finally { setSavingKey(null) }
-  }
-
   const togglePlan = async (provider: string, planCode: string, disabled: boolean) => {
     setSavingKey(`toggle:${provider}:${planCode}`)
     try {
@@ -133,32 +123,6 @@ export default function AdminPricingPage() {
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
         </button>
       </div>
-
-      {/* ── Global bills / VTU kill switch ── */}
-      <section className="liquid-glass p-5 relative overflow-hidden flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${data.billsEnabled ? 'bg-emerald-500/15' : 'bg-red-500/15'}`}>
-            <Power className={`w-5 h-5 ${data.billsEnabled ? 'text-emerald-400' : 'text-red-400'}`} />
-          </div>
-          <div>
-            <p className="text-white font-semibold text-sm">Bills &amp; VTU {data.billsEnabled ? 'LIVE' : 'PAUSED'}</p>
-            <p className="text-[11px] text-[#64748B] mt-0.5">
-              {data.billsEnabled
-                ? 'Users can buy airtime & data right now.'
-                : 'Paused — the app shows a fun "bills are napping" message.'}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={toggleBills}
-          disabled={savingKey === 'bills'}
-          className="px-4 py-2 rounded-xl text-xs font-bold text-black disabled:opacity-50 flex items-center gap-1.5"
-          style={{ background: data.billsEnabled ? 'linear-gradient(135deg, #EF4444, #EF4444CC)' : 'linear-gradient(135deg, #10B981, #10B981CC)', color: data.billsEnabled ? '#fff' : '#052014' }}
-        >
-          {savingKey === 'bills' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-          {data.billsEnabled ? 'Pause all bills' : 'Go live'}
-        </button>
-      </section>
 
       {/* ── Airtime ── */}
       <section className="liquid-glass p-5 relative overflow-hidden">

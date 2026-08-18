@@ -295,10 +295,3 @@ model ServicePricing {
   updatedAt DateTime @default(now())
   @@unique([category, provider, planCode])
 }
-
-// Simple admin-controlled key/value settings (e.g. global bills kill switch).
-model Setting {
-  key       String   @id
-  value     Json?
-  updatedAt DateTime @updatedAt
-}

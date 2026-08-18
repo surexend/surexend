@@ -94,11 +94,6 @@ export class AdminController {
     return this.adminService.setDataPlanEnabled(body.provider, body.planCode, body.enabled);
   }
 
-  @Put('pricing/bills-toggle')
-  setBillsEnabled(@Body() body: { enabled: boolean }) {
-    return this.adminService.setBillsEnabled(body.enabled);
-  }
-
   // ── Transaction detail (any user) ───────────────────────────────────────
 
   @Get('transactions/:id')

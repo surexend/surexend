@@ -13,11 +13,6 @@ export class BillsController {
     return this.billsService.getProviders(type, country);
   }
 
-  @Get('status')
-  async status() {
-    return this.billsService.getBillsStatus();
-  }
-
   @Get('data-plans')
   async getDataPlans(@Query('provider') provider: string) {
     return this.billsService.getDataPlans(provider);
