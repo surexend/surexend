@@ -19,6 +19,7 @@ import { ReferralsModule } from './referrals/referrals.module';
 import { SupportModule } from './support/support.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { AdminModule } from './admin/admin.module';
+import { CampaignsModule } from './campaigns/campaigns.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { AdminModule } from './admin/admin.module';
     SupportModule,
     WebhooksModule,
     AdminModule,
+    CampaignsModule,
   ],
 })
 export class AppModule {}

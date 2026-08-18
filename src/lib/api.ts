@@ -737,3 +737,10 @@ export const adminAPI = {
   decideKyc: (id: string, body: { approve: boolean; reason?: string }) =>
     apiClient.post(`/admin/kyc/${id}/decision`, body).then(r => r.data),
 }
+
+export const campaignsAPI = {
+  getLeaderboard: (type: 'bills' | 'crypto', range: 'day' | '7d' | '30d' | '365d' | 'all') =>
+    apiClient.get('/campaigns/leaderboard', { params: { type, range } }).then(r => r.data),
+  getMyStanding: () =>
+    apiClient.get('/campaigns/me').then(r => r.data),
+}

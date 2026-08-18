@@ -6,16 +6,18 @@ import { useTheme } from '@/context/ThemeContext'
 interface VerifiedCheckmarkProps {
   size?: number
   className?: string
-  variant?: 'gold' | 'lemon'
+  variant?: 'gold' | 'lemon' | 'black'
 }
 
 export default function VerifiedCheckmark({ size = 18, className = '', variant }: VerifiedCheckmarkProps) {
   const { variant: themeVariant, colors } = useTheme()
   const currentVariant = variant || themeVariant
   const isGold = currentVariant === 'gold'
+  const isBlack = currentVariant === 'black'
 
-  // Gradient colors for Gold and Lemon themes
-  const badgeColor = isGold ? '#D4A017' : '#B5E23D'
+  // Black tick (default membership) vs gold/lemon rosette (top-5 leaders)
+  const badgeColor = isBlack ? '#0A0F1E' : (isGold ? '#D4A017' : '#B5E23D')
+  const checkColor = isBlack ? '#FFFFFF' : '#0A0F1E'
 
   return (
     <svg
@@ -34,10 +36,10 @@ export default function VerifiedCheckmark({ size = 18, className = '', variant }
         fill={badgeColor}
         transform="translate(0.6, -0.6) scale(0.95)"
       />
-      {/* Checkmark tick in black */}
+      {/* Checkmark tick */}
       <path
         d="M9.8 15.2L6.3 11.7L7.7 10.3L9.8 12.4L15.3 6.9L16.7 8.3L9.8 15.2Z"
-        fill="#0A0F1E"
+        fill={checkColor}
         transform="translate(0.6, -0.6) scale(0.95)"
       />
     </svg>

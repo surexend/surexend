@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { walletAPI, transactionAPI, userAPI, conversionAPI, AFRICAN_CURRENCIES } from '@/lib/api'
+import { walletAPI, transactionAPI, userAPI, conversionAPI, campaignsAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
@@ -47,6 +47,7 @@ const LOCAL_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.na
 
 export default function DashboardPage() {
   const { variant, colors } = useTheme()
+  const isGold = variant === 'gold'
   const { lite } = useLite()
   const [showBalance, setShowBalance] = useState(true)
   // 'USD' = crypto wallet (USDC), 'LOCAL' = local currency wallet (NGN/GHS/etc)
@@ -217,6 +218,15 @@ export default function DashboardPage() {
     staleTime: 60000,
   })
 
+  // Campaign standing — decides the golden tick (top 5 per campaign).
+  const { data: standing } = useQuery({
+    queryKey: ['campaign-standing'],
+    queryFn: campaignsAPI.getMyStanding,
+    retry: false,
+    staleTime: 60000,
+  })
+  const isGolden = !!(standing?.bills?.golden || standing?.crypto?.golden)
+
   // Persisted wallet preference: 'AUTO' (highest balance) | 'USD' | 'LOCAL'
   const prefDefaultWallet = (profile?.defaultWallet as 'AUTO' | 'USD' | 'LOCAL' | undefined) || 'AUTO'
   // Persisted display currency from Profile → default local currency shown
@@ -332,7 +342,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-1 truncate">
             <span className="font-extrabold text-white truncate text-xs sm:text-sm">Welcome back, {profile?.firstName || 'there'}</span>
-            <VerifiedCheckmark size={16} variant={variant} />
+            <VerifiedCheckmark size={16} variant={isGolden ? (isGold ? 'gold' : 'lemon') : 'black'} />
           </div>
           <span className="hidden sm:inline text-[#64748B]">•</span>
           <span className="hidden sm:inline text-[#94A3B8] font-mono font-bold">@{profile?.surexTag || profile?.firstName?.toLowerCase() || 'surex'}</span>
@@ -347,7 +357,7 @@ export default function DashboardPage() {
               color: colors.primary,
             }}
           >
-            ✓ Verified
+            {isGolden ? '★ Top 5 Leaderboard' : '✓ Verified Member'}
           </span>
         </div>
       </div>
