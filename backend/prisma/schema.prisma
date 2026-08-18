@@ -291,6 +291,14 @@ model ServicePricing {
   costPrice Float?   // data: provider cost (info only; refreshed from catalog)
   sellPrice Float?   // data: admin override for this plan
   marginPct Float?   // data: network auto-margin; airtime: markup on face value
+  disabled  Boolean  @default(false) // admin turned this plan off
   updatedAt DateTime @default(now())
   @@unique([category, provider, planCode])
+}
+
+// Simple admin-controlled key/value settings (e.g. global bills kill switch).
+model Setting {
+  key       String   @id
+  value     Json?
+  updatedAt DateTime @updatedAt
 }

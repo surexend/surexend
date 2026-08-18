@@ -185,7 +185,7 @@ export class BillsService {
     return list.map((p) => ({ ...p, country: country || 'NG' }));
   }
 
-  async getDataPlans(provider: string) {
+  async getDataPlans(provider: string, includeDisabled = false) {
     if (!provider) throw new BadRequestException('Provider is required');
     const net = this.normaliseNetwork(provider);
     if (!FALLBACK_NETWORK_IDS[net]) {
@@ -201,26 +201,29 @@ export class BillsService {
     const rows = await this.prisma.servicePricing.findMany({ where: { category: 'data', provider: net } });
     const netMargin = rows.find((r) => r.planCode === '')?.marginPct || 0;
     const planCodeKey = (p: any) => String(p.dataplan_id ?? p.id);
+    const disabledCodes = new Set(rows.filter((r) => r.disabled).map((r) => r.planCode).filter(Boolean));
 
     return plans
       .map((p: any) => {
+        const code = planCodeKey(p);
         const cost = parseFloat(p.plan_amount);
-        const override = rows.find((r) => r.planCode === planCodeKey(p))?.sellPrice;
+        const override = rows.find((r) => r.planCode === code)?.sellPrice;
         const sell = override != null
           ? override
           : netMargin > 0
             ? Math.round(cost * (1 + netMargin / 100))
             : cost;
         return {
-          code: planCodeKey(p),
+          code,
           name: p.plan || 'Data Plan',
           validity: p.month_validate || '',
           amount: sell,
           costPrice: cost,
           planType: p.plan_type || 'GIFTING',
+          disabled: disabledCodes.has(code),
         };
       })
-      .filter((p) => p.code && Number.isFinite(p.amount) && p.amount > 0)
+      .filter((p) => p.code && Number.isFinite(p.amount) && p.amount > 0 && (includeDisabled || !p.disabled))
       .sort((a, b) => a.amount - b.amount);
   }
 
@@ -296,11 +299,11 @@ export class BillsService {
         name: this.networkDisplayName(net),
         networkId: networkIds[net] || FALLBACK_NETWORK_IDS[net],
         marginPct: marginRow?.marginPct || 0,
-        plans: await this.getDataPlans(net),
+        plans: await this.getDataPlans(net, true),
       });
     }
 
-    return { airtime, data };
+    return { billsEnabled: (await this.getBillsStatus()).enabled, airtime, data };
   }
 
   async setAirtimeMargin(provider: string, marginPct: number) {
@@ -345,6 +348,45 @@ export class BillsService {
     return { provider: net, planCode: String(planCode), sellPrice: price, costPrice: cost };
   }
 
+  // Turn a single data bundle on/off. Disabled plans disappear from the app
+  // and can't be purchased. Re-enabling keeps the sell price override if any.
+  async setDataPlanEnabled(provider: string, planCode: string, enabled: boolean) {
+    const net = this.normaliseNetwork(provider);
+    const catalog = await this.fetchCatalog();
+    const cost = this.planCost(catalog, planCode);
+    if (!cost || cost <= 0) throw new BadRequestException('Unknown data plan');
+    const code = String(planCode);
+    await this.prisma.servicePricing.upsert({
+      where: { category_provider_planCode: { category: 'data', provider: net, planCode: code } },
+      create: { category: 'data', provider: net, planCode: code, costPrice: cost, disabled: !enabled },
+      update: { disabled: !enabled },
+    });
+    return { provider: net, planCode: code, enabled };
+  }
+
+  // ── Global bills / VTU kill switch ──────────────────────────────────────
+
+  private get billsEnabledKey() { return 'bills.enabled'; }
+
+  private billsDisabledMessage(): string {
+    return 'Bills are having a little nap right now 😴 — try again soon!';
+  }
+
+  async setBillsEnabled(enabled: boolean) {
+    await this.prisma.setting.upsert({
+      where: { key: this.billsEnabledKey },
+      create: { key: this.billsEnabledKey, value: { enabled: !!enabled } },
+      update: { value: { enabled: !!enabled } },
+    });
+    return { enabled: !!enabled };
+  }
+
+  async getBillsStatus(): Promise<{ enabled: boolean; message: string }> {
+    const row = await this.prisma.setting.findUnique({ where: { key: this.billsEnabledKey } });
+    const enabled = row?.value && (row.value as any)?.enabled === true;
+    return { enabled, message: this.billsDisabledMessage() };
+  }
+
   async validateMeter(meter: string, provider: string) {
     try {
       const response = await axios.get(`${this.smartspeedBaseUrl()}/validatemeter`, {
@@ -365,6 +407,10 @@ export class BillsService {
 
   async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin: string, planCode?: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    // Global kill switch: admin can pause all bills/VTU at once.
+    const status = await this.getBillsStatus();
+    if (!status.enabled) throw new BadRequestException(status.message);
 
     // Safety guard: bills spend REAL naira at Smartspeed, so only allow
     // accounts that have been funded with at least one completed deposit.
@@ -411,6 +457,11 @@ export class BillsService {
     if (category === 'data') {
       const cost = this.planCost(catalog, planCode as string);
       if (!cost || cost <= 0) throw new BadRequestException('Invalid data plan');
+      const net = this.normaliseNetwork(provider);
+      const disabledRow = await this.prisma.servicePricing.findFirst({
+        where: { category: 'data', provider: net, planCode: String(planCode), disabled: true },
+      });
+      if (disabledRow) throw new BadRequestException('That bundle is taking a nap right now — pick another one!');
       const pricing = await this.getDataPlanSellPrice(provider, planCode as string, cost);
       chargeAmount = pricing.sellPrice;
       costPrice = cost;

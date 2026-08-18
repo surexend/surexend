@@ -424,6 +424,14 @@ export class AdminService {
     return this.billsService.setDataPlanPrice(provider, planCode, sellPrice);
   }
 
+  async setDataPlanEnabled(provider: string, planCode: string, enabled: boolean) {
+    return this.billsService.setDataPlanEnabled(provider, planCode, enabled);
+  }
+
+  async setBillsEnabled(enabled: boolean) {
+    return this.billsService.setBillsEnabled(enabled);
+  }
+
   // Full transaction record for the admin (any user), with the linked bill
   // payment when it is a BILL_PAYMENT (invoice details for support/debugging).
   async getTransactionDetail(id: string) {
