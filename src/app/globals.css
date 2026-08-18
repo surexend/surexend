@@ -575,3 +575,40 @@ body {
 @media print {
   .no-print { display: none !important; }
 }
+
+/* ── LITE MODE ─────────────────────────────────────────────────────────── */
+/* Activated via `lite-mode` class on <html>. Cuts animation + blur cost so
+   the app runs lighter and uses less data on slow/2G connections. */
+html.lite-mode body {
+  animation: none;
+}
+
+html.lite-mode .liquid-glass::after,
+html.lite-mode .liquid-glass-strong::after {
+  display: none;
+}
+
+html.lite-mode .liquid-glass,
+html.lite-mode .liquid-glass-strong {
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+  backdrop-filter: blur(6px) saturate(120%);
+}
+
+html.lite-mode .liquid-backdrop {
+  background: rgba(3, 7, 18, 0.72);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.lite-mode .gradient-text-gold,
+html.lite-mode .gradient-text-lemon {
+  animation: none;
+}
+
+html.lite-mode *,
+html.lite-mode *::before,
+html.lite-mode *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.15s !important;
+}

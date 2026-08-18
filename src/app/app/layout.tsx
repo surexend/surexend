@@ -15,6 +15,7 @@ import {
 import toast from 'react-hot-toast'
 import AISupportWidget from '@/components/AISupportWidget'
 import { notificationsAPI, userAPI } from '@/lib/api'
+import { useLite } from '@/lib/lite'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +28,7 @@ const queryClient = new QueryClient({
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { variant, colors, toggleVariant } = useTheme()
+  const { lite, toggle: toggleLite } = useLite()
   const router = useRouter()
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
@@ -109,40 +111,49 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <Toaster position="top-center" toastOptions={{ style: { background: '#0F1629', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
       <div className="flex h-screen overflow-hidden bg-[var(--app-bg)] relative">
-        {/* Ambient morphing mesh background — the "morphe" */}
+        {/* Ambient morphing mesh background — the "morphe" (static in lite mode) */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-          <motion.div
-            className="absolute rounded-full"
-            style={{
-              width: '70vmax',
-              height: '70vmax',
-              borderRadius: '50%',
-              background: `radial-gradient(circle at 30% 30%, rgba(${colors.glowRgb}, 0.10), transparent 60%)`,
-              filter: 'blur(60px)',
-              top: '-15%',
-              left: '-10%',
-              opacity: 0.7,
-              willChange: 'transform',
-            }}
-            animate={{ x: [0, 40, -20, 0], y: [0, -30, 15, 0] }}
-            transition={{ duration: 28, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <motion.div
-            className="absolute rounded-full"
-            style={{
-              width: '60vmax',
-              height: '60vmax',
-              borderRadius: '50%',
-              background: `radial-gradient(circle at 60% 60%, rgba(96, 165, 250, 0.08), transparent 60%)`,
-              filter: 'blur(60px)',
-              bottom: '-15%',
-              right: '-10%',
-              opacity: 0.6,
-              willChange: 'transform',
-            }}
-            animate={{ x: [0, -30, 20, 0], y: [0, 25, -15, 0] }}
-            transition={{ duration: 32, repeat: Infinity, ease: 'easeInOut', delay: 6 }}
-          />
+          {lite ? (
+            <>
+              <div className="absolute rounded-full" style={{ width: '70vmax', height: '70vmax', borderRadius: '50%', background: `radial-gradient(circle at 30% 30%, rgba(${colors.glowRgb}, 0.10), transparent 60%)`, filter: 'blur(60px)', top: '-15%', left: '-10%', opacity: 0.7 }} />
+              <div className="absolute rounded-full" style={{ width: '60vmax', height: '60vmax', borderRadius: '50%', background: `radial-gradient(circle at 60% 60%, rgba(96, 165, 250, 0.08), transparent 60%)`, filter: 'blur(60px)', bottom: '-15%', right: '-10%', opacity: 0.6 }} />
+            </>
+          ) : (
+            <>
+              <motion.div
+                className="absolute rounded-full"
+                style={{
+                  width: '70vmax',
+                  height: '70vmax',
+                  borderRadius: '50%',
+                  background: `radial-gradient(circle at 30% 30%, rgba(${colors.glowRgb}, 0.10), transparent 60%)`,
+                  filter: 'blur(60px)',
+                  top: '-15%',
+                  left: '-10%',
+                  opacity: 0.7,
+                  willChange: 'transform',
+                }}
+                animate={{ x: [0, 40, -20, 0], y: [0, -30, 15, 0] }}
+                transition={{ duration: 28, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <motion.div
+                className="absolute rounded-full"
+                style={{
+                  width: '60vmax',
+                  height: '60vmax',
+                  borderRadius: '50%',
+                  background: `radial-gradient(circle at 60% 60%, rgba(96, 165, 250, 0.08), transparent 60%)`,
+                  filter: 'blur(60px)',
+                  bottom: '-15%',
+                  right: '-10%',
+                  opacity: 0.6,
+                  willChange: 'transform',
+                }}
+                animate={{ x: [0, -30, 20, 0], y: [0, 25, -15, 0] }}
+                transition={{ duration: 32, repeat: Infinity, ease: 'easeInOut', delay: 6 }}
+              />
+            </>
+          )}
           <div className="absolute inset-0 bg-radial-vignette" />
         </div>
         {/* Desktop Sidebar */}
@@ -236,6 +247,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: colors.primary }}></span>
                 <span>{variant === 'gold' ? '🟡 Gold' : '🟢 Lemon'}</span>
+              </button>
+
+              {/* Lite mode toggle — cuts animations/blur, uses less data */}
+              <button
+                onClick={toggleLite}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all duration-300 shadow-md ${
+                  lite ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' : 'border-white/10 text-[#64748B] hover:text-white hover:bg-white/5'
+                }`}
+                title={lite ? 'Lite mode is ON (turn off for full effects)' : 'Lite mode (uses less data)'}
+                aria-pressed={lite}
+              >
+                <Zap className={`w-3 h-3 ${lite ? 'text-emerald-400' : ''}`} />
+                <span>Lite</span>
               </button>
 
               {profile?.role === 'ADMIN' && (

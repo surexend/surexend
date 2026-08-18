@@ -1,7 +1,7 @@
 {
   "name": "SureXend",
   "short_name": "SureXend",
-  "description": "Africa's premier stablecoin spending platform. Send, convert, pay bills with USDT & USDC.",
+  "description": "Africa's premier stablecoin spending platform. Send, convert, pay bills with USDC.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0A0F1E",
@@ -70,7 +70,7 @@
     {
       "name": "Send Money",
       "short_name": "Send",
-      "description": "Send USDT to anyone",
+      "description": "Send USDC to anyone",
       "url": "/app/send",
       "icons": [{ "src": "/icons/shortcut-send.png", "sizes": "96x96" }]
     },
@@ -87,15 +87,6 @@
       "description": "Pay airtime, data, utilities",
       "url": "/app/bills",
       "icons": [{ "src": "/icons/shortcut-bills.png", "sizes": "96x96" }]
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshots/dashboard.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "SureXend Dashboard"
     }
   ],
   "prefer_related_applications": false

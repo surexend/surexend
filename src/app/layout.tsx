@@ -72,6 +72,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${dmSans.variable}`}>
       <head>
+        {/* Lite mode — applied before paint to avoid a flash and to auto-detect slow connections */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var v=localStorage.getItem('surexend_lite_mode');var slow=['slow-2g','2g','3g'].indexOf((navigator.connection&&navigator.connection.effectiveType)||'')>-1;if(v==='on'||(v===null&&slow))document.documentElement.classList.add('lite-mode');}catch(e){}})();`,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* PWA meta tags */}

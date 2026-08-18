@@ -1,7 +1,8 @@
-const CACHE_NAME = 'surexend-v52'
+const CACHE_NAME = 'surexend-v53'
 const OFFLINE_URL = '/offline.html'
 
-// Assets to cache immediately on install
+// Assets to cache immediately on install. Each is added individually so a
+// single missing file can never break the whole install.
 const PRECACHE_URLS = [
   '/',
   '/offline.html',
@@ -14,7 +15,9 @@ const PRECACHE_URLS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS)
+      return Promise.all(
+        PRECACHE_URLS.map((url) => cache.add(url).catch(() => {}))
+      )
     }).then(() => self.skipWaiting())
   )
 })

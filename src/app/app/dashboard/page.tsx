@@ -5,13 +5,17 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check } from 'lucide-react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import dynamic from 'next/dynamic'
 import { walletAPI, transactionAPI, userAPI, conversionAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 import CurrencyFlag from '@/components/CurrencyFlag'
+import { useLite } from '@/lib/lite'
 import toast from 'react-hot-toast'
+
+// recharts is heavy (~130KB gz) — load it only when charts actually render.
+const ChartArea = dynamic(() => import('@/components/ChartArea'), { ssr: false })
 
 // Market pairs: USDC/USD (pegged at 1.0) + every supported local currency vs USD.
 // Rates come from a live public FX feed (er-api) and refresh on an interval so
@@ -43,6 +47,7 @@ const LOCAL_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.na
 
 export default function DashboardPage() {
   const { variant, colors } = useTheme()
+  const { lite } = useLite()
   const [showBalance, setShowBalance] = useState(true)
   // 'USD' = crypto wallet (USDC), 'LOCAL' = local currency wallet (NGN/GHS/etc)
   const [walletView, setWalletView] = useState<'USD' | 'LOCAL'>('USD')
@@ -612,64 +617,16 @@ export default function DashboardPage() {
         </div>
 
         {/* Large Market Chart */}
-        <div className="h-64 sm:h-72 w-full pt-2 relative">
-          {chartLoading && chartSeries.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center z-10">
-              <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-white/40 animate-spin" />
-            </div>
-          )}
-          <ResponsiveContainer width="100%" height="100%">
-            {chartSeries.length === 0 ? (
-              <div className="w-full h-full flex items-center justify-center">
-                <p className="text-xs text-[#64748B]">Loading live market data…</p>
-              </div>
-            ) : (
-            <AreaChart data={chartSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="cryptoMarketGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={colors.primary} stopOpacity={0.45} />
-                  <stop offset="100%" stopColor={colors.primary} stopOpacity={0.0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="time" stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} dy={5} minTickGap={40} />
-              <YAxis 
-                domain={chartYDomain} 
-                stroke="#64748B" 
-                fontSize={10} 
-                tickLine={false} 
-                axisLine={false} 
-                tickFormatter={(val) => `${MARKET_PAIRS.find(p => p.id === selectedMarket)?.symbol || '$'}${val.toLocaleString(undefined, { maximumFractionDigits: 4 })}`} 
-                width={70}
-              />
-              <Tooltip 
-                cursor={{ stroke: '#3B82F6', strokeDasharray: '4 4', strokeWidth: 1.5 }}
-                content={({ active, payload }: any) => {
-                  if (active && payload && payload.length) {
-                    const pair = MARKET_PAIRS.find(p => p.id === selectedMarket)
-                    return (
-                      <div className="bg-[#181F32] border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
-                        <p className="font-bold text-white text-sm">{pair?.symbol}{(payload[0].value)?.toLocaleString(undefined, { maximumFractionDigits: pair?.decimals ?? 4 })}</p>
-                        <p className="text-[10px] text-[#94A3B8] mt-0.5">{pair?.label} · {payload[0].payload.time}</p>
-                      </div>
-                    )
-                  }
-                  return null
-                }}
-              />
-              <Area 
-                type="monotone" 
-                dataKey="value" 
-                stroke={colors.primary} 
-                strokeWidth={2.5} 
-                fill="url(#cryptoMarketGradient)" 
-                activeDot={{ r: 6, fill: colors.primary, stroke: '#ffffff', strokeWidth: 2 }}
-                animationDuration={800}
-                isAnimationActive={chartSeries.length < 20}
-              />
-            </AreaChart>
-            )}
-          </ResponsiveContainer>
-        </div>
+        <ChartArea
+          section="market"
+          chartSeries={chartSeries}
+          chartYDomain={chartYDomain}
+          selectedMarket={selectedMarket}
+          marketPairs={MARKET_PAIRS}
+          chartLoading={chartLoading}
+          primary={colors.primary}
+          lite={lite}
+        />
       </motion.div>
 
       {/* 📊 SECOND ROW: CASH FLOW (MONEY IN vs MONEY OUT) & REFERRALS */}
@@ -711,41 +668,13 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="h-52 w-full pt-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="inflowGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10B981" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#10B981" stopOpacity={0.0} />
-                  </linearGradient>
-                  <linearGradient id="outflowGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#EF4444" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#EF4444" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="day" stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
-                <Tooltip 
-                  cursor={{ stroke: '#3B82F6', strokeDasharray: '4 4' }}
-                  content={({ active, payload }: any) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-[#181F32] border border-white/10 p-3 rounded-xl shadow-2xl">
-                          <p className="text-xs font-bold text-white mb-1.5">{payload[0]?.payload?.day}</p>
-                          <p className="text-xs text-[#10B981] font-semibold">Money In: +${payload[0]?.value}</p>
-                          <p className="text-xs text-[#EF4444] font-semibold mt-0.5">Money Out: -${payload[1]?.value}</p>
-                        </div>
-                      )
-                    }
-                    return null
-                  }}
-                />
-                <Area type="monotone" dataKey="moneyIn" stroke="#10B981" strokeWidth={2.5} fill="url(#inflowGradient)" />
-                <Area type="monotone" dataKey="moneyOut" stroke="#EF4444" strokeWidth={2.5} fill="url(#outflowGradient)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <ChartArea
+            section="cashflow"
+            cashFlowData={cashFlowData}
+            totalIn={totalIn}
+            totalOut={totalOut}
+            lite={lite}
+          />
         </motion.div>
 
         {/* Peak Referral Reward Card */}
