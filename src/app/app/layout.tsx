@@ -233,39 +233,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="hidden md:block">
               <h2 className="text-base font-bold text-white capitalize">{pathname.split('/').pop() || 'Dashboard'}</h2>
             </div>
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Theme Toggle Button */}
+            <div className="flex items-center gap-1.5 sm:gap-2.5">
+              {/* Theme Toggle — brand color dot (Gold / Lemon) */}
               <button
                 onClick={toggleVariant}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all duration-300 shadow-md"
+                className="w-9 h-9 rounded-xl border flex items-center justify-center transition-all duration-300 shadow-md flex-shrink-0 active:scale-95"
                 style={{
                   background: variant === 'gold' ? 'rgba(212, 160, 23, 0.15)' : 'rgba(181, 226, 61, 0.15)',
                   borderColor: variant === 'gold' ? 'rgba(212, 160, 23, 0.4)' : 'rgba(181, 226, 61, 0.4)',
-                  color: colors.primary,
                 }}
-                title="Switch Brand Theme (Gold / Lemon)"
+                title={`Theme: ${variant === 'gold' ? 'Gold' : 'Lemon'} — tap to switch`}
+                aria-label={`Switch theme to ${variant === 'gold' ? 'Lemon' : 'Gold'}`}
               >
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: colors.primary }}></span>
-                <span>{variant === 'gold' ? '🟡 Gold' : '🟢 Lemon'}</span>
+                <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ background: colors.primary }} />
               </button>
 
-              {/* Lite mode toggle — cuts animations/blur, uses less data */}
+              {/* Lite mode toggle — uses less data (animations & blur off) */}
               <button
                 onClick={toggleLite}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all duration-300 shadow-md ${
+                className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all duration-300 shadow-md flex-shrink-0 active:scale-95 ${
                   lite ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' : 'border-white/10 text-[#64748B] hover:text-white hover:bg-white/5'
                 }`}
-                title={lite ? 'Lite mode is ON (turn off for full effects)' : 'Lite mode (uses less data)'}
+                title={lite ? 'Lite mode ON — tap to restore full effects' : 'Lite mode — uses less data'}
+                aria-label="Toggle lite mode"
                 aria-pressed={lite}
               >
-                <Zap className={`w-3 h-3 ${lite ? 'text-emerald-400' : ''}`} />
-                <span>Lite</span>
+                <Zap className={`w-4 h-4 ${lite ? 'text-emerald-400' : ''}`} />
               </button>
 
               {profile?.role === 'ADMIN' && (
                 <Link
                   href="/admin"
-                  className="p-2 rounded-xl hover:bg-white/5 text-amber-400 hover:text-amber-300 transition-colors active:scale-95"
+                  className="p-2 rounded-xl hover:bg-white/5 text-amber-400 hover:text-amber-300 transition-colors active:scale-95 flex-shrink-0"
                   title="Admin Console"
                 >
                   <ShieldCheck className="w-5 h-5" />
@@ -275,7 +274,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {/* Notification Bell Button with badge & drawer */}
               <button 
                 onClick={() => { setShowNotifications(true); loadNotifications() }}
-                className="relative p-2 rounded-xl hover:bg-white/5 text-[#94A3B8] hover:text-white transition-colors active:scale-95"
+                className="relative p-2 rounded-xl hover:bg-white/5 text-[#94A3B8] hover:text-white transition-colors active:scale-95 flex-shrink-0"
                 title="Notifications"
               >
                 <Bell className="w-5 h-5" />
