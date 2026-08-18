@@ -208,7 +208,7 @@ export class AdminService {
         referralCode: true,
         createdAt: true,
         updatedAt: true,
-        wallet: { select: { usdtBalance: true, usdcBalance: true, lockedBalance: true, localBalance: true, localBalances: true, pendingBalance: true } },
+        wallet: { select: { usdtBalance: true, usdcBalance: true, lockedBalance: true, localBalance: true, localBalances: true, realLocalBalance: true, pendingBalance: true } },
         bankAccounts: true,
         kycDocuments: { orderBy: { createdAt: 'desc' } },
         referralsMade: { include: { referred: { select: { firstName: true, lastName: true, email: true, createdAt: true } } } },
@@ -263,14 +263,14 @@ export class AdminService {
     return { message: 'User deleted', id };
   }
 
-  // Manual deposits: admin credits a user's stablecoin balance (USDT/USDC)
-  // after confirming an off-platform transfer, and the user gets a completed
-  // RECEIVE transaction + notification. The credit is attributed to the admin.
+  // Manual deposits: admin credits a user's balance after confirming an
+  // off-platform transfer. USDT/USDC credit the stablecoin (testnet) wallet;
+  // NGN credits REAL naira (realLocalBalance) that can pay bills/withdrawals.
   async creditBalance(userId: string, adminId: string, body: { amount: number; currency?: string; note?: string }) {
     const amount = Number(body.amount);
     if (!amount || amount <= 0) throw new Error('Amount must be greater than zero');
     const currency = (body.currency || 'USDT').toUpperCase();
-    if (!['USDT', 'USDC'].includes(currency)) throw new Error('Currency must be USDT or USDC');
+    if (!['USDT', 'USDC', 'NGN'].includes(currency)) throw new Error('Currency must be USDT, USDC or NGN');
 
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
     if (!wallet) throw new Error('Wallet not found');
@@ -278,8 +278,29 @@ export class AdminService {
     const reference = `DEP-${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
     const result = await this.prisma.$transaction(async (prisma) => {
-      const field = currency === 'USDT' ? 'usdtBalance' : 'usdcBalance';
-      await prisma.wallet.update({ where: { userId }, data: { [field]: { increment: amount } } });
+      if (currency === 'NGN') {
+        let localBalances: Record<string, number> = {};
+        try {
+          const parsed = wallet.localBalances as any;
+          if (parsed && typeof parsed === 'object') localBalances = { ...parsed };
+        } catch { /* ignore */ }
+        localBalances['NGN'] = (localBalances['NGN'] || 0) + amount;
+        try {
+          await prisma.wallet.update({
+            where: { userId },
+            data: { localBalances, realLocalBalance: { increment: amount } },
+          });
+        } catch {
+          await prisma.wallet.update({
+            where: { userId },
+            data: { localBalance: localBalances['NGN'] ?? 0, realLocalBalance: { increment: amount } },
+          });
+        }
+      } else {
+        const field = currency === 'USDT' ? 'usdtBalance' : 'usdcBalance';
+        await prisma.wallet.update({ where: { userId }, data: { [field]: { increment: amount } } });
+      }
+
       const transaction = await prisma.transaction.create({
         data: {
           userId,

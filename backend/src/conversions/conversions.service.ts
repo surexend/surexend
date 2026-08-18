@@ -203,11 +203,24 @@ export class ConversionsService {
     };
   }
 
-  // Crypto-to-local (swap to naira) is paused at launch. Selling USDT/USDC
-  // for local currency is blocked until the payout integration is approved.
-  private assertConvertAllowed(fromCode: string, toCode: string) {
-    if (fromCode === 'USD' && toCode !== 'USD') {
-      throw new BadRequestException('Crypto-to-local conversion is paused for now. Please contact support for help with this.');
+  // Full isolation: crypto (testnet USDC) and local money never mix with real
+  // money. Swap always works, but the two pools are separate:
+  //   - Real naira (realLocalBalance, from bank transfers / admin NGN credits)
+  //     can ONLY pay bills or withdraw — it can never be swapped to crypto.
+  //   - Testnet funds (crypto + naira produced by swap) can swap freely but can
+  //     never pay bills or be withdrawn.
+  private assertSwapPool(amount: number, fromCode: string, localBalances: Record<string, number>, realLocalBalance: number) {
+    if (fromCode === 'USD') return;
+    const localAvailable = localBalances[fromCode] || 0;
+    if (fromCode === 'NGN') {
+      const real = Math.min(realLocalBalance || 0, localAvailable);
+      const swappable = Math.max(0, localAvailable - real);
+      if (swappable <= 0) {
+        throw new BadRequestException('Real naira can\'t be swapped yet — it\'s reserved for bills and withdrawals. Only testnet funds can swap.');
+      }
+      if (amount > swappable) {
+        throw new BadRequestException(`Only ₦${swappable.toFixed(2)} of testnet naira can be swapped. Real naira is reserved for bills and withdrawals.`);
+      }
     }
   }
 
@@ -219,7 +232,6 @@ export class ConversionsService {
     if (!(fromCode === 'USD' || LOCAL_CODES.includes(fromCode))) throw new BadRequestException(`Unsupported currency: ${fromCode}`);
     if (!(toCode === 'USD' || LOCAL_CODES.includes(toCode))) throw new BadRequestException(`Unsupported currency: ${toCode}`);
     if (!amount || amount <= 0) throw new BadRequestException('Amount must be greater than zero');
-    this.assertConvertAllowed(fromCode, toCode);
 
     const fromRate = fromCode === 'USD' ? 1 : getLocalRate(fromCode);
     const toRate = toCode === 'USD' ? 1 : getLocalRate(toCode);
@@ -242,7 +254,6 @@ export class ConversionsService {
     if (fromCode === toCode) throw new BadRequestException('From and To currencies must be different');
     if (!(fromCode === 'USD' || LOCAL_CODES.includes(fromCode))) throw new BadRequestException(`Unsupported currency: ${fromCode}`);
     if (!(toCode === 'USD' || LOCAL_CODES.includes(toCode))) throw new BadRequestException(`Unsupported currency: ${toCode}`);
-    this.assertConvertAllowed(fromCode, toCode);
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
@@ -260,7 +271,7 @@ export class ConversionsService {
     // column can't 500 conversion execution.
     let wallet = await this.prisma.wallet.findUnique({
       where: { userId },
-      select: { id: true, usdtBalance: true, usdcBalance: true, localBalance: true }
+      select: { id: true, usdtBalance: true, usdcBalance: true, localBalance: true, realLocalBalance: true }
     });
     if (!wallet) throw new BadRequestException('Wallet not found');
 
@@ -293,6 +304,8 @@ export class ConversionsService {
       if (localAvailable < amount) {
         throw new BadRequestException(`Insufficient ${fromCode} balance. Available: ${localAvailable.toFixed(2)} ${fromCode}`);
       }
+      // Full isolation — real money can never become crypto (and vice versa).
+      this.assertSwapPool(amount, fromCode, localBalances, wallet.realLocalBalance || 0);
     }
 
     const result = this.computeConversion(amount, fromCode, toCode, fromRate, toRate);

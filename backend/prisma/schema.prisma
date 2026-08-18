@@ -49,16 +49,17 @@ model User {
 }
 
 model Wallet {
-  id             String          @id @default(uuid())
-  userId         String          @unique
-  usdtBalance    Float           @default(0.0)
-  usdcBalance    Float           @default(0.0)
-  lockedBalance  Float           @default(0.0)
-  localBalance   Float           @default(0.0) // NGN/GHS/KES balance
-  localBalances  Json            @default("{}") // Per-currency local balances e.g. {"NGN":1000,"GHS":200}
-  pendingBalance Float           @default(0.0) // Incoming deposits not yet confirmed
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  addresses      WalletAddress[]
+  id               String          @id @default(uuid())
+  userId           String          @unique
+  usdtBalance      Float           @default(0.0)
+  usdcBalance      Float           @default(0.0)
+  lockedBalance    Float           @default(0.0)
+  localBalance     Float           @default(0.0) // NGN/GHS/KES balance
+  localBalances    Json            @default("{}") // Per-currency local balances e.g. {"NGN":1000,"GHS":200}
+  realLocalBalance Float           @default(0.0) // REAL local money (bank transfers / admin NGN credits) — only this pays bills & withdrawals
+  pendingBalance   Float           @default(0.0) // Incoming deposits not yet confirmed
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses        WalletAddress[]
 }
 
 model WalletAddress {

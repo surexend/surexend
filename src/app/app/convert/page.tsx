@@ -69,6 +69,8 @@ export default function ConvertPage() {
   // Balances per asset
   const localBalances: Record<string, number> = balanceData?.localBalances || {}
   const usdBalance = balanceData?.usdBalance ?? 0
+  const realNgn = balanceData?.realNgn ?? 0
+  const testnetNgn = balanceData?.testnetNgn ?? 0
   const getAssetBalance = (code: string) => code === 'USD' ? usdBalance : (localBalances[code] || 0)
 
   // Live/static rate for the "to" currency
@@ -91,7 +93,9 @@ export default function ConvertPage() {
 
   const fromSymbol = fromInfo?.symbol || ''
   const toSymbol = toInfo?.symbol || ''
-  const fromBalance = getAssetBalance(fromCode)
+  // Swappable balance: NGN shows only testnet naira — real naira is reserved for bills.
+  const fromBalance = fromCode === 'NGN' ? testnetNgn : getAssetBalance(fromCode)
+  const toBalance = toCode === 'NGN' ? testnetNgn : getAssetBalance(toCode)
   const fromRate = fromCode === 'USD' ? 1 : (assetInfo(fromCode)?.rate || 1500)
   const toRateForDisplay = toCode === 'USD' ? 1 : (assetInfo(toCode)?.rate || 1500)
 
@@ -107,9 +111,12 @@ export default function ConvertPage() {
 
   const handleNext = () => {
     if (fromCode === toCode) { toast.error('Select different currencies to convert'); return }
-    if (fromCode === 'USD' && toCode !== 'USD') { toast.error('Crypto-to-local conversion is paused for now. Please contact support.'); return }
+    if (fromCode === 'NGN' && numAmount > testnetNgn) {
+      toast.error('Real naira is reserved for bills. Only testnet naira can be swapped to crypto.')
+      return
+    }
     if (!numAmount || numAmount <= 0) { toast.error('Enter an amount'); return }
-    if (numAmount > fromBalance) { toast.error(`Insufficient balance in ${fromCode}`); return }
+    if (numAmount > fromBalance) { toast.error(`Insufficient swappable balance in ${fromCode}`); return }
     setStep(2)
   }
 
@@ -276,7 +283,7 @@ export default function ConvertPage() {
                   }}
                 >
                   <Wallet className="w-3.5 h-3.5" style={{ color: colors.primary }} />
-                  Bal: {toSymbol}{getAssetBalance(toCode).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  Bal: {toSymbol}{toBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </span>
               </div>
 
@@ -300,7 +307,12 @@ export default function ConvertPage() {
 
               {fromCode === 'USD' && toCode !== 'USD' && (
                 <div className="mt-3 rounded-xl px-4 py-3 text-xs text-amber-300 border border-amber-500/30 bg-amber-500/10">
-                  Crypto-to-local (swap to naira) is paused for now. You can still send, buy data & airtime, and hold stablecoins.
+                  Swapping crypto to naira creates <b>testnet naira</b> — great for testing, but it can't pay real bills or be withdrawn. Real bills are paid from the NGN wallet you fund by bank transfer. Crypto bill payments go live at mainnet launch.
+                </div>
+              )}
+              {fromCode === 'NGN' && (
+                <div className="mt-3 rounded-xl px-4 py-3 text-xs text-amber-300 border border-amber-500/30 bg-amber-500/10">
+                  Real naira (from bank transfers) is reserved for paying bills. Only your <b>testnet naira</b> (₦{testnetNgn.toLocaleString(undefined, { maximumFractionDigits: 2 })}) can be swapped to crypto.
                 </div>
               )}
             </div>
@@ -414,7 +426,7 @@ export default function ConvertPage() {
                 {filteredAssets.map((asset: any) => {
                   const isSelected = (pickerTarget === 'from' ? fromCode : toCode) === asset.code
                   const isUsd = asset.code === 'USD'
-                  const balance = getAssetBalance(asset.code)
+                  const balance = asset.code === 'NGN' ? testnetNgn : getAssetBalance(asset.code)
                   const assetRate = isUsd ? 1 : (asset.rate || 1500)
                   return (
                     <button
@@ -448,7 +460,9 @@ export default function ConvertPage() {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <p className="text-xs font-bold text-emerald-400">{isUsd ? 'Crypto balance' : `1 USD = ${asset.symbol}${assetRate.toLocaleString()}`}</p>
+                          <p className="text-xs font-bold text-emerald-400">
+                            {isUsd ? 'Crypto balance' : asset.code === 'NGN' ? 'Swappable naira' : `1 USD = ${asset.symbol}${assetRate.toLocaleString()}`}
+                          </p>
                           <p className="text-[11px] font-bold text-white">
                             Bal: {asset.symbol}{balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                           </p>

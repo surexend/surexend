@@ -4,14 +4,14 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
-import { billsAPI, conversionAPI } from '@/lib/api'
+import { billsAPI, walletAPI } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 import {
   Smartphone, Wifi, Zap, Tv, ChevronRight, ArrowLeft,
   Search, CheckCircle, AlertCircle, Loader2, Trophy,
   Lock, Coins, Gamepad2, Sun, GraduationCap, Globe,
   CreditCard, FileText, Heart, Landmark, ShoppingBag,
-  ShoppingCart, Store, Fuel, Plane, Grid, MoreHorizontal
+  ShoppingCart, Store, Fuel, Plane, Grid, MoreHorizontal, Wallet, NairaSign
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -89,16 +89,25 @@ export default function BillsPage() {
   const accentRgb = isGold ? '212, 160, 23' : '181, 226, 61'
   const accentHex = isGold ? '#D4A017' : '#B5E23D'
 
-  const [step, setStep] = useState<'categories' | 'providers' | 'form' | 'pin' | 'success' | 'failed'>('categories')
+  const [step, setStep] = useState<'categories' | 'providers' | 'form' | 'wallet' | 'pin' | 'success' | 'failed'>('categories')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedProvider, setSelectedProvider] = useState<any>(null)
   const [selectedPlan, setSelectedPlan] = useState<any>(null)
+  const [selectedWallet, setSelectedWallet] = useState<'NGN' | 'USD' | null>(null)
   const [recipient, setRecipient] = useState('')
   const [amount, setAmount] = useState('')
   const [meterName, setMeterName] = useState('')
   const [validating, setValidating] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<any>(null)
+
+  // Real wallet balances — shows what can actually pay bills.
+  const { data: walletBal } = useQuery({
+    queryKey: ['bill-wallet-balance'],
+    queryFn: () => walletAPI.getBalance(),
+    refetchInterval: 30000,
+  })
+  const realNgn = walletBal?.realNgn ?? walletBal?.ngnBalance ?? 0
 
   const { data: providers } = useQuery({
     queryKey: ['bill-providers', selectedCategory],
@@ -112,13 +121,14 @@ export default function BillsPage() {
     enabled: selectedCategory === 'data' && !!selectedProvider,
   })
 
-  // Live NGN→USD rate for the USDC estimate (never hardcoded)
-  const { data: rateInfo } = useQuery({
-    queryKey: ['ngn-rate'],
-    queryFn: () => conversionAPI.getRates('NGN'),
-    refetchInterval: 120000,
-  })
-  const ngntoUsdRate = rateInfo?.rate > 0 ? rateInfo.rate : 1500
+  // Total NGN the user will be charged (server recomputes this authoritatively).
+  const effectiveNgn = (() => {
+    if (!amount && !selectedPlan) return 0
+    if (selectedCategory === 'airtime' && (selectedProvider?.sellMarkup || 0) > 0) {
+      return (parseFloat(amount) || 0) * (1 + (selectedProvider.sellMarkup || 0) / 100)
+    }
+    return selectedPlan?.amount || parseFloat(amount) || 0
+  })()
 
   const validateMeter = async () => {
     if (!recipient || recipient.length < 10) return
@@ -166,6 +176,7 @@ export default function BillsPage() {
     setSelectedCategory(null)
     setSelectedProvider(null)
     setSelectedPlan(null)
+    setSelectedWallet(null)
     setRecipient('')
     setAmount('')
     setMeterName('')
@@ -184,7 +195,8 @@ export default function BillsPage() {
               onClick={() => {
                 if (step === 'providers') { setStep('categories'); setSelectedCategory(null) }
                 else if (step === 'form') { setStep('providers'); setSelectedProvider(null) }
-                else if (step === 'pin') setStep('form')
+                else if (step === 'wallet') setStep('form')
+                else if (step === 'pin') setStep('wallet')
                 else reset()
               }}
             >
@@ -197,6 +209,7 @@ export default function BillsPage() {
               {step === 'categories' && 'Airtime · Data · Electricity · TV · Utilities'}
               {step === 'providers' && `Select ${selectedCategory} provider`}
               {step === 'form' && selectedProvider?.name}
+              {step === 'wallet' && 'Choose a wallet'}
               {step === 'pin' && 'Enter your PIN'}
             </p>
           </div>
@@ -424,30 +437,30 @@ export default function BillsPage() {
                 </div>
               )}
 
-              {/* USDC equivalent */}
-              {(amount || selectedPlan) && (() => {
-                const effectiveNgn = selectedCategory === 'airtime' && (selectedProvider?.sellMarkup || 0) > 0
-                  ? (parseFloat(amount) || 0) * (1 + (selectedProvider.sellMarkup || 0) / 100)
-                  : (selectedPlan?.amount || parseFloat(amount) || 0)
-                return (
-                  <motion.div
-                    className="rounded-xl p-4 border"
-                    style={{ background: `rgba(${accentRgb}, 0.06)`, borderColor: `rgba(${accentRgb}, 0.15)` }}
-                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                  >
-                    <p className="text-[#94A3B8] text-xs mb-1">Estimated cost</p>
-                    <p className="text-white font-inter font-bold text-xl">
-                      ~{(effectiveNgn / ngntoUsdRate).toFixed(4)} USDC
+              {/* Estimated cost */}
+              {effectiveNgn > 0 && (
+                <motion.div
+                  className="rounded-xl p-4 border"
+                  style={{ background: `rgba(${accentRgb}, 0.06)`, borderColor: `rgba(${accentRgb}, 0.15)` }}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                >
+                  <p className="text-[#94A3B8] text-xs mb-1">Estimated cost (real naira)</p>
+                  <p className="text-white font-inter font-bold text-xl">₦{effectiveNgn.toLocaleString()}</p>
+                  {selectedCategory === 'airtime' && (selectedProvider?.sellMarkup || 0) > 0 && (
+                    <p className="text-[#94A3B8] text-[10px] mt-1">
+                      Includes {selectedProvider.sellMarkup}% markup
                     </p>
-                    <p className="text-[#64748B] text-xs mt-1">At current rate ₦{Math.round(ngntoUsdRate).toLocaleString()}/$1</p>
-                    {selectedCategory === 'airtime' && (selectedProvider?.sellMarkup || 0) > 0 && (
-                      <p className="text-[#94A3B8] text-[10px] mt-1">
-                        Includes {selectedProvider.sellMarkup}% markup (₦{effectiveNgn.toLocaleString()} total)
+                  )}
+                  {realNgn < effectiveNgn && (
+                    <div className="flex items-start gap-2 mt-2 rounded-lg bg-amber-500/10 border border-amber-500/25 p-2.5">
+                      <AlertCircle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-amber-300 text-[11px] leading-relaxed">
+                        You have ₦{realNgn.toLocaleString()} real naira — fund your NGN wallet via bank transfer on the Receive page.
                       </p>
-                    )}
-                  </motion.div>
-                )
-              })()}
+                    </div>
+                  )}
+                </motion.div>
+              )}
 
               <motion.button
                 className="w-full py-4 rounded-xl font-bold text-black"
@@ -457,7 +470,8 @@ export default function BillsPage() {
                   if (!recipient) return toast.error('Enter recipient number')
                   if (!selectedPlan && !amount) return toast.error('Select plan or enter amount')
                   if (selectedCategory === 'electricity' && !meterName) return toast.error('Please verify meter number first')
-                  setStep('pin')
+                  setSelectedWallet(null)
+                  setStep('wallet')
                 }}
               >
                 Continue to Payment
@@ -465,7 +479,64 @@ export default function BillsPage() {
             </motion.div>
           )}
 
-          {/* STEP 4: PIN */}
+          {/* STEP 4: Wallet picker — which wallet pays the bill */}
+          {step === 'wallet' && (
+            <motion.div key="wallet" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+              className="space-y-4 pt-2">
+              <div className="text-center mb-2">
+                <p className="text-white font-semibold text-lg">Pay with which wallet?</p>
+                <p className="text-[#64748B] text-sm mt-1">Cost: <span className="text-white font-bold">₦{effectiveNgn.toLocaleString()}</span></p>
+              </div>
+
+              <button
+                onClick={() => { setSelectedWallet('NGN'); setStep('pin') }}
+                className="w-full rounded-2xl p-5 text-left border transition-all relative overflow-hidden"
+                style={{
+                  background: 'rgba(16,185,129,0.05)',
+                  borderColor: 'rgba(16,185,129,0.25)',
+                }}
+                whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+              >
+                <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
+                  Recommended
+                </span>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
+                    <Landmark size={22} className="text-emerald-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-white font-bold text-sm">NGN Wallet <span className="text-emerald-400 text-xs">· Real money</span></p>
+                    <p className="text-[#94A3B8] text-xs mt-0.5">Available: <span className="text-white font-bold">₦{realNgn.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></p>
+                    <p className="text-[#64748B] text-[11px] mt-1 leading-snug">Funded by bank transfers. This is the only wallet that can pay real bills.</p>
+                  </div>
+                  <ChevronRight size={18} className="text-[#64748B]" />
+                </div>
+              </button>
+
+              <button
+                onClick={() => toast('USDC wallet payments go live at mainnet launch. For now, bills are paid with real naira.', { duration: 5000 })}
+                className="w-full rounded-2xl p-5 text-left border transition-all relative overflow-hidden opacity-80"
+                style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.08)' }}
+              >
+                <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-white/10 text-[#94A3B8] border border-white/15 uppercase tracking-wider flex items-center gap-1">
+                  <Lock size={9} /> After Mainnet
+                </span>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                    <Coins size={22} className="text-[#94A3B8]" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-white font-bold text-sm">USDC Wallet <span className="text-[#64748B] text-xs">· Crypto</span></p>
+                    <p className="text-[#94A3B8] text-xs mt-0.5">Locked until mainnet launch</p>
+                    <p className="text-[#64748B] text-[11px] mt-1 leading-snug">Testnet USDC can't pay real bills — you'll use it here once mainnet is live.</p>
+                  </div>
+                  <Lock size={18} className="text-[#475569]" />
+                </div>
+              </button>
+            </motion.div>
+          )}
+
+          {/* STEP 5: PIN */}
           {step === 'pin' && !processing && (
             <motion.div key="pin" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
               className="pt-4">
@@ -476,6 +547,9 @@ export default function BillsPage() {
                 </div>
                 <p className="text-white font-semibold text-lg">Confirm with PIN</p>
                 <p className="text-[#64748B] text-sm mt-1">Enter your 4-digit transaction PIN</p>
+                {selectedWallet === 'NGN' && (
+                  <p className="text-emerald-400 text-xs mt-2">Paying ₦{effectiveNgn.toLocaleString()} from your NGN wallet</p>
+                )}
               </div>
               <PinPad onComplete={executePurchase} accentHex={accentHex} accentRgb={accentRgb} />
             </motion.div>

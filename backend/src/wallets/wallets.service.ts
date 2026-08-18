@@ -222,6 +222,7 @@ export class WalletsService implements OnModuleInit {
         usdcBalance: true,
         lockedBalance: true,
         localBalance: true,
+        realLocalBalance: true,
         pendingBalance: true,
       }
     });
@@ -303,10 +304,14 @@ export class WalletsService implements OnModuleInit {
     }
 
     const ngnBalance = localBalances['NGN'] || 0;
+    const realNgn = wallet.realLocalBalance || 0;
+    const testnetNgn = Math.max(0, ngnBalance - realNgn);
 
     return {
       usdBalance: usdVal,
       ngnBalance,
+      realNgn,
+      testnetNgn,
       localBalances,
       lockedBalance: lockedVal,
       usdt: usdVal,

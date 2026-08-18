@@ -423,19 +423,31 @@ export class BillsService {
       providerAmount = amount;
     }
 
-    // Real NGN→USDT rate from the conversions service (live when YellowCard is
-    // configured, static table otherwise) — never a hardcoded rate.
+    // Bills are paid with REAL naira only. The funding guard above already
+    // requires a completed deposit; here we enforce that the naira is real
+    // (bank transfer / admin NGN credit) — never testnet swap funds.
     const rateInfo = await this.conversionsService.getRates('NGN');
     const rate = rateInfo.rate > 0 ? rateInfo.rate : 1500;
-    const usdtAmount = chargeAmount / rate;
 
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId },
-      select: { id: true, usdtBalance: true, usdcBalance: true }
+      select: { id: true, localBalances: true, realLocalBalance: true, localBalance: true }
     });
     if (!wallet) throw new BadRequestException('Wallet not found');
-    if ((wallet.usdtBalance || 0) < usdtAmount) {
-      throw new BadRequestException(`Insufficient balance. You need $${usdtAmount.toFixed(2)} USDT (${chargeAmount.toFixed(2)} NGN at ${rate} NGN/USD).`);
+
+    // Per-currency local balances (defensive against a missing column).
+    let localBalances: Record<string, number> = {};
+    try {
+      const parsed = wallet.localBalances as any;
+      if (parsed && typeof parsed === 'object') localBalances = { ...parsed };
+    } catch { /* ignore */ }
+    if ((wallet.localBalance || 0) > 0 && !localBalances['NGN']) localBalances['NGN'] = wallet.localBalance;
+
+    const realNgn = wallet.realLocalBalance || 0;
+    if (realNgn < chargeAmount) {
+      throw new BadRequestException(
+        `You need ₦${chargeAmount.toFixed(2)} of real naira for this bill — you have ₦${realNgn.toFixed(2)}. Crypto and testnet funds can't pay bills. Fund your NGN wallet via bank transfer on the Receive page.`
+      );
     }
 
     const reference = `SS-${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -454,10 +466,20 @@ export class BillsService {
     }
 
     return this.prisma.$transaction(async (prisma) => {
-      await prisma.wallet.update({
-        where: { id: wallet.id },
-        data: { usdtBalance: { decrement: usdtAmount } }
-      });
+      // Deduct REAL naira from both the total NGN pool and the real-money pool.
+      const ngnTotal = localBalances['NGN'] || 0;
+      const newLocalBalances = { ...localBalances, NGN: Math.max(0, ngnTotal - chargeAmount) };
+      try {
+        await prisma.wallet.update({
+          where: { id: wallet.id },
+          data: { localBalances: newLocalBalances, realLocalBalance: { decrement: chargeAmount } }
+        });
+      } catch {
+        await prisma.wallet.update({
+          where: { id: wallet.id },
+          data: { localBalance: newLocalBalances['NGN'] ?? 0, realLocalBalance: { decrement: chargeAmount } }
+        });
+      }
 
       const billPayment = await prisma.billPayment.create({
         data: {
@@ -466,7 +488,7 @@ export class BillsService {
           provider,
           recipient,
           amount: chargeAmount,
-          usdtAmount,
+          usdtAmount: chargeAmount / rate,
           reference,
           status: 'PENDING',
           metadata: billMeta
@@ -477,11 +499,11 @@ export class BillsService {
         userId,
         type: 'BILL_PAYMENT',
         status: 'PENDING',
-        amount: usdtAmount,
+        amount: chargeAmount,
         fee: 0,
-        currency: 'USDT',
+        currency: 'NGN',
         reference: billPayment.reference,
-        metadata: { provider, recipient, rate, ...(planCode ? { planCode, planName: planMeta?.name || null, planValidity: planMeta?.validity || null } : {}) }
+        metadata: { provider, recipient, rate, channel: 'real_ngn', ...(planCode ? { planCode, planName: planMeta?.name || null, planValidity: planMeta?.validity || null } : {}) }
       });
 
       try {
@@ -524,12 +546,19 @@ export class BillsService {
         const message = (error as Error).message;
         this.logger.error(`Smartspeed purchase failed (${reference}): ${message}`);
 
-        // Refund the USDT and mark both records FAILED — never keep funds for
-        // a bill that was not delivered.
-        await prisma.wallet.update({
-          where: { id: wallet.id },
-          data: { usdtBalance: { increment: usdtAmount } }
-        });
+        // Refund the real naira and mark both records FAILED — never keep funds
+        // for a bill that was not delivered.
+        try {
+          await prisma.wallet.update({
+            where: { id: wallet.id },
+            data: { localBalances: { ...newLocalBalances, NGN: (newLocalBalances['NGN'] || 0) + chargeAmount }, realLocalBalance: { increment: chargeAmount } }
+          });
+        } catch {
+          await prisma.wallet.update({
+            where: { id: wallet.id },
+            data: { localBalance: (newLocalBalances['NGN'] || 0) + chargeAmount, realLocalBalance: { increment: chargeAmount } }
+          });
+        }
         await prisma.billPayment.update({
           where: { id: billPayment.id },
           data: { status: 'FAILED', metadata: { ...(billPayment.metadata as object || {}), error: message } }

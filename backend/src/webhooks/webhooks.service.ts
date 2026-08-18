@@ -120,15 +120,19 @@ export class WebhooksService {
 
       localBalances[currency] = (localBalances[currency] || 0) + amount;
 
+      // Bank transfers are REAL money — also credit the real-money pool so the
+      // balance can pay bills / withdraw (and can never be swapped to crypto).
+      const realIncrement = currency === 'NGN' ? { realLocalBalance: { increment: amount } } : {};
+
       try {
         await prisma.wallet.update({
           where: { userId: virtualAccount.userId },
-          data: { localBalances },
+          data: { localBalances, ...realIncrement },
         });
       } catch {
         await prisma.wallet.update({
           where: { userId: virtualAccount.userId },
-          data: { localBalance: localBalances['NGN'] || 0 },
+          data: { localBalance: localBalances['NGN'] || 0, ...realIncrement },
         });
       }
 

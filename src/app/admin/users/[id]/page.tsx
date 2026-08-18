@@ -116,6 +116,7 @@ export default function AdminUserDetailPage() {
           <p className="text-[10px] uppercase tracking-wider text-[#64748B] font-semibold">Local Balance</p>
           <p className="text-xl font-black text-white mt-1.5">{fmt(w?.localBalance)}</p>
           <p className="text-[10px] text-[#64748B] mt-0.5">{JSON.stringify(w?.localBalances || {})}</p>
+          <p className="text-[10px] text-emerald-400 mt-1">Real naira (pays bills): ₦{fmt(w?.realLocalBalance)}</p>
         </div>
         <div className="liquid-glass p-4 relative overflow-hidden">
           <p className="text-[10px] uppercase tracking-wider text-[#64748B] font-semibold">Locked / Pending</p>
@@ -131,7 +132,7 @@ export default function AdminUserDetailPage() {
           </button>
         ) : (
           <div className="space-y-3">
-            <p className="text-xs text-[#94A3B8]">Credit this wallet after confirming an off-platform deposit (USDC). Creates a completed RECEIVE transaction and notifies the user.</p>
+            <p className="text-xs text-[#94A3B8]">Credit this wallet after confirming an off-platform deposit. USDC goes to the testnet crypto wallet; NGN is real money that can pay bills. Creates a completed RECEIVE transaction and notifies the user.</p>
             <div className="flex flex-wrap items-end gap-3">
               <label className="block">
                 <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Amount</span>
@@ -141,6 +142,7 @@ export default function AdminUserDetailPage() {
                 <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Currency</span>
                 <select value={creditCurrency} onChange={e => setCreditCurrency(e.target.value)} className="mt-1 bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none">
                   <option value="USDC">USDC</option>
+                  <option value="NGN">NGN (real naira)</option>
                 </select>
               </label>
               <label className="block flex-1 min-w-[160px]">
