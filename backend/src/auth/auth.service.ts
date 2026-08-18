@@ -83,9 +83,9 @@ export class AuthService {
       });
     }
 
-    await this.generateAndSendOtp(user.email, 'REGISTER');
+    const otpDelivered = await this.generateAndSendOtp(user.email, 'REGISTER');
 
-    return { message: 'Registration successful, OTP sent' };
+    return { message: 'Registration successful, OTP sent', otpDelivered };
   }
 
   async login(dto: LoginDto, req?: any) {
@@ -219,7 +219,7 @@ export class AuthService {
     };
   }
 
-  async generateAndSendOtp(identifier: string, type: string) {
+  async generateAndSendOtp(identifier: string, type: string): Promise<boolean> {
     // Basic rate limit check could go here
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60000); // 10 mins
@@ -233,7 +233,7 @@ export class AuthService {
       }
     });
 
-    await this.notificationsService.sendOTPEmail(identifier, code);
+    return this.notificationsService.sendOTPEmail(identifier, code);
   }
 
   // ── Passwordless OTP login (email) ──────────────────────────────────────
@@ -370,8 +370,8 @@ export class AuthService {
     if (!identifier) {
       throw new BadRequestException('Identifier is required');
     }
-    await this.generateAndSendOtp(identifier, type || 'REGISTER');
-    return { message: 'OTP resent successfully' };
+    const otpDelivered = await this.generateAndSendOtp(identifier, type || 'REGISTER');
+    return { message: 'OTP resent successfully', otpDelivered };
   }
 
   async refreshTokens(refreshToken: string) {

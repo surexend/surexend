@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, User, Mail, Phone, Lock, Hash } from 'lucide-react'
+import { Eye, EyeOff, User, Mail, MessageCircle, Lock, Hash } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
@@ -22,7 +22,7 @@ const registerSchema = z.object({
       message: '3-20 characters, letters, numbers or underscores',
     }),
   email: z.string().email('Invalid email address'),
-  phone: z.string().min(10, 'Invalid phone number'),
+  whatsapp: z.string().min(10, 'Enter a valid WhatsApp number'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string(),
   referralCode: z.string().optional(),
@@ -73,16 +73,19 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterFormValues) => {
     setIsLoading(true)
     try {
-      await authAPI.register({
+      const res = await authAPI.register({
         firstName: data.firstName,
         lastName: data.lastName,
         surexTag: data.surexTag?.trim() || undefined,
         email: data.email,
-        phone: '+234' + data.phone.replace(/^0+/, ''),
+        phone: '+234' + data.whatsapp.replace(/^0+/, ''),
         password: data.password,
         referralCode: data.referralCode
       })
       toast.success('Registration successful! Please verify your email.')
+      if (res.data?.otpDelivered === false) {
+        toast('Your code is still on its way — check your inbox (and spam). If it doesn\'t arrive, tap Resend on the next screen.', { duration: 6000 })
+      }
       router.push(`/auth/verify-otp?identifier=${encodeURIComponent(data.email)}&type=email`)
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Registration failed')
@@ -130,6 +133,30 @@ export default function RegisterPage() {
           <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
           <p className="text-[#94A3B8]">Join SureXend and manage your crypto seamlessly</p>
         </div>
+
+        {googleEnabled && (
+          <button
+            type="button"
+            onClick={googleLogin}
+            className="w-full mb-6 py-3.5 rounded-xl bg-white text-[#0A0F1E] font-bold text-sm flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors shadow-lg shadow-black/20"
+          >
+            <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 48 48">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            </svg>
+            Continue with Google
+          </button>
+        )}
+
+        {googleEnabled && (
+          <div className="mb-6 flex items-center gap-4">
+            <div className="flex-1 h-px bg-[rgba(255,255,255,0.1)]"></div>
+            <span className="text-sm text-[#64748B]">or sign up with email</span>
+            <div className="flex-1 h-px bg-[rgba(255,255,255,0.1)]"></div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -194,16 +221,17 @@ export default function RegisterPage() {
                 <span className="text-sm font-medium">NG +234</span>
               </div>
               <div className="relative flex-1">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] w-5 h-5 pointer-events-none z-10" />
+                <MessageCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] w-5 h-5 pointer-events-none z-10" />
                 <input
-                  {...register('phone')}
+                  {...register('whatsapp')}
                   type="tel"
-                  placeholder="Phone Number (e.g. 8012345678)"
+                  placeholder="WhatsApp Number (e.g. 8012345678)"
                   className={`input-field input-field-${variant} input-has-icon-left rounded-l-none`}
                 />
               </div>
             </div>
-            {errors.phone && <p className="text-[#EF4444] text-sm mt-1">{errors.phone.message}</p>}
+            <p className="text-[11px] text-[#64748B] mt-1">So we can reach you when you're away from the app. We never send codes here.</p>
+            {errors.whatsapp && <p className="text-[#EF4444] text-sm mt-1">{errors.whatsapp.message}</p>}
           </div>
 
           <div>
@@ -282,24 +310,6 @@ export default function RegisterPage() {
             )}
           </button>
         </form>
-
-        <div className="mt-6 flex items-center gap-4">
-          <div className="flex-1 h-px bg-[rgba(255,255,255,0.1)]"></div>
-          <span className="text-sm text-[#64748B]">or sign up with</span>
-          <div className="flex-1 h-px bg-[rgba(255,255,255,0.1)]"></div>
-        </div>
-
-        {googleEnabled && (
-          <button type="button" onClick={googleLogin} className="w-full mt-6 py-3 rounded-xl border border-[rgba(255,255,255,0.1)] flex items-center justify-center gap-3 hover:bg-[rgba(255,255,255,0.05)] transition-colors">
-          <svg className="w-5 h-5" viewBox="0 0 24 24">
-            <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-            <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-            <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-            <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-          </svg>
-          Google
-        </button>
-        )}
 
         <p className="mt-8 text-center text-[#94A3B8] text-sm">
           Already have an account?{' '}

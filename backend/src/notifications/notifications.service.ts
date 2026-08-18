@@ -52,18 +52,32 @@ export class NotificationsService {
     `;
   }
 
-  async sendOTPEmail(email: string, code: string) {
-    if (!this.resend) return;
-    const content = `<p>Your verification code is <strong style="color: #c0ff00; font-size: 24px;">${code}</strong>. It expires in 10 minutes.</p>`;
+  async sendOTPEmail(email: string, code: string): Promise<boolean> {
+    const fromEmail = this.configService.get('app.resend.fromEmail') || 'noreply@surexend.com';
+    if (!this.resend) {
+      // Never silently drop the code. In dev we print it so flows stay testable;
+      // in production we log loudly so a misconfigured server is impossible to miss.
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.warn(`[DEV] Resend not configured — OTP for ${email}: ${code}`);
+      } else {
+        this.logger.error(`Cannot send OTP to ${email}: RESEND_API_KEY is not configured on this server.`);
+      }
+      return false;
+    }
     try {
       await this.resend.emails.send({
-        from: this.configService.get('app.resend.fromEmail') || 'noreply@surexend.com',
+        from: fromEmail,
         to: email,
         subject: 'Your SureXend OTP Code',
-        html: this.getEmailTemplate(content),
+        html: this.getEmailTemplate(`<p>Your verification code is <strong style="color: #c0ff00; font-size: 24px;">${code}</strong>. It expires in 10 minutes.</p>`),
       });
-    } catch (error) {
-      this.logger.error(`Failed to send OTP email: ${error.message}`);
+      return true;
+    } catch (error: any) {
+      this.logger.error(`Failed to send OTP email to ${email}: ${error?.message || error}`);
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.warn(`[DEV] Resend send failed — OTP for ${email}: ${code}`);
+      }
+      return false;
     }
   }
 
