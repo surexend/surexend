@@ -116,12 +116,15 @@ function LoginForm() {
     setBiometricLoading(true)
     try {
       const { options, challengeId } = await passkeyAPI.loginBegin()
-      const response = await startAuthentication(options)
+      const response = await startAuthentication({ optionsJSON: options })
       await passkeyAPI.loginComplete(challengeId, response)
       toast.success('Login successful!')
       window.location.href = '/app/dashboard'
     } catch (error: any) {
-      toast.error(error.response?.data?.message || error?.name === 'NotAllowedError' ? 'Biometric sign-in cancelled' : (error?.message || 'Biometric sign-in failed'))
+      toast.error(
+        error?.response?.data?.message ||
+        (error?.name === 'NotAllowedError' ? 'Biometric sign-in cancelled' : error?.message || 'Biometric sign-in failed')
+      )
     } finally {
       setBiometricLoading(false)
     }

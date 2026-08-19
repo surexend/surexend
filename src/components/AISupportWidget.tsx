@@ -275,7 +275,7 @@ function ActionCard({
                 placeholder="••••"
               />
               <button
-                onClick={run}
+                onClick={() => run()}
                 disabled={busy}
                 className="px-4 rounded-xl bg-emerald-500 text-black text-xs font-bold disabled:opacity-50 transition-transform active:scale-95"
               >

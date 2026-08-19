@@ -45,12 +45,15 @@ export default function BiometricPage() {
     setEnrolling(true)
     try {
       const options = await passkeyAPI.registerBegin()
-      const response = await startRegistration(options)
+      const response = await startRegistration({ optionsJSON: options })
       await passkeyAPI.registerComplete(response)
       toast.success('Biometric added successfully')
       await loadDevices()
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.name === 'NotAllowedError' ? 'Registration cancelled' : (error?.message || 'Could not add biometric'))
+      toast.error(
+        error?.response?.data?.message ||
+        (error?.name === 'NotAllowedError' ? 'Registration cancelled' : error?.message || 'Could not add biometric')
+      )
     } finally {
       setEnrolling(false)
     }

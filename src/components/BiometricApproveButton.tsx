@@ -25,7 +25,7 @@ export default function BiometricApproveButton({
     setLoading(true)
     try {
       const options = await passkeyAPI.approveBegin()
-      const response = await startAuthentication(options)
+      const response = await startAuthentication({ optionsJSON: options })
       const { passkeyToken } = await passkeyAPI.approveComplete(response)
       onApproved(passkeyToken)
     } catch (error: any) {
