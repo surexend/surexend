@@ -1,9 +1,9 @@
-import { Injectable, BadRequestException, Logger, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { ConversionsService } from '../conversions/conversions.service';
-import * as bcrypt from 'bcryptjs';
+import { TransactionAuthService } from '../common/transaction-auth/transaction-auth.service';
 import axios from 'axios';
 
 // Static provider lists for categories not yet wired to Smartspeed (electricity,
@@ -57,6 +57,7 @@ export class BillsService {
     private configService: ConfigService,
     private transactionsService: TransactionsService,
     private conversionsService: ConversionsService,
+    private transactionAuth: TransactionAuthService,
   ) {}
 
   // ── Smartspeed plumbing ─────────────────────────────────────────────────
@@ -382,7 +383,7 @@ export class BillsService {
 
   // ── Purchase ────────────────────────────────────────────────────────────
 
-  async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin: string, planCode?: string) {
+  async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin?: string, planCode?: string, passkeyToken?: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     // Safety guard: bills spend REAL naira at Smartspeed, so only allow
@@ -398,15 +399,7 @@ export class BillsService {
       }
     }
 
-    // Testing mode: accept the default PIN if the user hasn't set a custom one yet
-    const testing = this.configService.get<{ enabled: boolean; defaultPin: string }>('app.testing');
-    if ((!user || !user.pin) && testing?.enabled) {
-      if (pin !== testing.defaultPin) throw new ForbiddenException('Invalid PIN');
-    } else {
-      if (!user || !user.pin) throw new ForbiddenException('PIN not set up');
-      const isPinValid = await bcrypt.compare(pin, user.pin);
-      if (!isPinValid) throw new ForbiddenException('Invalid PIN');
-    }
+    await this.transactionAuth.verify(user, { pin, passkeyToken });
 
     const category = (type || 'airtime').toLowerCase();
     if (!['airtime', 'data'].includes(category)) {

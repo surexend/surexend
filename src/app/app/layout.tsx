@@ -10,7 +10,7 @@ import { Toaster } from 'react-hot-toast'
 import { useTheme } from '@/context/ThemeContext'
 import { 
   Home, Send, Repeat, FileText, User, Bell, ArrowUpRight, ArrowDownLeft,
-  Smartphone, Building2, FileSpreadsheet, X, Check, ShieldCheck, Zap, Clock
+  Smartphone, Building2, FileSpreadsheet, X, Check, ShieldCheck, Zap, Clock, ChevronRight
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AISupportWidget from '@/components/AISupportWidget'
@@ -295,6 +295,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </header>
 
           <div className="flex-1 w-full max-w-full relative">
+            {profile && !profile.pinSet && !pathname.includes('/settings/change-pin') && (
+              <button
+                onClick={() => router.push('/app/settings/change-pin')}
+                className="mx-3 mt-2 w-[calc(100%-24px)] rounded-2xl p-3 flex items-center gap-3 border border-amber-500/30 bg-amber-500/10 text-left"
+              >
+                <ShieldCheck className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-amber-400">Set up your transaction PIN</p>
+                  <p className="text-[10px] text-[#94A3B8] truncate">Required before you can send, convert, pay bills, or withdraw</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-amber-400/70 flex-shrink-0" />
+              </button>
+            )}
             <AnimatePresence mode="wait">
               <motion.div
                 key={pathname}

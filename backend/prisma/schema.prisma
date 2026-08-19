@@ -44,8 +44,24 @@ model User {
   referredUsers   Referral[]      @relation("ReferredUser")
   referralsMade   Referral[]      @relation("Referrer")
   virtualAccounts VirtualAccount[]
+  passkeys        Passkey[]
 
   @@index([email, phone])
+}
+
+model Passkey {
+  id           String    @id @default(uuid())
+  userId       String
+  credentialId String    @unique
+  publicKey    String
+  counter      Int       @default(0)
+  transports   String    @default("[]")
+  deviceName   String    @default("")
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Wallet {

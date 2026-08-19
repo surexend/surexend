@@ -20,6 +20,7 @@ import { SupportModule } from './support/support.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { AdminModule } from './admin/admin.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
+import { PasskeysModule } from './passkeys/passkeys.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { CampaignsModule } from './campaigns/campaigns.module';
     WebhooksModule,
     AdminModule,
     CampaignsModule,
+    PasskeysModule,
   ],
 })
 export class AppModule {}

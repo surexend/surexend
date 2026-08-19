@@ -7,10 +7,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, Mail, Lock, KeyRound } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, KeyRound, Fingerprint } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { authAPI } from '@/lib/api'
+import { authAPI, passkeyAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
+import { startAuthentication } from '@simplewebauthn/browser'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -109,6 +110,23 @@ function LoginForm() {
     }
   }
 
+  const [biometricLoading, setBiometricLoading] = useState(false)
+
+  const biometricLogin = async () => {
+    setBiometricLoading(true)
+    try {
+      const { options, challengeId } = await passkeyAPI.loginBegin()
+      const response = await startAuthentication(options)
+      await passkeyAPI.loginComplete(challengeId, response)
+      toast.success('Login successful!')
+      window.location.href = '/app/dashboard'
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || error?.name === 'NotAllowedError' ? 'Biometric sign-in cancelled' : (error?.message || 'Biometric sign-in failed'))
+    } finally {
+      setBiometricLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden" style={{ background: 'var(--app-bg)' }}>
       {/* Background glowing orb */}
@@ -158,6 +176,16 @@ function LoginForm() {
             <div className="flex-1 h-px bg-[rgba(255,255,255,0.1)]"></div>
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={biometricLogin}
+          disabled={biometricLoading}
+          className="w-full mb-6 py-3.5 rounded-xl border border-white/10 bg-white/[0.03] text-white font-semibold text-sm flex items-center justify-center gap-2.5 hover:bg-white/[0.07] transition-colors disabled:opacity-60"
+        >
+          <Fingerprint className="w-5 h-5" style={{ color: colors.primary }} />
+          {biometricLoading ? 'Checking your biometric…' : 'Sign in with Face ID or fingerprint'}
+        </button>
 
         {!codeMode ? (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">

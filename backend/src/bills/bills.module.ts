@@ -3,9 +3,10 @@ import { BillsService } from './bills.service';
 import { BillsController } from './bills.controller';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ConversionsModule } from '../conversions/conversions.module';
+import { TransactionAuthModule } from '../common/transaction-auth/transaction-auth.module';
 
 @Module({
-  imports: [TransactionsModule, ConversionsModule],
+  imports: [TransactionsModule, ConversionsModule, TransactionAuthModule],
   providers: [BillsService],
   controllers: [BillsController],
   exports: [BillsService],

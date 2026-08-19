@@ -48,7 +48,8 @@ export class UsersService {
     }
 
     const { pin, ...profile } = user;
-    return { ...profile, pinSet: !!pin };
+    const passkeyCount = await this.prisma.passkey.count({ where: { userId } });
+    return { ...profile, pinSet: !!pin, passkeysEnabled: passkeyCount > 0 };
   }
 
   async updatePreferences(

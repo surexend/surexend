@@ -39,7 +39,8 @@ export class ConversionsController {
       dto.from,
       dto.to,
       dto.amount,
-      dto.pin
+      dto.pin,
+      dto.passkeyToken
     );
   }
 }

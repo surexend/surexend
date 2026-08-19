@@ -9,6 +9,7 @@ import { conversionAPI, walletAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
 import CurrencyFlag from '@/components/CurrencyFlag'
+import BiometricApproveButton from '@/components/BiometricApproveButton'
 
 const USD_ASSET = { code: 'USD', name: 'US Dollar', symbol: '$', flag: '💵', countryCode: 'US' }
 
@@ -138,17 +139,17 @@ export default function ConvertPage() {
     }
   }
 
-  const executeConversion = async (finalPin: string) => {
+  const executeConversion = async (finalPin?: string, passkeyToken?: string) => {
     setIsLoading(true)
     try {
-      const res = await conversionAPI.execute({ from: fromCode, to: toCode, amount: numAmount, pin: finalPin })
+      const res = await conversionAPI.execute({ from: fromCode, to: toCode, amount: numAmount, pin: finalPin, passkeyToken })
       setResult(res)
       setStep(3)
       refetchBalance()
     } catch (error: any) {
       const msg = error.response?.data?.message || 'Conversion failed'
       toast.error(msg)
-      if (msg === 'PIN not set up') {
+      if (msg && msg.toLowerCase().includes('pin not set up')) {
         setStep(1)
         router.push('/app/settings/change-pin')
       }
@@ -334,9 +335,6 @@ export default function ConvertPage() {
           <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="liquid-glass p-6 text-center space-y-6 rounded-2xl">
             <button onClick={() => setStep(1)} className="text-[#94A3B8] hover:text-white text-xs font-semibold flex items-center gap-1">← Back</button>
             <h2 className="text-xl font-bold text-white">Enter 4-Digit PIN</h2>
-            {process.env.NEXT_PUBLIC_TESTING_ENABLED === 'true' && (
-              <p className="text-[10px] text-[#F59E0B] font-semibold">Testing mode: use default PIN 0000 if you haven't set one</p>
-            )}
             <p className="text-xs text-[#94A3B8]">
               Convert {fromSymbol}{numAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {fromCode} → {toSymbol}{(preview?.receiveAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {toCode}
             </p>
@@ -355,6 +353,13 @@ export default function ConvertPage() {
               <button onClick={() => handlePinInput('0')} className="p-3.5 rounded-2xl bg-white/6 hover:bg-white/12 text-white font-bold text-lg active:scale-95">0</button>
               <button onClick={handlePinDelete} className="p-3.5 rounded-2xl bg-white/6 text-red-400 font-bold text-lg active:scale-95">⌫</button>
             </div>
+
+            <div className="flex items-center gap-3 my-2">
+              <div className="flex-1 h-px bg-white/5"></div>
+              <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
+              <div className="flex-1 h-px bg-white/5"></div>
+            </div>
+            <BiometricApproveButton onApproved={(token) => executeConversion(undefined, token)} disabled={isLoading} />
           </motion.div>
         )}
 

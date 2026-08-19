@@ -10,6 +10,7 @@ import Confetti from 'react-confetti'
 import toast from 'react-hot-toast'
 import { walletAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
+import BiometricApproveButton from '@/components/BiometricApproveButton'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -121,14 +122,15 @@ export default function SendPage() {
     }
   }
 
-  const executeSend = async (finalPin: string) => {
+  const executeSend = async (finalPin?: string, passkeyToken?: string) => {
     setIsLoading(true)
     try {
       await walletAPI.send({
         address: formData.address!,
         amount: formData.amount!,
         network: sendMode === 'TAG' ? 'SUREX_TAG' : formData.network!,
-        pin: finalPin
+        pin: finalPin,
+        passkeyToken,
       })
       setIsSuccess(true)
       setStep(5)
@@ -389,6 +391,13 @@ export default function SendPage() {
               <button onClick={() => handlePinInput('0')} className="p-3 rounded-xl bg-white/5 text-white font-bold text-lg">0</button>
               <button onClick={handlePinDelete} className="p-3 rounded-xl bg-white/5 text-red-400 font-bold text-sm">⌫</button>
             </div>
+
+            <div className="flex items-center gap-3 my-2">
+              <div className="flex-1 h-px bg-white/5"></div>
+              <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
+              <div className="flex-1 h-px bg-white/5"></div>
+            </div>
+            <BiometricApproveButton onApproved={(token) => executeSend(undefined, token)} disabled={isLoading} />
           </motion.div>
         )}
 

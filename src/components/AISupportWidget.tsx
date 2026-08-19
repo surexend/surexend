@@ -7,6 +7,7 @@ import { X, Send, Bot, Sparkles, RefreshCw, ShieldCheck, Download, KeyRound } fr
 import toast from 'react-hot-toast'
 import { walletAPI, billsAPI, transactionAPI, supportAPI, conversionAPI } from '@/lib/api'
 import { renderReceiptCanvas, downloadReceiptFile } from '@/lib/receipt'
+import BiometricApproveButton from '@/components/BiometricApproveButton'
 
 interface AssistantAction {
   type: 'send' | 'bill' | 'convert' | 'receipt' | null
@@ -84,27 +85,27 @@ function ActionCard({
   const inputCls = 'w-full px-3 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors'
   const labelCls = 'text-[10px] text-[#64748B] font-semibold uppercase tracking-wide mb-1 block'
 
-  const run = async () => {
-    if (!pin || pin.length !== 4) { setPinError('Enter your 4-digit PIN'); return }
+  const run = async (passkeyToken?: string) => {
+    if (!passkeyToken && (!pin || pin.length !== 4)) { setPinError('Enter your 4-digit PIN'); return }
     setPinError('')
     setBusy(true)
     onBusy(true)
     try {
       if (isSend) {
         const r = await walletAPI.send(
-          { address: form.to, amount: Number(form.amount), network: form.network, pin },
+          { address: form.to, amount: Number(form.amount), network: form.network, pin, passkeyToken },
           { 'X-Txn-Source': 'chat' },
         )
         onDone({ ok: true, text: `Sent ${Number(form.amount).toLocaleString()} USDC to ${form.to}. Reference: ${r.reference}`, ref: r.reference })
       } else if (isBill) {
         const r = await billsAPI.purchase(
-          { type: form.type, provider: form.provider, recipient: form.recipient, amount: Number(form.amount), pin },
+          { type: form.type, provider: form.provider, recipient: form.recipient, amount: Number(form.amount), pin, passkeyToken },
           { 'X-Txn-Source': 'chat' },
         )
         onDone({ ok: true, text: `${String(form.provider).toUpperCase()} ${form.type} of ${Number(form.amount).toLocaleString()} paid to ${form.recipient}. Reference: ${r.reference}`, ref: r.reference })
       } else if (isConvert) {
         const r = await conversionAPI.execute(
-          { from: form.from, to: form.to, amount: Number(form.amount), pin },
+          { from: form.from, to: form.to, amount: Number(form.amount), pin, passkeyToken },
           { 'X-Txn-Source': 'chat' },
         )
         onDone({ ok: true, text: `Converted ${Number(form.amount).toLocaleString()} ${form.from} to ${form.to}${r.receiveAmount ? ` (${Number(r.receiveAmount).toLocaleString()} ${form.to})` : ''}. Reference: ${r.reference}`, ref: r.reference })
@@ -282,6 +283,12 @@ function ActionCard({
               </button>
             </div>
             {pinError && <p className="text-[10px] text-red-400">{pinError}</p>}
+            <div className="flex items-center gap-2 pt-1">
+              <div className="flex-1 h-px bg-white/10"></div>
+              <span className="text-[9px] text-[#64748B] uppercase tracking-wider">or</span>
+              <div className="flex-1 h-px bg-white/10"></div>
+            </div>
+            <BiometricApproveButton onApproved={(token) => run(token)} accentRgb={accentRgb} disabled={busy} label="Use Face ID or fingerprint" />
           </div>
         )}
       </div>

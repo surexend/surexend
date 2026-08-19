@@ -26,6 +26,7 @@
     "@nestjs/schedule": "^4.0.1",
     "@nestjs/throttler": "^5.1.1",
     "@prisma/client": "^5.16.1",
+    "@simplewebauthn/server": "^11.0.0",
     "@types/bcryptjs": "^2.4.6",
     "axios": "^1.7.2",
     "bcrypt": "^5.1.1",

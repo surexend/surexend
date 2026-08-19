@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import { useQuery } from '@tanstack/react-query'
 import { walletAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import CurrencyFlag from '@/components/CurrencyFlag'
+import BiometricApproveButton from '@/components/BiometricApproveButton'
 
 // ── Fiat Options (all African countries) ──────────────────────────────────
 const FIAT_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.name, flag: c.flag, symbol: c.symbol, rate: c.rate, countryCode: c.countryCode }))
@@ -28,17 +29,17 @@ function PinPad({ onComplete, accentHex, accentRgb }: {
 
   const tap = (k: string) => {
     if (k === '⌫') setPin(p => p.slice(0, -1))
-    else if (pin.length < 6) {
+    else if (pin.length < 4) {
       const next = pin + k
       setPin(next)
-      if (next.length === 6) setTimeout(() => onComplete(next), 150)
+      if (next.length === 4) setTimeout(() => onComplete(next), 150)
     }
   }
 
   return (
     <div>
       <div className="flex justify-center gap-3 mb-8">
-        {Array.from({ length: 6 }, (_, i) => (
+        {Array.from({ length: 4 }, (_, i) => (
           <motion.div key={i}
             className="w-4 h-4 rounded-full border-2 transition-all"
             style={i < pin.length
@@ -103,7 +104,7 @@ export default function WithdrawPage() {
     setStep('bank')
   }
 
-  const handleExecute = (pin: string) => {
+  const handleExecute = (_pin?: string, _passkeyToken?: string) => {
     setIsProcessing(true)
     setTimeout(() => {
       setIsProcessing(false)
@@ -268,7 +269,15 @@ export default function WithdrawPage() {
                   <p className="text-sm font-semibold text-white">Processing payout via Flutterwave...</p>
                 </div>
               ) : (
-                <PinPad onComplete={handleExecute} accentHex={accentHex} accentRgb={accentRgb} />
+                <>
+                  <PinPad onComplete={handleExecute} accentHex={accentHex} accentRgb={accentRgb} />
+                  <div className="flex items-center gap-3 my-3">
+                    <div className="flex-1 h-px bg-white/5"></div>
+                    <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
+                    <div className="flex-1 h-px bg-white/5"></div>
+                  </div>
+                  <BiometricApproveButton onApproved={(token) => handleExecute(undefined, token)} accentHex={accentHex} accentRgb={accentRgb} disabled={isProcessing} />
+                </>
               )}
             </div>
           </motion.div>

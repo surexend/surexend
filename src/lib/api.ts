@@ -243,6 +243,30 @@ export const authAPI = {
   },
 }
 
+// ── Passkey / Biometrics API (WebAuthn) ───────────────────────────────────
+export const passkeyAPI = {
+  registerBegin: () => apiClient.post('/auth/passkey/register/begin').then(r => r.data),
+  registerComplete: (response: any, deviceName?: string) =>
+    apiClient.post('/auth/passkey/register/complete', { response, deviceName }),
+
+  loginBegin: (email?: string) =>
+    apiClient.post('/auth/passkey/login/begin', { email }).then(r => r.data),
+  loginComplete: async (challengeId: string, response: any) => {
+    const result = await apiClient.post('/auth/passkey/login/complete', { challengeId, response })
+    if (typeof window !== 'undefined' && result.data?.accessToken) {
+      storeTokens(result.data.accessToken, result.data.refreshToken)
+    }
+    return result
+  },
+
+  approveBegin: () => apiClient.post('/auth/passkey/approve/begin').then(r => r.data),
+  approveComplete: (response: any) =>
+    apiClient.post('/auth/passkey/approve/complete', { response }).then(r => r.data as { passkeyToken: string }),
+
+  listDevices: () => apiClient.get('/auth/passkey/devices').then(r => r.data as any[]),
+  removeDevice: (id: string) => apiClient.delete(`/auth/passkey/devices/${id}`),
+}
+
 // ── Wallet API ────────────────────────────────────────────────────────────
 export const walletAPI = {
   getBalance: () =>
@@ -281,13 +305,14 @@ export const walletAPI = {
       }
     ),
 
-  send: (payload: { address: string; amount: number; network: string; pin: string }, headers?: Record<string, string>) =>
+  send: (payload: { address: string; amount: number; network: string; pin?: string; passkeyToken?: string }, headers?: Record<string, string>) =>
     tryWithMock(
       () => apiClient.post('/wallets/send', {
         toAddress: payload.address,
         amount: payload.amount,
         network: payload.network,
         pin: payload.pin,
+        passkeyToken: payload.passkeyToken,
       }, { timeout: 180000, headers }).then(r => r.data),
       () => ({
         success: true,
@@ -433,13 +458,14 @@ export const conversionAPI = {
       }
     ),
 
-  execute: (payload: { from: string; to: string; amount: number; pin: string }, headers?: Record<string, string>) =>
+  execute: (payload: { from: string; to: string; amount: number; pin?: string; passkeyToken?: string }, headers?: Record<string, string>) =>
     tryWithMock(
       () => apiClient.post('/conversions/execute', {
         from: payload.from,
         to: payload.to,
         amount: payload.amount,
         pin: payload.pin,
+        passkeyToken: payload.passkeyToken,
       }, { headers }).then(r => r.data),
       () => ({
         success: true,
@@ -528,7 +554,7 @@ export const billsAPI = {
 
   purchase: (payload: {
     type: string; provider: string; recipient: string;
-    amount?: number; planCode?: string; pin: string
+    amount?: number; planCode?: string; pin?: string; passkeyToken?: string
   }, headers?: Record<string, string>) =>
     tryWithMock(
       () => apiClient.post('/bills/purchase', payload, { headers }).then(r => r.data),

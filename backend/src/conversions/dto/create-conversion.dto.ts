@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsNotEmpty, Min } from 'class-validator';
+import { IsString, IsNumber, IsNotEmpty, Min, IsOptional } from 'class-validator';
 
 export class CreateConversionDto {
   @IsString()
@@ -13,9 +13,13 @@ export class CreateConversionDto {
   @Min(1)
   amount: number;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  pin: string;
+  pin?: string;
+
+  @IsOptional()
+  @IsString()
+  passkeyToken?: string;
 }
 
 export class PreviewConversionDto {

@@ -14,6 +14,11 @@ export default registerAs('app', () => ({
     secret: process.env.JWT_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
   },
+  webauthn: {
+    rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
+    rpName: process.env.WEBAUTHN_RP_NAME || 'SureXend',
+    origin: process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000',
+  },
   flutterwave: {
     publicKey: process.env.FLUTTERWAVE_PUBLIC_KEY,
     secretKey: process.env.FLUTTERWAVE_SECRET_KEY,

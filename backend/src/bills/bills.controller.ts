@@ -30,9 +30,10 @@ export class BillsController {
     @Body('provider') provider: string,
     @Body('recipient') recipient: string,
     @Body('amount') amount: number,
-    @Body('pin') pin: string,
+    @Body('pin') pin?: string,
     @Body('planCode') planCode?: string,
+    @Body('passkeyToken') passkeyToken?: string,
   ) {
-    return this.billsService.purchaseBill(user.id, type, provider, recipient, amount, pin, planCode);
+    return this.billsService.purchaseBill(user.id, type, provider, recipient, amount, pin, planCode, passkeyToken);
   }
 }

@@ -6,6 +6,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
 import { billsAPI, walletAPI } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
+import BiometricApproveButton from '@/components/BiometricApproveButton'
 import {
   Smartphone, Wifi, Zap, Tv, ChevronRight, ArrowLeft,
   Search, CheckCircle, AlertCircle, Loader2, Trophy,
@@ -49,7 +50,7 @@ function PinPad({ onComplete, accentHex, accentRgb }: {
   return (
     <div>
       <div className="flex justify-center gap-3 mb-8">
-        {Array.from({ length: 6 }, (_, i) => (
+        {Array.from({ length: 4 }, (_, i) => (
           <motion.div key={i}
             className="w-4 h-4 rounded-full border-2 transition-all"
             style={i < pin.length
@@ -144,7 +145,7 @@ export default function BillsPage() {
     }
   }
 
-  const executePurchase = async (pin: string) => {
+  const executePurchase = async (pin?: string, passkeyToken?: string) => {
     setProcessing(true)
     setStep('pin')
     try {
@@ -153,6 +154,7 @@ export default function BillsPage() {
         provider: selectedProvider?.code,
         recipient,
         pin,
+        passkeyToken,
       }
       if (selectedCategory === 'data' && selectedPlan) {
         payload.planCode = selectedPlan.code
@@ -552,6 +554,12 @@ export default function BillsPage() {
                 )}
               </div>
               <PinPad onComplete={executePurchase} accentHex={accentHex} accentRgb={accentRgb} />
+              <div className="flex items-center gap-3 my-3">
+                <div className="flex-1 h-px bg-white/5"></div>
+                <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
+                <div className="flex-1 h-px bg-white/5"></div>
+              </div>
+              <BiometricApproveButton onApproved={(token) => executePurchase(undefined, token)} accentHex={accentHex} accentRgb={accentRgb} disabled={processing} />
             </motion.div>
           )}
 

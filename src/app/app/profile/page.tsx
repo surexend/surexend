@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation'
 import {
   User, Shield, Bell, CreditCard, HelpCircle, LogOut,
   ChevronRight, Camera, Edit3, Copy, CheckCircle,
-  Fingerprint, Eye, EyeOff, Smartphone, Lock,
+  Fingerprint, Eye, EyeOff, Smartphone, Lock, ScanFace,
   Globe, Moon, Star, Award, Crown, ExternalLink,
   AlertTriangle, Tag, Check, X
 } from 'lucide-react'
@@ -295,6 +295,11 @@ export default function ProfilePage() {
             badge={profile?.pinSet ? undefined : 'Set Up'}
             accentHex={accentHex} accentRgb={accentRgb}
             onClick={() => router.push('/app/settings/change-pin')} />
+          <MenuItem icon={ScanFace} label="Biometrics"
+            value={profile?.passkeysEnabled ? 'Face ID / fingerprint enabled' : 'Not enabled — recommended'}
+            badge={profile?.passkeysEnabled ? 'ON' : undefined}
+            accentHex={accentHex} accentRgb={accentRgb}
+            onClick={() => router.push('/app/settings/biometric')} />
           <MenuItem icon={Fingerprint} label="Two-Factor Authentication (2FA)"
             value={profile?.twoFactorEnabled ? 'Enabled via Authenticator' : 'Not enabled — recommended'}
             badge={profile?.twoFactorEnabled ? 'ON' : undefined}
