@@ -132,8 +132,8 @@ export class PasskeysService {
       throw new BadRequestException('Biometric registration was not verified');
     }
 
-    const credential = verification.registrationInfo.credential;
-    const credentialId = isoBase64URL.fromBuffer(credential.id);
+const credential = verification.registrationInfo.credential;
+    const credentialId = credential.id;
     const existing = await this.prisma.passkey.findUnique({ where: { credentialId } });
     if (existing) {
       throw new BadRequestException('This biometric has already been registered on your account');
