@@ -678,18 +678,26 @@ html.lite-mode *::after {
    opaque-ish base too, so nothing can bleed through weirdly. */
 @media (max-width: 767px) {
   .liquid-glass {
-    background-color: rgba(11, 17, 34, 0.9);
+    background-color: rgba(11, 17, 34, 0.92);
     background-image: none;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
   .liquid-glass-strong {
-    background-color: rgba(9, 14, 29, 0.95);
+    background-color: rgba(9, 14, 29, 0.97);
     background-image: none;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
   .liquid-backdrop {
     background: rgba(3, 7, 18, 0.86);
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
   .glass-card {
     background: linear-gradient(135deg, rgba(16, 23, 42, 0.97), rgba(21, 29, 51, 0.95));
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
   [data-variant="gold"] .glass-card {
     background: linear-gradient(135deg, rgba(212, 160, 23, 0.10), rgba(16, 23, 42, 0.97));
@@ -697,4 +705,49 @@ html.lite-mode *::after {
   [data-variant="lemon"] .glass-card {
     background: linear-gradient(135deg, rgba(181, 226, 61, 0.10), rgba(16, 23, 42, 0.97));
   }
+  .glass-card-gold,
+  .glass-card-lemon {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  /* Momentum scrolling + no URL-bar height jump (iOS) + no rubber-band chaining */
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* iOS auto-zooms into any input with font-size < 16px on focus — that jump
+     is the #1 "not seamless" tell on iPhones. Pin controls to 16px on phones. */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Kill the double-tap zoom delay on tappable elements (Android + iOS). */
+button,
+a,
+label,
+[role="button"],
+[role="switch"] {
+  touch-action: manipulation;
+}
+
+/* Stable mobile heights: prefer dynamic viewport units so the app shell never
+   jumps when the browser chrome (address bar) collapses on scroll. */
+@supports (height: 100dvh) {
+  .h-dvh-force { height: 100dvh; }
+}
+@supports not (height: 100dvh) {
+  .h-dvh-force { height: 100vh; }
+}
+
+/* Hide scrollbars on horizontal pill/picker rows while keeping them scrollable */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

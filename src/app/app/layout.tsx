@@ -126,7 +126,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <Toaster position="top-center" toastOptions={{ style: { background: '#0F1629', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
-      <div className="flex h-screen overflow-hidden bg-[var(--app-bg)] relative">
+      <div className="flex h-dvh-force overflow-hidden bg-[var(--app-bg)] relative">
         {/* Ambient morphing mesh background — the "morphe" (static in lite mode & on mobile) */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
           {(lite || isMobile) ? (
@@ -233,9 +233,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 flex flex-col h-screen overflow-y-auto w-full max-w-full relative bg-[var(--app-bg)]">
+        <main className="flex-1 flex flex-col h-dvh-force overflow-y-auto w-full max-w-full relative bg-[var(--app-bg)] overscroll-none">
           {/* Header */}
-          <header className="h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] sticky top-0 z-30">
+          <header className="h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] sticky top-0 z-30 transform-gpu will-change-transform">
             <div className="flex items-center gap-2 min-w-0">
               {/* Mobile: logo + wordmark */}
               <div className="md:hidden flex items-center gap-2 min-w-0">
@@ -365,7 +365,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
-        <nav className="md:hidden fixed bottom-0 w-full bg-[#0D1322]/95 backdrop-blur-md border-t border-white/5 px-1 py-1.5 safe-bottom z-50">
+        <nav className="md:hidden fixed bottom-0 w-full bg-[#0D1322] border-t border-white/5 px-1 py-1.5 safe-bottom z-50 transform-gpu">
           <div className="flex justify-around items-center">
             {navItems.map((item) => {
               const isActive = pathname === item.href
