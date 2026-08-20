@@ -232,10 +232,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        {/* Main Content Area */}
-        <main className="flex-1 flex flex-col h-dvh-force overflow-y-auto w-full max-w-full relative bg-[var(--app-bg)] overscroll-none">
-          {/* Header */}
-          <header className="h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] sticky top-0 z-30">
+        {/* Main Content Area — flex column so header is a normal flex item
+             (not sticky inside overflow-y-auto, which causes Android Chrome
+              compositor layer conflicts and the scanline corruption bug). */}
+        <main className="flex-1 flex flex-col h-dvh-force w-full max-w-full relative bg-[var(--app-bg)]">
+          {/* Header sits OUTSIDE the scroll container as a flex child.
+               No sticky needed — it's pinned by the flex layout. */}
+          <header className="flex-shrink-0 h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] z-30">
             <div className="flex items-center gap-2 min-w-0">
               {/* Mobile: logo + wordmark */}
               <div className="md:hidden flex items-center gap-2 min-w-0">
@@ -311,56 +314,60 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          <div className="flex-1 w-full max-w-full relative">
-            {profile && !profile.pinSet && !pathname.includes('/settings/change-pin') && (
-              <button
-                onClick={() => router.push('/app/settings/change-pin')}
-                className="mx-3 mt-2 w-[calc(100%-24px)] rounded-2xl p-3 flex items-center gap-3 border border-amber-500/30 bg-amber-500/10 text-left"
-              >
-                <ShieldCheck className="w-5 h-5 text-amber-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-amber-400">Set up your transaction PIN</p>
-                  <p className="text-[10px] text-[#94A3B8] truncate">Required before you can send, convert, pay bills, or withdraw</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-amber-400/70 flex-shrink-0" />
-              </button>
-            )}
-            {showBioPrompt && profile && !profile.passkeysEnabled && !pathname.includes('/settings/biometric') && (
-              <div className="mx-3 mt-2 w-[calc(100%-24px)] rounded-2xl p-3 flex items-center gap-3 border border-white/10 bg-gradient-to-r from-[rgba(212,160,23,0.12)] to-[rgba(212,160,23,0.04)] text-left">
-                <div className="w-9 h-9 rounded-xl border border-[rgba(212,160,23,0.4)] bg-[rgba(212,160,23,0.12)] flex items-center justify-center flex-shrink-0 animate-pulse">
-                  <Fingerprint className="w-5 h-5 text-[#D4A017]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-[#FFD966]">Unlock with your fingerprint</p>
-                  <p className="text-[10px] text-[#94A3B8] truncate">Skip the PIN — sign in and approve faster</p>
-                </div>
+          {/* Scroll container — completely separate from the header.
+               No sticky elements, no GPU layer conflicts. */}
+          <div className="flex-1 overflow-y-auto overscroll-none w-full max-w-full">
+            <div className="w-full max-w-full relative">
+              {profile && !profile.pinSet && !pathname.includes('/settings/change-pin') && (
                 <button
-                  onClick={() => router.push('/app/settings/biometric')}
-                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-black bg-[#FFD966] hover:brightness-110 transition-all active:scale-95 flex-shrink-0"
+                  onClick={() => router.push('/app/settings/change-pin')}
+                  className="mx-3 mt-2 w-[calc(100%-24px)] rounded-2xl p-3 flex items-center gap-3 border border-amber-500/30 bg-amber-500/10 text-left"
                 >
-                  Set up
+                  <ShieldCheck className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-amber-400">Set up your transaction PIN</p>
+                    <p className="text-[10px] text-[#94A3B8] truncate">Required before you can send, convert, pay bills, or withdraw</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-amber-400/70 flex-shrink-0" />
                 </button>
-                <button
-                  onClick={() => { localStorage.setItem('surexend_bio_prompt_dismissed', '1'); setShowBioPrompt(false) }}
-                  className="text-[#64748B] hover:text-white transition-colors p-1 flex-shrink-0"
-                  aria-label="Dismiss"
+              )}
+              {showBioPrompt && profile && !profile.passkeysEnabled && !pathname.includes('/settings/biometric') && (
+                <div className="mx-3 mt-2 w-[calc(100%-24px)] rounded-2xl p-3 flex items-center gap-3 border border-white/10 bg-gradient-to-r from-[rgba(212,160,23,0.12)] to-[rgba(212,160,23,0.04)] text-left">
+                  <div className="w-9 h-9 rounded-xl border border-[rgba(212,160,23,0.4)] bg-[rgba(212,160,23,0.12)] flex items-center justify-center flex-shrink-0 animate-pulse">
+                    <Fingerprint className="w-5 h-5 text-[#D4A017]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-[#FFD966]">Unlock with your fingerprint</p>
+                    <p className="text-[10px] text-[#94A3B8] truncate">Skip the PIN — sign in and approve faster</p>
+                  </div>
+                  <button
+                    onClick={() => router.push('/app/settings/biometric')}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-black bg-[#FFD966] hover:brightness-110 transition-all active:scale-95 flex-shrink-0"
+                  >
+                    Set up
+                  </button>
+                  <button
+                    onClick={() => { localStorage.setItem('surexend_bio_prompt_dismissed', '1'); setShowBioPrompt(false) }}
+                    className="text-[#64748B] hover:text-white transition-colors p-1 flex-shrink-0"
+                    aria-label="Dismiss"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={pathname}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="w-full"
                 >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={pathname}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.15 }}
-                className="w-full"
-              >
-                {children}
-              </motion.div>
-            </AnimatePresence>
+                  {children}
+                </motion.div>
+              </AnimatePresence>
+            </div>
           </div>
         </main>
 
