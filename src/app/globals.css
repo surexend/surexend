@@ -685,6 +685,13 @@ html.lite-mode *::after {
   * {
     will-change: auto !important;
   }
+  /* The sticky app header/bottom nav were promoted to their own GPU layers
+     via translateZ(0) — the exact cause of content smearing under a sticky
+     header on Android. Render them in the normal layer on phones. */
+  .transform-gpu,
+  .transform-gpu-3d {
+    transform: none;
+  }
 
   /* Cards: one simple gradient, no backdrop blur, no textures, no layers. */
   .liquid-glass,
