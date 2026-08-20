@@ -711,10 +711,37 @@ html.lite-mode *::after {
     backdrop-filter: none !important;
   }
 
-  /* The continuous text-gradient shimmer repaints the whole headline every
-     frame on phones — freeze it so it can't add jank during scroll. */
-  .gradient-text-gold,
+  /* The rotating "living edge" ring on every glass card repaints each frame
+     (the whole <body> animates --glass-angle). On phones that's constant GPU
+     repainting → flicker/tearing. Kill the ring + the animation entirely. */
+  body {
+    animation: none;
+    --glass-angle: 0deg;
+  }
+  .liquid-glass::after,
+  .liquid-glass-strong::after {
+    display: none;
+  }
+  .liquid-glass,
+  .liquid-glass-strong,
+  .glass-card,
+  .glass-card-gold,
+  .glass-card-lemon {
+    transform: none;
+  }
+
+  /* Gradient-clipped text (background-clip: text) re-rasterizes glyphs on
+     scroll and tears on Android. Use a solid brand color on phones instead. */
+  .gradient-text-gold {
+    background: none;
+    -webkit-text-fill-color: initial;
+    color: #FFD700;
+    animation: none;
+  }
   .gradient-text-lemon {
+    background: none;
+    -webkit-text-fill-color: initial;
+    color: #B5E23D;
     animation: none;
   }
 
