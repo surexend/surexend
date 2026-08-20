@@ -711,6 +711,13 @@ html.lite-mode *::after {
     backdrop-filter: none !important;
   }
 
+  /* The continuous text-gradient shimmer repaints the whole headline every
+     frame on phones — freeze it so it can't add jank during scroll. */
+  .gradient-text-gold,
+  .gradient-text-lemon {
+    animation: none;
+  }
+
   /* Momentum scrolling + no URL-bar height jump (iOS) + no rubber-band chaining */
   .overflow-y-auto,
   .overflow-x-auto {
@@ -738,9 +745,11 @@ label,
    jumps when the browser chrome (address bar) collapses on scroll. */
 @supports (height: 100dvh) {
   .h-dvh-force { height: 100dvh; }
+  .min-h-dvh-force { min-height: 100dvh; }
 }
 @supports not (height: 100dvh) {
   .h-dvh-force { height: 100vh; }
+  .min-h-dvh-force { min-height: 100vh; }
 }
 
 /* Hide scrollbars on horizontal pill/picker rows while keeping them scrollable */

@@ -177,7 +177,9 @@ export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showLoader, setShowLoader] = useState(true)
   const [scrolled, setScrolled] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  )
   const { scrollY } = useScroll()
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0])
   const heroScale = useTransform(scrollY, [0, 400], [1, 0.95])
@@ -393,7 +395,7 @@ export default function LandingPage() {
         </motion.nav>
 
         {/* ── Hero Section ───────────────────────────────────────────── */}
-        <section className="relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-20 pb-16 overflow-hidden">
+        <section className="relative min-h-screen min-h-dvh-force flex flex-col items-center justify-center px-4 sm:px-6 pt-20 pb-16 overflow-hidden">
           {/* Background effects */}
           <div className="absolute inset-0 pointer-events-none">
             <div
