@@ -54,13 +54,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <>
       <style>{`
-        /* Admin scroll fix: on Android Chrome an overflow-x-auto table wrapper
-           captures vertical swipes over it and, with the page at the bottom,
-           the gesture never chains back up (scroll trap). Declaring
-           touch-action: pan-x tells the browser these wrappers only pan
-           horizontally, so vertical gestures always reach the page. */
+        /* Admin scroll trap fix (scoped to admin only — does NOT touch the
+           shared mobile CSS): Android Chrome treats overflow-x-auto wrappers
+           as scroll containers. globals.css pins overscroll-behavior-y:
+           contain on every overflow container on mobile, so a vertical swipe
+           over an admin table never chains up to the page — with admin
+           scrolling the document, that means "stuck at the bottom, can't
+           scroll back up". Restore auto chaining for admin tables and tell
+           the browser they only pan horizontally, so vertical gestures
+           always reach the page. */
         @media (max-width: 767px) {
-          .overflow-x-auto { touch-action: pan-x; overscroll-behavior-x: contain; }
+          .overflow-x-auto {
+            touch-action: pan-x;
+            overscroll-behavior: auto !important;
+          }
         }
       `}</style>
       <div className="min-h-screen bg-[#060A15] text-white">
