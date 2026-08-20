@@ -26,6 +26,7 @@
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -38,22 +39,79 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Performance polish ─────────────────────────────────────────────────── */
+/* Crisper text/images on hi-DPI + cheaper image decode on scroll. */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+@media (min-resolution: 2dppx) {
+  body {
+    text-rendering: optimizeLegibility;
+  }
+}
+
+/* Long lists (transactions, pickers, history) get `content-visibility` so
+   browsers skip layout/paint for off-screen rows until they scroll near. */
+.content-visibility-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
+/* Motion-friendly smooth scrolling without breaking reduced-motion users. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 /* ── Selection ─────────────────────────────────────────────────────────── */
 
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
+/* Fun liquid-glass scrollbars: a slim brand-tinted glowing rail. The thumb is
+   a soft capsule with a bright specular line down its spine so it reads as a
+   tube of light instead of a flat bar. Colors follow the active brand variant. */
+:root {
+  --sb-track: rgba(255, 255, 255, 0.02);
+  --sb-thumb-a: rgba(255, 215, 0, 0.45);
+  --sb-thumb-b: rgba(212, 160, 23, 0.85);
+  --sb-glow: rgba(255, 215, 0, 0.5);
+}
+[data-variant="lemon"] {
+  --sb-thumb-a: rgba(202, 255, 58, 0.45);
+  --sb-thumb-b: rgba(181, 226, 61, 0.85);
+  --sb-glow: rgba(202, 255, 58, 0.5);
+}
+
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #0A0F1E;
+  background: var(--sb-track);
+  border-left: 1px solid rgba(255, 255, 255, 0.04);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  background: linear-gradient(180deg, var(--sb-thumb-a), var(--sb-thumb-b));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  box-shadow: inset 0 0 6px var(--sb-glow), 0 0 8px rgba(0, 0, 0, 0.4);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: linear-gradient(180deg, var(--sb-thumb-a), var(--sb-thumb-b));
+  box-shadow: inset 0 0 8px var(--sb-glow), 0 0 14px var(--sb-glow);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sb-thumb-b) var(--sb-track);
 }
 
 /* ── Loader Animations ─────────────────────────────────────────────────── */

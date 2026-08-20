@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { passkeyAPI } from '@/lib/api'
 import { startRegistration } from '@simplewebauthn/browser'
+import BiometricSuccessOverlay from '@/components/BiometricSuccessOverlay'
 
 export default function BiometricPage() {
   const { variant, colors } = useTheme()
@@ -21,6 +22,7 @@ export default function BiometricPage() {
   const [devices, setDevices] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [enrolling, setEnrolling] = useState(false)
+  const [enrolledFlash, setEnrolledFlash] = useState(false)
 
   const loadDevices = async () => {
     try {
@@ -47,6 +49,9 @@ export default function BiometricPage() {
       const options = await passkeyAPI.registerBegin()
       const response = await startRegistration({ optionsJSON: options })
       await passkeyAPI.registerComplete(response)
+      setEnrolledFlash(true)
+      await new Promise((r) => setTimeout(r, 1500))
+      setEnrolledFlash(false)
       toast.success('Biometric added successfully')
       await loadDevices()
     } catch (error: any) {
@@ -161,6 +166,7 @@ export default function BiometricPage() {
           </div>
         </div>
       </motion.div>
+      <BiometricSuccessOverlay show={enrolledFlash} title="Biometric added" subtitle="Unlock faster from now on" />
     </div>
   )
 }

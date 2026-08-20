@@ -10,7 +10,7 @@ import { Toaster } from 'react-hot-toast'
 import { useTheme } from '@/context/ThemeContext'
 import { 
   Home, Send, Repeat, FileText, User, Bell, ArrowUpRight, ArrowDownLeft,
-  Smartphone, Building2, FileSpreadsheet, X, Check, ShieldCheck, Zap, Clock, ChevronRight
+  Smartphone, Building2, FileSpreadsheet, X, Check, ShieldCheck, Zap, Clock, ChevronRight, Fingerprint
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AISupportWidget from '@/components/AISupportWidget'
@@ -38,6 +38,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<any[]>([])
   const [profile, setProfile] = useState<any>(null)
   const [isMobile, setIsMobile] = useState(false)
+  const [showBioPrompt, setShowBioPrompt] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -69,6 +70,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setMounted(true)
     const saved = localStorage.getItem('surexend_user_avatar')
     if (saved) setAvatar(saved)
+
+    // Biometric nudge: only when the device supports WebAuthn, the user hasn't
+    // enrolled a passkey yet, and they haven't dismissed the prompt before.
+    if (typeof window.PublicKeyCredential !== 'undefined' && !localStorage.getItem('surexend_bio_prompt_dismissed')) {
+      setShowBioPrompt(true)
+    }
 
     const token = localStorage.getItem('surexend_access_token')
     if (!token) {
@@ -229,24 +236,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 flex flex-col h-screen overflow-y-auto w-full max-w-full relative bg-[var(--app-bg)]">
           {/* Header */}
           <header className="h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] sticky top-0 z-30">
-            <div className="md:hidden flex items-center gap-2">
-              <img
-                src={variant === 'gold' ? '/logo-mark-gold.png' : '/logo-mark-plain.png'}
-                alt="SureXend"
-                className={`w-7 h-7 object-contain ${variant === 'gold' ? 'gold-logo-glow' : 'lemon-logo-glow'}`}
-              />
-              <span className="font-extrabold text-sm text-white tracking-wider">
-                SURE<span style={{ color: colors.primary }}>X</span>END
-              </span>
+            <div className="flex items-center gap-2 min-w-0">
+              {/* Mobile: logo + wordmark */}
+              <div className="md:hidden flex items-center gap-2 min-w-0">
+                <img
+                  src={variant === 'gold' ? '/logo-mark-gold.png' : '/logo-mark-plain.png'}
+                  alt="SureXend"
+                  className={`w-6 h-6 object-contain flex-shrink-0 ${variant === 'gold' ? 'gold-logo-glow' : 'lemon-logo-glow'}`}
+                />
+                <span className="font-extrabold text-sm text-white tracking-wider whitespace-nowrap">
+                  SURE<span style={{ color: colors.primary }}>X</span>END
+                </span>
+              </div>
+              {/* Desktop: page title */}
+              <div className="hidden md:block min-w-0">
+                <h2 className="text-base font-bold text-white capitalize truncate">{pathname.split('/').pop() || 'Dashboard'}</h2>
+              </div>
             </div>
-            <div className="hidden md:block">
-              <h2 className="text-base font-bold text-white capitalize">{pathname.split('/').pop() || 'Dashboard'}</h2>
-            </div>
-            <div className="flex items-center gap-1.5 sm:gap-2.5">
+
+            {/* Control cluster — one glass pill, evenly spaced, centred */}
+            <div className="flex items-center gap-0.5 sm:gap-1 p-1 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.03)] shadow-inner">
               {/* Theme Toggle — brand color dot (Gold / Lemon) */}
               <button
                 onClick={toggleVariant}
-                className="w-9 h-9 rounded-xl border flex items-center justify-center transition-all duration-300 shadow-md flex-shrink-0 active:scale-95"
+                className="w-9 h-9 rounded-xl border flex items-center justify-center transition-all duration-300 shadow-md flex-shrink-0 active:scale-95 hover:brightness-125"
                 style={{
                   background: variant === 'gold' ? 'rgba(212, 160, 23, 0.15)' : 'rgba(181, 226, 61, 0.15)',
                   borderColor: variant === 'gold' ? 'rgba(212, 160, 23, 0.4)' : 'rgba(181, 226, 61, 0.4)',
@@ -273,22 +286,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {profile?.role === 'ADMIN' && (
                 <Link
                   href="/admin"
-                  className="p-2 rounded-xl hover:bg-white/5 text-amber-400 hover:text-amber-300 transition-colors active:scale-95 flex-shrink-0"
+                  className="w-9 h-9 rounded-xl border border-white/10 hover:bg-white/5 text-amber-400 hover:text-amber-300 transition-colors active:scale-95 flex-shrink-0 flex items-center justify-center"
                   title="Admin Console"
                 >
-                  <ShieldCheck className="w-5 h-5" />
+                  <ShieldCheck className="w-4 h-4" />
                 </Link>
               )}
 
               {/* Notification Bell Button with badge & drawer */}
               <button 
                 onClick={() => { setShowNotifications(true); loadNotifications() }}
-                className="relative p-2 rounded-xl hover:bg-white/5 text-[#94A3B8] hover:text-white transition-colors active:scale-95 flex-shrink-0"
+                className="relative w-9 h-9 rounded-xl border border-white/10 hover:bg-white/5 text-[#94A3B8] hover:text-white transition-colors active:scale-95 flex-shrink-0 flex items-center justify-center"
                 title="Notifications"
               >
-                <Bell className="w-5 h-5" />
+                <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[#0A0F1E]"></span>
+                  <>
+                    <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-emerald-500 ring-2 ring-[#0A0F1E] text-[9px] font-bold text-black flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  </>
                 )}
               </button>
             </div>
@@ -307,6 +324,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
                 <ChevronRight className="w-4 h-4 text-amber-400/70 flex-shrink-0" />
               </button>
+            )}
+            {showBioPrompt && profile && !profile.passkeysEnabled && !pathname.includes('/settings/biometric') && (
+              <div className="mx-3 mt-2 w-[calc(100%-24px)] rounded-2xl p-3 flex items-center gap-3 border border-white/10 bg-gradient-to-r from-[rgba(212,160,23,0.12)] to-[rgba(212,160,23,0.04)] text-left">
+                <div className="w-9 h-9 rounded-xl border border-[rgba(212,160,23,0.4)] bg-[rgba(212,160,23,0.12)] flex items-center justify-center flex-shrink-0 animate-pulse">
+                  <Fingerprint className="w-5 h-5 text-[#D4A017]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-[#FFD966]">Unlock with your fingerprint</p>
+                  <p className="text-[10px] text-[#94A3B8] truncate">Skip the PIN — sign in and approve faster</p>
+                </div>
+                <button
+                  onClick={() => router.push('/app/settings/biometric')}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-black bg-[#FFD966] hover:brightness-110 transition-all active:scale-95 flex-shrink-0"
+                >
+                  Set up
+                </button>
+                <button
+                  onClick={() => { localStorage.setItem('surexend_bio_prompt_dismissed', '1'); setShowBioPrompt(false) }}
+                  className="text-[#64748B] hover:text-white transition-colors p-1 flex-shrink-0"
+                  aria-label="Dismiss"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             )}
             <AnimatePresence mode="wait">
               <motion.div

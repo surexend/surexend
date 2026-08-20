@@ -330,27 +330,36 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full max-w-full overflow-x-hidden px-4 py-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-6 pb-36 sm:pb-32">
-      {/* 🟢 SLEEK SINGLE-LINE FINTECH USER BAR */}
-      <div className="flex items-center justify-between py-2 px-3.5 rounded-xl liquid-glass border border-white/10 text-xs">
-        <div className="flex items-center gap-2 truncate">
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20 flex-shrink-0 shadow-md bg-[#1E2738]">
+      {/* 🟢 SLEEK FINTECH USER BAR — welcome + name on their own line so the
+          leaderboard badge never crowds the name out */}
+      <div className="flex items-center justify-between gap-3 py-2.5 px-3.5 rounded-xl liquid-glass border border-white/10">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-white/20 flex-shrink-0 shadow-md bg-[#1E2738]">
             {avatar ? (
               <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
             ) : (
               <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" alt="Avatar" className="w-full h-full object-cover" />
             )}
           </div>
-          <div className="flex items-center gap-1 truncate">
-            <span className="font-extrabold text-white truncate text-xs sm:text-sm">Welcome back, {profile?.firstName || 'there'}</span>
-            <VerifiedCheckmark size={16} variant={isGolden ? (isGold ? 'gold' : 'lemon') : 'black'} />
+          <div className="min-w-0">
+            <p className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider mb-0.5">
+              Welcome back
+            </p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h1 className="font-extrabold text-white truncate text-sm sm:text-base leading-tight">
+                {profile?.firstName || 'there'}
+              </h1>
+              <VerifiedCheckmark size={16} variant={isGolden ? (isGold ? 'gold' : 'lemon') : 'black'} />
+            </div>
+            <p className="hidden sm:block text-[10px] text-[#94A3B8] font-mono font-bold mt-0.5 truncate">
+              @{profile?.surexTag || profile?.firstName?.toLowerCase() || 'surex'}
+            </p>
           </div>
-          <span className="hidden sm:inline text-[#64748B]">•</span>
-          <span className="hidden sm:inline text-[#94A3B8] font-mono font-bold">@{profile?.surexTag || profile?.firstName?.toLowerCase() || 'surex'}</span>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
           <span 
-            className="px-2 py-0.5 rounded-full text-[10px] font-extrabold border flex items-center gap-1 shadow-sm"
+            className="px-2.5 py-1 rounded-full text-[10px] font-extrabold border flex items-center gap-1 shadow-sm"
             style={{
               background: variant === 'gold' ? 'rgba(212, 160, 23, 0.15)' : 'rgba(181, 226, 61, 0.15)',
               borderColor: variant === 'gold' ? 'rgba(212, 160, 23, 0.4)' : 'rgba(181, 226, 61, 0.4)',
@@ -358,6 +367,9 @@ export default function DashboardPage() {
             }}
           >
             {isGolden ? '★ Top 5 Leaderboard' : '✓ Verified Member'}
+          </span>
+          <span className="sm:hidden text-[10px] text-[#94A3B8] font-mono font-bold truncate max-w-[120px]">
+            @{profile?.surexTag || profile?.firstName?.toLowerCase() || 'surex'}
           </span>
         </div>
       </div>

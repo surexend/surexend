@@ -5,6 +5,7 @@ import { startAuthentication } from '@simplewebauthn/browser'
 import { passkeyAPI } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Fingerprint } from 'lucide-react'
+import BiometricSuccessOverlay from '@/components/BiometricSuccessOverlay'
 
 export default function BiometricApproveButton({
   onApproved,
@@ -20,6 +21,7 @@ export default function BiometricApproveButton({
   label?: string
 }) {
   const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
 
   const handle = async () => {
     setLoading(true)
@@ -27,7 +29,12 @@ export default function BiometricApproveButton({
       const options = await passkeyAPI.approveBegin()
       const response = await startAuthentication({ optionsJSON: options })
       const { passkeyToken } = await passkeyAPI.approveComplete(response)
-      onApproved(passkeyToken)
+      // Play the Apple-style success moment, then hand the token over.
+      setSuccess(true)
+      setTimeout(() => {
+        setSuccess(false)
+        onApproved(passkeyToken)
+      }, 1500)
     } catch (error: any) {
       const detail = error?.cause?.message || error?.message || ''
       const cancelled = error?.name === 'NotAllowedError' && /cancel/i.test(detail)
@@ -41,15 +48,18 @@ export default function BiometricApproveButton({
   }
 
   return (
-    <button
-      type="button"
-      onClick={handle}
-      disabled={disabled || loading}
-      className="mt-3 w-full py-2.5 rounded-xl border border-white/10 bg-white/[0.03] text-white text-xs font-semibold flex items-center justify-center gap-2 hover:bg-white/[0.07] transition-colors disabled:opacity-60"
-      style={accentRgb ? { boxShadow: `inset 0 0 0 1px rgba(${accentRgb}, 0.15)` } : undefined}
-    >
-      <Fingerprint className="w-4 h-4" style={accentHex ? { color: accentHex } : undefined} />
-      {loading ? 'Checking your biometric…' : (label || 'Use Face ID or fingerprint instead')}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={handle}
+        disabled={disabled || loading}
+        className="mt-3 w-full py-2.5 rounded-xl border border-white/10 bg-white/[0.03] text-white text-xs font-semibold flex items-center justify-center gap-2 hover:bg-white/[0.07] transition-colors disabled:opacity-60"
+        style={accentRgb ? { boxShadow: `inset 0 0 0 1px rgba(${accentRgb}, 0.15)` } : undefined}
+      >
+        <Fingerprint className="w-4 h-4" style={accentHex ? { color: accentHex } : undefined} />
+        {loading ? 'Checking your biometric…' : (label || 'Use Face ID or fingerprint instead')}
+      </button>
+      <BiometricSuccessOverlay show={success} title="Approved" subtitle="Transaction secured ✓" />
+    </>
   )
 }
