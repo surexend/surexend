@@ -235,7 +235,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Main Content Area */}
         <main className="flex-1 flex flex-col h-dvh-force overflow-y-auto w-full max-w-full relative bg-[var(--app-bg)] overscroll-none">
           {/* Header */}
-          <header className="h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] sticky top-0 z-30 transform-gpu will-change-transform">
+          <header className="h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] sticky top-0 z-30">
             <div className="flex items-center gap-2 min-w-0">
               {/* Mobile: logo + wordmark */}
               <div className="md:hidden flex items-center gap-2 min-w-0">
@@ -365,7 +365,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
-        <nav className="md:hidden fixed bottom-0 w-full bg-[#0D1322] border-t border-white/5 px-1 py-1.5 safe-bottom z-50 transform-gpu">
+        <nav className="md:hidden fixed bottom-0 w-full bg-[#0D1322] border-t border-white/5 px-1 py-1.5 safe-bottom z-50">
           <div className="flex justify-around items-center">
             {navItems.map((item) => {
               const isActive = pathname === item.href

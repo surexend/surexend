@@ -376,11 +376,18 @@ img {
   initial-value: 0deg;
 }
 
-body {
-  --glass-angle: 0deg;
-  animation: glass-edge-flow 9s linear infinite;
+/* The body custom-property animation is desktop-only.
+   @property --glass-angle has inherits:true, so if body animates it on mobile
+   every descendant triggers a repaint every frame — even when ::after is hidden.
+   Gating it here means mobile never pays this cost at all. */
+@media (min-width: 768px) {
+  body {
+    animation: glass-edge-flow 9s linear infinite;
+  }
 }
 
+/* Living edge ring — defined globally, displayed on desktop.
+   The mobile @media block suppresses it with display:none on ::after. */
 .liquid-glass::after,
 .liquid-glass-strong::after {
   content: '';
@@ -692,6 +699,12 @@ html.lite-mode *::after {
   .transform-gpu-3d {
     transform: none;
   }
+  /* Also zero out will-change — Tailwind's will-change-transform class sets
+     will-change:transform which alone can trigger layer promotion on Android. */
+  .will-change-transform,
+  .will-change-auto {
+    will-change: auto !important;
+  }
 
   /* Cards: one simple gradient, no backdrop blur, no textures, no layers. */
   .liquid-glass,
@@ -705,11 +718,10 @@ html.lite-mode *::after {
     animation: none;
   }
 
-  /* The mask-composited conic ring + specular hairline are GPU-buggy on
-     Android — remove them entirely on phones. */
-  .liquid-glass::before,
+  /* The mask-composited conic ring (::after) is GPU-buggy on Android —
+     remove it on phones. The specular hairline (::before) is just a 1px
+     linear-gradient — zero compositing cost — keep it for premium look. */
   .liquid-glass::after,
-  .liquid-glass-strong::before,
   .liquid-glass-strong::after {
     display: none;
   }
