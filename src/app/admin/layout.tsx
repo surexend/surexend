@@ -52,8 +52,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   ]
 
   return (
-    <div className="min-h-screen bg-[#060A15] text-white">
-      <div className="flex min-h-screen">
+    <>
+      <style>{`
+        /* Admin scroll fix: on Android Chrome an overflow-x-auto table wrapper
+           captures vertical swipes over it and, with the page at the bottom,
+           the gesture never chains back up (scroll trap). Declaring
+           touch-action: pan-x tells the browser these wrappers only pan
+           horizontally, so vertical gestures always reach the page. */
+        @media (max-width: 767px) {
+          .overflow-x-auto { touch-action: pan-x; overscroll-behavior-x: contain; }
+        }
+      `}</style>
+      <div className="min-h-screen bg-[#060A15] text-white">
+        <div className="flex min-h-screen">
         {/* Sidebar */}
         <aside className="hidden md:flex flex-col w-60 flex-shrink-0 border-r border-white/5 bg-[#0F1629] p-4 sticky top-0 h-screen overflow-y-auto">
           <Link href="/app/dashboard" className="flex items-center gap-2 text-[#64748B] hover:text-white text-xs mb-6">
@@ -89,7 +100,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </aside>
 
         {/* Main */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-8 max-w-[1400px]">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-8 pb-24 sm:pb-10 md:pb-10 max-w-[1400px]">
           {children}
         </main>
       </div>
@@ -106,6 +117,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           )
         })}
       </nav>
-    </div>
+      </div>
+    </>
   )
 }
