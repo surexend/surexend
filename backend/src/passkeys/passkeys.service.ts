@@ -12,6 +12,7 @@ import { isoBase64URL } from '@simplewebauthn/server/helpers';
 import type {
   RegistrationResponseJSON,
   AuthenticationResponseJSON,
+  AuthenticatorTransport,
 } from '@simplewebauthn/types';
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
@@ -77,6 +78,17 @@ export class PasskeysService {
 
   private async userPasskeys(userId: string) {
     return this.prisma.passkey.findMany({ where: { userId } });
+  }
+
+  private transportsOf(rawTransports: string | null): AuthenticatorTransport[] {
+    try {
+      const parsed = JSON.parse(rawTransports || '[]');
+      return Array.isArray(parsed)
+        ? parsed.filter((t) => typeof t === 'string') as AuthenticatorTransport[]
+        : [];
+    } catch {
+      return [];
+    }
   }
 
   // ── Registration (enrolling a device while signed in) ───────────────────
@@ -151,7 +163,11 @@ export class PasskeysService {
       const user = await this.prisma.user.findUnique({ where: { email: (email || '').toLowerCase().trim() } });
       if (user) {
         const passkeys = await this.userPasskeys(user.id);
-        allowCredentials = passkeys.map((p) => ({ id: p.credentialId, type: 'public-key' as const }));
+        allowCredentials = passkeys.map((p) => ({
+          id: p.credentialId,
+          type: 'public-key' as const,
+          transports: this.transportsOf(p.transports),
+        }));
       }
     }
 
@@ -230,7 +246,11 @@ export class PasskeysService {
     const { rpID } = this.webauthnConfig();
     const options = await generateAuthenticationOptions({
       rpID,
-      allowCredentials: passkeys.map((p) => ({ id: p.credentialId, type: 'public-key' as const })),
+      allowCredentials: passkeys.map((p) => ({
+        id: p.credentialId,
+        type: 'public-key' as const,
+        transports: this.transportsOf(p.transports),
+      })),
       userVerification: 'preferred',
       timeout: 120000,
     });

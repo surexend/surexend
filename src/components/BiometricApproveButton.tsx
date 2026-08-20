@@ -29,9 +29,11 @@ export default function BiometricApproveButton({
       const { passkeyToken } = await passkeyAPI.approveComplete(response)
       onApproved(passkeyToken)
     } catch (error: any) {
+      const detail = error?.cause?.message || error?.message || ''
+      const cancelled = error?.name === 'NotAllowedError' && /cancel/i.test(detail)
       toast.error(
         error?.response?.data?.message ||
-        (error?.name === 'NotAllowedError' ? 'Biometric approval cancelled' : error?.message || 'Biometric approval failed')
+        (cancelled ? 'Biometric approval cancelled' : detail || 'Biometric approval failed')
       )
     } finally {
       setLoading(false)

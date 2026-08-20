@@ -121,9 +121,11 @@ function LoginForm() {
       toast.success('Login successful!')
       window.location.href = '/app/dashboard'
     } catch (error: any) {
+      const detail = error?.cause?.message || error?.message || ''
+      const cancelled = error?.name === 'NotAllowedError' && /cancel/i.test(detail)
       toast.error(
         error?.response?.data?.message ||
-        (error?.name === 'NotAllowedError' ? 'Biometric sign-in cancelled' : error?.message || 'Biometric sign-in failed')
+        (cancelled ? 'Biometric sign-in cancelled' : detail || 'Biometric sign-in failed')
       )
     } finally {
       setBiometricLoading(false)
