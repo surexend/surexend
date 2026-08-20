@@ -177,6 +177,7 @@ export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showLoader, setShowLoader] = useState(true)
   const [scrolled, setScrolled] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const { scrollY } = useScroll()
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0])
   const heroScale = useTransform(scrollY, [0, 400], [1, 0.95])
@@ -199,6 +200,16 @@ export default function LandingPage() {
     const unsub = scrollY.on('change', v => setScrolled(v > 20))
     return unsub
   }, [scrollY])
+
+  // Keep the landing page static on phones: the animated blur orbs and the
+  // sticky-nav backdrop-filter tear into glitchy bands on Android Chrome.
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    setIsMobile(mq.matches)
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   const navLinks = ['Features', 'How It Works', 'Security', 'Pricing', 'Support']
   const stats = [
@@ -252,8 +263,9 @@ export default function LandingPage() {
         <motion.nav
           className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
           style={{
-            background: scrolled ? 'rgba(10, 15, 30, 0.9)' : 'transparent',
-            backdropFilter: scrolled ? 'blur(20px)' : 'none',
+            background: scrolled ? 'rgba(10, 15, 30, 0.92)' : 'transparent',
+            backdropFilter: scrolled && !isMobile ? 'blur(20px)' : 'none',
+            WebkitBackdropFilter: scrolled && !isMobile ? 'blur(20px)' : 'none',
             borderBottom: scrolled ? '1px solid rgba(255,255,255,0.06)' : 'none',
           }}
           initial={{ y: -80, opacity: 0 }}
@@ -390,32 +402,55 @@ export default function LandingPage() {
                 background: `radial-gradient(ellipse 80% 60% at 50% 0%, rgba(${accentRgb}, 0.18), transparent 70%)`,
               }}
             />
-            {/* Floating orbs */}
-            <motion.div
-              className="absolute rounded-full blur-3xl"
-              style={{
-                width: 400, height: 400,
-                top: '10%', left: '-10%',
-                background: `rgba(${accentRgb}, 0.08)`,
-              }}
-              animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
-              transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <motion.div
-              className="absolute rounded-full blur-3xl"
-              style={{
-                width: 300, height: 300,
-                bottom: '20%', right: '-5%',
-                background: `rgba(${accentRgb}, 0.06)`,
-              }}
-              animate={{ x: [0, -20, 0], y: [0, 30, 0] }}
-              transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-            />
+            {/* Floating orbs — static on phones to avoid GPU blur-tearing */}
+            {isMobile ? (
+              <>
+                <div
+                  className="absolute rounded-full blur-3xl"
+                  style={{
+                    width: 400, height: 400,
+                    top: '10%', left: '-10%',
+                    background: `rgba(${accentRgb}, 0.08)`,
+                  }}
+                />
+                <div
+                  className="absolute rounded-full blur-3xl"
+                  style={{
+                    width: 300, height: 300,
+                    bottom: '20%', right: '-5%',
+                    background: `rgba(${accentRgb}, 0.06)`,
+                  }}
+                />
+              </>
+            ) : (
+              <>
+                <motion.div
+                  className="absolute rounded-full blur-3xl"
+                  style={{
+                    width: 400, height: 400,
+                    top: '10%', left: '-10%',
+                    background: `rgba(${accentRgb}, 0.08)`,
+                  }}
+                  animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+                  transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <motion.div
+                  className="absolute rounded-full blur-3xl"
+                  style={{
+                    width: 300, height: 300,
+                    bottom: '20%', right: '-5%',
+                    background: `rgba(${accentRgb}, 0.06)`,
+                  }}
+                  animate={{ x: [0, -20, 0], y: [0, 30, 0] }}
+                  transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+                />
+              </>
+            )}
           </div>
 
           <motion.div
             className="relative z-10 flex flex-col items-center text-center max-w-5xl mx-auto"
-            style={{ opacity: heroOpacity, scale: heroScale }}
+            style={isMobile ? {} : { opacity: heroOpacity, scale: heroScale }}
           >
             {/* Badge */}
             <motion.div
