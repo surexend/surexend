@@ -35,7 +35,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (!mounted || checking) {
     return (
-      <div className="min-h-screen bg-[#060A15] flex items-center justify-center">
+      <div className="h-dvh-force w-full bg-[#060A15] flex items-center justify-center">
         <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-white/40 animate-spin" />
       </div>
     )
@@ -53,27 +53,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <>
-      <style>{`
-        /* Admin scroll trap fix (scoped to admin only — does NOT touch the
-           shared mobile CSS): Android Chrome treats overflow-x-auto wrappers
-           as scroll containers. globals.css pins overscroll-behavior-y:
-           contain on every overflow container on mobile, so a vertical swipe
-           over an admin table never chains up to the page — with admin
-           scrolling the document, that means "stuck at the bottom, can't
-           scroll back up". Restore auto chaining for admin tables and tell
-           the browser they only pan horizontally, so vertical gestures
-           always reach the page. */
-        @media (max-width: 767px) {
-          .overflow-x-auto {
-            touch-action: pan-x;
-            overscroll-behavior: auto !important;
-          }
-        }
-      `}</style>
-      <div className="min-h-screen bg-[#060A15] text-white">
-        <div className="flex min-h-screen">
+      <div className="h-dvh-force w-full max-w-full bg-[#060A15] text-white flex flex-col">
+        <div className="flex flex-1 min-h-0 w-full max-w-full">
         {/* Sidebar */}
-        <aside className="hidden md:flex flex-col w-60 flex-shrink-0 border-r border-white/5 bg-[#0F1629] p-4 sticky top-0 h-screen overflow-y-auto">
+        <aside className="hidden md:flex flex-col w-60 flex-shrink-0 border-r border-white/5 bg-[#0F1629] p-4 min-h-0 overflow-y-auto">
           <Link href="/app/dashboard" className="flex items-center gap-2 text-[#64748B] hover:text-white text-xs mb-6">
             <ArrowLeft className="w-3.5 h-3.5" /> Back to app
           </Link>
@@ -107,7 +90,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </aside>
 
         {/* Main */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-8 pb-24 sm:pb-10 md:pb-10 max-w-[1400px]">
+        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-none p-4 sm:p-6 md:p-8 pb-24 sm:pb-10 md:pb-10 max-w-[1400px]">
           {children}
         </main>
       </div>
