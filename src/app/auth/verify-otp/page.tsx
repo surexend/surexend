@@ -89,8 +89,8 @@ function VerifyOTPForm() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden" style={{ background: 'var(--app-bg)' }}>
       <div 
-        className="absolute w-96 h-96 rounded-full blur-[120px] pointer-events-none opacity-20"
-        style={{ background: colors.glow, bottom: '-10%', left: '-10%' }}
+        className="absolute w-96 h-96 rounded-full pointer-events-none opacity-20"
+        style={{ background: `radial-gradient(circle, ${colors.glow}, transparent 70%)`, bottom: '-10%', left: '-10%' }}
       />
       
       <motion.div 

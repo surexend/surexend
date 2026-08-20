@@ -112,8 +112,8 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden py-12" style={{ background: 'var(--app-bg)' }}>
       <div 
-        className="absolute w-96 h-96 rounded-full blur-[120px] pointer-events-none opacity-20"
-        style={{ background: colors.glow, top: '-10%', right: '-10%' }}
+        className="absolute w-96 h-96 rounded-full pointer-events-none opacity-20"
+        style={{ background: `radial-gradient(circle, ${colors.glow}, transparent 70%)`, top: '-10%', right: '-10%' }}
       />
       
       <motion.div 

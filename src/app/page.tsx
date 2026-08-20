@@ -404,23 +404,23 @@ export default function LandingPage() {
                 background: `radial-gradient(ellipse 80% 60% at 50% 0%, rgba(${accentRgb}, 0.18), transparent 70%)`,
               }}
             />
-            {/* Floating orbs — static on phones to avoid GPU blur-tearing */}
+            {/* Floating orbs — soft radial glows (no blur filter on phones) */}
             {isMobile ? (
               <>
                 <div
-                  className="absolute rounded-full blur-3xl"
+                  className="absolute rounded-full"
                   style={{
                     width: 400, height: 400,
                     top: '10%', left: '-10%',
-                    background: `rgba(${accentRgb}, 0.08)`,
+                    background: `radial-gradient(circle, rgba(${accentRgb}, 0.12), transparent 70%)`,
                   }}
                 />
                 <div
-                  className="absolute rounded-full blur-3xl"
+                  className="absolute rounded-full"
                   style={{
                     width: 300, height: 300,
                     bottom: '20%', right: '-5%',
-                    background: `rgba(${accentRgb}, 0.06)`,
+                    background: `radial-gradient(circle, rgba(${accentRgb}, 0.09), transparent 70%)`,
                   }}
                 />
               </>
@@ -737,9 +737,9 @@ export default function LandingPage() {
             </div>
           </div>
 
-            {/* Phone glow */}
+            {/* Phone glow — soft radial, no blur filter */}
             <div
-              className="absolute -inset-4 rounded-[60px] blur-3xl -z-10 opacity-70 pointer-events-none"
+              className="absolute -inset-4 rounded-[60px] -z-10 opacity-70 pointer-events-none"
               style={{ background: `radial-gradient(circle at center, rgba(${accentRgb}, 0.25), transparent 70%)` }}
             />
           </motion.div>
@@ -934,8 +934,8 @@ export default function LandingPage() {
               }}
             >
               <div
-                className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl -z-0"
-                style={{ background: `rgba(${accentRgb}, 0.06)` }}
+                className="absolute top-0 right-0 w-96 h-96 rounded-full -z-0"
+                style={{ background: `radial-gradient(circle, rgba(${accentRgb}, 0.10), transparent 70%)` }}
               />
               <div className="relative z-10">
                 <div className="text-center mb-12">

@@ -131,8 +131,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
           {(lite || isMobile) ? (
             <>
-              <div className="absolute rounded-full" style={{ width: '70vmax', height: '70vmax', borderRadius: '50%', background: `radial-gradient(circle at 30% 30%, rgba(${colors.glowRgb}, 0.10), transparent 60%)`, filter: 'blur(60px)', top: '-15%', left: '-10%', opacity: 0.7 }} />
-              <div className="absolute rounded-full" style={{ width: '60vmax', height: '60vmax', borderRadius: '50%', background: `radial-gradient(circle at 60% 60%, rgba(96, 165, 250, 0.08), transparent 60%)`, filter: 'blur(60px)', bottom: '-15%', right: '-10%', opacity: 0.6 }} />
+              <div className="absolute rounded-full" style={{ width: '70vmax', height: '70vmax', borderRadius: '50%', background: `radial-gradient(circle at 30% 30%, rgba(${colors.glowRgb}, 0.10), transparent 60%)`, top: '-15%', left: '-10%', opacity: 0.7 }} />
+              <div className="absolute rounded-full" style={{ width: '60vmax', height: '60vmax', borderRadius: '50%', background: `radial-gradient(circle at 60% 60%, rgba(96, 165, 250, 0.08), transparent 60%)`, bottom: '-15%', right: '-10%', opacity: 0.6 }} />
             </>
           ) : (
             <>

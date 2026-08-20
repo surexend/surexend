@@ -671,68 +671,99 @@ html.lite-mode *::after {
   transition-duration: 0.15s !important;
 }
 
-/* ── MOBILE HARDENING ──────────────────────────────────────────────────── */
-/* On phones, Android Chrome's backdrop-filter can tear into glitchy bands
-   when it sits over the big blurred gradient blobs. We already keep the
-   background static on small screens; this gives every glass surface an
-   opaque-ish base too, so nothing can bleed through weirdly. */
+/* ── MOBILE RENDERING SYSTEM ──────────────────────────────────────────── */
+/* Phones get a flat, GPU-safe layer. Vertical smearing / buffer corruption
+   on mobile browsers comes from too many composited layers and large
+   blur() surfaces (orbs, mesh, glass rings). Premium on phones is achieved
+   with solid gradients, borders, shadows and brand accents — not GPU blur. */
 @media (max-width: 767px) {
-  /* Keep the premium glass texture (sheen, tile, specular highlights) but drop
-     the real-time backdrop blur. Static translucent gradients look glassy on
-     their own — no per-frame GPU cost, no Android tearing. */
-  .liquid-glass {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
+  /* Stop every per-frame animation/repaint globally on phones. */
+  body {
+    animation: none;
+    --glass-angle: 0deg;
   }
+  * {
+    will-change: auto !important;
+  }
+
+  /* Cards: one simple gradient, no backdrop blur, no textures, no layers. */
+  .liquid-glass,
   .liquid-glass-strong {
+    background-image: linear-gradient(135deg, rgba(27, 36, 60, 0.94), rgba(13, 19, 38, 0.98));
+    border-color: rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 34px rgba(0, 0, 0, 0.35);
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
+    transform: none;
+    animation: none;
   }
+
+  /* The mask-composited conic ring + specular hairline are GPU-buggy on
+     Android — remove them entirely on phones. */
+  .liquid-glass::before,
+  .liquid-glass::after,
+  .liquid-glass-strong::before,
+  .liquid-glass-strong::after {
+    display: none;
+  }
+
+  .glass-card,
+  .glass-card-gold,
+  .glass-card-lemon {
+    background: linear-gradient(135deg, rgba(23, 31, 52, 0.96), rgba(13, 19, 38, 0.98));
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transform: none;
+  }
+  [data-variant="gold"] .glass-card {
+    background: linear-gradient(135deg, rgba(212, 160, 23, 0.12), rgba(13, 19, 38, 0.98));
+  }
+  [data-variant="lemon"] .glass-card {
+    background: linear-gradient(135deg, rgba(181, 226, 61, 0.12), rgba(13, 19, 38, 0.98));
+  }
+
   .liquid-backdrop {
     background: rgba(3, 7, 18, 0.86);
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-  .glass-card {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
-  [data-variant="gold"] .glass-card,
-  [data-variant="lemon"] .glass-card,
-  .glass-card-gold,
-  .glass-card-lemon {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
 
-  /* The rotating "living edge" ring repainted every frame (the whole <body>
-     animates --glass-angle) — that was the flicker/tearing source on phones.
-     Stop the animation but KEEP the ring as a static accent arc. */
-  body {
-    animation: none;
-    --glass-angle: 0deg;
-  }
-  .liquid-glass,
-  .liquid-glass-strong,
-  .glass-card,
-  .glass-card-gold,
-  .glass-card-lemon {
-    transform: none;
-  }
-
-  /* Gradient text keeps its premium look — just no animated shimmer. A static
-     gradient-clip is stable (the earlier tearing came from the animated ring
-     behind it repainting every frame, which is now gone). */
+  /* Gradient text: keep the premium look, just static (no shimmer). */
   .gradient-text-gold,
   .gradient-text-lemon {
     animation: none;
   }
 
-  /* Inline backdrop-filter (sticky sheet headers in app pages etc.) can't be
-     overridden by class rules — force it off on phones everywhere. */
-  [style*="backdrop-filter"] {
+  /* Strip every decorative blur() utility — the giant blurred orbs/mesh are
+     the #1 cause of buffer corruption on mobile GPUs. */
+  .blur,
+  .blur-sm,
+  .blur-md,
+  .blur-lg,
+  .blur-xl,
+  .blur-2xl,
+  .blur-3xl,
+  [class*="blur-["] {
+    filter: none;
+  }
+  .backdrop-blur,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-3xl {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
+  }
+
+  /* Inline styles we can't reach by class: any backdrop-filter or blur(). */
+  [style*="backdrop-filter"],
+  [style*="BackdropFilter"],
+  [style*="blur("] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
   }
 
   /* Momentum scrolling + no URL-bar height jump (iOS) + no rubber-band chaining */
