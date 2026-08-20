@@ -677,15 +677,14 @@ html.lite-mode *::after {
    background static on small screens; this gives every glass surface an
    opaque-ish base too, so nothing can bleed through weirdly. */
 @media (max-width: 767px) {
+  /* Keep the premium glass texture (sheen, tile, specular highlights) but drop
+     the real-time backdrop blur. Static translucent gradients look glassy on
+     their own — no per-frame GPU cost, no Android tearing. */
   .liquid-glass {
-    background-color: rgba(11, 17, 34, 0.92);
-    background-image: none;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
   .liquid-glass-strong {
-    background-color: rgba(9, 14, 29, 0.97);
-    background-image: none;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
@@ -695,32 +694,23 @@ html.lite-mode *::after {
     backdrop-filter: none !important;
   }
   .glass-card {
-    background: linear-gradient(135deg, rgba(16, 23, 42, 0.97), rgba(21, 29, 51, 0.95));
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-  [data-variant="gold"] .glass-card {
-    background: linear-gradient(135deg, rgba(212, 160, 23, 0.10), rgba(16, 23, 42, 0.97));
-  }
-  [data-variant="lemon"] .glass-card {
-    background: linear-gradient(135deg, rgba(181, 226, 61, 0.10), rgba(16, 23, 42, 0.97));
-  }
+  [data-variant="gold"] .glass-card,
+  [data-variant="lemon"] .glass-card,
   .glass-card-gold,
   .glass-card-lemon {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
 
-  /* The rotating "living edge" ring on every glass card repaints each frame
-     (the whole <body> animates --glass-angle). On phones that's constant GPU
-     repainting → flicker/tearing. Kill the ring + the animation entirely. */
+  /* The rotating "living edge" ring repainted every frame (the whole <body>
+     animates --glass-angle) — that was the flicker/tearing source on phones.
+     Stop the animation but KEEP the ring as a static accent arc. */
   body {
     animation: none;
     --glass-angle: 0deg;
-  }
-  .liquid-glass::after,
-  .liquid-glass-strong::after {
-    display: none;
   }
   .liquid-glass,
   .liquid-glass-strong,
@@ -730,19 +720,19 @@ html.lite-mode *::after {
     transform: none;
   }
 
-  /* Gradient-clipped text (background-clip: text) re-rasterizes glyphs on
-     scroll and tears on Android. Use a solid brand color on phones instead. */
-  .gradient-text-gold {
-    background: none;
-    -webkit-text-fill-color: initial;
-    color: #FFD700;
+  /* Gradient text keeps its premium look — just no animated shimmer. A static
+     gradient-clip is stable (the earlier tearing came from the animated ring
+     behind it repainting every frame, which is now gone). */
+  .gradient-text-gold,
+  .gradient-text-lemon {
     animation: none;
   }
-  .gradient-text-lemon {
-    background: none;
-    -webkit-text-fill-color: initial;
-    color: #B5E23D;
-    animation: none;
+
+  /* Inline backdrop-filter (sticky sheet headers in app pages etc.) can't be
+     overridden by class rules — force it off on phones everywhere. */
+  [style*="backdrop-filter"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 
   /* Momentum scrolling + no URL-bar height jump (iOS) + no rubber-band chaining */
