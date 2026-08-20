@@ -21,11 +21,15 @@ const dmSans = DM_Sans({
 const BRAND_VARIANT = process.env.NEXT_PUBLIC_BRAND_VARIANT || 'gold'
 
 export const metadata: Metadata = {
-  title: 'SureXend — Your Crypto, Finally Useful in Africa',
-  description: 'Send money, pay bills, buy airtime, and withdraw to any African bank account using USDC. Africa\'s premier stablecoin spending platform.',
-  keywords: ['crypto africa', 'USDC nigeria', 'stablecoin', 'send money africa', 'crypto to bank', 'airtime crypto', 'buy airtime with crypto', 'sell USDC for naira', 'pay bills with crypto', 'crypto to naira', 'surexend'],
+  title: {
+    default: 'SureXend — USDC to Naira, Airtime, Bills & Bank Withdrawals in Africa',
+    absolute: 'SureXend — Your Crypto, Finally Useful in Africa',
+  },
+  description: 'The stablecoin spending platform for Africa. Convert USDC to naira at a live rate, buy MTN & Airtel airtime with crypto, pay electricity and DSTV bills, and withdraw to any bank — all from one secure wallet.',
+  keywords: ['crypto africa', 'USDC nigeria', 'USDC to naira', 'sell USDC for naira', 'buy airtime with crypto', 'pay bills with crypto', 'stablecoin', 'send money africa', 'crypto to bank', 'crypto to naira', 'send money to nigeria', 'surexend'],
   authors: [{ name: 'SureXend' }],
   creator: 'SureXend',
+  publisher: 'SureXend',
   alternates: {
     canonical: 'https://surexend.com',
   },
@@ -37,15 +41,16 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://surexend.com'),
   openGraph: {
     title: 'SureXend — Your Crypto, Finally Useful in Africa',
-    description: 'Send money, pay bills, buy airtime, and withdraw to any African bank account using USDC.',
+    description: 'Convert USDC to naira, buy airtime with crypto, pay bills and withdraw to any African bank account.',
     url: 'https://surexend.com',
     siteName: 'SureXend',
     type: 'website',
+    locale: 'en_US',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'SureXend — Your Crypto, Finally Useful in Africa',
-    description: 'Africa\'s premier stablecoin spending platform.',
+    description: 'Africa\'s stablecoin spending platform.',
   },
   manifest: '/manifest.json',
   appleWebApp: {
@@ -105,16 +110,42 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               '@graph': [
                 {
                   '@type': 'Organization',
+                  '@id': 'https://surexend.com#organization',
                   name: 'SureXend',
                   url: 'https://surexend.com',
                   logo: 'https://surexend.com/logo-mark-gold.png',
-                  description: "Africa's premier stablecoin spending platform. Send money, pay bills, buy airtime, and withdraw to any African bank account using USDC.",
+                  description: "Africa's stablecoin spending platform. Convert USDC to local currency, buy airtime, pay bills and withdraw to banks across the continent.",
+                  email: 'support@surexend.com',
+                  sameAs: [
+                    'https://x.com/surexend',
+                    'https://www.linkedin.com/company/surexend',
+                    'https://www.facebook.com/surexend',
+                  ],
                 },
                 {
                   '@type': 'WebSite',
+                  '@id': 'https://surexend.com#website',
                   name: 'SureXend',
                   url: 'https://surexend.com',
                   description: 'Buy airtime with crypto, sell USDC for naira, pay bills with crypto, and send money across Africa using USDC.',
+                  publisher: { '@id': 'https://surexend.com#organization' },
+                },
+                {
+                  '@type': 'SoftwareApplication',
+                  name: 'SureXend',
+                  applicationCategory: 'FinanceApplication',
+                  operatingSystem: 'Android, iOS, Web',
+                  url: 'https://surexend.com',
+                  description:
+                    'Send money, convert USDC to local currency, pay bills and withdraw to banks across Africa.',
+                  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+                  featureList: [
+                    'USDC wallet',
+                    'Live currency conversion',
+                    'Airtime & bill payments',
+                    'Bank & mobile-money withdrawal',
+                    'Biometric & 2FA security',
+                  ],
                 },
               ],
             }),

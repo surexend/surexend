@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/app', '/admin'],
+        disallow: ['/app', '/admin', '/auth'],
       },
     ],
     sitemap: 'https://surexend.com/sitemap.xml',

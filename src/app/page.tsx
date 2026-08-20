@@ -997,6 +997,44 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ── Learn hub — internal links to the SEO/GEO guides ────────── */}
+        <section className="py-24 px-4 sm:px-6 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-12">
+              <p className="text-sm font-semibold tracking-widest uppercase mb-4" style={{ color: accentHex }}>Learn</p>
+              <h2 className="font-inter font-black text-white mb-4" style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)' }}>
+                Guides to make your crypto useful
+              </h2>
+              <p className="text-[#94A3B8] max-w-xl mx-auto">
+                Plain-English how-tos on selling USDC for naira, buying airtime with crypto and cashing out across Africa.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              {[
+                { href: '/convert-usdc-to-naira', label: 'Convert USDC to naira', desc: 'Sell USDC at a live rate, no P2P vendors.' },
+                { href: '/buy-airtime-with-crypto', label: 'Buy airtime with crypto', desc: 'MTN, Airtel, GLO & 9mobile from your balance.' },
+                { href: '/send-money-to-nigeria', label: 'Send money to Nigeria', desc: 'Cheaper than bank transfers, arrives in minutes.' },
+                { href: '/pay-bills-with-crypto', label: 'Pay bills with crypto', desc: 'Electricity, DSTV, data and water with USDC.' },
+                { href: '/withdraw-usdc-to-bank', label: 'Withdraw USDC to bank', desc: 'Naira in your bank in minutes via instant transfer.' },
+                { href: '/blog/how-to-sell-usdc-for-naira', label: 'Sell USDC for naira: guide', desc: 'Step-by-step walkthrough with safety tips.' },
+                { href: '/blog/buy-airtime-with-crypto', label: 'Buy airtime with crypto: guide', desc: 'The 2026 guide to top-ups with stablecoin.' },
+                { href: '/blog/crypto-to-bank-account-africa', label: 'Crypto to bank in Africa', desc: 'Nigeria, Kenya, Ghana & South Africa cashout.' },
+                { href: '/nigeria', label: 'SureXend in Nigeria', desc: 'USDC to naira, airtime, bills & bank withdrawal.' },
+              ].map(({ href, label, desc }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="group rounded-2xl border border-white/10 bg-white/[0.02] p-5 hover:border-[rgba(212,160,23,0.4)] hover:bg-white/[0.05] transition-all"
+                >
+                  <p className="text-sm font-bold text-white group-hover:text-[#FFD966] transition-colors">{label}</p>
+                  <p className="text-xs text-[#64748B] mt-1.5 leading-relaxed">{desc}</p>
+                  <span className="inline-block mt-3 text-[11px] font-bold" style={{ color: accentHex }}>Read guide →</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* ── FAQ ────────────────────────────────────────────────────── */}
         <section id="faq" className="py-24 px-4 sm:px-6 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
           <div className="max-w-3xl mx-auto">
