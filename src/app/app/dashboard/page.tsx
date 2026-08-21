@@ -139,26 +139,36 @@ export default function DashboardPage() {
       // live ticks (>= 30) we update the tip IN PLACE instead of growing
       // forever — long histories (e.g. 1Y) stay intact and the line still
       // moves, instead of the history scrolling off into a short flat tail.
-      setRateSeries(prev => {
-        const next: Record<string, { time: string; value: number }[]> = { ...prev }
-        for (const pair of MARKET_PAIRS) {
-          // USDC has no FloatRates quote — drive it from the real backend
-          // anchor (its actual ~0.9995 price), never a fabricated 1.0.
-          const rate = pair.id === 'USDC' ? (liveSpotRef.current['USDC'] ?? 1) : normalized[pair.id]
-          if (!rate) continue
-          const now = new Date()
-          const stamp = now.toLocaleTimeString('en-US', { hour12: false })
-          const arr = [...(next[pair.id] || [])]
-          if (arr.length >= 30 && arr.length > 0) {
-            arr[arr.length - 1] = { time: stamp, value: rate }
-          } else {
-            arr.push({ time: stamp, value: rate })
-            if (arr.length > 120) arr.shift()
+      //
+      // Deferred via requestIdleCallback so this heavy loop (40 currencies)
+      // never steals frames while the user is actively scrolling or tapping.
+      const doUpdate = () => {
+        setRateSeries(prev => {
+          const next: Record<string, { time: string; value: number }[]> = { ...prev }
+          for (const pair of MARKET_PAIRS) {
+            // USDC has no FloatRates quote — drive it from the real backend
+            // anchor (its actual ~0.9995 price), never a fabricated 1.0.
+            const rate = pair.id === 'USDC' ? (liveSpotRef.current['USDC'] ?? 1) : normalized[pair.id]
+            if (!rate) continue
+            const now = new Date()
+            const stamp = now.toLocaleTimeString('en-US', { hour12: false })
+            const arr = [...(next[pair.id] || [])]
+            if (arr.length >= 30 && arr.length > 0) {
+              arr[arr.length - 1] = { time: stamp, value: rate }
+            } else {
+              arr.push({ time: stamp, value: rate })
+              if (arr.length > 120) arr.shift()
+            }
+            next[pair.id] = arr
           }
-          next[pair.id] = arr
-        }
-        return next
-      })
+          return next
+        })
+      }
+      if (typeof requestIdleCallback !== 'undefined') {
+        requestIdleCallback(doUpdate, { timeout: 2000 })
+      } else {
+        setTimeout(doUpdate, 0)
+      }
     } catch (err) {
       // Keep the last good series; fallback static rates still power display.
       if (!Object.keys(liveRates).length) {
@@ -169,7 +179,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     refreshRates()
-    const id = setInterval(refreshRates, 30000)
+    // Poll less aggressively on mobile — 60s instead of 30s.
+    // The 30s interval was firing setRateSeries (40-currency loop) while the
+    // user was actively scrolling or tapping, causing a visible jank spike.
+    const isMobileConn = typeof navigator !== 'undefined' &&
+      ['slow-2g', '2g', '3g'].includes((navigator as any).connection?.effectiveType || '')
+    const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768
+    const intervalMs = (isMobileConn || isMobileScreen) ? 60000 : 30000
+    const id = setInterval(refreshRates, intervalMs)
     return () => clearInterval(id)
   }, [refreshRates])
 
@@ -358,7 +375,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          <span 
+          <span
             className="px-2.5 py-1 rounded-full text-[10px] font-extrabold border flex items-center gap-1 shadow-sm"
             style={{
               background: variant === 'gold' ? 'rgba(212, 160, 23, 0.15)' : 'rgba(181, 226, 61, 0.15)',
@@ -376,7 +393,7 @@ export default function DashboardPage() {
 
       {/* Live rates ticker — USDC/USD + USD to every supported local currency */}
       <div className="w-full overflow-hidden bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-lg py-1.5 flex items-center">
-        <motion.div 
+        <motion.div
           className="flex whitespace-nowrap text-xs text-[#94A3B8] gap-8 px-4"
           animate={{ x: [0, -400] }}
           transition={{ repeat: Infinity, duration: 15, ease: 'linear' }}
@@ -389,8 +406,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Balance Card */}
-      <motion.div 
-        className="liquid-glass p-4 sm:p-6 relative overflow-hidden"
+      <motion.div
+        className="liquid-glass p-4 sm:p-6 relative overflow-hidden border-white/15 shadow-[0_18px_50px_rgba(0,0,0,0.28)]"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
@@ -398,33 +415,31 @@ export default function DashboardPage() {
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-white/5 to-transparent rounded-full blur-3xl -z-10 pointer-events-none" />
 
         {/* ── Dual Wallet Balance Card ── */}
-        <div className="flex justify-between items-start mb-4">
+        <div className="flex justify-between items-start mb-4 rounded-2xl border border-white/10 bg-black/10 p-3 sm:p-4">
           <div className="flex-1 min-w-0">
             {/* Wallet toggle tabs */}
             <div className="flex items-center gap-1.5 mb-3">
               <button
                 onClick={() => {
                   setWalletView('USD')
-                  if (prefDefaultWallet !== 'USD') userAPI.updatePreferences({ defaultWallet: 'USD' }).catch(() => {})
+                  if (prefDefaultWallet !== 'USD') userAPI.updatePreferences({ defaultWallet: 'USD' }).catch(() => { })
                 }}
-                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ${
-                  walletView === 'USD'
-                    ? 'text-white bg-white/10 border-white/20'
-                    : 'text-[#64748B] bg-transparent border-white/5 hover:text-white'
-                }`}
+                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ${walletView === 'USD'
+                  ? 'text-white bg-white/10 border-white/20'
+                  : 'text-[#64748B] bg-transparent border-white/5 hover:text-white'
+                  }`}
               >
                 💵 USD Wallet
               </button>
               <button
                 onClick={() => {
                   setWalletView('LOCAL')
-                  if (prefDefaultWallet !== 'LOCAL') userAPI.updatePreferences({ defaultWallet: 'LOCAL' }).catch(() => {})
+                  if (prefDefaultWallet !== 'LOCAL') userAPI.updatePreferences({ defaultWallet: 'LOCAL' }).catch(() => { })
                 }}
-                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ${
-                  walletView === 'LOCAL'
-                    ? 'text-white bg-white/10 border-white/20'
-                    : 'text-[#64748B] bg-transparent border-white/5 hover:text-white'
-                }`}
+                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all border ${walletView === 'LOCAL'
+                  ? 'text-white bg-white/10 border-white/20'
+                  : 'text-[#64748B] bg-transparent border-white/5 hover:text-white'
+                  }`}
               >
                 🏦 Local Wallet
               </button>
@@ -447,7 +462,7 @@ export default function DashboardPage() {
               </button>
             </p>
 
-            <div className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mt-1">
+            <div className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mt-1 leading-none drop-shadow-sm">
               {isLoadingBalance ? (
                 <div className="h-9 w-40 skeleton rounded-lg" />
               ) : showBalance ? (
@@ -468,14 +483,14 @@ export default function DashboardPage() {
         </div>
 
         {/* Action Buttons: 4 Primary Actions in Order (Fund, Send, Receive, Bills) */}
-        <div className="grid grid-cols-4 gap-2 sm:gap-4 pt-2">
+        <div className="grid grid-cols-4 gap-2 sm:gap-3 pt-3 mt-1 border-t border-white/10">
           {/* 1. FUND */}
-          <button 
-            onClick={() => setShowFundModal(true)} 
+          <button
+            onClick={() => setShowFundModal(true)}
             className="group flex flex-col items-center gap-1.5 sm:gap-2"
           >
-            <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-all shadow-lg"
+            <div
+              className="w-full h-14 sm:h-16 rounded-2xl flex items-center justify-center group-hover:-translate-y-0.5 transition-transform shadow-lg"
               style={{
                 background: variant === 'gold' ? 'rgba(212, 160, 23, 0.15)' : 'rgba(181, 226, 61, 0.15)',
                 border: `1px solid ${variant === 'gold' ? 'rgba(212, 160, 23, 0.35)' : 'rgba(181, 226, 61, 0.35)'}`,
@@ -488,12 +503,12 @@ export default function DashboardPage() {
           </button>
 
           {/* 2. SEND */}
-          <button 
-            onClick={() => setShowSendModal(true)} 
+          <button
+            onClick={() => setShowSendModal(true)}
             className="group flex flex-col items-center gap-1.5 sm:gap-2"
           >
-            <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-all shadow-lg"
+            <div
+              className="w-full h-14 sm:h-16 rounded-2xl flex items-center justify-center group-hover:-translate-y-0.5 transition-transform shadow-lg"
               style={{
                 background: 'rgba(59, 130, 246, 0.15)',
                 border: '1px solid rgba(59, 130, 246, 0.35)',
@@ -507,8 +522,8 @@ export default function DashboardPage() {
 
           {/* 3. RECEIVE */}
           <Link href="/app/receive" className="group flex flex-col items-center gap-1.5 sm:gap-2">
-            <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-all shadow-lg"
+            <div
+              className="w-full h-14 sm:h-16 rounded-2xl flex items-center justify-center group-hover:-translate-y-0.5 transition-transform shadow-lg"
               style={{
                 background: 'rgba(245, 158, 11, 0.15)',
                 border: '1px solid rgba(245, 158, 11, 0.35)',
@@ -522,8 +537,8 @@ export default function DashboardPage() {
 
           {/* 4. BILLS */}
           <Link href="/app/bills" className="group flex flex-col items-center gap-1.5 sm:gap-2">
-            <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-all shadow-lg"
+            <div
+              className="w-full h-14 sm:h-16 rounded-2xl flex items-center justify-center group-hover:-translate-y-0.5 transition-transform shadow-lg"
               style={{
                 background: 'rgba(139, 92, 246, 0.15)',
                 border: '1px solid rgba(139, 92, 246, 0.35)',
@@ -538,7 +553,7 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* 🟢 LIVE MARKET CHART (USDC/USD + USD → local currencies) */}
-      <motion.div 
+      <motion.div
         className="liquid-glass p-4 sm:p-6 relative overflow-hidden"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -571,9 +586,8 @@ export default function DashboardPage() {
                       <button
                         key={pair.id}
                         onClick={() => { setSelectedMarket(pair.id); setShowMarketPicker(false) }}
-                        className={`w-full px-3 py-2 rounded-xl text-left flex items-center justify-between transition-all ${
-                          selectedMarket === pair.id ? 'bg-white/10 text-white' : 'text-[#94A3B8] hover:text-white hover:bg-white/5'
-                        }`}
+                        className={`w-full px-3 py-2 rounded-xl text-left flex items-center justify-between transition-all ${selectedMarket === pair.id ? 'bg-white/10 text-white' : 'text-[#94A3B8] hover:text-white hover:bg-white/5'
+                          }`}
                       >
                         <span className="text-xs font-bold flex items-center gap-2">
                           {pair.id === 'USDC' ? <Coins className="w-3.5 h-3.5" /> : <span className="text-[11px]"><CurrencyFlag countryCode={AFRICAN_CURRENCIES.find(c => c.code === pair.id)?.countryCode} emoji={AFRICAN_CURRENCIES.find(c => c.code === pair.id)?.flag} size={16} /></span>}
@@ -594,9 +608,8 @@ export default function DashboardPage() {
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                  timeframe === tf ? 'bg-white/10 text-white' : 'text-[#64748B] hover:text-white'
-                }`}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${timeframe === tf ? 'bg-white/10 text-white' : 'text-[#64748B] hover:text-white'
+                  }`}
               >
                 {tf}
               </button>
@@ -654,7 +667,7 @@ export default function DashboardPage() {
       {/* 📊 SECOND ROW: CASH FLOW (MONEY IN vs MONEY OUT) & REFERRALS */}
       <div className="grid md:grid-cols-2 gap-6">
         {/* Money In vs Money Out Cash Flow Chart */}
-        <motion.div 
+        <motion.div
           className="liquid-glass p-4 sm:p-5 relative overflow-hidden"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -667,7 +680,7 @@ export default function DashboardPage() {
               </h3>
               <p className="text-[11px] text-[#64748B]">Money In vs. Money Out · Your account · last 7 days</p>
             </div>
-            
+
             <div className="flex items-center gap-3 text-xs">
               <span className="flex items-center gap-1.5 text-white font-medium">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" /> Money In
@@ -700,7 +713,7 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Peak Referral Reward Card */}
-        <motion.div 
+        <motion.div
           className="glass-card p-5 flex flex-col justify-between relative overflow-hidden border border-amber-500/30 bg-amber-500/[0.02]"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -727,8 +740,8 @@ export default function DashboardPage() {
           </div>
 
           <div className="pt-4 relative z-10">
-            <Link 
-              href="/app/referrals" 
+            <Link
+              href="/app/referrals"
               className="w-full py-3 px-4 rounded-xl text-xs font-bold text-black flex items-center justify-center gap-2 shadow-lg transition-transform hover:scale-[1.02]"
               style={{ background: colors.gradientBg }}
             >
@@ -739,7 +752,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Transactions */}
-      <motion.div 
+      <motion.div
         className="liquid-glass p-5 relative overflow-hidden"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -777,9 +790,8 @@ export default function DashboardPage() {
                   className="flex items-center justify-between p-3 rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.04)] transition-all"
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      isSend ? 'bg-red-500/10 text-red-400' : isReceive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
-                    }`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSend ? 'bg-red-500/10 text-red-400' : isReceive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                      }`}>
                       {isSend ? <ArrowUpRight className="w-5 h-5" /> : isReceive ? <ArrowDownLeft className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
                     </div>
                     <div>
@@ -814,9 +826,8 @@ export default function DashboardPage() {
                         {isSend ? '-' : '+'}${tx.amount} {tx.currency || 'USD'}
                       </p>
                     )}
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${
-                      (tx.status || '').toUpperCase() === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                    }`}>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${(tx.status || '').toUpperCase() === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
                       {tx.status}
                     </span>
                   </div>
@@ -843,7 +854,7 @@ export default function DashboardPage() {
               {/* Header */}
               <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/10">
                 <div className="flex items-center gap-3">
-                  <div 
+                  <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md flex-shrink-0"
                     style={{
                       background: `rgba(${colors.glowRgb}, 0.15)`,
@@ -956,7 +967,7 @@ export default function DashboardPage() {
               {/* Header */}
               <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/10">
                 <div className="flex items-center gap-3">
-                  <div 
+                  <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md flex-shrink-0"
                     style={{
                       background: `rgba(${colors.glowRgb}, 0.15)`,
@@ -1144,7 +1155,7 @@ export default function DashboardPage() {
                     return (
                       <button
                         key={curr.code}
-                        onClick={() => { setSelectedLocalCurrency(curr.code); setShowLocalCurrencyPicker(false); setLocalCurrencySearch(''); userAPI.updatePreferences({ currencyDisplay: curr.code }).catch(() => {}) }}
+                        onClick={() => { setSelectedLocalCurrency(curr.code); setShowLocalCurrencyPicker(false); setLocalCurrencySearch(''); userAPI.updatePreferences({ currencyDisplay: curr.code }).catch(() => { }) }}
                         className="w-full p-3.5 rounded-2xl border flex items-center justify-between transition-all"
                         style={isSelected
                           ? { background: `rgba(${colors.glowRgb},0.12)`, borderColor: colors.primary }
