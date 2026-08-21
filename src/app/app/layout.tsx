@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
+import dynamic from 'next/dynamic'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { useTheme } from '@/context/ThemeContext'
@@ -13,7 +14,9 @@ import {
   Smartphone, Building2, FileSpreadsheet, X, Check, ShieldCheck, Zap, Clock, ChevronRight, Fingerprint
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import AISupportWidget from '@/components/AISupportWidget'
+// Lazy-load the AI widget — it's 24 KB and only needed on demand.
+// Loading it eagerly on every page adds parse cost on low-end phones.
+const AISupportWidget = dynamic(() => import('@/components/AISupportWidget'), { ssr: false })
 import { notificationsAPI, userAPI } from '@/lib/api'
 import { useLite } from '@/lib/lite'
 
@@ -235,7 +238,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Main Content Area — flex column so header is a normal flex item
              (not sticky inside overflow-y-auto, which causes Android Chrome
               compositor layer conflicts and the scanline corruption bug). */}
-        <main className="flex-1 flex flex-col h-dvh-force w-full max-w-full relative bg-[var(--app-bg)]">
+        <main className="flex-1 min-w-0 flex flex-col h-dvh-force max-w-full relative bg-[var(--app-bg)]">
           {/* Header sits OUTSIDE the scroll container as a flex child.
                No sticky needed — it's pinned by the flex layout. */}
           <header className="flex-shrink-0 h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] z-30">
@@ -316,7 +319,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           {/* Scroll container — completely separate from the header.
                No sticky elements, no GPU layer conflicts. */}
-          <div className="flex-1 overflow-y-auto overscroll-none w-full max-w-full">
+          {/* pb-nav-safe: ensures page content is never hidden behind the
+              fixed bottom nav bar (4rem tall) + iOS safe area inset */}
+          <div className="flex-1 overflow-y-auto overscroll-none w-full max-w-full pb-nav-safe md:pb-0">
             <div className="w-full max-w-full relative">
               {profile && !profile.pinSet && !pathname.includes('/settings/change-pin') && (
                 <button
@@ -355,23 +360,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   </button>
                 </div>
               )}
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={pathname}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="w-full"
-                >
+              {/* Page transition: CSS-only on mobile (JS animations bypass
+                  the CSS reduced-motion / animation-duration:0.01ms guards).
+                  Desktop keeps Framer for the premium fade. */}
+              {isMobile ? (
+                <div key={pathname} className="w-full animate-[fadeIn_0.12s_ease-out]">
                   {children}
-                </motion.div>
-              </AnimatePresence>
+                </div>
+              ) : (
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={pathname}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.12 }}
+                    className="w-full"
+                  >
+                    {children}
+                  </motion.div>
+                </AnimatePresence>
+              )}
             </div>
           </div>
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
+        {/* Pure-CSS nav — no Framer Motion. motion.div on every icon caused
+            a JS rAF spike on every tap and route change on low-end phones.
+            CSS transform + transition is handled entirely by the GPU compositor
+            at zero JS cost. */}
         <nav className="md:hidden fixed bottom-0 w-full bg-[#0D1322] border-t border-white/5 px-1 py-1.5 safe-bottom z-50">
           <div className="flex justify-around items-center">
             {navItems.map((item) => {
@@ -380,17 +398,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all ${
+                  className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-colors duration-150 ${
                     isActive ? 'text-white font-bold' : 'text-[#64748B]'
                   }`}
                   style={isActive ? { color: colors.primary } : {}}
                 >
-                  <motion.div
-                    animate={isActive ? { scale: 1.1 } : { scale: 1 }}
-                    className="relative"
+                  {/* CSS-only scale — zero JS animation overhead */}
+                  <div
+                    className="relative transition-transform duration-150"
+                    style={{ transform: isActive ? 'scale(1.12)' : 'scale(1)' }}
                   >
                     <item.icon className="w-5 h-5 mb-0.5" />
-                  </motion.div>
+                  </div>
                   <span className="text-[10px] font-semibold tracking-tight">{item.label}</span>
                 </Link>
               )
