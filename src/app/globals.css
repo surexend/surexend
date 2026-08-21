@@ -594,6 +594,13 @@ img {
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
 .safe-top    { padding-top: env(safe-area-inset-top, 0px); }
 
+/* Content clearance for the fixed mobile bottom nav (4rem tall) + safe area.
+   Apply `pb-nav-safe` to any full-height scroll container on mobile so page
+   content is never hidden behind the navigation bar. */
+.pb-nav-safe {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 16px));
+}
+
 /* ── Prevent layout shift on load ─────────────────────────────────────── */
 .contain-layout { contain: layout style; }
 
@@ -785,9 +792,13 @@ html.lite-mode *::after {
     filter: none !important;
   }
 
-  /* Momentum scrolling + no URL-bar height jump (iOS) + no rubber-band chaining */
+  /* Momentum scrolling on ALL scrollable containers, not just tagged classes.
+     Android Chrome + iOS Safari both benefit from this for smooth lists. */
+  [style*="overflow"],
   .overflow-y-auto,
-  .overflow-x-auto {
+  .overflow-x-auto,
+  .overflow-y-scroll,
+  .overflow-x-scroll {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
   }
@@ -796,6 +807,31 @@ html.lite-mode *::after {
      is the #1 "not seamless" tell on iPhones. Pin controls to 16px on phones. */
   input, select, textarea {
     font-size: 16px !important;
+  }
+
+  /* Ensure interactive elements meet minimum 44px touch target (iOS HIG).
+     Avoids mis-taps on small icon buttons in the header control cluster. */
+  button:not([data-no-touch-target]),
+  [role="button"]:not([data-no-touch-target]) {
+    min-height: 36px;
+    min-width: 36px;
+  }
+}
+
+/* Admin has one deliberate vertical scroll owner. Keep the global mobile
+   overscroll containment from trapping upward swipes after a table reaches
+   its horizontal edge. Tables may pan sideways, but vertical movement belongs
+   to the admin shell. */
+@media (max-width: 767px) {
+  [data-admin-scroll="true"] {
+    overscroll-behavior-y: auto !important;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-admin-scroll="true"] .overflow-x-auto {
+    overscroll-behavior-y: auto !important;
+    touch-action: auto !important;
   }
 }
 

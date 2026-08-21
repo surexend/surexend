@@ -90,7 +90,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </aside>
 
         {/* Main */}
-        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-none p-4 sm:p-6 md:p-8 pb-24 sm:pb-10 md:pb-10 max-w-[1400px]">
+        <main data-admin-scroll="true" className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-auto p-4 sm:p-6 md:p-8 pb-24 sm:pb-10 md:pb-10 max-w-[1400px]">
           {children}
         </main>
       </div>
