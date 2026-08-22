@@ -18,8 +18,8 @@ const registerSchema = z.object({
   surexTag: z.string()
     .optional()
     .or(z.literal(''))
-    .refine(v => !v || /^[a-zA-Z0-9_]{3,20}$/.test(v.replace(/^@/, '')), {
-      message: '3-20 characters, letters, numbers or underscores',
+    .refine(v => !v || /^[a-zA-Z0-9][a-zA-Z0-9._-]{2,39}$/.test(v.replace(/^@/, '')), {
+      message: '3-40 characters, starting with a letter or number',
     }),
   email: z.string().email('Invalid email address'),
   whatsapp: z.string().min(10, 'Enter a valid WhatsApp number'),

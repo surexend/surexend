@@ -755,7 +755,9 @@ export class WalletsService implements OnModuleInit {
   }
 
   async sendCrypto(userId: string, toAddress: string, amount: number, network: string, destinationNetwork?: string) {
-    if (amount <= 0) throw new BadRequestException('Amount must be greater than 0');
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      throw new BadRequestException('Amount must be greater than 0');
+    }
 
     const net = network.toUpperCase();
     // In-app tag send: zero-fee internal USDC transfer between SureXend users.
@@ -782,8 +784,8 @@ export class WalletsService implements OnModuleInit {
   // cash-flow charts reflect real money movement. No chain hops, no fees.
   private async sendToSurexTag(senderUserId: string, tagInput: string, amount: number) {
     const tag = tagInput.trim().replace(/^@/, '').toLowerCase();
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(tag)) {
-      throw new BadRequestException('Enter a valid SureX tag like @username.');
+    if (!/^[a-z0-9][a-z0-9._-]{2,39}$/.test(tag)) {
+      throw new BadRequestException('Enter a valid SureX tag like @first.last.');
     }
 
     const recipient = await this.prisma.user.findUnique({ where: { surexTag: tag } });
