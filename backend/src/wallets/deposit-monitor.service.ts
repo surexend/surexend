@@ -130,11 +130,23 @@ export class DepositMonitorService implements OnModuleInit {
         }
       }
 
-      // Update the gross USDC balance from live on-chain state. getBalance()
-      // layers the CONVERT ledger on top to compute spendable USD.
+      // Preserve the app-ledger net from internal SureX tag transfers. Those
+      // transfers do not appear on-chain, so replacing the wallet balance with
+      // gross chain state alone would erase a just-received internal payment.
+      const internalRows = await this.prisma.transaction.findMany({
+        where: { userId, status: 'COMPLETED' },
+        select: { type: true, amount: true, metadata: true },
+      });
+      const internalNet = internalRows.reduce((total, row) => {
+        const metadata = row.metadata as any;
+        if (metadata?.delivery !== 'internal' || metadata?.method !== 'surex-tag') return total;
+        return total + (row.type === 'RECEIVE' ? row.amount : row.type === 'SEND' ? -row.amount : 0);
+      }, 0);
+
+      // Update from live chain state plus the internal ledger adjustment.
       await this.prisma.wallet.update({
         where: { id: walletId },
-        data: { usdcBalance: grossUsdc },
+        data: { usdcBalance: Math.max(0, grossUsdc + internalNet) },
       });
 
       await this.backfillDepositNotifications(userId);
