@@ -138,7 +138,7 @@ export default function CampaignsPage() {
               return (
                 <div
                   key={e.userId}
-                  className={`flex items-center gap-3 px-4 py-3 content-visibility-auto ${isMe ? 'bg-white/[0.04]' : ''}`}
+                  className={`flex items-center gap-3 px-4 py-3 ${isMe ? 'bg-white/[0.04]' : ''}`}
                 >
                   <div className="w-7 flex-shrink-0 flex justify-center">{rankIcon(e.rank)}</div>
                   <div className="w-9 h-9 rounded-full bg-[#1E2738] border border-white/10 flex items-center justify-center text-[11px] font-black text-white flex-shrink-0">

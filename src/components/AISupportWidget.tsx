@@ -401,7 +401,7 @@ export default function AISupportWidget() {
         title="24/7 AI Support Assistant"
       >
         <Bot className="w-6 h-6 text-black" />
-        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-[#0A0F1E] animate-pulse" />
+        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-[#0A0F1E]" />
       </motion.button>
 
       {/* 💬 CHAT MODAL DRAWER */}

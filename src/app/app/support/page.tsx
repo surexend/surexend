@@ -199,7 +199,7 @@ export default function SupportPage() {
           <div>
             <h1 className="text-white font-inter font-bold text-xl mb-1">Support</h1>
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-[#10B981]" />
               <p className="text-[#10B981] text-xs font-medium">AI Support Active · 24/7</p>
             </div>
           </div>

@@ -77,18 +77,16 @@ export default function MobileResilienceScript() {
       font-size: 13px;
       font-weight: 600;
       z-index: 99999;
-      transform: translateY(-100%);
-      transition: transform 0.3s ease;
+      display: none;
     `
     offlineBanner.textContent = '⚡ You\'re offline — some features may be limited'
     document.body.prepend(offlineBanner)
 
-    const showOffline = () => {
-      offlineBanner.style.transform = 'translateY(0)'
-    }
-    const showOnline = () => {
-      offlineBanner.style.transform = 'translateY(-100%)'
-    }
+    // display:none keeps the layer out of the compositor entirely while
+    // online — a permanent transformed fixed layer (translateY(-100%)) was
+    // forcing tile compositing against scrolling content on Android GPUs.
+    const showOffline = () => { offlineBanner.style.display = 'block' }
+    const showOnline = () => { offlineBanner.style.display = 'none' }
 
     window.addEventListener('offline', showOffline)
     window.addEventListener('online', showOnline)

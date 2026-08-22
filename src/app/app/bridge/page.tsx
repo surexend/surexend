@@ -365,7 +365,7 @@ export default function BridgePage() {
                         isDone 
                           ? 'bg-emerald-500/20 border-emerald-400 text-emerald-400' 
                           : isActive 
-                            ? 'bg-purple-500/20 border-purple-400 text-purple-400 animate-pulse'
+                            ? 'bg-purple-500/20 border-purple-400 text-purple-400'
                             : 'bg-white/5 border-white/10 text-gray-500'
                       }`}
                     >

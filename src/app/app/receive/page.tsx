@@ -299,7 +299,7 @@ export default function ReceivePage() {
                 <p className="text-xs text-[#64748B]">{activeNet.sublabel}</p>
               </div>
               <div className="ml-auto flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span className="text-[10px] text-emerald-400 font-bold">Active</span>
               </div>
             </div>

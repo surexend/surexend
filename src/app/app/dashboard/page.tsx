@@ -621,7 +621,7 @@ export default function DashboardPage() {
                 {selectedMarket === 'USDC' ? `$${(liveSpotRef.current['USDC'] ?? 1).toFixed(4)}` : `${MARKET_PAIRS.find(p => p.id === selectedMarket)?.symbol || '$'}${rateFor(selectedMarket).toFixed(MARKET_PAIRS.find(p => p.id === selectedMarket)?.decimals ?? 2)}`}
               </span>
               <span className="text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-0.5 bg-[rgba(16,185,129,0.15)] text-[#10B981] border border-[rgba(16,185,129,0.2)]">
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-[#10B981]" /> Live
+                <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" /> Live
               </span>
             </div>
             <p className="text-xs text-[#64748B] mt-0.5 font-medium">

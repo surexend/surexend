@@ -273,7 +273,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 title={`Theme: ${variant === 'gold' ? 'Gold' : 'Lemon'} — tap to switch`}
                 aria-label={`Switch theme to ${variant === 'gold' ? 'Lemon' : 'Gold'}`}
               >
-                <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ background: colors.primary }} />
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: colors.primary }} />
               </button>
 
               {/* Lite mode toggle — uses less data (animations & blur off) */}
@@ -338,7 +338,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               )}
               {showBioPrompt && profile && !profile.passkeysEnabled && !pathname.includes('/settings/biometric') && (
                 <div className="mx-3 mt-2 w-[calc(100%-24px)] rounded-2xl p-3 flex items-center gap-3 border border-white/10 bg-gradient-to-r from-[rgba(212,160,23,0.12)] to-[rgba(212,160,23,0.04)] text-left">
-                  <div className="w-9 h-9 rounded-xl border border-[rgba(212,160,23,0.4)] bg-[rgba(212,160,23,0.12)] flex items-center justify-center flex-shrink-0 animate-pulse">
+                  <div className="w-9 h-9 rounded-xl border border-[rgba(212,160,23,0.4)] bg-[rgba(212,160,23,0.12)] flex items-center justify-center flex-shrink-0">
                     <Fingerprint className="w-5 h-5 text-[#D4A017]" />
                   </div>
                   <div className="flex-1 min-w-0">

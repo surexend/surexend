@@ -242,7 +242,7 @@ export default function BillsPage() {
                             <Icon size={20} className="text-white" />
                           </div>
                           {cat.badge && (
-                            <span className="absolute -top-1.5 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#FF4D6D] text-white shadow-md animate-pulse">
+                            <span className="absolute -top-1.5 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#FF4D6D] text-white shadow-md">
                               {cat.badge}
                             </span>
                           )}
