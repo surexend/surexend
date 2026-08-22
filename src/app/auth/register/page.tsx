@@ -111,17 +111,23 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden py-12" style={{ background: 'var(--app-bg)' }}>
-      <div 
+      <div
         className="absolute w-96 h-96 rounded-full pointer-events-none opacity-20"
         style={{ background: `radial-gradient(circle, ${colors.glow}, transparent 70%)`, top: '-10%', right: '-10%' }}
       />
-      
-      <motion.div 
+      <div
+        className="absolute w-80 h-80 rounded-full pointer-events-none opacity-[0.12]"
+        style={{ background: `radial-gradient(circle, ${colors.glow}, transparent 70%)`, bottom: '-8%', left: '-6%' }}
+      />
+
+      <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className={`w-full max-w-xl p-8 liquid-glass relative z-10`}
+        className={`w-full max-w-xl p-8 liquid-glass relative z-10 overflow-hidden rounded-3xl border border-white/10`}
       >
+        {/* Signature brand hairline */}
+        <div className="absolute inset-x-0 top-0 h-[2px] pointer-events-none" style={{ background: `linear-gradient(90deg, transparent, ${colors.primary}, transparent)` }} />
         <div className="text-center mb-8">
           <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
             <img 

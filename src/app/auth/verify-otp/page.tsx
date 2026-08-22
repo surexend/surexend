@@ -97,9 +97,11 @@ function VerifyOTPForm() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
-        className={`w-full max-w-md p-8 liquid-glass relative z-10 text-center`}
+        className={`w-full max-w-md p-8 liquid-glass relative z-10 text-center overflow-hidden rounded-3xl border border-white/10`}
       >
-        <div className="w-16 h-16 mx-auto rounded-full bg-[rgba(255,255,255,0.05)] flex items-center justify-center mb-6">
+        {/* Signature brand hairline */}
+        <div className="absolute inset-x-0 top-0 h-[2px] pointer-events-none" style={{ background: `linear-gradient(90deg, transparent, ${colors.primary}, transparent)` }} />
+        <div className="w-16 h-16 mx-auto rounded-full bg-[rgba(255,255,255,0.05)] border border-white/10 flex items-center justify-center mb-6">
           <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
@@ -111,7 +113,7 @@ function VerifyOTPForm() {
           <span className="text-white font-medium">{identifier}</span>
         </p>
 
-        <div className="flex justify-center gap-2 mb-8">
+        <div className="flex justify-center gap-2.5 mb-8">
           {otp.map((digit, index) => (
             <input
               key={index}
@@ -120,11 +122,12 @@ function VerifyOTPForm() {
               }}
               type="text"
               inputMode="numeric"
+              autoComplete="one-time-code"
               maxLength={1}
               value={digit}
               onChange={(e) => handleChange(index, e.target.value)}
               onKeyDown={(e) => handleKeyDown(index, e)}
-              className={`w-12 h-14 text-center text-xl font-bold rounded-xl bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.1)] text-white focus:outline-none focus:border-[${colors.primary}] focus:ring-1 focus:ring-[${colors.primary}] transition-all`}
+              className="w-12 h-14 text-center text-xl font-bold rounded-2xl bg-[rgba(255,255,255,0.04)] border border-white/10 text-white focus:outline-none focus:border-white/40 focus:bg-white/[0.07] transition-colors"
               disabled={isLoading}
             />
           ))}

@@ -71,12 +71,14 @@ export default function ForgotPasswordPage() {
         style={{ background: `radial-gradient(circle, ${colors.glow}, transparent 70%)`, top: '20%', right: '10%' }}
       />
       
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className={`w-full max-w-md p-8 liquid-glass relative z-10`}
+        className={`w-full max-w-md p-8 liquid-glass relative z-10 overflow-hidden rounded-3xl border border-white/10`}
       >
+        {/* Signature brand hairline */}
+        <div className="absolute inset-x-0 top-0 h-[2px] pointer-events-none" style={{ background: `linear-gradient(90deg, transparent, ${colors.primary}, transparent)` }} />
         <Link href="/auth/login" className="inline-flex items-center text-[#94A3B8] hover:text-white transition-colors mb-6">
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to login
         </Link>
