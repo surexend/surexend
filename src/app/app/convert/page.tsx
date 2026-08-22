@@ -199,7 +199,7 @@ export default function ConvertPage() {
                 <button
                   type="button"
                   onClick={() => setPickerTarget('from')}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 transition-all active:scale-95"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.08] border border-white/10 hover:bg-white/15 transition-all active:scale-95"
                 >
                   <CurrencyFlag countryCode={fromInfo?.countryCode} emoji={fromInfo?.flag} size={18} />
                   <span className="font-extrabold text-sm text-white">{fromCode}</span>
@@ -224,7 +224,7 @@ export default function ConvertPage() {
                       key={pct}
                       type="button"
                       onClick={() => handlePreset(pct)}
-                      className="px-1.5 py-0.5 rounded-md bg-white/6 hover:bg-white/15 text-[10px] font-bold text-[#94A3B8] hover:text-white transition-colors"
+                      className="px-1.5 py-0.5 rounded-md bg-white/[0.06] hover:bg-white/15 text-[10px] font-bold text-[#94A3B8] hover:text-white transition-colors"
                     >
                       {pct === 100 ? 'Max' : `${pct}%`}
                     </button>
@@ -236,10 +236,11 @@ export default function ConvertPage() {
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-[#64748B]">{fromSymbol}</span>
                 <input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
+                  autoComplete="off"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                   placeholder="0"
                   className="bg-transparent text-3xl sm:text-4xl font-black text-white w-full focus:outline-none placeholder:text-[#2D3A50]"
                 />
@@ -269,7 +270,7 @@ export default function ConvertPage() {
                 <button
                   type="button"
                   onClick={() => setPickerTarget('to')}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/15 transition-all active:scale-95"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.08] border border-white/10 hover:bg-white/15 transition-all active:scale-95"
                 >
                   <CurrencyFlag countryCode={toInfo?.countryCode} emoji={toInfo?.flag} size={18} />
                   <span className="font-extrabold text-sm text-white">{toCode}</span>
@@ -347,11 +348,11 @@ export default function ConvertPage() {
             </div>
             <div className="grid grid-cols-3 gap-3 max-w-[240px] mx-auto">
               {[1,2,3,4,5,6,7,8,9].map(n => (
-                <button key={n} onClick={() => handlePinInput(n.toString())} className="p-3.5 rounded-2xl bg-white/6 hover:bg-white/12 text-white font-bold text-lg active:scale-95 transition-all">{n}</button>
+                <button key={n} onClick={() => handlePinInput(n.toString())} className="p-3.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] text-white font-bold text-lg active:scale-95 transition-all">{n}</button>
               ))}
-              <button onClick={() => setStep(1)} className="p-3.5 rounded-2xl bg-white/4 text-[#94A3B8] text-xs font-bold">Cancel</button>
-              <button onClick={() => handlePinInput('0')} className="p-3.5 rounded-2xl bg-white/6 hover:bg-white/12 text-white font-bold text-lg active:scale-95">0</button>
-              <button onClick={handlePinDelete} className="p-3.5 rounded-2xl bg-white/6 text-red-400 font-bold text-lg active:scale-95">⌫</button>
+              <button onClick={() => setStep(1)} className="p-3.5 rounded-2xl bg-white/[0.04] text-[#94A3B8] text-xs font-bold">Cancel</button>
+              <button onClick={() => handlePinInput('0')} className="p-3.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] text-white font-bold text-lg active:scale-95">0</button>
+              <button onClick={handlePinDelete} className="p-3.5 rounded-2xl bg-white/[0.06] text-red-400 font-bold text-lg active:scale-95">⌫</button>
             </div>
 
             <div className="flex items-center gap-3 my-2">

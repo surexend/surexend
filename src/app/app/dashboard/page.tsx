@@ -444,7 +444,7 @@ export default function DashboardPage() {
               {walletView === 'LOCAL' && (
                 <button
                   onClick={() => setShowLocalCurrencyPicker(true)}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/8 hover:bg-white/15 border border-white/10 transition-all text-[10px] font-bold text-white"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/[0.08] hover:bg-white/15 border border-white/10 transition-all text-[10px] font-bold text-white"
                 >
                   <span className="text-[11px]"><CurrencyFlag countryCode={LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.countryCode} emoji={LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.flag} size={16} /></span>
                   {selectedLocalCurrency}
@@ -1079,7 +1079,7 @@ export default function DashboardPage() {
                     <span className="text-lg font-black text-white font-mono tracking-widest">9824018420</span>
                     <button
                       onClick={copyVBA}
-                      className="p-1.5 rounded-lg bg-white/8 hover:bg-white/15 text-[#94A3B8] hover:text-white transition-colors"
+                      className="p-1.5 rounded-lg bg-white/[0.08] hover:bg-white/15 text-[#94A3B8] hover:text-white transition-colors"
                     >
                       {copiedVBA
                         ? <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>

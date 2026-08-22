@@ -152,11 +152,11 @@ export default function ChangePinPage() {
 
             <div className="grid grid-cols-3 gap-3 max-w-[240px] mx-auto">
               {[1,2,3,4,5,6,7,8,9].map(n => (
-                <button key={n} onClick={() => handleDigit(n.toString())} disabled={isLoading} className="p-3.5 rounded-2xl bg-white/6 hover:bg-white/12 text-white font-bold text-lg active:scale-95 transition-all disabled:opacity-50">{n}</button>
+                <button key={n} onClick={() => handleDigit(n.toString())} disabled={isLoading} className="p-3.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] text-white font-bold text-lg active:scale-95 transition-all disabled:opacity-50">{n}</button>
               ))}
-              <button onClick={() => router.back()} className="p-3.5 rounded-2xl bg-white/4 text-[#94A3B8] text-xs font-bold">Cancel</button>
-              <button onClick={() => handleDigit('0')} disabled={isLoading} className="p-3.5 rounded-2xl bg-white/6 hover:bg-white/12 text-white font-bold text-lg active:scale-95 transition-all disabled:opacity-50">0</button>
-              <button onClick={handleDelete} disabled={isLoading} className="p-3.5 rounded-2xl bg-white/6 text-red-400 font-bold text-lg active:scale-95 transition-all disabled:opacity-50">⌫</button>
+              <button onClick={() => router.back()} className="p-3.5 rounded-2xl bg-white/[0.04] text-[#94A3B8] text-xs font-bold">Cancel</button>
+              <button onClick={() => handleDigit('0')} disabled={isLoading} className="p-3.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] text-white font-bold text-lg active:scale-95 transition-all disabled:opacity-50">0</button>
+              <button onClick={handleDelete} disabled={isLoading} className="p-3.5 rounded-2xl bg-white/[0.06] text-red-400 font-bold text-lg active:scale-95 transition-all disabled:opacity-50">⌫</button>
             </div>
 
             <div className="flex items-center gap-2 text-[#64748B] text-[11px]">
