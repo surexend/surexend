@@ -833,6 +833,7 @@ export class WalletsService implements OnModuleInit {
     }
 
     const reference = `TAG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const receiveReference = `${reference}-R`;
     const result = await this.prisma.$transaction(async (prisma) => {
       await prisma.wallet.update({
         where: { id: senderWallet.id },
@@ -865,7 +866,7 @@ export class WalletsService implements OnModuleInit {
         amount: sendAmount,
         fee: 0,
         currency: 'USDC',
-        reference,
+        reference: receiveReference,
         metadata: {
           fromTag: senderWallet.user?.surexTag || null,
           senderUserId,
