@@ -395,7 +395,16 @@ export default function DashboardPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-white/5 to-transparent rounded-full blur-3xl -z-10 pointer-events-none" />
+        {/* Premium surface treatment — hairline + radial corner glow.
+            Radial gradients only: zero blur filters, GPU-cheap on phones. */}
+        <div
+          className="absolute inset-x-0 top-0 h-[2px] pointer-events-none"
+          style={{ background: `linear-gradient(90deg, transparent, rgba(${colors.glowRgb}, 0.75), transparent)` }}
+        />
+        <div
+          className="absolute -top-28 -right-20 w-80 h-80 -z-10 pointer-events-none rounded-full"
+          style={{ background: `radial-gradient(circle, rgba(${colors.glowRgb}, 0.09), transparent 70%)` }}
+        />
 
         {/* ── Dual Wallet Balance Card ── */}
         <div className="flex justify-between items-start mb-4">
@@ -475,7 +484,7 @@ export default function DashboardPage() {
             className="group flex flex-col items-center gap-1.5 sm:gap-2"
           >
             <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-all shadow-lg"
+              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200"
               style={{
                 background: variant === 'gold' ? 'rgba(212, 160, 23, 0.15)' : 'rgba(181, 226, 61, 0.15)',
                 border: `1px solid ${variant === 'gold' ? 'rgba(212, 160, 23, 0.35)' : 'rgba(181, 226, 61, 0.35)'}`,
@@ -493,7 +502,7 @@ export default function DashboardPage() {
             className="group flex flex-col items-center gap-1.5 sm:gap-2"
           >
             <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-all shadow-lg"
+              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200"
               style={{
                 background: 'rgba(59, 130, 246, 0.15)',
                 border: '1px solid rgba(59, 130, 246, 0.35)',
@@ -508,7 +517,7 @@ export default function DashboardPage() {
           {/* 3. RECEIVE */}
           <Link href="/app/receive" className="group flex flex-col items-center gap-1.5 sm:gap-2">
             <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-all shadow-lg"
+              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200"
               style={{
                 background: 'rgba(245, 158, 11, 0.15)',
                 border: '1px solid rgba(245, 158, 11, 0.35)',
@@ -523,7 +532,7 @@ export default function DashboardPage() {
           {/* 4. BILLS */}
           <Link href="/app/bills" className="group flex flex-col items-center gap-1.5 sm:gap-2">
             <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-all shadow-lg"
+              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200"
               style={{
                 background: 'rgba(139, 92, 246, 0.15)',
                 border: '1px solid rgba(139, 92, 246, 0.35)',

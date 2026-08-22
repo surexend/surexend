@@ -8,7 +8,7 @@ import {
   ArrowRight, Send, RefreshCw, Zap, Shield, Users, User, Globe,
   ChevronDown, Check, Star, MessageCircle, X, Menu, Download,
   TrendingUp, Wallet, CreditCard, Smartphone, Lock, Clock,
-  BarChart3, Gift, ChevronRight, Bell
+  BarChart3, Gift, ChevronRight, PlusCircle, Eye
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -535,214 +535,238 @@ export default function LandingPage() {
             </motion.div>
           </motion.div>
 
-          {/* Floating phone mockup - EXACT PWA REPLICA (Outside scroll fade opacity) */}
-          <motion.div
-            className="mt-12 sm:mt-16 relative w-full max-w-[320px] sm:max-w-[350px] mx-auto z-20 px-2"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.6 }}
-          >
-            {/* Realistic device frame */}
-            <div className="relative mx-auto select-none">
-              {/* Physical side buttons */}
-              <div className="absolute -left-1 top-[118px] h-7 w-[3px] rounded-l-sm bg-gradient-to-b from-[#4a4a4e] to-[#1c1c1e]" />
-              <div className="absolute -left-1 top-[160px] h-7 w-[3px] rounded-l-sm bg-gradient-to-b from-[#4a4a4e] to-[#1c1c1e]" />
-              <div className="absolute -left-1 top-[205px] h-11 w-[3px] rounded-l-sm bg-gradient-to-b from-[#3f3f42] to-[#151517]" />
-              <div className="absolute -right-1 top-[140px] h-16 w-[3px] rounded-r-sm bg-gradient-to-b from-[#4a4a4e] to-[#1c1c1e]" />
-
-              {/* Titanium device body */}
+            {/* Floating phone mockup — PIXEL-FAITHFUL replica of the real
+                dashboard. Everything inside is plain divs/SVG: no images, no
+                filters, no animations on mobile. Desktop gets a slow float. */}
+            <motion.div
+              className="mt-12 sm:mt-16 relative w-full max-w-[340px] mx-auto z-20"
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.6 }}
+            >
+            <div className="relative mx-auto select-none w-full">
+              {/* Ambient glow — radial only, zero filters */}
               <div
-                className="relative rounded-[52px] p-[10px]"
+                className="absolute -inset-8 -z-10 pointer-events-none"
+                style={{ background: `radial-gradient(ellipse 62% 55% at 50% 46%, rgba(${accentRgb}, 0.22), transparent 70%)` }}
+              />
+
+              {/* Physical side buttons */}
+              <div className="absolute -left-[2px] top-[124px] h-6 w-[3px] rounded-l-md bg-gradient-to-b from-[#5a5a5e] to-[#232325]" />
+              <div className="absolute -left-[2px] top-[164px] h-12 w-[3px] rounded-l-md bg-gradient-to-b from-[#5a5a5e] to-[#232325]" />
+              <div className="absolute -left-[2px] top-[224px] h-12 w-[3px] rounded-l-md bg-gradient-to-b from-[#5a5a5e] to-[#232325]" />
+              <div className="absolute -right-[2px] top-[188px] h-20 w-[3px] rounded-r-md bg-gradient-to-b from-[#5a5a5e] to-[#232325]" />
+
+              {/* Titanium body */}
+              <div
+                className="relative rounded-[56px] p-[10px]"
                 style={{
-                  background: 'linear-gradient(145deg, #2e2e31 0%, #0b0b0d 28%, #414145 52%, #0b0b0d 78%, #2e2e31 100%)',
-                  boxShadow: `0 40px 90px rgba(0,0,0,0.85), 0 0 70px rgba(${accentRgb}, 0.18), inset 0 0 0 1px rgba(255,255,255,0.12), inset 0 2px 4px rgba(255,255,255,0.16)`,
+                  background: 'linear-gradient(145deg, #3b3b3f 0%, #0d0d0f 26%, #4a4a4e 50%, #0d0d0f 74%, #3b3b3f 100%)',
+                  boxShadow: `0 50px 100px rgba(0,0,0,0.85), 0 12px 40px rgba(0,0,0,0.6), 0 0 90px rgba(${accentRgb}, 0.14), inset 0 0 0 1px rgba(255,255,255,0.14), inset 0 2px 3px rgba(255,255,255,0.2)`,
                 }}
               >
                 {/* Inner black bezel */}
-                <div className="rounded-[44px] bg-black p-[2px]">
+                <div className="rounded-[47px] bg-black p-[3px]">
                   {/* Screen */}
                   <div
-                    className="rounded-[42px] bg-[#060A15] overflow-hidden pt-8 relative border border-white/10 flex flex-col justify-between select-none w-full"
-                    style={{ height: 552 }}
+                    className="relative rounded-[44px] bg-[#060A15] overflow-hidden border border-white/10 flex flex-col select-none w-full"
+                    style={{ height: 672 }}
                   >
-                    {/* Dynamic Island with camera sensor */}
-                    <div className="absolute top-3 left-1/2 -translate-x-1/2 w-[96px] h-[30px] bg-black rounded-full z-40 flex items-center justify-between px-3">
-                      <div className="w-2.5 h-2.5 rounded-full bg-[#141416] ring-1 ring-white/10" />
-                      <div className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
-                    </div>
-                {/* Content scroll area inside phone */}
-                <div className="p-3.5 space-y-3 overflow-y-auto no-scrollbar">
-                  {/* Status Bar */}
-                  <div className="flex justify-between items-center text-[10px] text-[#64748B] px-1 pt-1">
-                    <span className="font-semibold text-white">9:41</span>
-                    <div className="flex items-center gap-1.5 text-[9px] text-[#94A3B8]">
-                      <span>5G</span>
-                      <span>🔋 100%</span>
-                    </div>
-                  </div>
-
-                  {/* App Header (Exact PWA Header) */}
-                  <div className="flex items-center justify-between py-1">
-                    <div className="flex items-center gap-2">
-                      <img
-                        src={isGold ? '/logo-mark-gold.png' : '/logo-mark-plain.png'}
-                        alt="SureXend"
-                        className={`w-6 h-6 object-contain ${isGold ? 'gold-logo-glow' : ''}`}
-                        style={{
-                          filter: isGold
-                            ? 'brightness(1.25) drop-shadow(0 0 10px rgba(252, 211, 77, 0.9))'
-                            : 'invert(1) sepia(0.5) saturate(6) hue-rotate(30deg) brightness(1.1)'
-                        }}
-                      />
-                      <span className="font-bold text-white text-xs tracking-wider">
-                        SURE<span style={{ color: accentHex }}>X</span>END
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-[10px] text-[#94A3B8] border border-white/10">
-                        <Bell size={11} />
-                      </div>
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-[#10B981] to-[#3B82F6] text-white font-bold text-[9px] flex items-center justify-center">
-                        AO
+                    {/* Dynamic Island */}
+                    <div className="absolute top-[14px] left-1/2 -translate-x-1/2 w-[104px] h-[30px] bg-black rounded-full z-40 flex items-center justify-end pr-3.5">
+                      <div className="w-[13px] h-[13px] rounded-full bg-[#0d0d10] ring-1 ring-white/[0.08] flex items-center justify-center">
+                        <div className="w-[5px] h-[5px] rounded-full bg-[#1a1a2e]" />
                       </div>
                     </div>
-                  </div>
 
-                  {/* Live Rates Ticker (Exact PWA Component) */}
-                  <div className="w-full overflow-hidden bg-white/[0.03] border border-white/5 rounded-lg py-1.5 flex items-center text-[9px]">
-                    <div className="flex whitespace-nowrap gap-4 px-2 font-medium">
-                      <span className="text-[#94A3B8]">USDC/NGN: <span style={{ color: accentHex }}>₦1,500</span></span>
-                      <span className="text-[#94A3B8]">BTC/USD: <span style={{ color: accentHex }}>$65,420</span></span>
-                      <span className="text-[#94A3B8]">USDC/GHS: <span style={{ color: accentHex }}>₵13.5</span></span>
-                    </div>
-                  </div>
+                    {/* ── Screen content: the REAL dashboard ── */}
+                    <div className="flex-1 px-3.5 pt-[50px] pb-2 space-y-2 overflow-hidden">
 
-                  {/* PWA Balance Card */}
-                  <div
-                    className="rounded-2xl p-4 relative overflow-hidden"
-                    style={{
-                      background: `linear-gradient(135deg, rgba(${accentRgb}, 0.22), rgba(${accentRgb}, 0.04))`,
-                      border: `1px solid rgba(${accentRgb}, 0.3)`,
-                      boxShadow: `0 10px 30px rgba(${accentRgb}, 0.1)`,
-                    }}
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[#94A3B8] text-[10px] font-medium flex items-center gap-1">
-                        Total Balance 👁️
-                      </span>
-                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/10 text-white font-semibold">USDC</span>
-                    </div>
-                    <div className="text-white font-inter font-bold text-2xl tracking-tight">$2,450.75</div>
-                    <div className="text-[11px] font-semibold mt-1" style={{ color: accentHex }}>
-                      ≈ ₦3,675,000 NGN
-                    </div>
-                  </div>
-
-                  {/* PWA Quick Action Grid */}
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { icon: Send, label: 'Send', color: '#10B981' },
-                      { icon: Download, label: 'Receive', color: '#3B82F6' },
-                      { icon: RefreshCw, label: 'Convert', color: accentHex },
-                      { icon: Smartphone, label: 'Bills', color: '#8B5CF6' }
-                    ].map((action, idx) => (
-                      <div key={idx} className="flex flex-col items-center gap-1">
-                        <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center shadow-sm">
-                          <action.icon size={16} style={{ color: action.color }} />
+                      {/* Status bar */}
+                      <div className="flex justify-between items-center px-1.5">
+                        <span className="text-[11px] font-semibold text-white tracking-wide">9:41</span>
+                        <div className="flex items-center gap-1.5">
+                          {/* Cellular */}
+                          <svg width="15" height="10" viewBox="0 0 15 10" fill="none">
+                            <rect x="0" y="6" width="2.5" height="4" rx="0.8" fill="#fff" />
+                            <rect x="4" y="4" width="2.5" height="6" rx="0.8" fill="#fff" />
+                            <rect x="8" y="2" width="2.5" height="8" rx="0.8" fill="#fff" />
+                            <rect x="12" y="0" width="2.5" height="10" rx="0.8" fill="#fff" opacity="0.4" />
+                          </svg>
+                          {/* WiFi */}
+                          <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
+                            <path d="M7 9.5L1 3.5C2.5 2 4.6 1 7 1s4.5 1 6 2.5L7 9.5z" fill="#fff" />
+                          </svg>
+                          {/* Battery */}
+                          <svg width="22" height="11" viewBox="0 0 22 11" fill="none">
+                            <rect x="0.5" y="0.5" width="18" height="10" rx="3" stroke="#fff" strokeOpacity="0.4" />
+                            <rect x="2" y="2" width="15" height="7" rx="1.8" fill="#34D399" />
+                            <path d="M20.5 3.5v4c1-0.3 1.5-1.1 1.5-2s-0.5-1.7-1.5-2z" fill="#fff" fillOpacity="0.4" />
+                          </svg>
                         </div>
-                        <span className="text-[9.5px] font-medium text-[#94A3B8]">{action.label}</span>
                       </div>
-                    ))}
-                  </div>
 
-                  {/* Live Conversion Card */}
-                  <div className="rounded-xl p-3 bg-white/[0.03] border border-white/10 space-y-2">
-                    <div className="flex justify-between items-center text-[9px] font-bold text-[#64748B] tracking-wider uppercase">
-                      <span>Live Conversion</span>
-                      <span className="text-[#F59E0B] font-semibold">1 USDC = ₦1,598</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <div>
-                        <p className="text-[8px] text-[#94A3B8]">You send</p>
-                        <p className="font-bold text-white text-xs">100 USDC</p>
+                      {/* User bar — mirrors the dashboard's welcome bar */}
+                      <div className="flex items-center justify-between gap-2 py-1.5 px-2.5 rounded-xl border border-white/10 bg-white/[0.03]">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-8 h-8 rounded-full flex-shrink-0 bg-gradient-to-tr from-[#10B981] to-[#3B82F6] flex items-center justify-center text-[10px] font-extrabold text-white shadow-md">
+                            AO
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[7.5px] text-[#64748B] font-bold uppercase tracking-wider leading-none mb-[3px]">Welcome back</p>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[11px] font-extrabold text-white leading-none">Adaeze</span>
+                              <span className="w-3 h-3 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: `rgba(${accentRgb}, 0.2)`, border: `1px solid rgba(${accentRgb}, 0.5)` }}>
+                                <Check size={7} style={{ color: accentHex }} strokeWidth={3.5} />
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <span
+                          className="px-2 py-1 rounded-full text-[7.5px] font-extrabold flex-shrink-0 whitespace-nowrap"
+                          style={{ background: `rgba(${accentRgb}, 0.15)`, border: `1px solid rgba(${accentRgb}, 0.4)`, color: accentHex }}
+                        >
+                          ★ Top 5 Leaderboard
+                        </span>
                       </div>
-                      <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[#F59E0B]">
-                        <RefreshCw size={10} />
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[8px] text-[#94A3B8]">They receive</p>
-                        <p className="font-bold text-[#F59E0B] text-xs">₦159,800</p>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Bill Payment Activity Card */}
-                  <div className="rounded-xl p-3 bg-white/[0.03] border border-white/10 space-y-2">
-                    <div className="flex justify-between items-center text-[9px] font-bold text-[#64748B] tracking-wider uppercase">
-                      <span>Bill Payment</span>
+                      {/* Rates ticker */}
+                      <div className="w-full overflow-hidden bg-white/[0.02] border border-white/5 rounded-lg py-1 px-2.5 flex items-center text-[8px] whitespace-nowrap">
+                        <span className="text-[#94A3B8] font-medium">USDC/USD <strong className="text-white">$1.0000</strong> <span className="text-emerald-400">pegged</span></span>
+                        <span className="mx-2 w-px h-2.5 bg-white/10" />
+                        <span className="text-[#94A3B8] font-medium">NGN/USD <strong className="text-white">₦1,598</strong> <span className="text-[#64748B]">live</span></span>
+                        <span className="mx-2 w-px h-2.5 bg-white/10" />
+                        <span className="text-[#94A3B8] font-medium">GHS/USD <strong className="text-white">₵13.50</strong> <span className="text-[#64748B]">live</span></span>
+                      </div>
+
+                      {/* Balance card — mirrors the dual-wallet card */}
+                      <div
+                        className="rounded-2xl p-3.5 relative overflow-hidden"
+                        style={{
+                          background: `linear-gradient(150deg, rgba(${accentRgb}, 0.16), rgba(255,255,255,0.02) 65%)`,
+                          border: `1px solid rgba(${accentRgb}, 0.28)`,
+                        }}
+                      >
+                        <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, rgba(${accentRgb}, 0.7), transparent)` }} />
+                        {/* Wallet tabs */}
+                        <div className="flex items-center gap-1.5 mb-2.5">
+                          <span className="px-2.5 py-1 rounded-lg text-[8.5px] font-bold text-white bg-white/10 border border-white/20">💵 USD Wallet</span>
+                          <span className="px-2.5 py-1 rounded-lg text-[8.5px] font-bold text-[#64748B] border border-white/5">🏦 Local Wallet</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[8.5px] font-medium text-[#64748B]">USD Crypto Balance (USDC)</span>
+                          <Eye size={10} className="text-[#64748B]" />
+                        </div>
+                        <div className="text-white font-extrabold text-[26px] tracking-tight leading-tight mt-0.5">$2,458.90</div>
+                        <p className="text-[8px] text-[#475569] font-medium leading-snug mt-0.5">Deposited via crypto (USDC). Convert to get local currency.</p>
+
+                        {/* Actions — Fund / Send / Receive / Bills, exact dashboard colors */}
+                        <div className="grid grid-cols-4 gap-1.5 pt-2.5 mt-1.5 border-t border-white/[0.06]">
+                          {[
+                            { icon: PlusCircle, label: 'Fund', bg: `rgba(${accentRgb}, 0.15)`, bd: `rgba(${accentRgb}, 0.4)`, fg: accentHex },
+                            { icon: Send, label: 'Send', bg: 'rgba(59,130,246,0.15)', bd: 'rgba(59,130,246,0.35)', fg: '#60A5FA' },
+                            { icon: Download, label: 'Receive', bg: 'rgba(245,158,11,0.15)', bd: 'rgba(245,158,11,0.35)', fg: '#FBBF24' },
+                            { icon: Smartphone, label: 'Bills', bg: 'rgba(139,92,246,0.15)', bd: 'rgba(139,92,246,0.35)', fg: '#A78BFA' },
+                          ].map((a) => (
+                            <div key={a.label} className="flex flex-col items-center gap-1">
+                              <div
+                                className="w-9 h-9 rounded-xl flex items-center justify-center"
+                                style={{ background: a.bg, border: `1px solid ${a.bd}` }}
+                              >
+                                <a.icon size={14} style={{ color: a.fg }} />
+                              </div>
+                              <span className="text-[8px] font-semibold text-white">{a.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Market card — mirrors the live market chart */}
+                      <div className="rounded-2xl p-3 bg-white/[0.03] border border-white/5">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className="px-2 py-1 rounded-lg text-[8px] font-bold flex items-center gap-1 bg-white/10 border border-white/20"
+                            style={{ color: accentHex }}
+                          >
+                            USDC/NGN <ChevronDown size={8} />
+                          </span>
+                          <div className="flex items-center gap-0.5 bg-[#121827] p-0.5 rounded-lg border border-white/5">
+                            {['1D', '1W', '1M', '1Y'].map((tf, i) => (
+                              <span key={tf} className={`px-1.5 py-0.5 rounded-md text-[7.5px] font-bold ${i === 0 ? 'bg-white/10 text-white' : 'text-[#64748B]'}`}>{tf}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[15px] font-extrabold text-white tracking-tight">₦1,598.00</span>
+                          <span className="text-[7px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 flex items-center gap-0.5">
+                            <span className="w-1 h-1 rounded-full bg-emerald-400" /> Live
+                          </span>
+                        </div>
+                        <p className="text-[7.5px] text-[#64748B] mt-0.5 font-medium">USD Coin · 1 USD = ₦1,598.00 NGN</p>
+                        {/* Sparkline */}
+                        <svg viewBox="0 0 300 60" className="w-full h-[46px] mt-1" preserveAspectRatio="none">
+                          <defs>
+                            <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={accentHex} stopOpacity="0.28" />
+                              <stop offset="100%" stopColor={accentHex} stopOpacity="0" />
+                            </linearGradient>
+                          </defs>
+                          <path d="M0,46 C18,42 30,50 46,44 C62,38 74,30 92,34 C110,38 124,46 142,38 C160,30 176,18 198,24 C220,30 238,36 258,22 C274,12 288,14 300,10 L300,60 L0,60 Z" fill="url(#sparkFill)" />
+                          <path d="M0,46 C18,42 30,50 46,44 C62,38 74,30 92,34 C110,38 124,46 142,38 C160,30 176,18 198,24 C220,30 238,36 258,22 C274,12 288,14 300,10" fill="none" stroke={accentHex} strokeWidth="1.8" strokeLinecap="round" />
+                          <circle cx="300" cy="10" r="2.5" fill={accentHex} />
+                        </svg>
+                      </div>
+
+                      {/* Cash flow — mirrors Money In vs Money Out */}
+                      <div className="rounded-2xl p-3 bg-white/[0.03] border border-white/5">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[9px] font-bold text-white">Cash Flow Movement</span>
+                          <div className="flex items-center gap-2 text-[7px] text-[#94A3B8] font-medium">
+                            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> In</span>
+                            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400" /> Out</span>
+                          </div>
+                        </div>
+                        {[
+                          { d: 'Mon', in: 82, out: 38 },,
+                          { d: 'Tue', in: 54, out: 62 },
+                          { d: 'Wed', in: 91, out: 30 },
+                          { d: 'Thu', in: 47, out: 55 },
+                        ].map((r) => (
+                          <div key={r.d} className="flex items-center gap-2 mb-[3px]">
+                            <span className="text-[7px] text-[#64748B] font-semibold w-5">{r.d}</span>
+                            <div className="flex-1 h-[7px] rounded-full bg-white/[0.04] overflow-hidden flex">
+                              <div className="h-full bg-emerald-400/80 rounded-l-full" style={{ width: `${r.in}%` }} />
+                              <div className="h-full bg-red-400/70" style={{ width: `${r.out}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="space-y-1.5 text-[10px]">
-                      <div className="flex justify-between items-center border-b border-white/5 pb-1">
-                        <span className="text-white flex items-center gap-1">
-                          <span className="text-[#10B981] font-bold">✓</span> MTN Airtime · 080123...
-                        </span>
-                        <span className="font-semibold text-white">-₦1,000</span>
-                      </div>
-                      <div className="flex justify-between items-center border-b border-white/5 pb-1">
-                        <span className="text-white flex items-center gap-1">
-                          <span className="text-[#10B981] font-bold">✓</span> DSTV Compact · 70452...
-                        </span>
-                        <span className="font-semibold text-white">-₦14,500</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-white flex items-center gap-1">
-                          <span className="text-[#F59E0B]">⏳</span> EKEDC · 45123...
-                        </span>
-                        <span className="font-semibold text-white">-₦8,000</span>
-                      </div>
+
+                    {/* Bottom nav — mirrors the app's tab bar */}
+                    <div className="bg-[#0D1322] border-t border-white/10 px-5 pt-2 pb-1.5 flex justify-between items-center">
+                      {[
+                        { icon: Wallet, label: 'Home', active: true },
+                        { icon: Send, label: 'Send' },
+                        { icon: RefreshCw, label: 'Convert' },
+                        { icon: CreditCard, label: 'Bills' },
+                        { icon: User, label: 'Profile' },
+                      ].map((t) => (
+                        <div key={t.label} className="flex flex-col items-center gap-0.5" style={t.active ? { color: accentHex } : { color: '#64748B' }}>
+                          <t.icon size={15} strokeWidth={t.active ? 2.4 : 2} />
+                          <span className="text-[7.5px] font-semibold">{t.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Home indicator */}
+                    <div className="bg-[#0D1322] pb-2 flex justify-center">
+                      <div className="w-[100px] h-[3.5px] rounded-full bg-white/25" />
                     </div>
                   </div>
                 </div>
-
-                {/* PWA Bottom Navigation Bar */}
-                <div className="bg-[#0F1629] border-t border-white/10 px-4 py-2 flex justify-between items-center text-[#64748B]">
-                  <div className="flex flex-col items-center gap-0.5" style={{ color: accentHex }}>
-                    <Wallet size={15} />
-                    <span className="text-[8px] font-medium">Home</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-0.5">
-                    <Send size={15} />
-                    <span className="text-[8px] font-medium">Send</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-0.5">
-                    <RefreshCw size={15} />
-                    <span className="text-[8px] font-medium">Convert</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-0.5">
-                    <CreditCard size={15} />
-                    <span className="text-[8px] font-medium">Bills</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-0.5">
-                    <User size={15} />
-                    <span className="text-[8px] font-medium">Profile</span>
-                  </div>
-                </div>
-              </div>
               </div>
             </div>
-
-            {/* Glass reflection */}
-            <div className="pointer-events-none absolute inset-[10px] rounded-[44px] overflow-hidden">
-              <div className="absolute inset-y-0 left-1/4 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/[0.09] to-transparent" />
-            </div>
-          </div>
-
-            {/* Phone glow — soft radial, no blur filter */}
-            <div
-              className="absolute -inset-4 rounded-[60px] -z-10 opacity-70 pointer-events-none"
-              style={{ background: `radial-gradient(circle at center, rgba(${accentRgb}, 0.25), transparent 70%)` }}
-            />
-          </motion.div>
+            </motion.div>
 
           {/* Scroll indicator below hero content */}
           <motion.div
