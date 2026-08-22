@@ -284,12 +284,12 @@ export default function BillsPage() {
                     const name = (provider.name || '').toLowerCase()
 
                     // ── Network brand logos — actual logo image files ──
-                    const NETWORK_LOGOS: Record<string, { src: string; description: string; circular?: boolean; bg?: string; scale?: number }> = {
-                      mtn: { src: '/logos/mtn.png', description: 'Mobile Telecommunication Network' },
-                      airtel: { src: '/logos/airtel.png', description: 'Airtel Networks Limited' },
-                      glo: { src: '/logos/glo.png', description: 'Glo Mobile Network', circular: true, scale: 1.15 },
-                      '9mobile': { src: '/logos/9mobile.png', description: 'Formerly Etisalat Nigeria', bg: '#fff' },
-                      etisalat: { src: '/logos/9mobile.png', description: 'Formerly Etisalat Nigeria', bg: '#fff' },
+                    const NETWORK_LOGOS: Record<string, { src: string; description: string; circular?: boolean; fit?: 'cover' | 'contain'; scale?: number }> = {
+                      mtn: { src: '/logos/mtn.png', description: 'Mobile Telecommunication Network', fit: 'cover' },
+                      airtel: { src: '/logos/airtel.png', description: 'Airtel Networks Limited', fit: 'cover' },
+                      glo: { src: '/logos/glo.png', description: 'Glo Mobile Network', circular: true, fit: 'cover', scale: 1.15 },
+                      '9mobile': { src: '/logos/9mobile.png', description: 'Formerly Etisalat Nigeria', fit: 'contain' },
+                      etisalat: { src: '/logos/9mobile.png', description: 'Formerly Etisalat Nigeria', fit: 'contain' },
                       dstv: { src: '/logos/dstv.svg', description: 'MultiChoice DStv Subscription' },
                       gotv: { src: '/logos/gotv.svg', description: 'MultiChoice GOtv Subscription' },
                       startimes: { src: '/logos/startimes.svg', description: 'StarTimes TV Subscription' },
@@ -305,14 +305,18 @@ export default function BillsPage() {
                             <div style={{
                               width: 52, height: 52, flexShrink: 0, overflow: 'hidden',
                               borderRadius: net.circular ? '50%' : 12,
-                              background: net.bg || 'transparent',
+                              background: 'transparent',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
                             }}>
                               <img
                                 src={net.src}
                                 alt={provider.name}
                                 style={{
                                   width: '100%', height: '100%',
-                                  objectFit: 'cover', display: 'block',
+                                  objectFit: net.fit || 'cover',
+                                  display: 'block',
                                   transform: net.scale ? `scale(${net.scale})` : undefined,
                                 }}
                               />
