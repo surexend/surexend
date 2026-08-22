@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -23,6 +23,13 @@ export default function EditProfilePage() {
   const [lastName, setLastName] = useState(profile?.lastName || '')
   const [avatar, setAvatar] = useState<string | null>(profile?.avatar || null)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!profile) return
+    setFirstName(profile.firstName || '')
+    setLastName(profile.lastName || '')
+    setAvatar(profile.avatar || localStorage.getItem('surexend_user_avatar'))
+  }, [profile])
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

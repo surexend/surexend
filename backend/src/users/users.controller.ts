@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, UseGuards, BadRequestException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -12,6 +12,14 @@ export class UsersController {
   @Get('me')
   async getProfile(@CurrentUser() user: any) {
     return this.usersService.getProfile(user.id);
+  }
+
+  @Patch('me')
+  async updateProfile(
+    @CurrentUser() user: any,
+    @Body() body: { firstName?: string; lastName?: string; avatar?: string | null },
+  ) {
+    return this.usersService.updateProfile(user.id, body);
   }
 
   @Post('setup-pin')

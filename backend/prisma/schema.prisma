@@ -16,6 +16,7 @@ model User {
   passwordHash     String
   firstName        String
   lastName         String
+  avatar           String?
   surexTag         String?   @unique
   pin              String?
   kycTier          Int       @default(0)

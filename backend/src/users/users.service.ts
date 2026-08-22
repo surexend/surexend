@@ -17,6 +17,7 @@ export class UsersService {
         phone: true,
         firstName: true,
         lastName: true,
+        avatar: true,
         surexTag: true,
         kycTier: true,
         kycStatus: true,
@@ -50,6 +51,28 @@ export class UsersService {
     const { pin, ...profile } = user;
     const passkeyCount = await this.prisma.passkey.count({ where: { userId } });
     return { ...profile, pinSet: !!pin, passkeysEnabled: passkeyCount > 0 };
+  }
+
+  async updateProfile(
+    userId: string,
+    profile: { firstName?: string; lastName?: string; avatar?: string | null },
+  ) {
+    const data: { firstName?: string; lastName?: string; avatar?: string | null } = {};
+    if (profile.firstName !== undefined) {
+      const firstName = profile.firstName.trim();
+      if (!firstName) throw new BadRequestException('First name is required');
+      data.firstName = firstName;
+    }
+    if (profile.lastName !== undefined) data.lastName = profile.lastName.trim();
+    if (profile.avatar !== undefined) {
+      if (profile.avatar !== null && !profile.avatar.startsWith('data:image/')) {
+        throw new BadRequestException('Invalid avatar image');
+      }
+      data.avatar = profile.avatar;
+    }
+    if (!Object.keys(data).length) return { message: 'No profile changes to update' };
+    await this.prisma.user.update({ where: { id: userId }, data });
+    return { message: 'Profile updated successfully' };
   }
 
   async updatePreferences(
