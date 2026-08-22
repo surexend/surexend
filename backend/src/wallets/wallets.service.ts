@@ -763,7 +763,12 @@ export class WalletsService implements OnModuleInit {
     // In-app tag send: zero-fee internal USDC transfer between SureXend users.
     // Resolves the @tag, moves balance between wallets, records SEND + RECEIVE.
     if (net === 'SUREX_TAG') {
-      return this.sendToSurexTag(userId, toAddress, amount);
+      try {
+        return await this.sendToSurexTag(userId, toAddress, amount);
+      } catch (error: any) {
+        this.logger.error(`Internal tag transfer failed for ${userId}: ${error?.stack || error?.message || error}`);
+        throw error;
+      }
     }
 
     // Explicit select so a not-yet-migrated localBalances column can't 500 this endpoint
@@ -818,7 +823,10 @@ export class WalletsService implements OnModuleInit {
     const recipientName = `${recipient.firstName} ${recipient.lastName}`.trim();
 
     const sendAmount = Number(amount);
-    const spendable = await this.computeSpendableUsdc(senderUserId, senderWallet, sendAmount);
+    // Internal transfers use the wallet ledger directly. Do not run the
+    // conversion reconciliation SQL here: a malformed legacy conversion row
+    // must never prevent a peer-to-peer balance transfer.
+    const spendable = Math.max(0, Number(senderWallet.usdcBalance || 0) - Number(senderWallet.lockedBalance || 0));
     if (spendable < sendAmount) {
       const reason = `Insufficient balance. You can send up to ${spendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`;
       throw new BadRequestException(reason);
