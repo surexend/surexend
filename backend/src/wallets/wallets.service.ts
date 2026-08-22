@@ -788,7 +788,9 @@ export class WalletsService implements OnModuleInit {
       throw new BadRequestException('Enter a valid SureX tag like @first.last.');
     }
 
-    const recipient = await this.prisma.user.findUnique({ where: { surexTag: tag } });
+    const recipient = await this.prisma.user.findFirst({
+      where: { surexTag: { equals: tag, mode: 'insensitive' } },
+    });
     if (!recipient) {
       throw new BadRequestException(`No SureXend user found with the tag @${tag}.`);
     }
@@ -806,8 +808,9 @@ export class WalletsService implements OnModuleInit {
     const senderName = `${senderWallet.user?.firstName || ''} ${senderWallet.user?.lastName || ''}`.trim();
     const recipientName = `${recipient.firstName} ${recipient.lastName}`.trim();
 
-    const spendable = await this.computeSpendableUsdc(senderUserId, senderWallet, amount);
-    if (spendable < amount) {
+    const sendAmount = Number(amount);
+    const spendable = await this.computeSpendableUsdc(senderUserId, senderWallet, sendAmount);
+    if (spendable < sendAmount) {
       const reason = `Insufficient balance. You can send up to ${spendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`;
       throw new BadRequestException(reason);
     }
@@ -816,17 +819,17 @@ export class WalletsService implements OnModuleInit {
     const result = await this.prisma.$transaction(async (prisma) => {
       await prisma.wallet.update({
         where: { id: senderWallet.id },
-        data: { usdcBalance: { decrement: amount } },
+        data: { usdcBalance: { decrement: sendAmount } },
       });
       await prisma.wallet.update({
         where: { id: recipientWallet.id },
-        data: { usdcBalance: { increment: amount } },
+        data: { usdcBalance: { increment: sendAmount } },
       });
       await this.transactionsService.createTransaction(prisma, {
         userId: senderUserId,
         type: 'SEND',
         status: 'COMPLETED',
-        amount,
+        amount: sendAmount,
         fee: 0,
         currency: 'USDC',
         reference,
@@ -842,7 +845,7 @@ export class WalletsService implements OnModuleInit {
         userId: recipient.id,
         type: 'RECEIVE',
         status: 'COMPLETED',
-        amount,
+        amount: sendAmount,
         fee: 0,
         currency: 'USDC',
         reference,
@@ -860,13 +863,13 @@ export class WalletsService implements OnModuleInit {
     // In-app notifications so both users see the movement in the bell drawer.
     await this.notifications.createNotification(senderUserId, {
       title: 'Send Successful',
-      body: `You sent ${amount} USDC to @${tag}.`,
+      body: `You sent ${sendAmount} USDC to @${tag}.`,
       type: 'SEND',
       data: { amount, currency: 'USDC', toTag: tag, reference },
     });
     await this.notifications.createNotification(recipient.id, {
       title: 'Payment Received',
-      body: `You received +${amount} USDC from ${senderName || `@${senderWallet.user?.surexTag || 'a SureXend user'}`}.`,
+      body: `You received +${sendAmount} USDC from ${senderName || `@${senderWallet.user?.surexTag || 'a SureXend user'}`}.`,
       type: 'DEPOSIT',
       data: { amount, currency: 'USDC', fromTag: senderWallet.user?.surexTag || null, reference },
     });
@@ -874,7 +877,7 @@ export class WalletsService implements OnModuleInit {
     return {
       success: true,
       reference,
-      amount,
+      amount: sendAmount,
       currency: 'USDC',
       recipient: `@${tag}`,
       network: 'SUREX_TAG',
