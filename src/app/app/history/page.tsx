@@ -462,17 +462,35 @@ function TransactionDetailModal({
       ? `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)}`
       : `${sign}${symbol}${formatAmount(Number(details?.amount || 0))}`
     const amountSub = swap
-      ? `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from} → ${swap.to}`
+      ? null
       : `${details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'}  ·  ${displayNetwork}`
 
     let amountSize = 40
     while (amountSize > 22 && measure(amountValue, `900 ${amountSize}px ${font}`) > CW) amountSize -= 2
 
+    // Swap conversion row: [from] (→chip) [to] laid out as ONE measured unit,
+    // centred on W/2 — the arrow is drawn manually so it can never misalign.
+    const convFrom = swap ? `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from}` : ''
+    const convTo = swap ? `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}` : ''
+    const CONV_FONT = `600 12px ${font}`
+    const CONV_GAP = 9
+    const CONV_CHIP_R = 9.5
+    const convW = swap
+      ? measure(convFrom, CONV_FONT) + CONV_GAP + CONV_CHIP_R * 2 + CONV_GAP + measure(convTo, CONV_FONT)
+      : 0
+
+    // Baseline offsets shared by the layout pass and the render pass so the
+    // panel height is always exactly what the renderer draws.
+    const labelOff = 35
+    const amtOff = labelOff + 9 + amountSize
+    const subOff = amtOff + 18
+    const convCy = amtOff + 14 + CONV_CHIP_R
+    const panelH = Math.round((swap ? convCy + CONV_CHIP_R : subOff) + 26)
+
     // ── Layout pass (compute total height) ──
     let y = PY
     y += 32 + 22                                   // header + gap
     y += 24 + 18                                   // status row + gap
-    const panelH = 26 + 12 + 10 + amountSize + 10 + 16 + 26
     y += panelH + 24                               // amount panel + gap
 
     let failLines: string[] = []
@@ -555,14 +573,7 @@ function TransactionDetailModal({
     ctx.fillText('END', PX + logoSize + 10 + w1 + 3 + w2 + 3, wmY)
 
     const rightX = W - PX
-    ctx.textAlign = 'right'
-    ctx.font = `700 9px ${font}`
-    ctx.fillStyle = '#475569'
-    spaced('OFFICIAL RECEIPT', `700 9px ${font}`, rightX, PY + 12, '#475569', 2.5, 'right')
-    ctx.font = `500 9px ${font}`
-    ctx.fillStyle = '#334155'
-    ctx.fillText(displayNetwork, rightX, PY + 24)
-    ctx.textAlign = 'left'
+    spaced('OFFICIAL RECEIPT', `700 9px ${font}`, rightX, PY + 21, '#475569', 2.5, 'right')
 
     // Status row
     const statusY = PY + 32 + 22
@@ -603,13 +614,48 @@ function TransactionDetailModal({
     ctx.fillStyle = grad
     ctx.fillRect(PX, panelY, CW, 3)
     ctx.textAlign = 'center'
-    spaced(amountLabel, `700 9px ${font}`, W / 2, panelY + 26 + 11, '#64748B', 2.5, 'center')
+    spaced(amountLabel, `700 9px ${font}`, W / 2, panelY + labelOff, '#64748B', 2.5, 'center')
     ctx.font = `900 ${amountSize}px ${font}`
     ctx.fillStyle = amountColor
-    ctx.fillText(amountValue, W / 2, panelY + 26 + 12 + 10 + amountSize)
-    ctx.font = `400 12px ${font}`
-    ctx.fillStyle = '#94A3B8'
-    ctx.fillText(amountSub, W / 2, panelY + 26 + 12 + 10 + amountSize + 10 + 15)
+    ctx.fillText(amountValue, W / 2, panelY + amtOff)
+    if (swap) {
+      const startX = W / 2 - convW / 2
+      let x = startX
+      ctx.font = CONV_FONT
+      ctx.textAlign = 'left'
+      ctx.fillStyle = '#94A3B8'
+      ctx.fillText(convFrom, x, panelY + convCy + 4)
+      x += measure(convFrom, CONV_FONT) + CONV_GAP
+      // Circular chip with a hand-drawn arrow — always perfectly centred.
+      ctx.beginPath()
+      ctx.arc(x + CONV_CHIP_R, panelY + convCy, CONV_CHIP_R, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(255,255,255,0.06)'
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(255,255,255,0.16)'
+      ctx.lineWidth = 1
+      ctx.stroke()
+      const acx = x + CONV_CHIP_R
+      const acy = panelY + convCy
+      ctx.strokeStyle = '#CBD5E1'
+      ctx.lineWidth = 1.3
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.beginPath()
+      ctx.moveTo(acx - 3.4, acy)
+      ctx.lineTo(acx + 3, acy)
+      ctx.moveTo(acx + 0.4, acy - 2.8)
+      ctx.lineTo(acx + 3.4, acy)
+      ctx.lineTo(acx + 0.4, acy + 2.8)
+      ctx.stroke()
+      x += CONV_CHIP_R * 2 + CONV_GAP
+      ctx.fillStyle = '#ffffff'
+      ctx.font = CONV_FONT
+      ctx.fillText(convTo, x, panelY + convCy + 4)
+    } else if (amountSub) {
+      ctx.font = `400 12px ${font}`
+      ctx.fillStyle = '#94A3B8'
+      ctx.fillText(amountSub, W / 2, panelY + subOff)
+    }
     ctx.textAlign = 'left'
 
     // Failure box
@@ -693,10 +739,23 @@ function TransactionDetailModal({
     ctx.font = `400 9px ${font}`
     ctx.fillStyle = '#334155'
     ctx.fillText('Verified digital transaction record', PX, fy + 24)
-    ctx.font = `600 9px ${mono}`
+    // Faint reference stamp — ellipsized to the space left of the footer text
+    // so it can never overlap it.
+    const refFont = `600 9px ${mono}`
+    const leftWidest = Math.max(
+      measure('Powered by SureXend', `500 9px ${font}`),
+      measure('Verified digital transaction record', `400 9px ${font}`)
+    )
+    const maxRefW = Math.max(60, CW - leftWidest - 24)
+    let refTxt = details?.reference || '—'
+    if (measure(refTxt, refFont) > maxRefW) {
+      while (refTxt.length > 1 && measure(refTxt + '…', refFont) > maxRefW) refTxt = refTxt.slice(0, -1)
+      refTxt += '…'
+    }
+    ctx.font = refFont
     ctx.fillStyle = '#475569'
     ctx.textAlign = 'right'
-    ctx.fillText(details?.reference || '—', W - PX, fy + 24)
+    ctx.fillText(refTxt, W - PX, fy + 24)
     ctx.textAlign = 'left'
 
     return canvas
@@ -779,19 +838,30 @@ function TransactionDetailModal({
   }
 
   // Receipt rows: swap (CONVERT) shows both legs; bills show the full invoice
-  // (service, recipient, plan, paid amount, provider reference); everything
-  // else shows the standard money-movement fields with copyable addresses.
+  // (service, recipient, plan, paid amount, provider reference); internal
+  // SureX-tag transfers show who sent/received with tags; everything else shows
+  // the standard money-movement fields with copyable addresses.
   const isBill = typeUpper === 'BILL_PAYMENT'
   const bill = details?.bill || null
   const billMeta = meta
+  const internal = meta?.delivery === 'internal'
+  const feeVal = Number(details?.fee || 0)
+  const feeTxt = feeVal > 0 ? `$${feeVal.toFixed(2)}` : 'Free'
+  const dateValue = new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })
+  const fromParty = meta.fromTag
+    ? `@${meta.fromTag}${meta.senderName ? ` · ${meta.senderName}` : ''}`
+    : null
+  const toParty = meta.toTag
+    ? `@${meta.toTag}${meta.recipientName ? ` · ${meta.recipientName}` : ''}`
+    : null
   const rows: { label: string; value: string; copyable?: string; mono?: boolean; accent?: boolean }[] = swap
     ? [
         { label: 'You swapped', value: `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from}` },
         { label: 'You received', value: `+${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}`, accent: true },
         ...(swap.rate ? [{ label: 'Rate', value: `1 ${swap.from} = ${formatAmount(swap.rate, 6)} ${swap.to}` }] : []),
-        { label: 'Fee', value: `$${(details?.fee || 0).toFixed(2)}` },
+        { label: 'Fee', value: feeTxt },
         { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
-        { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
+        { label: 'Date', value: dateValue },
       ]
     : isBill
       ? [
@@ -804,18 +874,28 @@ function TransactionDetailModal({
           ...(billMeta.rate ? [{ label: 'Rate', value: `₦${formatAmount(billMeta.rate)} / USDC` }] : []),
           ...(meta.smartspeed?.reference ? [{ label: 'Provider Ref', value: meta.smartspeed.reference, copyable: meta.smartspeed.reference, mono: true }] : []),
           ...(meta.error ? [{ label: 'Error', value: meta.error }] : []),
-          { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
+          { label: 'Date', value: dateValue },
         ]
-      : [
-        { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
-        { label: 'Amount', value: `${sign}${symbol}${formatAmount(Number(details?.amount || 0))}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}`, accent: true },
-        { label: 'Fee', value: `$${(details?.fee || 0).toFixed(2)}` },
-        { label: 'Network', value: displayNetwork },
-        { label: 'Date', value: new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
-        ...(meta.sourceAddress ? [{ label: 'From Address', value: meta.sourceAddress, copyable: meta.sourceAddress, mono: true }] : []),
-        ...(meta.destinationAddress || details?.recipient ? [{ label: 'To Address', value: meta.destinationAddress || details?.recipient, copyable: meta.destinationAddress || details?.recipient, mono: true }] : []),
-        ...(meta.txHash ? [{ label: 'Transaction Hash', value: meta.txHash, copyable: meta.txHash, mono: true }] : []),
-      ]
+      : internal
+        ? [
+            ...(typeUpper === 'RECEIVE' && fromParty ? [{ label: 'From', value: fromParty, accent: true }] : []),
+            ...(typeUpper !== 'RECEIVE' && toParty ? [{ label: 'To', value: toParty, accent: true }] : []),
+            { label: 'Delivery', value: 'Instant · SureX Tag' },
+            { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
+            { label: 'Amount', value: `${sign}${symbol}${formatAmount(Number(details?.amount || 0))}` },
+            { label: 'Fee', value: feeTxt },
+            { label: 'Date', value: dateValue },
+          ]
+        : [
+          { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
+          { label: 'Amount', value: `${sign}${symbol}${formatAmount(Number(details?.amount || 0))}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}`, accent: true },
+          { label: 'Fee', value: feeTxt },
+          { label: 'Network', value: displayNetwork },
+          { label: 'Date', value: dateValue },
+          ...(meta.sourceAddress ? [{ label: 'From Address', value: meta.sourceAddress, copyable: meta.sourceAddress, mono: true }] : []),
+          ...(meta.destinationAddress || details?.recipient ? [{ label: 'To Address', value: meta.destinationAddress || details?.recipient, copyable: meta.destinationAddress || details?.recipient, mono: true }] : []),
+          ...(meta.txHash ? [{ label: 'Transaction Hash', value: meta.txHash, copyable: meta.txHash, mono: true }] : []),
+        ]
 
   if (typeof document === 'undefined') return null
   return createPortal(
@@ -850,8 +930,7 @@ function TransactionDetailModal({
               </span>
             </div>
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[#475569] font-bold">Official Receipt</p>
-              <p className="text-[9px] text-[#334155] mt-0.5 font-medium">{displayNetwork}</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[#475569] font-bold leading-none pt-2">Official Receipt</p>
             </div>
           </div>
 
@@ -877,15 +956,17 @@ function TransactionDetailModal({
                 <p className="text-4xl font-black tracking-tight text-white leading-none">
                   {currencySymbol(swap.to)}{formatAmount(swap.toAmount)}
                 </p>
-                <p className="text-[#94A3B8] text-xs mt-2.5 flex items-center justify-center gap-2">
-                  <span className="flex items-center gap-1">
+                <div className="mt-3.5 flex items-center justify-center gap-2.5 leading-none">
+                  <span className="text-xs font-semibold text-[#94A3B8] whitespace-nowrap">
                     {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from}
                   </span>
-                  <span className="w-5 h-5 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center flex-shrink-0">
-                    <ArrowRight className="w-3 h-3 text-[#94A3B8]" />
+                  <span className="w-[22px] h-[22px] rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center flex-shrink-0">
+                    <ArrowRight className="w-3 h-3 text-slate-300" strokeWidth={2.2} />
                   </span>
-                  <span>{swap.to}</span>
-                </p>
+                  <span className="text-xs font-semibold text-white whitespace-nowrap">
+                    {currencySymbol(swap.to)}{formatAmount(swap.toAmount)} {swap.to}
+                  </span>
+                </div>
               </>
             ) : (
               <>
@@ -959,7 +1040,7 @@ function TransactionDetailModal({
               <p className="text-[9px] text-[#475569] font-medium">Powered by SureXend</p>
               <p className="text-[9px] text-[#334155] mt-0.5">Verified digital transaction record</p>
             </div>
-            <p className="text-[9px] text-[#475569] font-mono font-semibold">
+            <p className="text-[9px] text-[#475569] font-mono font-semibold max-w-[45%] truncate text-right" title={details?.reference || ''}>
               {details?.reference || '—'}
             </p>
           </div>

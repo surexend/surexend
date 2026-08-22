@@ -852,6 +852,7 @@ export class WalletsService implements OnModuleInit {
         currency: 'USDC',
         reference,
         metadata: {
+          fromTag: senderWallet.user?.surexTag || null,
           toTag: tag,
           recipientUserId: recipient.id,
           recipientName,

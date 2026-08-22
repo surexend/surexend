@@ -3,6 +3,8 @@
 // the history page export) so a blank page or overlapping text is impossible by
 // construction. jsPDF is lazy-loaded only for the PDF path.
 
+import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
+
 const statusLabel = (s?: string) => {
   const u = (s || '').toUpperCase()
   if (u === 'COMPLETED' || u === 'SUCCESS' || u === 'PAID') return 'COMPLETED'
@@ -64,6 +66,7 @@ export async function renderReceiptCanvas(opts: {
   }
 
   const meta = tx?.metadata || {}
+  const swap = getSwapInfo(tx)
   const statusU = statusLabel(tx?.status)
   const palette: Record<string, { bg: string; border: string; text: string; dot: string }> = {
     COMPLETED: { bg: 'rgba(16,185,129,0.10)', border: 'rgba(16,185,129,0.25)', text: '#34D399', dot: '#34D399' },
@@ -77,29 +80,62 @@ export async function renderReceiptCanvas(opts: {
 
   const isDebit = statusU !== 'FAILED' && ['SEND', 'BILL_PAYMENT', 'CONVERT', 'WITHDRAWAL'].includes((tx?.type || '').toUpperCase())
   const symbol = tx?.currency === 'NGN' ? '₦' : tx?.currency === 'GHS' ? 'GH₵' : tx?.currency === 'KES' ? 'KSh' : '$'
-  const amountValue = `${isDebit ? '-' : ''}${symbol}${Number(tx?.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  const amountValue = swap
+    ? `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)}`
+    : `${isDebit ? '-' : ''}${symbol}${Number(tx?.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
   const amountColor = '#ffffff'
-  const amountSub = tx?.currency && tx?.currency !== 'USDT' ? `${tx.currency} · ${meta.network || 'ARC'}` : `US Dollar · ${meta.network || 'ARC'}`
-  const amountStr = Number(tx?.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
+  const amountSub = swap
+    ? null
+    : tx?.currency && tx?.currency !== 'USDT' ? `${tx.currency} · ${meta.network || 'ARC'}` : `US Dollar · ${meta.network || 'ARC'}`
 
   let amountSize = 40
   while (amountSize > 22 && measure(amountValue, `900 ${amountSize}px ${font}`) > CW) amountSize -= 2
+
+  // Swap conversion row geometry (same approach as the history page export).
+  const convFrom = swap ? `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from}` : ''
+  const convTo = swap ? `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}` : ''
+  const CONV_FONT = `600 12px ${font}`
+  const CONV_GAP = 9
+  const CONV_CHIP_R = 9.5
+  const convW = swap
+    ? measure(convFrom, CONV_FONT) + CONV_GAP + CONV_CHIP_R * 2 + CONV_GAP + measure(convTo, CONV_FONT)
+    : 0
+
+  const labelOff = 35
+  const amtOff = labelOff + 9 + amountSize
+  const subOff = amtOff + 18
+  const convCy = amtOff + 14 + CONV_CHIP_R
+  const panelH = Math.round((swap ? convCy + CONV_CHIP_R : subOff) + 26)
 
   const rows: { label: string; value: string; mono?: boolean; accent?: boolean }[] = []
   const addRow = (label: string, value: string, mono = false, accent = false) => {
     if (value) rows.push({ label, value, mono, accent })
   }
   addRow('Reference', tx?.reference || tx?.id || '—', true)
-  addRow('Type', (tx?.type || 'Transaction').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c: string) => c.toUpperCase()))
-  addRow('Status', statusU)
-  addRow('Recipient', tx?.recipient || meta?.recipient || meta?.destinationNetwork || '')
+  if (!swap) {
+    addRow('Type', (tx?.type || 'Transaction').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c: string) => c.toUpperCase()))
+    addRow('Status', statusU)
+  }
+  if (swap) {
+    addRow('You swapped', `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from}`)
+    addRow('You received', `+${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}`, false, true)
+    if (swap.rate) addRow('Rate', `1 ${swap.from} = ${formatAmount(swap.rate, 6)} ${swap.to}`)
+  } else {
+    const internal = meta?.delivery === 'internal'
+    if (internal && (tx?.type || '').toUpperCase() === 'RECEIVE' && meta.fromTag) {
+      addRow('From', `@${meta.fromTag}${meta.senderName ? ` · ${meta.senderName}` : ''}`, false, true)
+    } else if (internal && meta.toTag) {
+      addRow('To', `@${meta.toTag}${meta.recipientName ? ` · ${meta.recipientName}` : ''}`, false, true)
+    }
+    if (internal) addRow('Delivery', 'Instant · SureX Tag')
+    else addRow('Recipient', tx?.recipient || meta?.recipient || meta?.destinationNetwork || '')
+  }
   addRow('Provider', meta?.provider || '')
   if (tx?.fee && Number(tx.fee) > 0) addRow('Fee', `${symbol}${Number(tx.fee).toLocaleString()}`)
 
   let y = PY
   y += 32 + 22
   y += 24 + 18
-  const panelH = 26 + 12 + 10 + amountSize + 10 + 16 + 26
   y += panelH + 24
   const rowsTop = y
   y += 20
@@ -164,12 +200,7 @@ export async function renderReceiptCanvas(opts: {
   ctx.fillText('END', PX + logoSize + 10 + w1 + 3 + w2 + 3, wmY)
 
   const rightX = W - PX
-  ctx.textAlign = 'right'
-  spaced('OFFICIAL RECEIPT', `700 9px ${font}`, rightX, PY + 12, '#475569', 2.5, 'right')
-  ctx.font = `500 9px ${font}`
-  ctx.fillStyle = '#334155'
-  ctx.fillText(meta.network || 'SureXend', rightX, PY + 24)
-  ctx.textAlign = 'left'
+  spaced('OFFICIAL RECEIPT', `700 9px ${font}`, rightX, PY + 21, '#475569', 2.5, 'right')
 
   // Status row
   const statusY = PY + 32 + 22
@@ -210,13 +241,47 @@ export async function renderReceiptCanvas(opts: {
   ctx.fillStyle = grad
   ctx.fillRect(PX, panelY, CW, 3)
   ctx.textAlign = 'center'
-  spaced('AMOUNT', `700 9px ${font}`, W / 2, panelY + 26 + 11, '#64748B', 2.5, 'center')
+  spaced('AMOUNT', `700 9px ${font}`, W / 2, panelY + labelOff, '#64748B', 2.5, 'center')
   ctx.font = `900 ${amountSize}px ${font}`
   ctx.fillStyle = amountColor
-  ctx.fillText(amountValue, W / 2, panelY + 26 + 12 + 10 + amountSize)
-  ctx.font = `400 12px ${font}`
-  ctx.fillStyle = '#94A3B8'
-  ctx.fillText(amountSub, W / 2, panelY + 26 + 12 + 10 + amountSize + 10 + 15)
+  ctx.fillText(amountValue, W / 2, panelY + amtOff)
+  if (swap) {
+    const startX = W / 2 - convW / 2
+    let x = startX
+    ctx.font = CONV_FONT
+    ctx.textAlign = 'left'
+    ctx.fillStyle = '#94A3B8'
+    ctx.fillText(convFrom, x, panelY + convCy + 4)
+    x += measure(convFrom, CONV_FONT) + CONV_GAP
+    ctx.beginPath()
+    ctx.arc(x + CONV_CHIP_R, panelY + convCy, CONV_CHIP_R, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)'
+    ctx.lineWidth = 1
+    ctx.stroke()
+    const acx = x + CONV_CHIP_R
+    const acy = panelY + convCy
+    ctx.strokeStyle = '#CBD5E1'
+    ctx.lineWidth = 1.3
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    ctx.moveTo(acx - 3.4, acy)
+    ctx.lineTo(acx + 3, acy)
+    ctx.moveTo(acx + 0.4, acy - 2.8)
+    ctx.lineTo(acx + 3.4, acy)
+    ctx.lineTo(acx + 0.4, acy + 2.8)
+    ctx.stroke()
+    x += CONV_CHIP_R * 2 + CONV_GAP
+    ctx.fillStyle = '#ffffff'
+    ctx.font = CONV_FONT
+    ctx.fillText(convTo, x, panelY + convCy + 4)
+  } else if (amountSub) {
+    ctx.font = `400 12px ${font}`
+    ctx.fillStyle = '#94A3B8'
+    ctx.fillText(amountSub, W / 2, panelY + subOff)
+  }
   ctx.textAlign = 'left'
 
   // Rows
@@ -256,10 +321,21 @@ export async function renderReceiptCanvas(opts: {
   ctx.font = `400 9px ${font}`
   ctx.fillStyle = '#334155'
   ctx.fillText('Verified digital transaction record', PX, fy + 24)
-  ctx.font = `600 9px ${mono}`
+  const refFont = `600 9px ${mono}`
+  const leftWidest = Math.max(
+    measure('Powered by SureXend', `500 9px ${font}`),
+    measure('Verified digital transaction record', `400 9px ${font}`)
+  )
+  const maxRefW = Math.max(60, CW - leftWidest - 24)
+  let refTxt = tx?.reference || tx?.id || '—'
+  if (measure(refTxt, refFont) > maxRefW) {
+    while (refTxt.length > 1 && measure(refTxt + '…', refFont) > maxRefW) refTxt = refTxt.slice(0, -1)
+    refTxt += '…'
+  }
+  ctx.font = refFont
   ctx.fillStyle = '#475569'
   ctx.textAlign = 'right'
-  ctx.fillText(tx?.reference || tx?.id || '—', W - PX, fy + 24)
+  ctx.fillText(refTxt, W - PX, fy + 24)
   ctx.textAlign = 'left'
 
   return canvas
