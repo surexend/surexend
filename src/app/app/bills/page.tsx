@@ -283,84 +283,108 @@ export default function BillsPage() {
                   {providers.map((provider: any, i: number) => {
                     const name = (provider.name || '').toLowerCase()
 
-                    // ── Brand config per network ──────────────────────────
+                    // ── Brand logos — proper SVG recreations of each network's visual identity ──
                     const brand = (() => {
+                      // MTN: yellow rounded square, "MTN" inside a blue oval badge (their actual logo mark)
                       if (name.includes('mtn')) return {
-                        bg: '#FFCC00', border: '#E6B800',
+                        description: 'Mobile Telecommunication Network',
                         logo: (
-                          <div style={{ background: '#FFCC00', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="36" height="20" viewBox="0 0 80 40" fill="none">
-                              <text x="4" y="30" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="28" fill="#003366" letterSpacing="-1">MTN</text>
+                          <div style={{ background: '#FFCB05', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+                              {/* yellow bg already set on div */}
+                              {/* MTN blue oval badge */}
+                              <ellipse cx="22" cy="22" rx="18" ry="12" fill="#003580" />
+                              <text x="22" y="26.5" textAnchor="middle" fontFamily="Arial Black, Helvetica, sans-serif" fontWeight="900" fontSize="11.5" fill="#FFCB05" letterSpacing="0.5">MTN</text>
                             </svg>
                           </div>
                         ),
-                        description: 'Mobile Telecommunication Network',
                       }
+                      // Airtel: red rounded square, cursive "a" with swooping arc above — their iconic symbol
                       if (name.includes('airtel')) return {
-                        bg: '#ED1C24', border: '#C21017',
-                        logo: (
-                          <div style={{ background: 'linear-gradient(135deg,#ED1C24,#B01018)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <span style={{ fontFamily: 'Arial, sans-serif', fontWeight: 900, fontSize: 13, color: '#fff', letterSpacing: '-0.5px' }}>airtel</span>
-                          </div>
-                        ),
                         description: 'Airtel Networks Limited',
+                        logo: (
+                          <div style={{ background: '#ED1B24', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                              {/* Airtel swoosh arc */}
+                              <path d="M6 10 Q18 1 30 10" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" fill="none"/>
+                              {/* Airtel lowercase 'a' */}
+                              <text x="18" y="30" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontStyle="italic" fontWeight="700" fontSize="16" fill="#fff">airtel</text>
+                            </svg>
+                          </div>
+                        ),
                       }
+                      // GLO: perfect green circle with "glo" in rounded white text — exactly as their brand
                       if (name.includes('glo')) return {
-                        bg: '#009900', border: '#007700',
-                        logo: (
-                          <div style={{ background: 'linear-gradient(135deg,#00B300,#007700)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <span style={{ fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif', fontWeight: 900, fontSize: 15, color: '#fff', letterSpacing: '0.5px' }}>glo</span>
-                          </div>
-                        ),
                         description: 'Glo Mobile Network',
+                        logo: (
+                          <div style={{ width: 52, height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+                              {/* Full circle — GLO's iconic green circle logo */}
+                              <circle cx="26" cy="26" r="25" fill="#009A00" />
+                              <circle cx="26" cy="26" r="25" fill="none" stroke="#007700" strokeWidth="1.5"/>
+                              <text x="26" y="31" textAnchor="middle" fontFamily="Arial Rounded MT Bold, Arial, sans-serif" fontWeight="900" fontSize="15" fill="#fff" letterSpacing="0.8">glo</text>
+                            </svg>
+                          </div>
+                        ),
                       }
+                      // 9Mobile: white/green rounded square, stylised "9" numeral with their teal-green brand color
                       if (name.includes('9mobile') || name.includes('etisalat')) return {
-                        bg: '#6CC24A', border: '#4FA832',
-                        logo: (
-                          <div style={{ background: 'linear-gradient(135deg,#7DD85A,#4FA832)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 13, color: '#fff', letterSpacing: '-0.5px' }}>9MOBILE</span>
-                          </div>
-                        ),
                         description: 'Formerly Etisalat Nigeria',
+                        logo: (
+                          <div style={{ background: '#fff', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1.5px solid #e0e0e0' }}>
+                            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                              {/* 9Mobile green stylised "9" with their brand colour */}
+                              <text x="20" y="28" textAnchor="middle" fontFamily="Arial Black, Helvetica, sans-serif" fontWeight="900" fontSize="26" fill="#5BAD4E" letterSpacing="-1">9</text>
+                              {/* small "mobile" text below */}
+                              <text x="20" y="37" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontWeight="700" fontSize="6.5" fill="#5BAD4E" letterSpacing="0.5">mobile</text>
+                            </svg>
+                          </div>
+                        ),
                       }
+                      // DStv: blue rounded square, DStv wordmark in white
                       if (name.includes('dstv')) return {
-                        bg: '#003087', border: '#002060',
-                        logo: (
-                          <div style={{ background: 'linear-gradient(135deg,#003087,#001A4D)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 12, color: '#fff', letterSpacing: '0.5px' }}>DStv</span>
-                          </div>
-                        ),
                         description: 'MultiChoice DStv Subscription',
+                        logo: (
+                          <div style={{ background: '#003087', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="44" height="28" viewBox="0 0 88 28" fill="none">
+                              <text x="2" y="22" fontFamily="Arial Black, Helvetica, sans-serif" fontWeight="900" fontSize="22" fill="#fff" letterSpacing="-0.5">DStv</text>
+                            </svg>
+                          </div>
+                        ),
                       }
+                      // GOtv: orange rounded square, GOtv wordmark
                       if (name.includes('gotv')) return {
-                        bg: '#F7941D', border: '#D97A0A',
-                        logo: (
-                          <div style={{ background: 'linear-gradient(135deg,#F7941D,#D97A0A)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 12, color: '#fff', letterSpacing: '0.5px' }}>GOtv</span>
-                          </div>
-                        ),
                         description: 'MultiChoice GOtv Subscription',
-                      }
-                      if (name.includes('startimes')) return {
-                        bg: '#E5671A', border: '#BF5010',
                         logo: (
-                          <div style={{ background: 'linear-gradient(135deg,#E5671A,#BF5010)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 11, color: '#fff', letterSpacing: '0.3px' }}>StarTimes</span>
+                          <div style={{ background: '#F5A623', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="44" height="28" viewBox="0 0 88 28" fill="none">
+                              <text x="2" y="22" fontFamily="Arial Black, Helvetica, sans-serif" fontWeight="900" fontSize="22" fill="#fff" letterSpacing="-0.5">GOtv</text>
+                            </svg>
                           </div>
                         ),
+                      }
+                      // StarTimes
+                      if (name.includes('startimes')) return {
                         description: 'StarTimes TV Subscription',
+                        logo: (
+                          <div style={{ background: '#E5671A', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                              {/* Star shape */}
+                              <polygon points="20,4 23.5,14.5 34,14.5 25.5,21 28.5,32 20,25.5 11.5,32 14.5,21 6,14.5 16.5,14.5" fill="#fff" opacity="0.95"/>
+                            </svg>
+                          </div>
+                        ),
                       }
                       // Generic fallback
                       return {
-                        bg: '#1E2738', border: 'rgba(255,255,255,0.1)',
+                        description: provider.code || 'Service Provider',
                         logo: (
-                          <div style={{ background: 'linear-gradient(135deg,#2A3450,#1A2238)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 18, color: '#fff' }}>
+                          <div style={{ background: 'linear-gradient(135deg,#2A3450,#1A2238)', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 20, color: '#fff' }}>
                               {(provider.name || '?')[0].toUpperCase()}
                             </span>
                           </div>
                         ),
-                        description: provider.code || 'Service Provider',
                       }
                     })()
 
