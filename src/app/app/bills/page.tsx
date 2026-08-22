@@ -283,99 +283,44 @@ export default function BillsPage() {
                   {providers.map((provider: any, i: number) => {
                     const name = (provider.name || '').toLowerCase()
 
-                    // ── Brand logos — proper SVG recreations of each network's visual identity ──
+                    // ── Network brand logos — actual logo image files ──
+                    const NETWORK_LOGOS: Record<string, { src: string; description: string; circular?: boolean; bg?: string; scale?: number }> = {
+                      mtn: { src: '/logos/mtn.png', description: 'Mobile Telecommunication Network' },
+                      airtel: { src: '/logos/airtel.png', description: 'Airtel Networks Limited' },
+                      glo: { src: '/logos/glo.png', description: 'Glo Mobile Network', circular: true, scale: 1.15 },
+                      '9mobile': { src: '/logos/9mobile.png', description: 'Formerly Etisalat Nigeria', bg: '#fff' },
+                      etisalat: { src: '/logos/9mobile.png', description: 'Formerly Etisalat Nigeria', bg: '#fff' },
+                      dstv: { src: '/logos/dstv.svg', description: 'MultiChoice DStv Subscription' },
+                      gotv: { src: '/logos/gotv.svg', description: 'MultiChoice GOtv Subscription' },
+                      startimes: { src: '/logos/startimes.svg', description: 'StarTimes TV Subscription' },
+                    }
+
                     const brand = (() => {
-                      // MTN: yellow rounded square, "MTN" inside a blue oval badge (their actual logo mark)
-                      if (name.includes('mtn')) return {
-                        description: 'Mobile Telecommunication Network',
-                        logo: (
-                          <div style={{ background: '#FFCB05', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
-                              {/* yellow bg already set on div */}
-                              {/* MTN blue oval badge */}
-                              <ellipse cx="22" cy="22" rx="18" ry="12" fill="#003580" />
-                              <text x="22" y="26.5" textAnchor="middle" fontFamily="Arial Black, Helvetica, sans-serif" fontWeight="900" fontSize="11.5" fill="#FFCB05" letterSpacing="0.5">MTN</text>
-                            </svg>
-                          </div>
-                        ),
+                      const match = Object.keys(NETWORK_LOGOS).find(key => name.includes(key))
+                      if (match) {
+                        const net = NETWORK_LOGOS[match]
+                        return {
+                          description: net.description,
+                          logo: (
+                            <div style={{
+                              width: 52, height: 52, flexShrink: 0, overflow: 'hidden',
+                              borderRadius: net.circular ? '50%' : 12,
+                              background: net.bg || 'transparent',
+                            }}>
+                              <img
+                                src={net.src}
+                                alt={provider.name}
+                                style={{
+                                  width: '100%', height: '100%',
+                                  objectFit: 'cover', display: 'block',
+                                  transform: net.scale ? `scale(${net.scale})` : undefined,
+                                }}
+                              />
+                            </div>
+                          ),
+                        }
                       }
-                      // Airtel: red rounded square, cursive "a" with swooping arc above — their iconic symbol
-                      if (name.includes('airtel')) return {
-                        description: 'Airtel Networks Limited',
-                        logo: (
-                          <div style={{ background: '#ED1B24', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                              {/* Airtel swoosh arc */}
-                              <path d="M6 10 Q18 1 30 10" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" fill="none"/>
-                              {/* Airtel lowercase 'a' */}
-                              <text x="18" y="30" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontStyle="italic" fontWeight="700" fontSize="16" fill="#fff">airtel</text>
-                            </svg>
-                          </div>
-                        ),
-                      }
-                      // GLO: perfect green circle with "glo" in rounded white text — exactly as their brand
-                      if (name.includes('glo')) return {
-                        description: 'Glo Mobile Network',
-                        logo: (
-                          <div style={{ width: 52, height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
-                              {/* Full circle — GLO's iconic green circle logo */}
-                              <circle cx="26" cy="26" r="25" fill="#009A00" />
-                              <circle cx="26" cy="26" r="25" fill="none" stroke="#007700" strokeWidth="1.5"/>
-                              <text x="26" y="31" textAnchor="middle" fontFamily="Arial Rounded MT Bold, Arial, sans-serif" fontWeight="900" fontSize="15" fill="#fff" letterSpacing="0.8">glo</text>
-                            </svg>
-                          </div>
-                        ),
-                      }
-                      // 9Mobile: white/green rounded square, stylised "9" numeral with their teal-green brand color
-                      if (name.includes('9mobile') || name.includes('etisalat')) return {
-                        description: 'Formerly Etisalat Nigeria',
-                        logo: (
-                          <div style={{ background: '#fff', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1.5px solid #e0e0e0' }}>
-                            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                              {/* 9Mobile green stylised "9" with their brand colour */}
-                              <text x="20" y="28" textAnchor="middle" fontFamily="Arial Black, Helvetica, sans-serif" fontWeight="900" fontSize="26" fill="#5BAD4E" letterSpacing="-1">9</text>
-                              {/* small "mobile" text below */}
-                              <text x="20" y="37" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontWeight="700" fontSize="6.5" fill="#5BAD4E" letterSpacing="0.5">mobile</text>
-                            </svg>
-                          </div>
-                        ),
-                      }
-                      // DStv: blue rounded square, DStv wordmark in white
-                      if (name.includes('dstv')) return {
-                        description: 'MultiChoice DStv Subscription',
-                        logo: (
-                          <div style={{ background: '#003087', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="44" height="28" viewBox="0 0 88 28" fill="none">
-                              <text x="2" y="22" fontFamily="Arial Black, Helvetica, sans-serif" fontWeight="900" fontSize="22" fill="#fff" letterSpacing="-0.5">DStv</text>
-                            </svg>
-                          </div>
-                        ),
-                      }
-                      // GOtv: orange rounded square, GOtv wordmark
-                      if (name.includes('gotv')) return {
-                        description: 'MultiChoice GOtv Subscription',
-                        logo: (
-                          <div style={{ background: '#F5A623', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="44" height="28" viewBox="0 0 88 28" fill="none">
-                              <text x="2" y="22" fontFamily="Arial Black, Helvetica, sans-serif" fontWeight="900" fontSize="22" fill="#fff" letterSpacing="-0.5">GOtv</text>
-                            </svg>
-                          </div>
-                        ),
-                      }
-                      // StarTimes
-                      if (name.includes('startimes')) return {
-                        description: 'StarTimes TV Subscription',
-                        logo: (
-                          <div style={{ background: '#E5671A', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                              {/* Star shape */}
-                              <polygon points="20,4 23.5,14.5 34,14.5 25.5,21 28.5,32 20,25.5 11.5,32 14.5,21 6,14.5 16.5,14.5" fill="#fff" opacity="0.95"/>
-                            </svg>
-                          </div>
-                        ),
-                      }
-                      // Generic fallback
+                      // Generic fallback — first letter
                       return {
                         description: provider.code || 'Service Provider',
                         logo: (
