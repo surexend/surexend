@@ -181,7 +181,7 @@ export default function InvoicePage() {
         initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
       >
         {/* Card Header */}
-        <div className="flex items-center justify-between border-b border-white/8 pb-3">
+        <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
           <div className="flex items-center gap-2.5">
             <span className="text-2xl">{curr.flag}</span>
             <div>
@@ -196,7 +196,7 @@ export default function InvoicePage() {
 
         {/* Invoice Summary */}
         {numAmount > 0 && (
-          <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/8">
+          <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
             <p className="text-[10px] text-[#64748B] uppercase tracking-wider mb-0.5">Invoice Total</p>
             <p className="text-2xl font-black text-white">{curr.symbol}{numAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {curr.code}</p>
             <p className="text-xs text-emerald-400 font-medium mt-0.5">≈ ${usdEquivalent} USD (Auto-credited to wallet)</p>
@@ -207,7 +207,7 @@ export default function InvoicePage() {
         {/* Bank Details */}
         <div className="space-y-2.5">
           {/* Account Name */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/6">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <div>
               <p className="text-[10px] text-[#64748B] uppercase tracking-wider">Account Name</p>
               <p className="text-xs font-bold text-white mt-0.5">{curr.accountName}</p>
@@ -216,7 +216,7 @@ export default function InvoicePage() {
           </div>
 
           {/* BIC / SWIFT */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/6">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <div>
               <p className="text-[10px] text-[#64748B] uppercase tracking-wider">BIC / SWIFT</p>
               <p className="text-xs font-mono font-bold text-white mt-0.5">{curr.bic}</p>
@@ -241,7 +241,7 @@ export default function InvoicePage() {
         </div>
 
         {/* Auto-Settlement Notice */}
-        <div className="p-3.5 rounded-xl bg-emerald-500/8 border border-emerald-500/20 flex items-start gap-3">
+        <div className="p-3.5 rounded-xl bg-emerald-500/[0.08] border border-emerald-500/20 flex items-start gap-3">
           <RefreshCw className="w-4 h-4 flex-shrink-0 text-emerald-400 mt-0.5" />
           <div>
             <p className="text-xs font-semibold text-white">Automated Real-Time Settlement</p>

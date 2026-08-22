@@ -727,7 +727,7 @@ export default function LandingPage() {
                           </div>
                         </div>
                         {[
-                          { d: 'Mon', in: 82, out: 38 },,
+                          { d: 'Mon', in: 82, out: 38 },
                           { d: 'Tue', in: 54, out: 62 },
                           { d: 'Wed', in: 91, out: 30 },
                           { d: 'Thu', in: 47, out: 55 },

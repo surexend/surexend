@@ -1067,7 +1067,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Account Details */}
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/8 space-y-3">
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Bank</span>
                   <span className="text-sm font-bold text-emerald-400">Wema Bank / Moniepoint</span>
@@ -1094,7 +1094,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-amber-500/8 border border-amber-500/20 flex items-start gap-2">
+              <div className="p-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/20 flex items-start gap-2">
                 <span className="text-amber-400 text-base flex-shrink-0">⚡</span>
                 <p className="text-[11px] text-[#94A3B8] leading-relaxed">
                   Transfer any amount in <strong className="text-white">Naira (NGN)</strong> to this account. Funds will credit your <strong className="text-white">Local Wallet</strong> within minutes. <em className="text-amber-400">These funds stay in NGN — use the Convert tab to move to USD.</em>

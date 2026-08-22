@@ -258,7 +258,7 @@ function FilterPanel({ filters, setFilters, accentHex, accentRgb, onClose }: {
         transition={{ type: 'spring', damping: 28, stiffness: 320 }}
       >
         {/* Header + drag handle */}
-        <div className="flex items-center justify-between px-5 pt-3 pb-3 border-b border-white/8 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 pt-3 pb-3 border-b border-white/[0.08] flex-shrink-0">
           <div className="flex items-center gap-2">
             <Filter size={14} style={{ color: accentHex }} />
             <h4 className="text-white font-semibold text-sm">Filter Transactions</h4>
@@ -340,7 +340,7 @@ function FilterPanel({ filters, setFilters, accentHex, accentRgb, onClose }: {
         </div>
 
         {/* Sticky action bar — always visible */}
-        <div className="flex gap-3 px-5 py-4 border-t border-white/8 bg-[#0F1629] flex-shrink-0">
+        <div className="flex gap-3 px-5 py-4 border-t border-white/[0.08] bg-[#0F1629] flex-shrink-0">
           <button
             className="flex-1 py-3 rounded-xl text-sm text-[#94A3B8] border border-white/08 hover:text-white transition-colors"
             onClick={() => { setLocal({ year: null, month: null, week: null, day: null, type: 'ALL' }); setFilters({ year: null, month: null, week: null, day: null, type: 'ALL' }); onClose() }}

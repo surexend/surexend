@@ -454,7 +454,7 @@ export default function ProfilePage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.95 }}
             >
-              <div className="bg-[#0F1629] rounded-3xl p-6 border border-white/8">
+              <div className="bg-[#0F1629] rounded-3xl p-6 border border-white/[0.08]">
                 <div className="w-14 h-14 rounded-2xl bg-[#EF4444]/10 flex items-center justify-center mx-auto mb-4">
                   <AlertTriangle size={26} className="text-[#EF4444]" />
                 </div>

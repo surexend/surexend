@@ -164,7 +164,7 @@ function BankFundingCard() {
           <p className="text-[11px] text-[#94A3B8] leading-relaxed">
             Send money to this account and your <strong className="text-white">NGN wallet</strong> is credited automatically.
           </p>
-          <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-4 space-y-2">
+          <div className="bg-white/[0.03] border border-white/[0.08] rounded-2xl p-4 space-y-2">
             <div>
               <p className="text-[9px] uppercase tracking-wider text-[#64748B] font-bold">Account Name</p>
               <p className="text-sm font-bold text-white">{data.account.accountName}</p>
@@ -185,7 +185,7 @@ function BankFundingCard() {
           </div>
         </>
       ) : (
-        <div className="flex items-start gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8">
+        <div className="flex items-start gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
           <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
           <p className="text-[11px] text-[#94A3B8] leading-relaxed">
             {data?.message || 'Bank deposits are being set up. Contact support to fund your local wallet for now.'}
@@ -292,7 +292,7 @@ export default function ReceivePage() {
             className="liquid-glass p-5 rounded-3xl flex flex-col items-center gap-4 border border-white/10"
           >
             {/* Chain info banner */}
-            <div className="flex items-center gap-3 w-full p-3 rounded-2xl bg-white/[0.03] border border-white/8">
+            <div className="flex items-center gap-3 w-full p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
               <activeNet.Logo size={32} />
               <div>
                 <p className="text-sm font-bold text-white">{activeNet.label} Network</p>
@@ -331,7 +331,7 @@ export default function ReceivePage() {
           {/* Address Card */}
           <div className="liquid-glass p-4 rounded-2xl border border-white/10">
             <p className="text-[10px] text-[#64748B] uppercase tracking-wider mb-2 font-bold">{network} Deposit Address</p>
-            <p className="text-xs font-mono text-white break-all leading-relaxed bg-white/[0.03] p-3 rounded-xl border border-white/8 select-all">
+            <p className="text-xs font-mono text-white break-all leading-relaxed bg-white/[0.03] p-3 rounded-xl border border-white/[0.08] select-all">
               {isLoading ? 'Loading address...' : address}
             </p>
           </div>
@@ -362,7 +362,7 @@ export default function ReceivePage() {
       <BankFundingCard />
 
       {/* Warning */}
-      <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-red-500/8 border border-red-500/20">
+      <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-red-500/[0.08] border border-red-500/20">
         <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-xs font-semibold text-red-400 mb-0.5">Important</p>
