@@ -274,49 +274,142 @@ export default function BillsPage() {
             <motion.div key="providers" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
               {!providers ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 6 }, (_, i) => (
-                    <div key={i} className="skeleton h-16 rounded-xl" />
+                  {Array.from({ length: 4 }, (_, i) => (
+                    <div key={i} className="skeleton h-[76px] rounded-2xl" />
                   ))}
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {providers.map((provider: any, i: number) => (
-                    <motion.button key={provider.code}
-                      className="w-full bg-[#0F1629] rounded-xl p-4 flex items-center gap-4 border border-white/5 text-left"
-                      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      whileHover={{ borderColor: `rgba(${accentRgb}, 0.2)` }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => { setSelectedProvider(provider); setStep('form') }}
-                    >
-                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-black text-sm flex-shrink-0 shadow-md">
+                <div className="space-y-3">
+                  {providers.map((provider: any, i: number) => {
+                    const name = (provider.name || '').toLowerCase()
+
+                    // ── Brand config per network ──────────────────────────
+                    const brand = (() => {
+                      if (name.includes('mtn')) return {
+                        bg: '#FFCC00', border: '#E6B800',
+                        logo: (
+                          <div style={{ background: '#FFCC00', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="36" height="20" viewBox="0 0 80 40" fill="none">
+                              <text x="4" y="30" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="28" fill="#003366" letterSpacing="-1">MTN</text>
+                            </svg>
+                          </div>
+                        ),
+                        description: 'Mobile Telecommunication Network',
+                      }
+                      if (name.includes('airtel')) return {
+                        bg: '#ED1C24', border: '#C21017',
+                        logo: (
+                          <div style={{ background: 'linear-gradient(135deg,#ED1C24,#B01018)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ fontFamily: 'Arial, sans-serif', fontWeight: 900, fontSize: 13, color: '#fff', letterSpacing: '-0.5px' }}>airtel</span>
+                          </div>
+                        ),
+                        description: 'Airtel Networks Limited',
+                      }
+                      if (name.includes('glo')) return {
+                        bg: '#009900', border: '#007700',
+                        logo: (
+                          <div style={{ background: 'linear-gradient(135deg,#00B300,#007700)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif', fontWeight: 900, fontSize: 15, color: '#fff', letterSpacing: '0.5px' }}>glo</span>
+                          </div>
+                        ),
+                        description: 'Glo Mobile Network',
+                      }
+                      if (name.includes('9mobile') || name.includes('etisalat')) return {
+                        bg: '#6CC24A', border: '#4FA832',
+                        logo: (
+                          <div style={{ background: 'linear-gradient(135deg,#7DD85A,#4FA832)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 13, color: '#fff', letterSpacing: '-0.5px' }}>9MOBILE</span>
+                          </div>
+                        ),
+                        description: 'Formerly Etisalat Nigeria',
+                      }
+                      if (name.includes('dstv')) return {
+                        bg: '#003087', border: '#002060',
+                        logo: (
+                          <div style={{ background: 'linear-gradient(135deg,#003087,#001A4D)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 12, color: '#fff', letterSpacing: '0.5px' }}>DStv</span>
+                          </div>
+                        ),
+                        description: 'MultiChoice DStv Subscription',
+                      }
+                      if (name.includes('gotv')) return {
+                        bg: '#F7941D', border: '#D97A0A',
+                        logo: (
+                          <div style={{ background: 'linear-gradient(135deg,#F7941D,#D97A0A)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 12, color: '#fff', letterSpacing: '0.5px' }}>GOtv</span>
+                          </div>
+                        ),
+                        description: 'MultiChoice GOtv Subscription',
+                      }
+                      if (name.includes('startimes')) return {
+                        bg: '#E5671A', border: '#BF5010',
+                        logo: (
+                          <div style={{ background: 'linear-gradient(135deg,#E5671A,#BF5010)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 11, color: '#fff', letterSpacing: '0.3px' }}>StarTimes</span>
+                          </div>
+                        ),
+                        description: 'StarTimes TV Subscription',
+                      }
+                      // Generic fallback
+                      return {
+                        bg: '#1E2738', border: 'rgba(255,255,255,0.1)',
+                        logo: (
+                          <div style={{ background: 'linear-gradient(135deg,#2A3450,#1A2238)', borderRadius: 12, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 18, color: '#fff' }}>
+                              {(provider.name || '?')[0].toUpperCase()}
+                            </span>
+                          </div>
+                        ),
+                        description: provider.code || 'Service Provider',
+                      }
+                    })()
+
+                    return (
+                      <motion.button key={provider.code}
+                        className="w-full rounded-2xl p-4 flex items-center gap-4 border text-left transition-all"
+                        style={{
+                          background: 'rgba(15,22,41,0.8)',
+                          borderColor: 'rgba(255,255,255,0.07)',
+                          backdropFilter: 'blur(8px)',
+                        }}
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.06, type: 'spring', stiffness: 300, damping: 28 }}
+                        whileHover={{
+                          borderColor: `rgba(${accentRgb}, 0.35)`,
+                          background: `rgba(${accentRgb}, 0.04)`,
+                          scale: 1.005,
+                        }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => { setSelectedProvider(provider); setStep('form') }}
+                      >
+                        {/* Logo tile */}
                         {provider.image ? (
-                          <img src={provider.image} alt={provider.name} className="w-10 h-10 object-contain rounded-lg" />
-                        ) : (
-                          (() => {
-                            const name = (provider.name || '').toLowerCase()
-                            if (name.includes('mtn')) return <span className="px-2 py-1 rounded bg-yellow-400 text-black font-black text-xs">MTN</span>
-                            if (name.includes('airtel')) return <span className="px-2 py-1 rounded bg-red-600 text-white font-black text-xs">airtel</span>
-                            if (name.includes('glo')) return <span className="px-2 py-1 rounded bg-emerald-600 text-white font-black text-xs">glo</span>
-                            if (name.includes('9mobile') || name.includes('etisalat')) return <span className="px-2 py-1 rounded bg-lime-500 text-black font-black text-xs">9mob</span>
-                            if (name.includes('dstv')) return <span className="px-2 py-1 rounded bg-blue-600 text-white font-black text-xs">DSTV</span>
-                            if (name.includes('gotv')) return <span className="px-2 py-1 rounded bg-amber-500 text-black font-black text-xs">GOtv</span>
-                            if (name.includes('startimes')) return <span className="px-2 py-1 rounded bg-orange-600 text-white font-black text-xs">ST</span>
-                            return <span className="text-white font-extrabold">{provider.name?.[0]}</span>
-                          })()
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-white font-medium text-sm">{provider.name}</p>
-                        <p className="text-[#64748B] text-xs">
-                          {selectedCategory === 'airtime' && provider.discount
-                            ? `${provider.discount}% discount`
-                            : provider.code}
-                        </p>
-                      </div>
-                      <ChevronRight size={16} className="text-[#64748B]" />
-                    </motion.button>
-                  ))}
+                          <div style={{ width: 52, height: 52, borderRadius: 12, overflow: 'hidden', flexShrink: 0, border: `1.5px solid rgba(255,255,255,0.1)`, background: '#fff' }}>
+                            <img src={provider.image} alt={provider.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }} />
+                          </div>
+                        ) : brand.logo}
+
+                        {/* Text */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-semibold text-[15px] leading-snug">{provider.name}</p>
+                          <p className="text-[#64748B] text-xs mt-0.5 truncate">
+                            {selectedCategory === 'airtime' && provider.discount
+                              ? `${provider.discount}% cashback discount`
+                              : brand.description}
+                          </p>
+                        </div>
+
+                        {/* Arrow */}
+                        <div
+                          className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ background: `rgba(${accentRgb}, 0.08)` }}
+                        >
+                          <ChevronRight size={15} style={{ color: accentHex }} />
+                        </div>
+                      </motion.button>
+                    )
+                  })}
                 </div>
               )}
             </motion.div>
