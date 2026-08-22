@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   ArrowUpRight, ArrowDownLeft, RefreshCw, Zap, Gift,
   Search, Filter, Download, ChevronDown, Calendar,
-  CheckCircle, XCircle, Clock, FileText, X, Copy, Check, Hash, ExternalLink, ArrowRight
+  CheckCircle, XCircle, Clock, FileText, X, Copy, Check, Hash, ExternalLink, ArrowRight, BarChart3
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -1255,7 +1255,9 @@ export default function HistoryPage() {
             className="flex flex-col items-center justify-center py-24 text-center"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           >
-            <div className="text-5xl mb-4">📊</div>
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center">
+              <BarChart3 className="w-7 h-7 text-[#475569]" />
+            </div>
             <h3 className="text-white font-semibold mb-2">No transactions found</h3>
             <p className="text-[#64748B] text-sm max-w-xs">
               {activeFilterCount > 0 ? 'Try adjusting your filters' : 'Your transactions will appear here once you start using SureXend'}
@@ -1293,13 +1295,9 @@ export default function HistoryPage() {
                     const dateStr = new Date(tx.createdAt || tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
                     return (
-                      <motion.div
+                      <div
                         key={tx.id}
-                        className={`flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.03] transition-colors cursor-pointer ${idx !== 0 ? 'border-t border-white/[0.04]' : ''}`}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: (groupIdx * 5 + idx) * 0.035 }}
-                        whileHover={{ x: 2 }}
+                        className={`flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.03] active:bg-white/[0.06] transition-colors cursor-pointer ${idx !== 0 ? 'border-t border-white/[0.04]' : ''}`}
                         onClick={() => setSelectedTx(tx)}
                       >
                         <div className="flex items-center gap-3">
@@ -1340,7 +1338,7 @@ export default function HistoryPage() {
                           )}
                           <StatusBadge status={tx.status} />
                         </div>
-                      </motion.div>
+                      </div>
                     )
                   })}
                 </div>
