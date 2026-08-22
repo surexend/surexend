@@ -790,6 +790,7 @@ export class WalletsService implements OnModuleInit {
 
     const recipient = await this.prisma.user.findFirst({
       where: { surexTag: { equals: tag, mode: 'insensitive' } },
+      select: { id: true, firstName: true, lastName: true, surexTag: true },
     });
     if (!recipient) {
       throw new BadRequestException(`No SureXend user found with the tag @${tag}.`);
@@ -799,7 +800,15 @@ export class WalletsService implements OnModuleInit {
     }
 
     const [senderWallet, recipientWallet] = await Promise.all([
-      this.prisma.wallet.findUnique({ where: { userId: senderUserId }, include: { user: true } }),
+      this.prisma.wallet.findUnique({
+        where: { userId: senderUserId },
+        select: {
+          id: true,
+          usdcBalance: true,
+          lockedBalance: true,
+          user: { select: { firstName: true, lastName: true, surexTag: true } },
+        },
+      }),
       this.prisma.wallet.findUnique({ where: { userId: recipient.id } }),
     ]);
     if (!senderWallet) throw new BadRequestException('Wallet not found.');
