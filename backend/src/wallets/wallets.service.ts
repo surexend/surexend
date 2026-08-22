@@ -835,6 +835,22 @@ export class WalletsService implements OnModuleInit {
     const reference = `TAG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const receiveReference = `${reference}-R`;
     const result = await this.prisma.$transaction(async (prisma) => {
+      // SECURITY: lock both wallet rows FOR UPDATE and re-derive spendable
+      // INSIDE the transaction. Checking against the unlocked pre-read allowed
+      // concurrent sends to all pass validation and drive the balance negative.
+      // Ordered by id to keep a deterministic lock order (deadlock-safe).
+      const locked = await prisma.$queryRaw<Array<{ id: string; usdcBalance: number; lockedBalance: number }>>`
+        SELECT "id", "usdcBalance", "lockedBalance"
+        FROM "Wallet"
+        WHERE "id" IN (${senderWallet.id}, ${recipientWallet.id})
+        ORDER BY "id"
+        FOR UPDATE`;
+      const lockedSender = locked.find((w) => w.id === senderWallet.id);
+      if (!lockedSender) throw new BadRequestException('Wallet not found.');
+      const lockedSpendable = Math.max(0, Number(lockedSender.usdcBalance || 0) - Number(lockedSender.lockedBalance || 0));
+      if (lockedSpendable < sendAmount) {
+        throw new BadRequestException(`Insufficient balance. You can send up to ${lockedSpendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`);
+      }
       await prisma.wallet.update({
         where: { id: senderWallet.id },
         data: { usdcBalance: { decrement: sendAmount } },
@@ -1067,6 +1083,44 @@ export class WalletsService implements OnModuleInit {
     }
 
     await this.prisma.$transaction(async (prisma) => {
+      // SECURITY: re-verify spendable against a FOR UPDATE row lock before the
+      // ledger debit. The chain leg has already moved (external call above), but
+      // concurrent sends must not each pass the unlocked pre-check and drive the
+      // internal balance negative. If this fails the ledger stays consistent;
+      // deposit-monitor reconciliation flags any on-chain/ledger divergence.
+      const lockedRows = await prisma.$queryRawUnsafe<Array<{ id: string; usdcBalance: number; lockedBalance: number }>>(
+        `SELECT "id", "usdcBalance", "lockedBalance" FROM "Wallet" WHERE "id" = $1 FOR UPDATE`,
+        wallet.id
+      );
+      const lw = lockedRows[0];
+      if (!lw) throw new BadRequestException('Wallet not found.');
+      let lockedSpendable = lw.usdcBalance || 0;
+      try {
+        const netRows = await prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
+          `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
+             SELECT 'out' AS kind, amount::float8 AS total
+               FROM "Transaction"
+              WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
+                AND (metadata->>'from' = 'USD')
+             UNION ALL
+             SELECT 'in', COALESCE((metadata->>'toAmount')::float8, 0)
+               FROM "Transaction"
+              WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
+                AND (metadata->>'to' = 'USD')
+           ) t GROUP BY kind`,
+          userId
+        );
+        const cOut = netRows.find((r) => r.kind === 'out')?.total || 0;
+        const cIn = netRows.find((r) => r.kind === 'in')?.total || 0;
+        if (cOut > 0 || cIn > 0) lockedSpendable = Math.max(0, lockedSpendable - cOut + cIn);
+      } catch (netErr: any) {
+        this.logger.warn(`In-tx conversion netting failed (${netErr.message}); using gross-locked`);
+      }
+      lockedSpendable = Math.max(0, lockedSpendable - (lw.lockedBalance || 0));
+      if (lockedSpendable < amount + fee) {
+        throw new BadRequestException(`Insufficient balance for this send. Spendable: ${lockedSpendable.toFixed(2)} USDC.`);
+      }
+
       await prisma.wallet.update({
         where: { id: wallet.id },
         data: {

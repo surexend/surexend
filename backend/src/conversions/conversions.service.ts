@@ -260,69 +260,69 @@ export class ConversionsService {
 
     await this.transactionAuth.verify(user, { pin, passkeyToken });
 
-    // Load wallet with a defensive select so a not-yet-migrated localBalances
-    // column can't 500 conversion execution.
-    let wallet = await this.prisma.wallet.findUnique({
-      where: { userId },
-      select: { id: true, usdtBalance: true, usdcBalance: true, localBalance: true, realLocalBalance: true }
-    });
-    if (!wallet) throw new BadRequestException('Wallet not found');
+    // SECURITY: balance check + debit MUST be atomic. The previous version read
+    // the wallet outside the transaction and checked against that stale value,
+    // so concurrent conversions all passed the check and drove the balance
+    // negative (verified forensically: 22 negative-balance conversions on one
+    // account minted ~$202 of phantom money). Everything below now runs inside
+    // ONE transaction against a SELECT ... FOR UPDATE row lock: a second
+    // concurrent conversion blocks until the first commits, then sees the
+    // post-debit balance and is rejected correctly.
+    const result = await this.prisma.$transaction(async (prisma) => {
+      const rows = await prisma.$queryRaw<Array<{
+        id: string; usdtBalance: number; usdcBalance: number;
+        localBalance: number; realLocalBalance: number; localBalances: any;
+      }>>`
+        SELECT "id", "usdtBalance", "usdcBalance", "localBalance",
+               "realLocalBalance", "localBalances"
+        FROM "Wallet"
+        WHERE "userId" = ${userId}
+        FOR UPDATE`;
+      const w = rows[0];
+      if (!w) throw new BadRequestException('Wallet not found');
 
-    // Load per-currency local balances (fall back to legacy localBalance as NGN)
-    let localBalances: Record<string, number> = {};
-    try {
-      const fullWallet = await this.prisma.wallet.findUnique({
-        where: { userId },
-        select: { localBalances: true }
-      });
-      const parsed = fullWallet?.localBalances as any;
+      let localBalances: Record<string, number> = {};
+      const parsed = typeof w.localBalances === 'string'
+        ? (() => { try { return JSON.parse(w.localBalances); } catch { return null; } })()
+        : w.localBalances;
       if (parsed && typeof parsed === 'object') localBalances = { ...parsed };
-    } catch {
-      // Column may not exist in the DB yet (pre-migration); fall through to legacy field
-      localBalances = {};
-    }
-    if (wallet.localBalance > 0 && !localBalances['NGN']) localBalances['NGN'] = wallet.localBalance;
+      if ((w.localBalance || 0) > 0 && !localBalances['NGN']) localBalances['NGN'] = w.localBalance;
 
-    const fromRate = fromCode === 'USD' ? 1 : getLocalRate(fromCode);
-    const toRate = toCode === 'USD' ? 1 : getLocalRate(toCode);
+      const fromRate = fromCode === 'USD' ? 1 : getLocalRate(fromCode);
+      const toRate = toCode === 'USD' ? 1 : getLocalRate(toCode);
 
-    // Check sufficient balance in the source wallet
-    if (fromCode === 'USD') {
-      const usdAvailable = (wallet.usdtBalance || 0) + (wallet.usdcBalance || 0);
-      if (usdAvailable < amount) {
-        throw new BadRequestException(`Insufficient USD balance. Available: $${usdAvailable.toFixed(2)}`);
+      // Sufficient-balance checks against the LOCKED row
+      if (fromCode === 'USD') {
+        const usdAvailable = (w.usdtBalance || 0) + (w.usdcBalance || 0);
+        if (usdAvailable < amount) {
+          throw new BadRequestException(`Insufficient USD balance. Available: $${usdAvailable.toFixed(2)}`);
+        }
+      } else {
+        const localAvailable = localBalances[fromCode] || 0;
+        if (localAvailable < amount) {
+          throw new BadRequestException(`Insufficient ${fromCode} balance. Available: ${localAvailable.toFixed(2)} ${fromCode}`);
+        }
+        this.assertSwapPool(amount, fromCode, localBalances, w.realLocalBalance || 0);
       }
-    } else {
-      const localAvailable = localBalances[fromCode] || 0;
-      if (localAvailable < amount) {
-        throw new BadRequestException(`Insufficient ${fromCode} balance. Available: ${localAvailable.toFixed(2)} ${fromCode}`);
-      }
-      // Full isolation — real money can never become crypto (and vice versa).
-      this.assertSwapPool(amount, fromCode, localBalances, wallet.realLocalBalance || 0);
-    }
 
-    const result = this.computeConversion(amount, fromCode, toCode, fromRate, toRate);
+      const result = this.computeConversion(amount, fromCode, toCode, fromRate, toRate);
 
-    // Deduct from source, then credit destination atomically.
-    const updatedLocalBalances = (() => {
-      if (fromCode === 'USD' && toCode === 'USD') return localBalances; // impossible (same) but safe
-      const base = { ...localBalances };
-      if (fromCode !== 'USD') {
-        base[fromCode] = Math.max(0, (base[fromCode] || 0) - amount);
-      }
-      if (toCode !== 'USD') {
-        base[toCode] = (base[toCode] || 0) + result.receiveAmount;
-      }
-      return base;
-    })();
+      const updatedLocalBalances = (() => {
+        if (fromCode !== 'USD') {
+          localBalances[fromCode] = Math.max(0, (localBalances[fromCode] || 0) - amount);
+        }
+        if (toCode !== 'USD') {
+          localBalances[toCode] = (localBalances[toCode] || 0) + result.receiveAmount;
+        }
+        return localBalances;
+      })();
 
-    return this.prisma.$transaction(async (prisma) => {
       // Deduct from source
       if (fromCode === 'USD') {
-        const deductUsdt = Math.min(amount, wallet.usdtBalance || 0);
+        const deductUsdt = Math.min(amount, w.usdtBalance || 0);
         const deductUsdc = Math.max(0, amount - deductUsdt);
         await prisma.wallet.update({
-          where: { id: wallet.id },
+          where: { id: w.id },
           data: {
             usdtBalance: { decrement: deductUsdt },
             usdcBalance: { decrement: deductUsdc },
@@ -333,37 +333,27 @@ export class ConversionsService {
       // Credit destination
       if (toCode === 'USD') {
         await prisma.wallet.update({
-          where: { id: wallet.id },
+          where: { id: w.id },
           data: { usdtBalance: { increment: result.receiveAmount } }
         });
       }
 
-      // Apply local-balance changes (deduct source + credit dest) in one update.
-      // Writes to localBalances are guarded: if the column isn't migrated yet in
-      // the deployed DB, fall back to the legacy NGN-only field so conversions
-      // never 500 (mirrors getBalance's defensive read).
-      const localChanged =
-        (fromCode !== 'USD' && (localBalances[fromCode] || 0) !== updatedLocalBalances[fromCode]) ||
-        (toCode !== 'USD' && (localBalances[toCode] || 0) !== updatedLocalBalances[toCode]);
-      if (localChanged) {
-        try {
-          await prisma.wallet.update({
-            where: { id: wallet.id },
-            data: { localBalances: updatedLocalBalances }
-          });
-        } catch (err: any) {
-          this.logger.warn(`localBalances column unavailable; falling back to legacy localBalance: ${err.message}`);
-          await prisma.wallet.update({
-            where: { id: wallet.id },
-            data: { localBalance: updatedLocalBalances['NGN'] ?? 0 }
-          });
-        }
+      // Apply local-balance changes in one update. Guarded: fall back to the
+      // legacy NGN-only field if the deployed DB lacks the localBalances column.
+      try {
+        await prisma.wallet.update({
+          where: { id: w.id },
+          data: { localBalances: updatedLocalBalances }
+        });
+      } catch (err: any) {
+        this.logger.warn(`localBalances column unavailable; falling back to legacy localBalance: ${err.message}`);
+        await prisma.wallet.update({
+          where: { id: w.id },
+          data: { localBalance: updatedLocalBalances['NGN'] ?? 0 }
+        });
       }
 
-      // Record Conversion record. If the deployed DB's Conversion table is not
-      // migrated (e.g. legacy NOT NULL columns like bankAccountId/flutterwaveRef
-      // that we can't populate), the conversion must still succeed and record
-      // its Transaction — mirroring the localBalances guard above.
+      // Record Conversion record; skip gracefully if the table isn't migrated.
       let conversionId: string | null = null;
       try {
         const conversion = await prisma.conversion.create({
@@ -382,7 +372,6 @@ export class ConversionsService {
         this.logger.warn(`Conversion record unavailable; skipping: ${err.message}`);
       }
 
-      // Record Transaction record
       await this.transactionsService.createTransaction(prisma, {
         userId,
         type: 'CONVERT',
@@ -419,5 +408,6 @@ export class ConversionsService {
         fee: result.feeUsd,
       };
     });
+    return result;
   }
 }
