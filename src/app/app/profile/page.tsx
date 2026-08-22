@@ -156,7 +156,11 @@ export default function ProfilePage() {
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 py-4 sm:p-6 md:p-8 max-w-2xl mx-auto space-y-4 pb-28 sm:pb-32">
       {/* Sleek Single-Line Profile Header with Custom Avatar Upload */}
-      <div className="liquid-glass p-3.5 sm:p-5 rounded-2xl border border-white/10 flex items-center justify-between gap-3">
+      <div className="liquid-glass p-3.5 sm:p-5 rounded-2xl border border-white/10 flex items-center justify-between gap-3 relative overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-[2px] pointer-events-none"
+          style={{ background: `linear-gradient(90deg, transparent, rgba(${accentRgb}, 0.65), transparent)` }}
+        />
         <div className="flex items-center gap-3 truncate">
           {/* Clean Avatar Display */}
           <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-lg bg-[#1E2738] flex-shrink-0">
@@ -337,8 +341,8 @@ export default function ProfilePage() {
         </MenuSection>
 
         {/* App version */}
-        <p className="text-center text-[#334155] text-xs mb-6">
-          SureXend v1.0.0 · Built with ❤️ for Africa
+        <p className="text-center text-[#334155] text-[11px] font-medium tracking-wide mb-6">
+          SureXend v1.0.0
         </p>
 
         <MenuSection title="">
