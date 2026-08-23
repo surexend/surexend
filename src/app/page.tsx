@@ -259,7 +259,7 @@ export default function LandingPage() {
         )}
       </AnimatePresence>
 
-      <div id="app-shell" data-page-loaded className="min-h-screen bg-[#060A15]">
+      <div id="app-shell" data-page-loaded className="min-h-screen bg-[#000000]">
 
         {/* ── Navigation ─────────────────────────────────────────────── */}
         <motion.nav
@@ -541,7 +541,7 @@ export default function LandingPage() {
                 <div className="rounded-[47px] bg-black p-[3px]">
                   {/* Screen */}
                   <div
-                    className="relative rounded-[44px] bg-[#060A15] overflow-hidden border border-white/10 flex flex-col select-none w-full"
+                    className="relative rounded-[44px] bg-[#000000] overflow-hidden border border-white/10 flex flex-col select-none w-full"
                     style={{ height: 672 }}
                   >
                     {/* Dynamic Island */}
