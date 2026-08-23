@@ -483,9 +483,33 @@ export class BillsService {
     }
 
     return this.prisma.$transaction(async (prisma) => {
+      // SECURITY: lock the wallet row and re-verify real-naira balance INSIDE
+      // the transaction. Checking against the unlocked pre-read allowed
+      // concurrent bill payments to all pass validation and overdraw.
+      const lockedRows = await prisma.$queryRaw<Array<{ id: string; localBalances: any; localBalance: number; realLocalBalance: number }>>`
+        SELECT "id", "localBalances", "localBalance", "realLocalBalance"
+        FROM "Wallet"
+        WHERE "id" = ${wallet.id}
+        FOR UPDATE`;
+      const lw = lockedRows[0];
+      if (!lw) throw new BadRequestException('Wallet not found');
+      let lockedLocals: Record<string, number> = {};
+      const parsedLocked = typeof lw.localBalances === 'string'
+        ? (() => { try { return JSON.parse(lw.localBalances); } catch { return null; } })()
+        : lw.localBalances;
+      if (parsedLocked && typeof parsedLocked === 'object') lockedLocals = { ...parsedLocked };
+      if ((lw.localBalance || 0) > 0 && !lockedLocals['NGN']) lockedLocals['NGN'] = lw.localBalance;
+
+      const lockedReal = lw.realLocalBalance || 0;
+      if (lockedReal < chargeAmount) {
+        throw new BadRequestException(
+          `You need ₦${chargeAmount.toFixed(2)} of real naira for this bill — you have ₦${lockedReal.toFixed(2)}. Crypto and testnet funds can't pay bills. Fund your NGN wallet via bank transfer on the Receive page.`
+        );
+      }
+
       // Deduct REAL naira from both the total NGN pool and the real-money pool.
-      const ngnTotal = localBalances['NGN'] || 0;
-      const newLocalBalances = { ...localBalances, NGN: Math.max(0, ngnTotal - chargeAmount) };
+      const ngnTotal = lockedLocals['NGN'] || 0;
+      const newLocalBalances = { ...lockedLocals, NGN: Math.max(0, ngnTotal - chargeAmount) };
       try {
         await prisma.wallet.update({
           where: { id: wallet.id },
