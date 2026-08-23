@@ -241,7 +241,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 min-w-0 flex flex-col h-dvh-force max-w-full relative bg-[var(--app-bg)]">
           {/* Header sits OUTSIDE the scroll container as a flex child.
                No sticky needed — it's pinned by the flex layout. */}
-          <header className="flex-shrink-0 h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#000000] z-30">
+          <header className="flex-shrink-0 h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] z-30">
             <div className="flex items-center gap-2 min-w-0">
               {/* Mobile: logo + wordmark */}
               <div className="md:hidden flex items-center gap-2 min-w-0">
