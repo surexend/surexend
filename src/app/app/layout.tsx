@@ -131,7 +131,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Toaster position="top-center" toastOptions={{ style: { background: '#121419', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
       <div className="flex h-dvh-force overflow-hidden bg-[var(--app-bg)] relative">
         {/* Ambient morphing mesh background — the "morphe" (static in lite mode & on mobile) */}
-        <div className="app-ambient absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
           {(lite || isMobile) ? (
             <>
               <div className="absolute rounded-full" style={{ width: '70vmax', height: '70vmax', borderRadius: '50%', background: `radial-gradient(circle at 30% 30%, rgba(${colors.glowRgb}, 0.10), transparent 60%)`, top: '-15%', left: '-10%', opacity: 0.7 }} />
@@ -176,7 +176,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="absolute inset-0 bg-radial-vignette" />
         </div>
         {/* Desktop Sidebar */}
-        <aside className="hidden md:flex flex-col w-60 md:w-64 h-full border-r border-white/[0.08] bg-[#0b0b0b] p-4 flex-shrink-0 z-20 overflow-y-auto">
+        <aside className="hidden md:flex flex-col w-60 md:w-64 h-full border-r border-[rgba(255,255,255,0.06)] bg-[#121419] p-4 flex-shrink-0 z-20 overflow-y-auto">
           <div className="flex items-center gap-2.5 mb-8 px-3 pt-3">
             <img
               src={variant === 'gold' ? '/logo-mark-gold.png' : '/logo-mark-plain.png'}
@@ -308,7 +308,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* pb-nav-safe: ensures page content is never hidden behind the
               fixed bottom nav bar (4rem tall) + iOS safe area inset */}
           <div className="flex-1 overflow-y-auto overscroll-none w-full max-w-full pb-nav-safe md:pb-0">
-            <div className="w-full max-w-full relative app-content">
+            <div className="w-full max-w-full relative">
               {profile && !profile.pinSet && !pathname.includes('/settings/change-pin') && (
                 <button
                   onClick={() => router.push('/app/settings/change-pin')}

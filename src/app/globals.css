@@ -745,53 +745,6 @@ html.lite-mode *::after {
   }
 }
 
-/* ── Enterprise surface system ───────────────────────────────────────────
-   The product uses opaque surfaces and one restrained gold signal. No blur,
-   animated mesh, transforms, or decorative glow is required for hierarchy;
-   this keeps the interface stable on mobile GPUs and readable in bright rooms. */
-:root {
-  --app-bg: #070707;
-  --card-bg: #111111;
-  --surface-1: #0d0d0d;
-  --surface-2: #151515;
-  --surface-3: #1b1b1b;
-  --line: rgba(255,255,255,.09);
-  --line-strong: rgba(255,255,255,.15);
-  --gold: #d4a017;
-  --gold-bright: #f0c44f;
-}
-
-body { background: var(--app-bg); }
-.app-ambient { display: none !important; }
-
-.liquid-glass,
-.liquid-glass-strong,
-.glass-card,
-.glass-card-gold,
-.glass-card-lemon {
-  background-image: none !important;
-  background-color: var(--surface-1) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 14px !important;
-  box-shadow: 0 10px 28px rgba(0,0,0,.24) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  transform: none !important;
-}
-
-.glass-card-gold { border-color: rgba(212,160,23,.34) !important; background-color: #15120a !important; }
-.glass-card-lemon { background-color: var(--surface-1) !important; }
-
-button, a, input, select, textarea { transition: background-color .16s ease, border-color .16s ease, color .16s ease, opacity .16s ease !important; }
-button:hover, a:hover { transform: none !important; }
-button:active, a:active { transform: scale(.985) !important; }
-
-/* Remove persistent compositor work from generic animation utilities. */
-.animate-pulse-glow, .animate-shine-sweep, .loader-plane, .loader-plane-bob, .loader-trail { animation: none !important; }
-@media (max-width: 767px) {
-  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
-}
-
 /* Admin has one deliberate vertical scroll owner. Keep the global mobile
    overscroll containment from trapping upward swipes after a table reaches
    its horizontal edge. Tables may pan sideways, but vertical movement belongs
