@@ -16,8 +16,8 @@ export default function VerifiedCheckmark({ size = 18, className = '', variant }
   const isBlack = currentVariant === 'black'
 
   // Black tick (default membership) vs gold/lemon rosette (top-5 leaders)
-  const badgeColor = isBlack ? '#0A0B0F' : (isGold ? '#D4A017' : '#B5E23D')
-  const checkColor = isBlack ? '#FFFFFF' : '#0A0B0F'
+  const badgeColor = isBlack ? '#020203' : (isGold ? '#D4A017' : '#B5E23D')
+  const checkColor = isBlack ? '#FFFFFF' : '#020203'
 
   return (
     <svg

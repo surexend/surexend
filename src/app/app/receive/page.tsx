@@ -217,7 +217,7 @@ export default function ReceivePage() {
       QRCode.toDataURL(address, {
         width: 220,
         margin: 2,
-        color: { dark: '#0A0B0F', light: '#FFFFFF' }
+        color: { dark: '#020203', light: '#FFFFFF' }
       }).then(setQrCodeDataUrl).catch(console.error)
     }
   }, [address])

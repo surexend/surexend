@@ -162,7 +162,7 @@ function VerifyOTPForm() {
 export default function VerifyOTPPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center p-4 bg-[#07080B] text-white">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-[#000000] text-white">
         <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
       </div>
     }>

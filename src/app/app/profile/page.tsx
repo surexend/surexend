@@ -382,7 +382,7 @@ export default function ProfilePage() {
                     value={currencySearch}
                     onChange={(e) => setCurrencySearch(e.target.value)}
                     placeholder="Search country or currency…"
-                    className="w-full bg-[#0A0B0F] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
+                    className="w-full bg-[#020203] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
                   />
                 </div>
                 <div className="p-3 space-y-2 max-h-[55vh] overflow-y-auto">

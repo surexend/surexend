@@ -35,14 +35,14 @@ function Card({ path, h1, metaDescription, readingTime, tag }: { path: string; h
 
 export default function BlogIndex() {
   return (
-    <div className="min-h-screen bg-[#07080B] text-white">
+    <div className="min-h-screen bg-[#000000] text-white">
       <JsonLd schemas={buildSchemas({
         slug: 'blog', kind: 'blog', path: '/blog',
         metaTitle: 'Stablecoin & Crypto Guides for Africa', metaDescription: metadata.description || '',
         keywords: [], h1: 'Guides', intro: '', sections: [], faq: [],
         priority: 0.9,
       })} />
-      <header className="sticky top-0 z-30 border-b border-white/5 bg-[#07080B]/95">
+      <header className="sticky top-0 z-30 border-b border-white/5 bg-[#000000]/95">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <img src="/logo-mark-gold.png" alt="SureXend" className="w-6 h-6 object-contain" />

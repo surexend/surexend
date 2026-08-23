@@ -152,7 +152,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className="bg-[#07080B] text-white font-dm antialiased">
+      <body className="bg-[#000000] text-white font-dm antialiased">
         {/* Anti-white-screen-of-death mobile resilience */}
         <MobileResilienceScript />
         <ThemeProvider>

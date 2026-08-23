@@ -165,7 +165,7 @@ export default function WithdrawPage() {
                   placeholder="0.00"
                   value={amountUsdt}
                   onChange={(e) => setAmountUsdt(e.target.value)}
-                  className="w-full bg-[#0A0B0F] border border-white/10 rounded-xl px-4 py-3.5 text-2xl font-bold text-white focus:outline-none focus:border-white/30"
+                  className="w-full bg-[#020203] border border-white/10 rounded-xl px-4 py-3.5 text-2xl font-bold text-white focus:outline-none focus:border-white/30"
                 />
                 <button
                   onClick={() => setAmountUsdt(availableUsdt.toFixed(2))}

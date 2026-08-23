@@ -35,7 +35,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (!mounted || checking) {
     return (
-      <div className="h-dvh-force w-full bg-[#07080B] flex items-center justify-center">
+      <div className="h-dvh-force w-full bg-[#000000] flex items-center justify-center">
         <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-white/40 animate-spin" />
       </div>
     )
@@ -53,7 +53,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <>
-      <div className="h-dvh-force w-full max-w-full bg-[#07080B] text-white flex flex-col">
+      <div className="h-dvh-force w-full max-w-full bg-[#000000] text-white flex flex-col">
         <div className="flex flex-1 min-h-0 w-full max-w-full">
         {/* Sidebar */}
         <aside className="hidden md:flex flex-col w-60 flex-shrink-0 border-r border-white/5 bg-[#121419] p-4 min-h-0 overflow-y-auto">

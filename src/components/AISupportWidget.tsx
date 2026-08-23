@@ -143,7 +143,7 @@ function ActionCard({
   }
 
   return (
-    <div className="mt-2 rounded-2xl border border-white/10 bg-[#0A0B0F]/80 overflow-hidden">
+    <div className="mt-2 rounded-2xl border border-white/10 bg-[#020203]/80 overflow-hidden">
       <div className="px-3 py-2 flex items-center gap-2 border-b border-white/5">
         <ShieldCheck className="w-3.5 h-3.5" style={{ color: `rgb(${accentRgb})` }} />
         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">
@@ -159,13 +159,13 @@ function ActionCard({
               <div>
                 <span className={labelCls}>From</span>
                 <select className={inputCls} value={form.from || 'USD'} onChange={e => set('from', e.target.value)}>
-                  {CONVERT_FROM.map(c => <option key={c} value={c} className="bg-[#0A0B0F]">{c}</option>)}
+                  {CONVERT_FROM.map(c => <option key={c} value={c} className="bg-[#020203]">{c}</option>)}
                 </select>
               </div>
               <div>
                 <span className={labelCls}>To</span>
                 <select className={inputCls} value={form.to || 'NGN'} onChange={e => set('to', e.target.value)}>
-                  {CONVERT_TO.map(c => <option key={c} value={c} className="bg-[#0A0B0F]">{c}</option>)}
+                  {CONVERT_TO.map(c => <option key={c} value={c} className="bg-[#020203]">{c}</option>)}
                 </select>
               </div>
             </div>
@@ -194,7 +194,7 @@ function ActionCard({
               <div>
                 <span className={labelCls}>Network</span>
                 <select className={inputCls} value={form.network || 'POLYGON'} onChange={e => set('network', e.target.value)}>
-                  {SEND_NETWORKS.map(n => <option key={n} value={n} className="bg-[#0A0B0F]">{n}</option>)}
+                  {SEND_NETWORKS.map(n => <option key={n} value={n} className="bg-[#020203]">{n}</option>)}
                 </select>
               </div>
             </div>
@@ -207,7 +207,7 @@ function ActionCard({
               <div>
                 <span className={labelCls}>Bill type</span>
                 <select className={inputCls} value={form.type || ''} onChange={e => set('type', e.target.value)}>
-                  {BILL_TYPES.map(t => <option key={t} value={t} className="bg-[#0A0B0F]">{t}</option>)}
+                  {BILL_TYPES.map(t => <option key={t} value={t} className="bg-[#020203]">{t}</option>)}
                 </select>
               </div>
               <div>
@@ -401,7 +401,7 @@ export default function AISupportWidget() {
         title="24/7 AI Support Assistant"
       >
         <Bot className="w-6 h-6 text-black" />
-        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-[#0A0B0F]" />
+        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-[#020203]" />
       </motion.button>
 
       {/* 💬 CHAT MODAL DRAWER */}
@@ -505,7 +505,7 @@ export default function AISupportWidget() {
               </div>
 
               {/* Input Bar */}
-              <div className="p-3 border-t border-white/10 bg-[#0A0B0F] flex items-center gap-2">
+              <div className="p-3 border-t border-white/10 bg-[#020203] flex items-center gap-2">
                 <input
                   type="text"
                   value={input}

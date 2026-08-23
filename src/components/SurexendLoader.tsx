@@ -154,7 +154,7 @@ export default function SurexendLoader({
     <AnimatePresence>
       {visible && (
         <motion.div
-          className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-[#07080B]"
+          className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-[#000000]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

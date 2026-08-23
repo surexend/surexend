@@ -15,7 +15,7 @@ export default async function OpengraphImage({ params }: { params: Promise<{ slu
         style={{
           width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', textAlign: 'center',
-          background: 'linear-gradient(135deg, #0B0D12 0%, #131519 55%, #1D2026 100%)',
+          background: 'linear-gradient(135deg, #060608 0%, #131519 55%, #1D2026 100%)',
           color: '#FFFFFF', fontFamily: 'sans-serif', padding: 60,
         }}
       >

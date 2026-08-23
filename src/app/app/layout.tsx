@@ -241,7 +241,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 min-w-0 flex flex-col h-dvh-force max-w-full relative bg-[var(--app-bg)]">
           {/* Header sits OUTSIDE the scroll container as a flex child.
                No sticky needed — it's pinned by the flex layout. */}
-          <header className="flex-shrink-0 h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#07080B] z-30">
+          <header className="flex-shrink-0 h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#000000] z-30">
             <div className="flex items-center gap-2 min-w-0">
               {/* Mobile: logo + wordmark */}
               <div className="md:hidden flex items-center gap-2 min-w-0">
@@ -308,7 +308,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
                   <>
-                    <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-emerald-500 ring-2 ring-[#0A0B0F] text-[9px] font-bold text-black flex items-center justify-center">
+                    <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-emerald-500 ring-2 ring-[#020203] text-[9px] font-bold text-black flex items-center justify-center">
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   </>

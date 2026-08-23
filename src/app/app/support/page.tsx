@@ -192,7 +192,7 @@ export default function SupportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#07080B] pb-32 flex flex-col">
+    <div className="min-h-screen bg-[#000000] pb-32 flex flex-col">
       {/* Header */}
       <div className="px-4 pt-6 pb-4 max-w-2xl mx-auto w-full">
         <div className="flex items-center justify-between">

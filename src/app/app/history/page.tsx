@@ -523,7 +523,7 @@ function TransactionDetailModal({
     canvas.height = H * S
     const ctx = canvas.getContext('2d')!
     ctx.scale(S, S)
-    ctx.fillStyle = '#0B0D11'
+    ctx.fillStyle = '#060608'
     ctx.fillRect(0, 0, W, H)
 
     const roundRect = (x: number, y: number, w: number, h: number, r: number) => {

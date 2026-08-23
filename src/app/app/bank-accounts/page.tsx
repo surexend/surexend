@@ -107,9 +107,9 @@ export default function BankAccountsPage() {
               onChange={(e) => setBankCode(e.target.value)}
               className="mt-1 w-full px-3 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm outline-none"
             >
-              <option value="" disabled className="bg-[#0A0B0F]">Select bank</option>
+              <option value="" disabled className="bg-[#020203]">Select bank</option>
               {banks.map((b) => (
-                <option key={b.code} value={b.code} className="bg-[#0A0B0F]">{b.name}</option>
+                <option key={b.code} value={b.code} className="bg-[#020203]">{b.name}</option>
               ))}
             </select>
           </div>

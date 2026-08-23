@@ -109,7 +109,7 @@ export default function BiometricSuccessOverlay({
               >
                 <motion.span
                   className="w-3/5 h-3/5 rounded-full"
-                  style={{ background: '#0A0B0F', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)' }}
+                  style={{ background: '#020203', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)' }}
                 />
                 <svg viewBox="0 0 52 52" className="absolute w-3/5 h-3/5" fill="none">
                   <motion.path

@@ -232,7 +232,7 @@ export default function BridgePage() {
               className="w-full px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/10 text-white text-xs font-bold focus:outline-none focus:border-purple-500"
             >
               {BRIDGE_CHAINS.map(c => (
-                <option key={c.id} value={c.id} className="bg-[#0A0B0F] text-white">
+                <option key={c.id} value={c.id} className="bg-[#020203] text-white">
                   {c.label} ({c.symbol})
                 </option>
               ))}
@@ -253,7 +253,7 @@ export default function BridgePage() {
               className="w-full px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/10 text-white text-xs font-bold focus:outline-none focus:border-purple-500"
             >
               {BRIDGE_CHAINS.filter(c => c.id !== 'Solana' && c.id !== 'Arc').map(c => (
-                <option key={c.id} value={c.id} className="bg-[#0A0B0F] text-white">
+                <option key={c.id} value={c.id} className="bg-[#020203] text-white">
                   {c.label} ({c.symbol})
                 </option>
               ))}
