@@ -168,7 +168,7 @@ function LoginForm() {
           <button
             type="button"
             onClick={googleLogin}
-            className="w-full mb-6 py-3.5 rounded-xl bg-white text-[#0A0F1E] font-bold text-sm flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors shadow-lg shadow-black/20"
+            className="w-full mb-6 py-3.5 rounded-xl bg-white text-[#0A0B0F] font-bold text-sm flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors shadow-lg shadow-black/20"
           >
             <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 48 48">
               <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -345,7 +345,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-[#060A15] text-white">
+      <div className="min-h-screen flex items-center justify-center bg-[#07080B] text-white">
         <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
       </div>
     }>

@@ -68,7 +68,7 @@ export default function EditProfilePage() {
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="liquid-glass p-5 rounded-2xl space-y-5">
         <div className="text-center">
-          <div className="w-20 h-20 rounded-full overflow-hidden border-2 mx-auto mb-3" style={{ borderColor: `rgba(${accentRgb}, 0.5)`, background: '#1E2738' }}>
+          <div className="w-20 h-20 rounded-full overflow-hidden border-2 mx-auto mb-3" style={{ borderColor: `rgba(${accentRgb}, 0.5)`, background: '#212429' }}>
             {avatar ? (
               <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
             ) : (

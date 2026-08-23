@@ -5,7 +5,7 @@ import SeoFaq from './SeoFaq'
 
 function BrandHeader() {
   return (
-    <header className="sticky top-0 z-30 border-b border-white/5 bg-[#060A15]/95 transform-gpu">
+    <header className="sticky top-0 z-30 border-b border-white/5 bg-[#07080B]/95 transform-gpu">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
           <img src="/logo-mark-gold.png" alt="SureXend logo" className="w-6 h-6 object-contain" />
@@ -30,7 +30,7 @@ function BrandHeader() {
 
 function Footer() {
   return (
-    <footer className="border-t border-white/5 bg-[#060A15] mt-16">
+    <footer className="border-t border-white/5 bg-[#07080B] mt-16">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 text-sm">
           <div className="col-span-2">
@@ -72,7 +72,7 @@ export default function SeoShell({ page }: { page: SeoPage }) {
   const related = getRelated(page)
   const cta = ctaByKind[page.kind]
   return (
-    <div className="min-h-screen bg-[#060A15] text-white">
+    <div className="min-h-screen bg-[#07080B] text-white">
       <BrandHeader />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12">
         {/* Breadcrumb */}

@@ -157,7 +157,7 @@ export default function AdminPricingPage() {
                     value={airtimeMarkup[a.provider] ?? '0'}
                     onChange={(e) => setAirtimeMarkup((m) => ({ ...m, [a.provider]: e.target.value }))}
                     placeholder="Markup %"
-                    className="flex-1 bg-[#0F1629] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+                    className="flex-1 bg-[#121419] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-white/30"
                   />
                   <button
                     onClick={() => saveAirtime(a.provider)}
@@ -209,7 +209,7 @@ export default function AdminPricingPage() {
                 type="number" min={0} step={0.5}
                 value={dataMargin[active.provider] ?? '0'}
                 onChange={(e) => setDataMargin((m) => ({ ...m, [active.provider]: e.target.value }))}
-                className="w-24 bg-[#0F1629] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+                className="w-24 bg-[#121419] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-white/30"
               />
               <button
                 onClick={() => saveDataMargin(active.provider)}
@@ -226,7 +226,7 @@ export default function AdminPricingPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search plans…"
-                  className="pl-9 pr-3 py-2 rounded-xl bg-[#0F1629] border border-white/10 text-xs text-white outline-none focus:border-white/30 w-48"
+                  className="pl-9 pr-3 py-2 rounded-xl bg-[#121419] border border-white/10 text-xs text-white outline-none focus:border-white/30 w-48"
                 />
               </div>
             </div>
@@ -275,7 +275,7 @@ export default function AdminPricingPage() {
                               value={sellInput}
                               onChange={(e) => setEdits((m) => ({ ...m, [key]: e.target.value }))}
                               placeholder={String(p.amount)}
-                              className="w-24 bg-[#0F1629] border border-white/10 rounded-lg px-2.5 py-1.5 text-sm text-white outline-none focus:border-amber-400/50"
+                              className="w-24 bg-[#121419] border border-white/10 rounded-lg px-2.5 py-1.5 text-sm text-white outline-none focus:border-amber-400/50"
                             />
                             {isCustom && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">custom</span>}
                           </div>

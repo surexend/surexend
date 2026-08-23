@@ -334,7 +334,7 @@ export default function DashboardPage() {
           leaderboard badge never crowds the name out */}
       <div className="flex items-center justify-between gap-3 py-2.5 px-3.5 rounded-xl liquid-glass border border-white/10">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-white/20 flex-shrink-0 shadow-md bg-[#1E2738]">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-white/20 flex-shrink-0 shadow-md bg-[#212429]">
             {avatar ? (
               <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
             ) : (
@@ -608,7 +608,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Timeframes */}
-          <div className="flex items-center gap-1 bg-[#121827] p-1 rounded-xl border border-white/5 self-start sm:self-auto">
+          <div className="flex items-center gap-1 bg-[#15171C] p-1 rounded-xl border border-white/5 self-start sm:self-auto">
             {(['1D', '1W', '1M', '1Y'] as const).map((tf) => (
               <button
                 key={tf}
@@ -698,7 +698,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Cash flow totals */}
-          <div className="grid grid-cols-2 gap-3 mb-3 bg-[#121827] p-3 rounded-xl border border-white/5">
+          <div className="grid grid-cols-2 gap-3 mb-3 bg-[#15171C] p-3 rounded-xl border border-white/5">
             <div>
               <p className="text-[10px] text-[#64748B] uppercase tracking-wider">Total Money In</p>
               <p className="text-sm font-bold text-[#10B981]">+${totalIn.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -1144,12 +1144,12 @@ export default function DashboardPage() {
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                <div className="p-4 pb-2 sticky top-0 z-10" style={{ background: 'rgba(10,15,30,0.95)', backdropFilter: 'blur(12px)' }}>
+                <div className="p-4 pb-2 sticky top-0 z-10" style={{ background: 'rgba(8,9,12,0.95)', backdropFilter: 'blur(12px)' }}>
                   <input
                     value={localCurrencySearch}
                     onChange={(e) => setLocalCurrencySearch(e.target.value)}
                     placeholder="Search country or currency…"
-                    className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
+                    className="w-full bg-[#0A0B0F] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
                   />
                 </div>
                 <div className="p-4 space-y-2 max-h-[55vh] overflow-y-auto pb-8">

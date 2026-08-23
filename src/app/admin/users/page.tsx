@@ -41,7 +41,7 @@ export default function AdminUsersPage() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex items-center gap-2 flex-1 bg-[#0F1629] border border-white/10 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 flex-1 bg-[#121419] border border-white/10 rounded-xl px-3 py-2">
           <Search className="w-4 h-4 text-[#64748B]" />
           <input
             value={search}
@@ -53,7 +53,7 @@ export default function AdminUsersPage() {
         <select
           value={kycStatus}
           onChange={e => { setKycStatus(e.target.value); setPage(1) }}
-          className="bg-[#0F1629] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none"
+          className="bg-[#121419] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none"
         >
           <option value="">All KYC</option>
           <option value="UNVERIFIED">Unverified</option>

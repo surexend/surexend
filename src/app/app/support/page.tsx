@@ -70,7 +70,7 @@ function MessageBubble({ msg, accentHex, accentRgb }: {
             color: '#fff',
             borderBottomRightRadius: 6,
           } : {
-            background: '#0F1629',
+            background: '#121419',
             border: '1px solid rgba(255,255,255,0.06)',
             color: '#E2E8F0',
             borderBottomLeftRadius: 6,
@@ -192,7 +192,7 @@ export default function SupportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#060A15] pb-32 flex flex-col">
+    <div className="min-h-screen bg-[#07080B] pb-32 flex flex-col">
       {/* Header */}
       <div className="px-4 pt-6 pb-4 max-w-2xl mx-auto w-full">
         <div className="flex items-center justify-between">
@@ -208,7 +208,7 @@ export default function SupportPage() {
 
       {/* Tab switch */}
       <div className="max-w-2xl mx-auto w-full px-4 mb-4">
-        <div className="flex gap-1 bg-[#0F1629] p-1 rounded-xl border border-white/5">
+        <div className="flex gap-1 bg-[#121419] p-1 rounded-xl border border-white/5">
           {[
             { key: 'chat', label: '💬 Chat' },
             { key: 'tickets', label: '🎫 Tickets' },
@@ -280,7 +280,7 @@ export default function SupportPage() {
           <div className="pb-4">
             <div
               className="flex items-end gap-3 p-3 rounded-2xl border"
-              style={{ background: '#0F1629', borderColor: 'rgba(255,255,255,0.08)' }}
+              style={{ background: '#121419', borderColor: 'rgba(255,255,255,0.08)' }}
             >
               <textarea
                 className="flex-1 bg-transparent text-white text-sm resize-none outline-none placeholder-[#64748B] max-h-32"
@@ -319,7 +319,7 @@ export default function SupportPage() {
         </div>
       ) : (
         <div className="max-w-2xl mx-auto w-full px-4">
-          <div className="bg-[#0F1629] rounded-2xl p-5 border border-white/5 text-center py-16">
+          <div className="bg-[#121419] rounded-2xl p-5 border border-white/5 text-center py-16">
             <div className="text-5xl mb-4">🎫</div>
             <h3 className="text-white font-semibold mb-2">No open tickets</h3>
             <p className="text-[#64748B] text-sm mb-6 max-w-xs mx-auto">

@@ -152,13 +152,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className="bg-[#060A15] text-white font-dm antialiased">
+      <body className="bg-[#07080B] text-white font-dm antialiased">
         {/* Anti-white-screen-of-death mobile resilience */}
         <MobileResilienceScript />
         <ThemeProvider>
           {children}
           <PWAInstallPrompt />
-          <Toaster position="top-center" toastOptions={{ style: { background: '#0F1629', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
+          <Toaster position="top-center" toastOptions={{ style: { background: '#121419', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
         </ThemeProvider>
       </body>
     </html>

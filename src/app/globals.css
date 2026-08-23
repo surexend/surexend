@@ -6,8 +6,8 @@
 :root {
   --font-inter: 'Inter', sans-serif;
   --font-dm: 'DM Sans', sans-serif;
-  --app-bg: #060A15;
-  --card-bg: #0F1629;
+  --app-bg: #07080B;
+  --card-bg: #121419;
   --border: rgba(255, 255, 255, 0.06);
   --text: #FFFFFF;
   --text-muted: #94A3B8;
@@ -175,7 +175,7 @@ img {
 
 /* ── Glass Card & Dynamic Gold / Lemon Glass Morphism ─────────────────── */
 .glass-card {
-  background: linear-gradient(135deg, rgba(15, 22, 41, 0.75), rgba(20, 28, 50, 0.6));
+  background: linear-gradient(135deg, rgba(18, 20, 26, 0.75), rgba(24, 26, 32, 0.6));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -186,19 +186,19 @@ img {
 }
 
 [data-variant="gold"] .glass-card {
-  background: linear-gradient(135deg, rgba(212, 160, 23, 0.07), rgba(15, 22, 41, 0.85));
+  background: linear-gradient(135deg, rgba(212, 160, 23, 0.07), rgba(18, 20, 26, 0.85));
   border: 1px solid rgba(212, 160, 23, 0.25);
   box-shadow: inset 0 1px 2px rgba(255, 215, 0, 0.15), 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(212, 160, 23, 0.06);
 }
 
 [data-variant="lemon"] .glass-card {
-  background: linear-gradient(135deg, rgba(181, 226, 61, 0.07), rgba(15, 22, 41, 0.85));
+  background: linear-gradient(135deg, rgba(181, 226, 61, 0.07), rgba(18, 20, 26, 0.85));
   border: 1px solid rgba(181, 226, 61, 0.25);
   box-shadow: inset 0 1px 2px rgba(212, 255, 74, 0.15), 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(181, 226, 61, 0.06);
 }
 
 .glass-card-gold {
-  background: linear-gradient(135deg, rgba(212, 160, 23, 0.08), rgba(15, 22, 41, 0.9));
+  background: linear-gradient(135deg, rgba(212, 160, 23, 0.08), rgba(18, 20, 26, 0.9));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(212, 160, 23, 0.3);
@@ -208,7 +208,7 @@ img {
 }
 
 .glass-card-lemon {
-  background: linear-gradient(135deg, rgba(181, 226, 61, 0.08), rgba(15, 22, 41, 0.9));
+  background: linear-gradient(135deg, rgba(181, 226, 61, 0.08), rgba(18, 20, 26, 0.9));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(181, 226, 61, 0.3);
@@ -251,7 +251,7 @@ img {
 /* No backdrop-filter support: solid premium gradient so nothing looks broken. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .liquid-glass {
-    background: linear-gradient(135deg, #161E36, #0D1426 55%, #111A2E);
+    background: linear-gradient(135deg, #181B21, #0C0E12 55%, #101216);
   }
 }
 
@@ -292,7 +292,7 @@ img {
     radial-gradient(120% 90% at 50% -15%, rgba(255, 255, 255, 0.10), transparent 55%),
     linear-gradient(135deg, transparent 0 46%, var(--tile, rgba(255, 255, 255, 0.02)) 47.5%, transparent 49% 100%),
     linear-gradient(45deg, transparent 0 46%, var(--tile, rgba(255, 255, 255, 0.02)) 47.5%, transparent 49% 100%),
-    linear-gradient(135deg, rgba(20, 28, 52, 0.88), rgba(12, 18, 36, 0.92));
+    linear-gradient(135deg, rgba(24, 26, 33, 0.88), rgba(11, 13, 17, 0.92));
   background-size: auto, auto, 38px 38px, 38px 38px, auto;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
@@ -311,7 +311,7 @@ img {
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .liquid-glass-strong {
-    background: linear-gradient(135deg, #141B30, #0C1224);
+    background: linear-gradient(135deg, #14161C, #0B0D10);
   }
 }
 
@@ -719,7 +719,7 @@ html.lite-mode *::after {
     /* Static depth layers: premium without blur, masks, or per-frame paint. */
     background-image:
       radial-gradient(120% 80% at 0% 0%, rgba(255, 255, 255, 0.075), transparent 48%),
-      linear-gradient(145deg, rgba(31, 43, 72, 0.98), rgba(13, 19, 38, 0.99) 68%);
+      linear-gradient(145deg, rgba(37, 40, 48, 0.98), rgba(12, 14, 18, 0.99) 68%);
     border-color: rgba(255, 255, 255, 0.13);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11), inset 0 -1px 0 rgba(0, 0, 0, 0.22), 0 10px 28px rgba(0, 0, 0, 0.30);
     -webkit-backdrop-filter: none !important;
@@ -745,7 +745,7 @@ html.lite-mode *::after {
   [data-variant="gold"] .liquid-glass-strong {
     background-image:
       radial-gradient(115% 80% at 0% 0%, rgba(212, 160, 23, 0.16), transparent 52%),
-      linear-gradient(145deg, rgba(35, 43, 66, 0.99), rgba(13, 19, 38, 0.99) 70%);
+      linear-gradient(145deg, rgba(40, 43, 51, 0.99), rgba(12, 14, 18, 0.99) 70%);
     border-color: rgba(212, 160, 23, 0.28);
   }
 
@@ -753,7 +753,7 @@ html.lite-mode *::after {
   [data-variant="lemon"] .liquid-glass-strong {
     background-image:
       radial-gradient(115% 80% at 0% 0%, rgba(181, 226, 61, 0.14), transparent 52%),
-      linear-gradient(145deg, rgba(32, 47, 61, 0.99), rgba(13, 19, 38, 0.99) 70%);
+      linear-gradient(145deg, rgba(34, 40, 44, 0.99), rgba(12, 14, 18, 0.99) 70%);
     border-color: rgba(181, 226, 61, 0.27);
   }
 
@@ -762,17 +762,17 @@ html.lite-mode *::after {
   .glass-card-lemon {
     background:
       radial-gradient(100% 70% at 0% 0%, rgba(255, 255, 255, 0.06), transparent 55%),
-      linear-gradient(145deg, rgba(27, 38, 64, 0.98), rgba(13, 19, 38, 0.99));
+      linear-gradient(145deg, rgba(29, 32, 39, 0.98), rgba(12, 14, 18, 0.99));
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     transform: none;
   }
   [data-variant="gold"] .glass-card {
-    background: radial-gradient(100% 70% at 0% 0%, rgba(212, 160, 23, 0.16), transparent 55%), linear-gradient(145deg, rgba(31, 39, 60, 0.99), rgba(13, 19, 38, 0.99));
+    background: radial-gradient(100% 70% at 0% 0%, rgba(212, 160, 23, 0.16), transparent 55%), linear-gradient(145deg, rgba(36, 39, 46, 0.99), rgba(12, 14, 18, 0.99));
     border-color: rgba(212, 160, 23, 0.25);
   }
   [data-variant="lemon"] .glass-card {
-    background: radial-gradient(100% 70% at 0% 0%, rgba(181, 226, 61, 0.14), transparent 55%), linear-gradient(145deg, rgba(28, 43, 57, 0.99), rgba(13, 19, 38, 0.99));
+    background: radial-gradient(100% 70% at 0% 0%, rgba(181, 226, 61, 0.14), transparent 55%), linear-gradient(145deg, rgba(32, 38, 42, 0.99), rgba(12, 14, 18, 0.99));
     border-color: rgba(181, 226, 61, 0.24);
   }
 
@@ -890,4 +890,62 @@ label,
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* ── DEEP GLASS THEME ─────────────────────────────────────────────────── */
+/* Bybit-style stage: near-black graphite page with glass-tinted blocks that
+   read as translucent white panels floating on it. Declared LAST so it wins
+   the cascade without modifying any legacy rule above. Gold/lemon brand
+   variants stay as soft radial tints in the top corner of each surface.
+   Phones remain flat-GPU-safe: solid layered gradients only — every
+   functional declaration in the mobile system above stays authoritative;
+   these rules only recolor surfaces. */
+
+body {
+  background-color: var(--app-bg);
+}
+
+/* No-backdrop-support fallbacks: graphite instead of navy. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .liquid-glass { background: linear-gradient(155deg, #191C22, #0B0D11 58%, #11141A); }
+  .liquid-glass-strong { background: linear-gradient(155deg, #1A1D24, #0D0F13); }
+}
+
+@media (max-width: 767px) {
+  .liquid-glass,
+  .liquid-glass-strong {
+    background-image:
+      radial-gradient(140% 90% at 10% -12%, rgba(255, 255, 255, 0.08), transparent 55%),
+      linear-gradient(168deg, rgba(35, 38, 45, 0.985), rgba(15, 16, 20, 0.998) 62%);
+    border-color: rgba(255, 255, 255, 0.09);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.42),
+      0 14px 34px rgba(0, 0, 0, 0.5);
+  }
+
+  [data-variant="gold"] .liquid-glass,
+  [data-variant="gold"] .liquid-glass-strong {
+    background-image:
+      radial-gradient(120% 85% at 8% -10%, rgba(212, 160, 23, 0.13), transparent 55%),
+      linear-gradient(168deg, rgba(37, 37, 41, 0.985), rgba(15, 16, 20, 0.998) 62%);
+    border-color: rgba(212, 160, 23, 0.24);
+  }
+
+  [data-variant="lemon"] .liquid-glass,
+  [data-variant="lemon"] .liquid-glass-strong {
+    background-image:
+      radial-gradient(120% 85% at 8% -10%, rgba(181, 226, 61, 0.11), transparent 55%),
+      linear-gradient(168deg, rgba(34, 38, 37, 0.985), rgba(15, 16, 20, 0.998) 62%);
+    border-color: rgba(181, 226, 61, 0.22);
+  }
+
+  .glass-card,
+  .glass-card-gold,
+  .glass-card-lemon {
+    background:
+      radial-gradient(110% 75% at 0% 0%, rgba(255, 255, 255, 0.055), transparent 55%),
+      linear-gradient(165deg, rgba(30, 33, 40, 0.98), rgba(14, 15, 19, 0.995));
+    border-color: rgba(255, 255, 255, 0.09);
+  }
 }

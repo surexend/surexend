@@ -4,7 +4,7 @@
   "description": "Africa's premier stablecoin spending platform. Send, convert, pay bills with USDC.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0A0F1E",
+  "background_color": "#0A0B0F",
   "theme_color": "#D4A017",
   "orientation": "portrait-primary",
   "scope": "/",

@@ -159,7 +159,7 @@ export async function renderReceiptCanvas(opts: {
   canvas.height = H * S
   const ctx = canvas.getContext('2d')!
   ctx.scale(S, S)
-  ctx.fillStyle = '#0B1120'
+  ctx.fillStyle = '#0B0D11'
   ctx.fillRect(0, 0, W, H)
 
   const roundRect = (x: number, y: number, w: number, h: number, r: number) => {

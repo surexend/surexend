@@ -242,7 +242,7 @@ export default function ConvertPage() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                   placeholder="0"
-                  className="bg-transparent text-3xl sm:text-4xl font-black text-white w-full focus:outline-none placeholder:text-[#2D3A50]"
+                  className="bg-transparent text-3xl sm:text-4xl font-black text-white w-full focus:outline-none placeholder:text-[#2F3239]"
                 />
               </div>
             </div>
@@ -418,13 +418,13 @@ export default function ConvertPage() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="p-4 pb-2 sticky top-0 z-10" style={{ background: 'rgba(10,15,30,0.95)', backdropFilter: 'blur(12px)' }}>
+              <div className="p-4 pb-2 sticky top-0 z-10" style={{ background: 'rgba(8,9,12,0.95)', backdropFilter: 'blur(12px)' }}>
                 <div className="relative">
                   <input
                     value={currencySearch}
                     onChange={(e) => setCurrencySearch(e.target.value)}
                     placeholder="Search country or currency…"
-                    className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
+                    className="w-full bg-[#0A0B0F] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
                   />
                 </div>
               </div>

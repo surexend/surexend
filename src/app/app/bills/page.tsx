@@ -186,9 +186,9 @@ export default function BillsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#060A15] pb-32">
+    <div className="min-h-screen bg-[#07080B] pb-32">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-[#060A15]/90 backdrop-blur-xl border-b border-white/5">
+      <div className="sticky top-0 z-30 bg-[#07080B]/90 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
           {step !== 'categories' && (
             <motion.button
@@ -223,7 +223,7 @@ export default function BillsPage() {
           {/* STEP 1: Categories (4-Column Grid matching Images 2 & 3) */}
           {step === 'categories' && (
             <motion.div key="cats" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <div className="bg-[#121827] rounded-3xl p-5 border border-white/5 mb-6">
+              <div className="bg-[#15171C] rounded-3xl p-5 border border-white/5 mb-6">
                 <p className="text-[#64748B] text-xs font-bold uppercase tracking-widest mb-5 px-1">Utilities & Services</p>
                 <div className="grid grid-cols-4 gap-y-6 gap-x-2 sm:gap-x-4">
                   {CATEGORIES.map((cat, i) => {
@@ -238,7 +238,7 @@ export default function BillsPage() {
                         onClick={() => { setSelectedCategory(cat.type); setStep('providers') }}
                       >
                         <div className="relative">
-                          <div className="w-12 h-12 rounded-full bg-[#1E2738] border border-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors shadow-inner">
+                          <div className="w-12 h-12 rounded-full bg-[#212429] border border-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors shadow-inner">
                             <Icon size={20} className="text-white" />
                           </div>
                           {cat.badge && (
@@ -257,7 +257,7 @@ export default function BillsPage() {
               </div>
 
               {/* Quick Recharge Empty State */}
-              <div className="bg-[#121827] rounded-3xl p-6 border border-white/5 text-center">
+              <div className="bg-[#15171C] rounded-3xl p-6 border border-white/5 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3">
                   <Zap className="w-6 h-6" />
                 </div>
@@ -328,7 +328,7 @@ export default function BillsPage() {
                       return {
                         description: provider.code || 'Service Provider',
                         logo: (
-                          <div style={{ background: 'linear-gradient(135deg,#2A3450,#1A2238)', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <div style={{ background: 'linear-gradient(135deg,#2C2F36,#1B1E24)', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 20, color: '#fff' }}>
                               {(provider.name || '?')[0].toUpperCase()}
                             </span>
@@ -341,7 +341,7 @@ export default function BillsPage() {
                       <motion.button key={provider.code}
                         className="w-full rounded-2xl p-4 flex items-center gap-4 border text-left transition-all"
                         style={{
-                          background: 'rgba(15,22,41,0.8)',
+                          background: 'rgba(18,20,26,0.8)',
                           borderColor: 'rgba(255,255,255,0.07)',
                           backdropFilter: 'blur(8px)',
                         }}
@@ -454,7 +454,7 @@ export default function BillsPage() {
                                     background: `rgba(${accentRgb}, 0.1)`,
                                     borderColor: `rgba(${accentRgb}, 0.4)`,
                                   } : {
-                                    background: '#0F1629',
+                                    background: '#121419',
                                     borderColor: 'rgba(255,255,255,0.06)',
                                   }}
                                   onClick={() => setSelectedPlan(plan)}

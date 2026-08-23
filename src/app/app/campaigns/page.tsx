@@ -141,7 +141,7 @@ export default function CampaignsPage() {
                   className={`flex items-center gap-3 px-4 py-3 ${isMe ? 'bg-white/[0.04]' : ''}`}
                 >
                   <div className="w-7 flex-shrink-0 flex justify-center">{rankIcon(e.rank)}</div>
-                  <div className="w-9 h-9 rounded-full bg-[#1E2738] border border-white/10 flex items-center justify-center text-[11px] font-black text-white flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-[#212429] border border-white/10 flex items-center justify-center text-[11px] font-black text-white flex-shrink-0">
                     {(e.name || '?').charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">

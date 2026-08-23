@@ -232,7 +232,7 @@ export default function BridgePage() {
               className="w-full px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/10 text-white text-xs font-bold focus:outline-none focus:border-purple-500"
             >
               {BRIDGE_CHAINS.map(c => (
-                <option key={c.id} value={c.id} className="bg-[#0A0F1E] text-white">
+                <option key={c.id} value={c.id} className="bg-[#0A0B0F] text-white">
                   {c.label} ({c.symbol})
                 </option>
               ))}
@@ -240,7 +240,7 @@ export default function BridgePage() {
           </div>
 
           {/* Swap Direction Indicator Icon */}
-          <div className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#151D30] border border-white/10 flex items-center justify-center shadow-lg z-10">
+          <div className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#17191F] border border-white/10 flex items-center justify-center shadow-lg z-10">
             <ArrowRightLeft className="w-3.5 h-3.5 text-purple-400 rotate-90" />
           </div>
 
@@ -253,7 +253,7 @@ export default function BridgePage() {
               className="w-full px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/10 text-white text-xs font-bold focus:outline-none focus:border-purple-500"
             >
               {BRIDGE_CHAINS.filter(c => c.id !== 'Solana' && c.id !== 'Arc').map(c => (
-                <option key={c.id} value={c.id} className="bg-[#0A0F1E] text-white">
+                <option key={c.id} value={c.id} className="bg-[#0A0B0F] text-white">
                   {c.label} ({c.symbol})
                 </option>
               ))}

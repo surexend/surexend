@@ -98,7 +98,7 @@ export default function ChartArea({
                 content={({ active, payload }: any) => {
                   if (active && payload && payload.length) {
                     return (
-                      <div className="bg-[#181F32] border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
+                      <div className="bg-[#191B21] border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
                         <p className="font-bold text-white text-sm">{symbol}{(payload[0].value)?.toLocaleString(undefined, { maximumFractionDigits: decimals })}</p>
                         <p className="text-[10px] text-[#94A3B8] mt-0.5">{pair?.label} · {payload[0].payload.time}</p>
                       </div>
@@ -145,7 +145,7 @@ export default function ChartArea({
             content={({ active, payload }: any) => {
               if (active && payload && payload.length) {
                 return (
-                  <div className="bg-[#181F32] border border-white/10 p-3 rounded-xl shadow-2xl">
+                  <div className="bg-[#191B21] border border-white/10 p-3 rounded-xl shadow-2xl">
                     <p className="text-xs font-bold text-white mb-1.5">{payload[0]?.payload?.day}</p>
                     <p className="text-xs text-[#10B981] font-semibold">Money In: +${payload[0]?.value}</p>
                     <p className="text-xs text-[#EF4444] font-semibold mt-0.5">Money Out: -${payload[1]?.value}</p>

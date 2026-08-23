@@ -128,7 +128,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Toaster position="top-center" toastOptions={{ style: { background: '#0F1629', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
+      <Toaster position="top-center" toastOptions={{ style: { background: '#121419', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
       <div className="flex h-dvh-force overflow-hidden bg-[var(--app-bg)] relative">
         {/* Ambient morphing mesh background — the "morphe" (static in lite mode & on mobile) */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
@@ -176,7 +176,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="absolute inset-0 bg-radial-vignette" />
         </div>
         {/* Desktop Sidebar */}
-        <aside className="hidden md:flex flex-col w-60 md:w-64 h-full border-r border-[rgba(255,255,255,0.06)] bg-[#0F1629] p-4 flex-shrink-0 z-20 overflow-y-auto">
+        <aside className="hidden md:flex flex-col w-60 md:w-64 h-full border-r border-[rgba(255,255,255,0.06)] bg-[#121419] p-4 flex-shrink-0 z-20 overflow-y-auto">
           <div className="flex items-center gap-2.5 mb-8 px-3 pt-3">
             <img
               src={variant === 'gold' ? '/logo-mark-gold.png' : '/logo-mark-plain.png'}
@@ -220,7 +220,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             )}
             <div className="p-3 rounded-xl border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20 flex-shrink-0 bg-[#1E2738]">
+              <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20 flex-shrink-0 bg-[#212429]">
                 {avatar ? (
                   <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
@@ -241,7 +241,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 min-w-0 flex flex-col h-dvh-force max-w-full relative bg-[var(--app-bg)]">
           {/* Header sits OUTSIDE the scroll container as a flex child.
                No sticky needed — it's pinned by the flex layout. */}
-          <header className="flex-shrink-0 h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#060A15] z-30">
+          <header className="flex-shrink-0 h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#07080B] z-30">
             <div className="flex items-center gap-2 min-w-0">
               {/* Mobile: logo + wordmark */}
               <div className="md:hidden flex items-center gap-2 min-w-0">
@@ -308,7 +308,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
                   <>
-                    <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-emerald-500 ring-2 ring-[#0A0F1E] text-[9px] font-bold text-black flex items-center justify-center">
+                    <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-emerald-500 ring-2 ring-[#0A0B0F] text-[9px] font-bold text-black flex items-center justify-center">
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   </>
@@ -390,7 +390,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             a JS rAF spike on every tap and route change on low-end phones.
             CSS transform + transition is handled entirely by the GPU compositor
             at zero JS cost. */}
-        <nav className="md:hidden fixed bottom-0 w-full bg-[#0D1322] border-t border-white/5 px-1 py-1.5 safe-bottom z-50">
+        <nav className="md:hidden fixed bottom-0 w-full bg-[#0F1116] border-t border-white/5 px-1 py-1.5 safe-bottom z-50">
           <div className="flex justify-around items-center">
             {navItems.map((item) => {
               const isActive = pathname === item.href

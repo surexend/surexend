@@ -130,7 +130,7 @@ export default function WithdrawPage() {
         {step === 'form' && (
           <motion.div key="form" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-5">
             {/* Currency selector */}
-            <div className="bg-[#121827] p-4 rounded-2xl border border-white/5 space-y-3">
+            <div className="bg-[#15171C] p-4 rounded-2xl border border-white/5 space-y-3">
               <label className="text-xs font-semibold text-[#94A3B8] uppercase tracking-wider">Select Payout Country & Currency</label>
               <div className="grid grid-cols-2 gap-2">
                 {FIAT_CURRENCIES.map((fiat) => (
@@ -154,7 +154,7 @@ export default function WithdrawPage() {
             </div>
 
             {/* Amount Input */}
-            <div className="bg-[#121827] p-5 rounded-2xl border border-white/5 space-y-3">
+            <div className="bg-[#15171C] p-5 rounded-2xl border border-white/5 space-y-3">
               <div className="flex justify-between items-center text-xs font-semibold text-[#94A3B8]">
                 <span>Withdraw Amount (USDC)</span>
                 <span>Available: <strong className="text-white">{availableUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC</strong></span>
@@ -165,7 +165,7 @@ export default function WithdrawPage() {
                   placeholder="0.00"
                   value={amountUsdt}
                   onChange={(e) => setAmountUsdt(e.target.value)}
-                  className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3.5 text-2xl font-bold text-white focus:outline-none focus:border-white/30"
+                  className="w-full bg-[#0A0B0F] border border-white/10 rounded-xl px-4 py-3.5 text-2xl font-bold text-white focus:outline-none focus:border-white/30"
                 />
                 <button
                   onClick={() => setAmountUsdt(availableUsdt.toFixed(2))}
@@ -198,7 +198,7 @@ export default function WithdrawPage() {
               onClick={handleNext}
               disabled={numUsdt <= 0}
               className="w-full py-4 rounded-2xl font-bold text-base transition-all disabled:opacity-40 shadow-lg"
-              style={{ background: accentHex, color: '#0F1629' }}
+              style={{ background: accentHex, color: '#121419' }}
             >
               Continue to Select Bank
             </button>
@@ -208,7 +208,7 @@ export default function WithdrawPage() {
         {/* STEP 2: SELECT BANK ACCOUNT */}
         {step === 'bank' && (
           <motion.div key="bank" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-5">
-            <div className="bg-[#121827] p-5 rounded-2xl border border-white/5 space-y-4">
+            <div className="bg-[#15171C] p-5 rounded-2xl border border-white/5 space-y-4">
               <h3 className="font-bold text-white text-sm">Select Destination Bank Account</h3>
               
               <div className="space-y-2.5">
@@ -247,7 +247,7 @@ export default function WithdrawPage() {
               <button
                 onClick={() => setStep('pin')}
                 className="flex-[2] py-3.5 rounded-xl font-bold text-sm shadow-lg"
-                style={{ background: accentHex, color: '#0F1629' }}
+                style={{ background: accentHex, color: '#121419' }}
               >
                 Confirm & Enter PIN
               </button>
@@ -258,7 +258,7 @@ export default function WithdrawPage() {
         {/* STEP 3: SECURITY PIN */}
         {step === 'pin' && (
           <motion.div key="pin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6 text-center">
-            <div className="bg-[#121827] p-6 rounded-2xl border border-white/5">
+            <div className="bg-[#15171C] p-6 rounded-2xl border border-white/5">
               <ShieldCheck className="w-12 h-12 mx-auto mb-3" style={{ color: accentHex }} />
               <h2 className="text-lg font-bold text-white">Enter Transaction PIN</h2>
               <p className="text-xs text-[#64748B] mt-1 mb-6">Authorize withdrawal of {selectedFiat.symbol}{fiatAmount.toLocaleString()} to {selectedBank.bankName}</p>
@@ -299,7 +299,7 @@ export default function WithdrawPage() {
             <Link
               href="/app/dashboard"
               className="inline-block px-8 py-3.5 rounded-2xl font-bold text-sm shadow-lg"
-              style={{ background: accentHex, color: '#0F1629' }}
+              style={{ background: accentHex, color: '#121419' }}
             >
               Return to Dashboard
             </Link>

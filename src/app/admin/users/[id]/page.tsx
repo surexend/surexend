@@ -136,18 +136,18 @@ export default function AdminUserDetailPage() {
             <div className="flex flex-wrap items-end gap-3">
               <label className="block">
                 <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Amount</span>
-                <input value={creditAmount} onChange={e => setCreditAmount(e.target.value)} type="number" min="0" step="any" placeholder="0.00" className="mt-1 w-36 bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
+                <input value={creditAmount} onChange={e => setCreditAmount(e.target.value)} type="number" min="0" step="any" placeholder="0.00" className="mt-1 w-36 bg-[#121419] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
               </label>
               <label className="block">
                 <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Currency</span>
-                <select value={creditCurrency} onChange={e => setCreditCurrency(e.target.value)} className="mt-1 bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none">
+                <select value={creditCurrency} onChange={e => setCreditCurrency(e.target.value)} className="mt-1 bg-[#121419] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none">
                   <option value="USDC">USDC</option>
                   <option value="NGN">NGN (real naira)</option>
                 </select>
               </label>
               <label className="block flex-1 min-w-[160px]">
                 <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Note</span>
-                <input value={creditNote} onChange={e => setCreditNote(e.target.value)} type="text" placeholder="e.g. Bank transfer 12/03" className="mt-1 w-full bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
+                <input value={creditNote} onChange={e => setCreditNote(e.target.value)} type="text" placeholder="e.g. Bank transfer 12/03" className="mt-1 w-full bg-[#121419] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
               </label>
               <button onClick={credit} disabled={crediting} className="px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-semibold hover:bg-emerald-500/30 disabled:opacity-50">
                 {crediting ? 'Crediting…' : 'Credit'}
@@ -183,7 +183,7 @@ export default function AdminUserDetailPage() {
               <ShieldCheck className="w-3.5 h-3.5 text-amber-400" /> Role
             </label>
             <div className="flex gap-2">
-              <select value={role} onChange={e => setRole(e.target.value)} className="bg-[#0F1629] border border-white/10 rounded-lg px-2 py-1 text-xs text-white outline-none">
+              <select value={role} onChange={e => setRole(e.target.value)} className="bg-[#121419] border border-white/10 rounded-lg px-2 py-1 text-xs text-white outline-none">
                 <option value="USER">USER</option>
                 <option value="ADMIN">ADMIN</option>
               </select>
@@ -193,11 +193,11 @@ export default function AdminUserDetailPage() {
           <div className="space-y-2 pt-1">
             <label className="block">
               <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Email</span>
-              <input value={email} onChange={e => setEmail(e.target.value)} type="email" className="mt-1 w-full bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
+              <input value={email} onChange={e => setEmail(e.target.value)} type="email" className="mt-1 w-full bg-[#121419] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
             </label>
             <label className="block">
               <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider">Phone</span>
-              <input value={phone} onChange={e => setPhone(e.target.value)} type="text" className="mt-1 w-full bg-[#0F1629] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
+              <input value={phone} onChange={e => setPhone(e.target.value)} type="text" className="mt-1 w-full bg-[#121419] border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/25" />
             </label>
             <button onClick={save} className="w-full px-3 py-2 rounded-lg bg-white/10 text-xs text-white font-semibold hover:bg-white/15">Save profile</button>
           </div>

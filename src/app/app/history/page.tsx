@@ -119,7 +119,7 @@ function StatementModal({
             initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }}
             transition={{ type: 'spring', damping: 24, stiffness: 300 }}
           >
-            <div className="bg-[#0F1629] rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 border border-white/10 shadow-2xl">
+            <div className="bg-[#121419] rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 border border-white/10 shadow-2xl">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -250,7 +250,7 @@ function FilterPanel({ filters, setFilters, accentHex, accentRgb, onClose }: {
       <div className="absolute inset-0 liquid-backdrop sm:hidden" onClick={onClose} />
 
       <motion.div
-        className="relative w-full sm:w-80 max-h-[82vh] sm:max-h-[70vh] bg-[#0F1629] rounded-t-3xl sm:rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden sm:shadow-2xl"
+        className="relative w-full sm:w-80 max-h-[82vh] sm:max-h-[70vh] bg-[#121419] rounded-t-3xl sm:rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden sm:shadow-2xl"
         style={{ boxShadow: '0 -20px 60px rgba(0,0,0,0.6)' }}
         initial={{ y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -340,7 +340,7 @@ function FilterPanel({ filters, setFilters, accentHex, accentRgb, onClose }: {
         </div>
 
         {/* Sticky action bar — always visible */}
-        <div className="flex gap-3 px-5 py-4 border-t border-white/[0.08] bg-[#0F1629] flex-shrink-0">
+        <div className="flex gap-3 px-5 py-4 border-t border-white/[0.08] bg-[#121419] flex-shrink-0">
           <button
             className="flex-1 py-3 rounded-xl text-sm text-[#94A3B8] border border-white/08 hover:text-white transition-colors"
             onClick={() => { setLocal({ year: null, month: null, week: null, day: null, type: 'ALL' }); setFilters({ year: null, month: null, week: null, day: null, type: 'ALL' }); onClose() }}
@@ -523,7 +523,7 @@ function TransactionDetailModal({
     canvas.height = H * S
     const ctx = canvas.getContext('2d')!
     ctx.scale(S, S)
-    ctx.fillStyle = '#0B1120'
+    ctx.fillStyle = '#0B0D11'
     ctx.fillRect(0, 0, W, H)
 
     const roundRect = (x: number, y: number, w: number, h: number, r: number) => {

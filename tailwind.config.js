@@ -24,9 +24,9 @@ module.exports = {
         },
         // === SHARED APP COLORS ===
         app: {
-          bg: '#0A0F1E',
-          card: '#0F1629',
-          cardHover: '#141C35',
+          bg: '#0A0B0F',
+          card: '#121419',
+          cardHover: '#17191F',
           border: 'rgba(0, 212, 255, 0.15)',
           borderGold: 'rgba(212, 160, 23, 0.25)',
           borderLemon: 'rgba(181, 226, 61, 0.25)',
@@ -52,7 +52,7 @@ module.exports = {
       backgroundImage: {
         'gold-gradient': 'radial-gradient(ellipse at center, #E8B820 0%, #C49015 40%, #A07810 100%)',
         'lemon-gradient': 'radial-gradient(ellipse at center, #C8F050 0%, #B0D830 40%, #90B820 100%)',
-        'app-gradient': 'linear-gradient(135deg, #0A0F1E 0%, #0F1629 50%, #0A0F1E 100%)',
+        'app-gradient': 'linear-gradient(135deg, #0A0B0F 0%, #121419 50%, #0A0B0F 100%)',
         'card-gradient': 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)',
         'hero-radial': 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,212,255,0.15), transparent)',
         'gold-hero-radial': 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(212,160,23,0.2), transparent)',

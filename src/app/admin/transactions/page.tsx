@@ -25,7 +25,7 @@ function DetailModal({ id, onClose }: { id: string; onClose: () => void }) {
     return (
       <div className="fixed inset-0 z-[80] flex items-center justify-center">
         <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-        <div className="relative w-full max-w-md mx-4 bg-[#0F1629] rounded-3xl border border-white/10 p-8 text-center">
+        <div className="relative w-full max-w-md mx-4 bg-[#121419] rounded-3xl border border-white/10 p-8 text-center">
           <div className="w-8 h-8 mx-auto rounded-full border-2 border-white/10 border-t-white/40 animate-spin" />
         </div>
       </div>
@@ -64,8 +64,8 @@ function DetailModal({ id, onClose }: { id: string; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center sm:justify-center">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg mx-auto bg-[#0F1629] rounded-t-3xl sm:rounded-3xl border border-white/10 max-h-[88vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-white/10 sticky top-0 bg-[#0F1629]">
+      <div className="relative w-full sm:max-w-lg mx-auto bg-[#121419] rounded-t-3xl sm:rounded-3xl border border-white/10 max-h-[88vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-white/10 sticky top-0 bg-[#121419]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
               {tx.type === 'BILL_PAYMENT' ? <Zap className="w-4 h-4 text-amber-400" /> : <FileText className="w-4 h-4 text-amber-400" />}
@@ -140,7 +140,7 @@ export default function AdminTransactionsPage() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex items-center gap-2 flex-1 bg-[#0F1629] border border-white/10 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 flex-1 bg-[#121419] border border-white/10 rounded-xl px-3 py-2">
           <Search className="w-4 h-4 text-[#64748B]" />
           <input
             value={search}
@@ -149,11 +149,11 @@ export default function AdminTransactionsPage() {
             className="bg-transparent outline-none text-sm text-white w-full placeholder:text-[#64748B]"
           />
         </div>
-        <select value={type} onChange={e => { setType(e.target.value); setPage(1) }} className="bg-[#0F1629] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none">
+        <select value={type} onChange={e => { setType(e.target.value); setPage(1) }} className="bg-[#121419] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none">
           <option value="">All types</option>
           {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        <select value={status} onChange={e => { setStatus(e.target.value); setPage(1) }} className="bg-[#0F1629] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none">
+        <select value={status} onChange={e => { setStatus(e.target.value); setPage(1) }} className="bg-[#121419] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none">
           <option value="">All statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>

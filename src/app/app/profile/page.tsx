@@ -163,7 +163,7 @@ export default function ProfilePage() {
         />
         <div className="flex items-center gap-3 truncate">
           {/* Clean Avatar Display */}
-          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-lg bg-[#1E2738] flex-shrink-0">
+          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-lg bg-[#212429] flex-shrink-0">
             {avatar ? (
               <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
             ) : (
@@ -367,7 +367,7 @@ export default function ProfilePage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.95 }}
             >
-              <div className="bg-[#0F1629] rounded-3xl border border-white/10 overflow-hidden">
+              <div className="bg-[#121419] rounded-3xl border border-white/10 overflow-hidden">
                 <div className="flex items-center justify-between p-4 border-b border-white/10">
                   <div>
                     <h3 className="font-bold text-white text-sm">Currency Display</h3>
@@ -377,12 +377,12 @@ export default function ProfilePage() {
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                <div className="p-3 sticky top-0 z-10" style={{ background: 'rgba(10,15,30,0.95)', backdropFilter: 'blur(12px)' }}>
+                <div className="p-3 sticky top-0 z-10" style={{ background: 'rgba(8,9,12,0.95)', backdropFilter: 'blur(12px)' }}>
                   <input
                     value={currencySearch}
                     onChange={(e) => setCurrencySearch(e.target.value)}
                     placeholder="Search country or currency…"
-                    className="w-full bg-[#0A0F1E] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
+                    className="w-full bg-[#0A0B0F] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-[#64748B] focus:outline-none focus:border-white/30"
                   />
                 </div>
                 <div className="p-3 space-y-2 max-h-[55vh] overflow-y-auto">
@@ -454,7 +454,7 @@ export default function ProfilePage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.95 }}
             >
-              <div className="bg-[#0F1629] rounded-3xl p-6 border border-white/[0.08]">
+              <div className="bg-[#121419] rounded-3xl p-6 border border-white/[0.08]">
                 <div className="w-14 h-14 rounded-2xl bg-[#EF4444]/10 flex items-center justify-center mx-auto mb-4">
                   <AlertTriangle size={26} className="text-[#EF4444]" />
                 </div>

@@ -259,13 +259,13 @@ export default function LandingPage() {
         )}
       </AnimatePresence>
 
-      <div id="app-shell" data-page-loaded className="min-h-screen bg-[#060A15]">
+      <div id="app-shell" data-page-loaded className="min-h-screen bg-[#07080B]">
 
         {/* ── Navigation ─────────────────────────────────────────────── */}
         <motion.nav
           className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
           style={{
-            background: scrolled ? 'rgba(10, 15, 30, 0.92)' : 'transparent',
+            background: scrolled ? 'rgba(8, 9, 12, 0.92)' : 'transparent',
             backdropFilter: scrolled && !isMobile ? 'blur(20px)' : 'none',
             WebkitBackdropFilter: scrolled && !isMobile ? 'blur(20px)' : 'none',
             borderBottom: scrolled ? '1px solid rgba(255,255,255,0.06)' : 'none',
@@ -363,7 +363,7 @@ export default function LandingPage() {
           <AnimatePresence>
             {menuOpen && (
               <motion.div
-                className="md:hidden bg-[#0F1629] border-t border-white/5"
+                className="md:hidden bg-[#121419] border-t border-white/5"
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
@@ -569,13 +569,13 @@ export default function LandingPage() {
                 <div className="rounded-[47px] bg-black p-[3px]">
                   {/* Screen */}
                   <div
-                    className="relative rounded-[44px] bg-[#060A15] overflow-hidden border border-white/10 flex flex-col select-none w-full"
+                    className="relative rounded-[44px] bg-[#07080B] overflow-hidden border border-white/10 flex flex-col select-none w-full"
                     style={{ height: 672 }}
                   >
                     {/* Dynamic Island */}
                     <div className="absolute top-[14px] left-1/2 -translate-x-1/2 w-[104px] h-[30px] bg-black rounded-full z-40 flex items-center justify-end pr-3.5">
                       <div className="w-[13px] h-[13px] rounded-full bg-[#0d0d10] ring-1 ring-white/[0.08] flex items-center justify-center">
-                        <div className="w-[5px] h-[5px] rounded-full bg-[#1a1a2e]" />
+                        <div className="w-[5px] h-[5px] rounded-full bg-[#17181d]" />
                       </div>
                     </div>
 
@@ -690,7 +690,7 @@ export default function LandingPage() {
                           >
                             USDC/NGN <ChevronDown size={8} />
                           </span>
-                          <div className="flex items-center gap-0.5 bg-[#121827] p-0.5 rounded-lg border border-white/5">
+                          <div className="flex items-center gap-0.5 bg-[#15171C] p-0.5 rounded-lg border border-white/5">
                             {['1D', '1W', '1M', '1Y'].map((tf, i) => (
                               <span key={tf} className={`px-1.5 py-0.5 rounded-md text-[7.5px] font-bold ${i === 0 ? 'bg-white/10 text-white' : 'text-[#64748B]'}`}>{tf}</span>
                             ))}
@@ -744,7 +744,7 @@ export default function LandingPage() {
                     </div>
 
                     {/* Bottom nav — mirrors the app's tab bar */}
-                    <div className="bg-[#0D1322] border-t border-white/10 px-5 pt-2 pb-1.5 flex justify-between items-center">
+                    <div className="bg-[#0F1116] border-t border-white/10 px-5 pt-2 pb-1.5 flex justify-between items-center">
                       {[
                         { icon: Wallet, label: 'Home', active: true },
                         { icon: Send, label: 'Send' },
@@ -759,7 +759,7 @@ export default function LandingPage() {
                       ))}
                     </div>
                     {/* Home indicator */}
-                    <div className="bg-[#0D1322] pb-2 flex justify-center">
+                    <div className="bg-[#0F1116] pb-2 flex justify-center">
                       <div className="w-[100px] h-[3.5px] rounded-full bg-white/25" />
                     </div>
                   </div>

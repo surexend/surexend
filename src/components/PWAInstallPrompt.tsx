@@ -82,7 +82,7 @@ export default function PWAInstallPrompt() {
         <div
           className="rounded-2xl p-4 relative overflow-hidden"
           style={{
-            background: '#0F1629',
+            background: '#121419',
             border: `1px solid rgba(${accentRgb}, 0.3)`,
             boxShadow: `0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(${accentRgb}, 0.1)`,
           }}
