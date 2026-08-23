@@ -35,3 +35,8 @@ backend/.env
 
 # backend runtime logs
 backend/*.log
+
+# Financial forensics/cleanup (local-only)
+backend/cleanup/
+backup-*.json
+corrections.json
