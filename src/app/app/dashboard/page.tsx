@@ -489,69 +489,49 @@ export default function DashboardPage() {
         {/* Action Buttons: 4 Primary Actions in Order (Fund, Send, Receive, Bills) */}
         <div className="grid grid-cols-4 gap-2 sm:gap-4 pt-2">
           {/* 1. FUND */}
-          <button 
-            onClick={() => setShowFundModal(true)} 
+          <button
+            onClick={() => setShowFundModal(true)}
             className="group flex flex-col items-center gap-1.5 sm:gap-2"
           >
-            <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200"
-              style={{
-                background: variant === 'gold' ? 'rgba(212, 160, 23, 0.15)' : 'rgba(181, 226, 61, 0.15)',
-                border: `1px solid ${variant === 'gold' ? 'rgba(212, 160, 23, 0.35)' : 'rgba(181, 226, 61, 0.35)'}`,
-                boxShadow: `0 0 15px rgba(${colors.glowRgb}, 0.25)`
-              }}
+            <div
+              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200 bg-white/[0.06] border border-white/10"
             >
-              <PlusCircle className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: colors.primary }} />
+              <PlusCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <span className="text-xs font-semibold text-white group-hover:text-[var(--text)] transition-colors text-center">Fund</span>
           </button>
 
           {/* 2. SEND */}
-          <button 
-            onClick={() => setShowSendModal(true)} 
+          <button
+            onClick={() => setShowSendModal(true)}
             className="group flex flex-col items-center gap-1.5 sm:gap-2"
           >
-            <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200"
-              style={{
-                background: 'rgba(59, 130, 246, 0.15)',
-                border: '1px solid rgba(59, 130, 246, 0.35)',
-                boxShadow: '0 0 15px rgba(59, 130, 246, 0.2)'
-              }}
+            <div
+              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200 bg-white/[0.06] border border-white/10"
             >
-              <Send className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
+              <Send className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <span className="text-xs font-semibold text-white group-hover:text-blue-400 transition-colors text-center">Send</span>
+            <span className="text-xs font-semibold text-white group-hover:text-[var(--text)] transition-colors text-center">Send</span>
           </button>
 
           {/* 3. RECEIVE */}
           <Link href="/app/receive" className="group flex flex-col items-center gap-1.5 sm:gap-2">
-            <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200"
-              style={{
-                background: 'rgba(245, 158, 11, 0.15)',
-                border: '1px solid rgba(245, 158, 11, 0.35)',
-                boxShadow: '0 0 15px rgba(245, 158, 11, 0.2)'
-              }}
+            <div
+              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200 bg-white/[0.06] border border-white/10"
             >
-              <Download className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
+              <Download className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <span className="text-xs font-semibold text-white group-hover:text-amber-400 transition-colors text-center">Receive</span>
+            <span className="text-xs font-semibold text-white group-hover:text-[var(--text)] transition-colors text-center">Receive</span>
           </Link>
 
           {/* 4. BILLS */}
           <Link href="/app/bills" className="group flex flex-col items-center gap-1.5 sm:gap-2">
-            <div 
-              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200"
-              style={{
-                background: 'rgba(139, 92, 246, 0.15)',
-                border: '1px solid rgba(139, 92, 246, 0.35)',
-                boxShadow: '0 0 15px rgba(139, 92, 246, 0.2)'
-              }}
+            <div
+              className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center group-hover:scale-105 group-active:scale-90 transition-transform duration-200 bg-white/[0.06] border border-white/10"
             >
-              <Smartphone className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" />
+              <Smartphone className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <span className="text-xs font-semibold text-white group-hover:text-purple-400 transition-colors text-center">Bills</span>
+            <span className="text-xs font-semibold text-white group-hover:text-[var(--text)] transition-colors text-center">Bills</span>
           </Link>
         </div>
       </motion.div>

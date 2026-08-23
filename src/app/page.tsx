@@ -173,7 +173,7 @@ function FAQItem({ q, a, accent }: { q: string; a: string; accent: string }) {
 // ══════════════════════════════════════════════════════════════════════════
 
 export default function LandingPage() {
-  const { variant, colors, toggleVariant } = useTheme()
+  const { variant, colors } = useTheme()
   const [menuOpen, setMenuOpen] = useState(false)
   const [showLoader, setShowLoader] = useState(true)
   const [scrolled, setScrolled] = useState(false)
@@ -305,24 +305,8 @@ export default function LandingPage() {
               ))}
             </div>
 
-            {/* CTA buttons + Theme Switcher */}
+            {/* CTA buttons */}
             <div className="hidden md:flex items-center gap-3">
-              {/* Theme Toggle Button */}
-              <button
-                onClick={toggleVariant}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all duration-300 shadow-lg hover:scale-105"
-                style={{
-                  background: isGold ? 'rgba(212, 160, 23, 0.15)' : 'rgba(181, 226, 61, 0.15)',
-                  borderColor: isGold ? 'rgba(212, 160, 23, 0.4)' : 'rgba(181, 226, 61, 0.4)',
-                  color: isGold ? '#FFD700' : '#B5E23D',
-                  boxShadow: isGold ? '0 0 15px rgba(212,160,23,0.3)' : '0 0 15px rgba(181,226,61,0.3)',
-                }}
-                title="Switch Brand Theme (Gold / Lemon)"
-              >
-                <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ background: accentHex }}></span>
-                <span>{isGold ? 'Gold Theme 🟡' : 'Lemon Theme 🟢'}</span>
-              </button>
-
               <Link href="/auth/login">
                 <button className={`${btnOutlineClass} px-5 py-2 rounded-xl text-sm font-semibold`}>
                   Log In
@@ -337,18 +321,6 @@ export default function LandingPage() {
 
             {/* Mobile header controls */}
             <div className="flex items-center gap-2 md:hidden">
-              <button
-                onClick={toggleVariant}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shadow-md"
-                style={{
-                  background: isGold ? 'rgba(212, 160, 23, 0.15)' : 'rgba(181, 226, 61, 0.15)',
-                  borderColor: isGold ? 'rgba(212, 160, 23, 0.4)' : 'rgba(181, 226, 61, 0.4)',
-                  color: isGold ? '#FFD700' : '#B5E23D',
-                }}
-              >
-                <span>{isGold ? '🟡 Gold' : '🟢 Lemon'}</span>
-              </button>
-
               <button
                 className="p-2 rounded-lg text-white"
                 style={{ background: 'rgba(255,255,255,0.06)' }}
@@ -660,20 +632,19 @@ export default function LandingPage() {
                         <div className="text-white font-extrabold text-[26px] tracking-tight leading-tight mt-0.5">$2,458.90</div>
                         <p className="text-[8px] text-[#475569] font-medium leading-snug mt-0.5">Deposited via crypto (USDC). Convert to get local currency.</p>
 
-                        {/* Actions — Fund / Send / Receive / Bills, exact dashboard colors */}
+                        {/* Actions — Fund / Send / Receive / Bills, uniform monochrome */}
                         <div className="grid grid-cols-4 gap-1.5 pt-2.5 mt-1.5 border-t border-white/[0.06]">
                           {[
-                            { icon: PlusCircle, label: 'Fund', bg: `rgba(${accentRgb}, 0.15)`, bd: `rgba(${accentRgb}, 0.4)`, fg: accentHex },
-                            { icon: Send, label: 'Send', bg: 'rgba(59,130,246,0.15)', bd: 'rgba(59,130,246,0.35)', fg: '#60A5FA' },
-                            { icon: Download, label: 'Receive', bg: 'rgba(245,158,11,0.15)', bd: 'rgba(245,158,11,0.35)', fg: '#FBBF24' },
-                            { icon: Smartphone, label: 'Bills', bg: 'rgba(139,92,246,0.15)', bd: 'rgba(139,92,246,0.35)', fg: '#A78BFA' },
+                            { icon: PlusCircle, label: 'Fund' },
+                            { icon: Send, label: 'Send' },
+                            { icon: Download, label: 'Receive' },
+                            { icon: Smartphone, label: 'Bills' },
                           ].map((a) => (
                             <div key={a.label} className="flex flex-col items-center gap-1">
                               <div
-                                className="w-9 h-9 rounded-xl flex items-center justify-center"
-                                style={{ background: a.bg, border: `1px solid ${a.bd}` }}
+                                className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/[0.06] border border-white/10"
                               >
-                                <a.icon size={14} style={{ color: a.fg }} />
+                                <a.icon size={14} className="text-white" />
                               </div>
                               <span className="text-[8px] font-semibold text-white">{a.label}</span>
                             </div>

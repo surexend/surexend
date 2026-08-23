@@ -1,17 +1,15 @@
 /**
  * SureXend Theme Context
- * Controls Gold (var1) vs Lemon (var2) brand variant globally
+ * Provides the single SureXend Gold brand palette globally.
  */
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useState } from 'react'
 
 export type ThemeVariant = 'gold' | 'lemon'
 
 interface ThemeContextValue {
   variant: ThemeVariant
-  setVariant: (v: ThemeVariant) => void
-  toggleVariant: () => void
   colors: {
     primary: string
     light: string
@@ -66,55 +64,17 @@ const LEMON_COLORS: ThemeContextValue['colors'] = {
 
 const ThemeContext = createContext<ThemeContextValue>({
   variant: 'gold',
-  setVariant: () => {},
-  toggleVariant: () => {},
   colors: GOLD_COLORS,
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const envVariant = process.env.NEXT_PUBLIC_BRAND_VARIANT as ThemeVariant | undefined
-  const [variant, setVariantState] = useState<ThemeVariant>(envVariant || 'lemon')
+  // Brand is locked to Gold — one accent, spent surgically. No runtime switching.
+  const [variant] = useState<ThemeVariant>('gold')
 
-  useEffect(() => {
-    // 1. Check URL query params (?theme=gold | ?theme=lemon | ?variant=gold | ?variant=lemon)
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const urlTheme = (params.get('theme') || params.get('variant')) as ThemeVariant
-      if (urlTheme === 'gold' || urlTheme === 'lemon') {
-        setVariantState(urlTheme)
-        localStorage.setItem('surexend_variant', urlTheme)
-        return
-      }
-    }
-
-    // 2. Check env variable if no URL param
-    if (envVariant) {
-      setVariantState(envVariant)
-      return
-    }
-
-    // 3. Fallback to localStorage
-    const stored = localStorage.getItem('surexend_variant') as ThemeVariant
-    if (stored && (stored === 'gold' || stored === 'lemon')) {
-      setVariantState(stored)
-    }
-  }, [envVariant])
-
-  const setVariant = (v: ThemeVariant) => {
-    setVariantState(v)
-    localStorage.setItem('surexend_variant', v)
-  }
-
-  const toggleVariant = () => {
-    const next = variant === 'gold' ? 'lemon' : 'gold'
-    setVariantState(next)
-    localStorage.setItem('surexend_variant', next)
-  }
-
-  const colors = variant === 'gold' ? GOLD_COLORS : LEMON_COLORS
+  const colors = GOLD_COLORS
 
   return (
-    <ThemeContext.Provider value={{ variant, setVariant, toggleVariant, colors }}>
+    <ThemeContext.Provider value={{ variant, colors }}>
       <div data-variant={variant}>
         {children}
       </div>

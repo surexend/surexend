@@ -30,7 +30,7 @@ const queryClient = new QueryClient({
 })
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { variant, colors, toggleVariant } = useTheme()
+  const { variant, colors } = useTheme()
   const { lite, toggle: toggleLite } = useLite()
   const router = useRouter()
   const pathname = usePathname()
@@ -262,20 +262,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* Control cluster — one glass pill, evenly spaced, centred */}
             <div className="flex items-center gap-0.5 sm:gap-1 p-1 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.03)] shadow-inner">
-              {/* Theme Toggle — brand color dot (Gold / Lemon) */}
-              <button
-                onClick={toggleVariant}
-                className="w-9 h-9 rounded-xl border flex items-center justify-center transition-all duration-300 shadow-md flex-shrink-0 active:scale-95 hover:brightness-125"
-                style={{
-                  background: variant === 'gold' ? 'rgba(212, 160, 23, 0.15)' : 'rgba(181, 226, 61, 0.15)',
-                  borderColor: variant === 'gold' ? 'rgba(212, 160, 23, 0.4)' : 'rgba(181, 226, 61, 0.4)',
-                }}
-                title={`Theme: ${variant === 'gold' ? 'Gold' : 'Lemon'} — tap to switch`}
-                aria-label={`Switch theme to ${variant === 'gold' ? 'Lemon' : 'Gold'}`}
-              >
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: colors.primary }} />
-              </button>
-
               {/* Lite mode toggle — uses less data (animations & blur off) */}
               <button
                 onClick={toggleLite}
