@@ -476,6 +476,16 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Real-naira indicator — bank-funded money is what pays bills and
+            withdrawals; it must never be invisible next to the testnet pool. */}
+        {walletView === 'LOCAL' && (balanceData?.realNgn ?? 0) > 0 && (
+          <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-[11px] font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span className="text-emerald-300">Real naira: ₦{(balanceData?.realNgn ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="text-[#64748B] font-medium">· pays bills</span>
+          </div>
+        )}
+
         {/* Action Buttons: 4 Primary Actions in Order (Fund, Send, Receive, Bills) */}
         <div className="grid grid-cols-4 gap-2 sm:gap-4 pt-2">
           {/* 1. FUND */}

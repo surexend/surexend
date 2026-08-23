@@ -525,19 +525,11 @@ export class WalletsService implements OnModuleInit {
               // settlement point; it flips status once so it runs exactly once.
               const totalLocked = (pendingMatch.amount || 0) + (preservedFee || 0);
               await this.prisma.$transaction(async (prisma) => {
-                await prisma.wallet.update({
-                  where: { userId: pendingMatch.userId },
-                  data:
-                    status === 'FAILED'
-                      ? {
-                          usdcBalance: { increment: totalLocked },
-                          lockedBalance: { decrement: totalLocked },
-                        }
-                      : { lockedBalance: { decrement: totalLocked } },
-                });
-
-                await prisma.transaction.update({
-                  where: { id: pendingMatch.id },
+                // SECURITY: claim the settlement with a guarded conditional
+                // flip FIRST. A plain update by id let two concurrent
+                // settlements both pass and double-release the locked funds.
+                const claimed = await prisma.transaction.updateMany({
+                  where: { id: pendingMatch.id, status: 'PENDING' },
                   data: {
                     status,
                     // Circle's feed reports networkFee in the native fee token
@@ -553,6 +545,21 @@ export class WalletsService implements OnModuleInit {
                       ...(burnHash ? { txHash: burnHash } : {}),
                     }
                   },
+                });
+                if (claimed.count === 0) {
+                  this.logger.log(`Settlement race lost for ${pendingMatch.reference} — already settled, skipping wallet release`);
+                  return;
+                }
+
+                await prisma.wallet.update({
+                  where: { userId: pendingMatch.userId },
+                  data:
+                    status === 'FAILED'
+                      ? {
+                          usdcBalance: { increment: totalLocked },
+                          lockedBalance: { decrement: totalLocked },
+                        }
+                      : { lockedBalance: { decrement: totalLocked } },
                 });
               });
               this.logger.log(`Merged Circle ${type} history into PENDING tx ${pendingMatch.reference}: ${amount || 0} ${symbol} on ${chainLabel} status=${status}`);

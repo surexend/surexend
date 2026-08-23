@@ -897,6 +897,17 @@ function TransactionDetailModal({
           ...(meta.txHash ? [{ label: 'Transaction Hash', value: meta.txHash, copyable: meta.txHash, mono: true }] : []),
         ]
 
+  // Narration / channel context (e.g. admin manual-deposit notes) — surfaced
+  // prominently so credits are self-explanatory on the receipt.
+  if (rows.length && typeof meta.note === 'string' && meta.note.trim()) {
+    if (meta.channel === 'manual_deposit') {
+      rows.unshift({ label: 'Narration', value: meta.note.trim() });
+      rows.unshift({ label: 'Channel', value: 'Admin deposit' });
+    } else {
+      rows.unshift({ label: 'Narration', value: meta.note.trim() });
+    }
+  }
+
   if (typeof document === 'undefined') return null
   return createPortal(
     <AnimatePresence>

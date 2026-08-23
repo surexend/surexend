@@ -111,7 +111,13 @@ export async function renderReceiptCanvas(opts: {
   const addRow = (label: string, value: string, mono = false, accent = false) => {
     if (value) rows.push({ label, value, mono, accent })
   }
-  addRow('Reference', tx?.reference || tx?.id || '—', true)
+  if (meta?.note && String(meta.note).trim()) {
+    addRow('Narration', String(meta.note).trim())
+  }
+  if (meta?.channel === 'manual_deposit') {
+    addRow('Channel', 'Admin deposit')
+  }
+    addRow('Reference', tx?.reference || tx?.id || '—', true)
   if (!swap) {
     addRow('Type', (tx?.type || 'Transaction').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c: string) => c.toUpperCase()))
     addRow('Status', statusU)
