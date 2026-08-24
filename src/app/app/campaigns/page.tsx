@@ -49,7 +49,7 @@ export default function CampaignsPage() {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-3 py-4 sm:p-6 md:p-8 space-y-5 pb-28 sm:pb-36">
+    <div className="w-full max-w-full overflow-x-hidden max-w-2xl mx-auto px-3 py-4 sm:p-6 md:p-8 space-y-5 pb-28 sm:pb-36">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
@@ -78,7 +78,7 @@ export default function CampaignsPage() {
             <button
               key={t.key}
               onClick={() => setType(t.key)}
-              className="rounded-2xl p-4 text-left border transition-all"
+              className="rounded-2xl p-4 text-left border transition-colors"
               style={active
                 ? { background: `rgba(${accentRgb}, 0.08)`, borderColor: `rgba(${accentRgb}, 0.4)` }
                 : { background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.08)' }}
@@ -93,13 +93,15 @@ export default function CampaignsPage() {
         })}
       </div>
 
-      {/* Range pills */}
-      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
+      {/* Range pills — wrapped, not a horizontal scroll layer. A composited
+          overflow-x row inside a page that could itself scroll sideways was
+          the trigger for Android's scanline corruption on this screen. */}
+      <div className="flex flex-wrap justify-center gap-1.5">
         {RANGES.map((r) => (
           <button
             key={r.key}
             onClick={() => setRange(r.key)}
-            className="px-3.5 py-1.5 rounded-full text-[11px] font-bold flex-shrink-0 transition-all border"
+            className="px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-colors border"
             style={range === r.key
               ? { background: `rgba(${accentRgb}, 0.12)`, borderColor: `rgba(${accentRgb}, 0.4)`, color: accentHex }
               : { background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)', color: '#94A3B8' }}

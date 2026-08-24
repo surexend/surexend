@@ -304,10 +304,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </header>
 
           {/* Scroll container — completely separate from the header.
-               No sticky elements, no GPU layer conflicts. */}
+                No sticky elements, no GPU layer conflicts. */}
           {/* pb-nav-safe: ensures page content is never hidden behind the
-              fixed bottom nav bar (4rem tall) + iOS safe area inset */}
-          <div className="flex-1 overflow-y-auto overscroll-none w-full max-w-full pb-nav-safe md:pb-0">
+                fixed bottom nav bar (4rem tall) + iOS safe area inset */}
+          {/* overflow-x-hidden: overflow-y:auto alone makes overflow-x compute
+                to auto, so any page content a few px too wide gives the whole
+                shell a horizontal scrollbar — the trigger for the Android
+                compositor scanline corruption. Clip it here for EVERY page. */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-none w-full max-w-full pb-nav-safe md:pb-0">
             <div className="w-full max-w-full relative">
               {profile && !profile.pinSet && !pathname.includes('/settings/change-pin') && (
                 <button
