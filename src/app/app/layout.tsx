@@ -133,10 +133,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Ambient morphing mesh background — the "morphe" (static in lite mode & on mobile) */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
           {(lite || isMobile) ? (
-            <>
-              <div className="absolute rounded-full" style={{ width: '70vmax', height: '70vmax', borderRadius: '50%', background: `radial-gradient(circle at 30% 30%, rgba(${colors.glowRgb}, 0.10), transparent 60%)`, top: '-15%', left: '-10%', opacity: 0.7 }} />
-              <div className="absolute rounded-full" style={{ width: '60vmax', height: '60vmax', borderRadius: '50%', background: `radial-gradient(circle at 60% 60%, rgba(96, 165, 250, 0.08), transparent 60%)`, bottom: '-15%', right: '-10%', opacity: 0.6 }} />
-            </>
+            /* Phones/lite: ONE flat pre-painted gradient. Separate orb divs are
+               their own composited surfaces; a single background-image paints
+               once into the base layer and gives the GPU nothing to corrupt. */
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `radial-gradient(58% 40% at 16% 6%, rgba(${colors.glowRgb}, 0.10), transparent 64%), radial-gradient(50% 36% at 88% 94%, rgba(96, 165, 250, 0.08), transparent 62%)`,
+              }}
+            />
           ) : (
             <>
               <motion.div
@@ -173,7 +178,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               />
             </>
           )}
-          <div className="absolute inset-0 bg-radial-vignette" />
+          {/* Vignette is a full-screen blend layer — desktop-only. On phones
+              every extra blend over the scroll content is corruption fuel. */}
+          {!(lite || isMobile) && <div className="absolute inset-0 bg-radial-vignette" />}
         </div>
         {/* Desktop Sidebar */}
         <aside className="hidden md:flex flex-col w-60 md:w-64 h-full border-r border-[rgba(255,255,255,0.06)] bg-[#121419] p-4 flex-shrink-0 z-20 overflow-y-auto">
@@ -350,11 +357,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   </button>
                 </div>
               )}
-              {/* Page transition: CSS-only on mobile (JS animations bypass
-                  the CSS reduced-motion / animation-duration:0.01ms guards).
-                  Desktop keeps Framer for the premium fade. */}
+              {/* Page transition: desktop only. Even a 0.12s CSS opacity fade
+                  promotes the ENTIRE page subtree to a blended compositor
+                  layer on phones — the trigger for the Android scanline /
+                  static-noise corruption on low-end Mali GPUs. Phones now
+                  render children directly: zero promoted layers, zero blends. */}
               {isMobile ? (
-                <div key={pathname} className="w-full animate-[fadeIn_0.12s_ease-out]">
+                <div key={pathname} className="w-full">
                   {children}
                 </div>
               ) : (
