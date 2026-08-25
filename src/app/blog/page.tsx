@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { blogPosts, landingPages, countryPages } from '@/lib/content'
+import { allPages, blogPosts, landingPages, countryPages } from '@/lib/content'
 import { buildSchemas } from '@/lib/content/seo-jsonld'
 import JsonLd from '@/components/seo/JsonLd'
 
@@ -33,7 +33,19 @@ function Card({ path, h1, metaDescription, readingTime, tag }: { path: string; h
   )
 }
 
-export default function BlogIndex() {
+const tagFor = (kind: string) => (kind === 'blog' ? 'Guide' : kind === 'country' ? 'Country' : 'How-to')
+
+export default async function BlogIndex({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  // Sitelinks search box support: /blog?q=... filters every guide by keyword.
+  const q = (await searchParams).q?.trim() || ''
+  const needle = q.toLowerCase()
+  const results = needle
+    ? allPages.filter((p) => {
+        const hay = [p.h1, p.metaDescription, ...(p.keywords || [])].join(' ').toLowerCase()
+        return hay.includes(needle) || needle.split(/\s+/).every((t) => hay.includes(t))
+      })
+    : []
+
   return (
     <div className="min-h-screen bg-[#000000] text-white">
       <JsonLd schemas={buildSchemas({
@@ -64,32 +76,53 @@ export default function BlogIndex() {
           your bank or mobile money — plain-English guides with real numbers.
         </p>
 
-        <section className="mt-10">
-          <h2 className="text-lg font-bold text-white mb-4">Latest guides</h2>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {featured.map((p) => (
-              <Card key={p.path} path={p.path} h1={p.h1} metaDescription={p.metaDescription} readingTime={p.readingTime} tag="Guide" />
-            ))}
-          </div>
-        </section>
+        {q ? (
+          <section className="mt-10">
+            <h2 className="text-lg font-bold text-white mb-4">
+              {results.length} result{results.length === 1 ? '' : 's'} for &ldquo;{q}&rdquo;
+            </h2>
+            {results.length > 0 && (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {results.map((p) => (
+                  <Card key={p.path} path={p.path} h1={p.h1} metaDescription={p.metaDescription} readingTime={p.readingTime} tag={tagFor(p.kind)} />
+                ))}
+              </div>
+            )}
+            <p className="mt-6 text-xs text-[#64748B]">
+              Nothing useful? <Link href="/blog" className="text-[#D4A017] font-bold hover:underline">Browse all guides</Link> or{' '}
+              <Link href="/register" className="text-[#D4A017] font-bold hover:underline">create a free account</Link>.
+            </p>
+          </section>
+        ) : (
+          <>
+            <section className="mt-10">
+              <h2 className="text-lg font-bold text-white mb-4">Latest guides</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {featured.map((p) => (
+                  <Card key={p.path} path={p.path} h1={p.h1} metaDescription={p.metaDescription} readingTime={p.readingTime} tag="Guide" />
+                ))}
+              </div>
+            </section>
 
-        <section className="mt-12">
-          <h2 className="text-lg font-bold text-white mb-4">Popular topics</h2>
-          <div className="grid sm:grid-cols-3 gap-3">
-            {landingPages.map((p) => (
-              <Card key={p.path} path={p.path} h1={p.h1} metaDescription={p.metaDescription} tag="How-to" />
-            ))}
-          </div>
-        </section>
+            <section className="mt-12">
+              <h2 className="text-lg font-bold text-white mb-4">Popular topics</h2>
+              <div className="grid sm:grid-cols-3 gap-3">
+                {landingPages.map((p) => (
+                  <Card key={p.path} path={p.path} h1={p.h1} metaDescription={p.metaDescription} tag="How-to" />
+                ))}
+              </div>
+            </section>
 
-        <section className="mt-12">
-          <h2 className="text-lg font-bold text-white mb-4">Country guides</h2>
-          <div className="grid sm:grid-cols-4 gap-3">
-            {countryPages.map((p) => (
-              <Card key={p.path} path={p.path} h1={p.h1} metaDescription={p.metaDescription} tag="Country" />
-            ))}
-          </div>
-        </section>
+            <section className="mt-12">
+              <h2 className="text-lg font-bold text-white mb-4">Country guides</h2>
+              <div className="grid sm:grid-cols-4 gap-3">
+                {countryPages.map((p) => (
+                  <Card key={p.path} path={p.path} h1={p.h1} metaDescription={p.metaDescription} tag="Country" />
+                ))}
+              </div>
+            </section>
+          </>
+        )}
       </main>
     </div>
   )

@@ -129,6 +129,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   url: 'https://surexend.com',
                   description: 'Buy airtime with crypto, sell USDC for naira, pay bills with crypto, and send money across Africa using USDC.',
                   publisher: { '@id': 'https://surexend.com#organization' },
+                  potentialAction: {
+                    '@type': 'SearchAction',
+                    target: { '@type': 'EntryPoint', urlTemplate: 'https://surexend.com/blog?q={search_term_string}' },
+                    'query-input': 'required name=search_term_string',
+                  },
                 },
                 {
                   '@type': 'SoftwareApplication',
