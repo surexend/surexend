@@ -1148,14 +1148,43 @@ export default function LandingPage() {
                 <p className="text-[#64748B] text-sm leading-relaxed">Africa&apos;s premier stablecoin spending platform. Your crypto, finally useful.</p>
               </div>
               {[
-                { title: 'Product', links: ['Features', 'Security', 'Pricing', 'Referrals'] },
-                { title: 'Company', links: ['About Us', 'Blog', 'Careers', 'Contact'] },
-                { title: 'Legal', links: ['Privacy Policy', 'Terms of Service', 'Cookie Policy', 'AML Policy', 'NDPR Notice'] },
+                {
+                  title: 'Product',
+                  links: [
+                    { label: 'Features', href: '#features' },
+                    { label: 'Security', href: '#security' },
+                    { label: 'Pricing', href: '#pricing' },
+                    { label: 'Referrals', href: '/app/referrals' },
+                  ],
+                },
+                {
+                  title: 'Company',
+                  links: [
+                    { label: 'About Us', href: '#how' },
+                    { label: 'Blog', href: '/blog' },
+                    { label: 'Guides', href: '/blog' },
+                    { label: 'Contact', href: 'mailto:support@surexend.com' },
+                  ],
+                },
+                {
+                  title: 'Legal',
+                  links: [
+                    { label: 'Privacy Policy', href: '/privacy' },
+                    { label: 'Terms of Service', href: '/terms' },
+                    { label: 'Cookie Policy', href: '/cookies' },
+                    { label: 'AML Policy', href: '/aml' },
+                    { label: 'NDPR Notice', href: '/ndpr' },
+                  ],
+                },
               ].map(({ title, links }) => (
                 <div key={title}>
                   <p className="font-semibold text-white text-sm mb-4">{title}</p>
                   <ul className="space-y-2">
-                    {links.map(link => <li key={link}><a href="#" className="text-[#64748B] text-sm hover:text-white transition-colors">{link}</a></li>)}
+                    {links.map(link => (
+                      <li key={link.label}>
+                        <Link href={link.href} className="text-[#64748B] text-sm hover:text-white transition-colors">{link.label}</Link>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               ))}

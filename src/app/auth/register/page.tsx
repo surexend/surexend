@@ -299,7 +299,7 @@ export default function RegisterPage() {
               className="mt-1 w-4 h-4 rounded border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)]"
             />
             <label className="text-sm text-[#94A3B8]">
-              I agree to SureXend's <Link href="#" className="text-white hover:underline">Terms of Service</Link> and <Link href="#" className="text-white hover:underline">Privacy Policy</Link>
+              I agree to SureXend's <Link href="/terms" target="_blank" className="text-white hover:underline">Terms of Service</Link> and <Link href="/privacy" target="_blank" className="text-white hover:underline">Privacy Policy</Link>
             </label>
           </div>
           {errors.terms && <p className="text-[#EF4444] text-sm">{errors.terms.message}</p>}

@@ -26,7 +26,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: p.priority,
   }))
 
-  return [...home, ...pages]
+  const legal: MetadataRoute.Sitemap = [
+    '/privacy',
+    '/terms',
+    '/cookies',
+    '/aml',
+    '/ndpr',
+  ].map((p) => ({
+    url: `https://surexend.com${p}`,
+    lastModified,
+    changeFrequency: 'yearly' as const,
+    priority: 0.3,
+  }))
+
+  return [...home, ...pages, ...legal]
 }
 
 export const dynamic = 'force-static'
