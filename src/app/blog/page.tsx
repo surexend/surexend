@@ -17,7 +17,8 @@ export const metadata: Metadata = {
   },
 }
 
-const featured = blogPosts.slice(0, 6)
+// Newest posts first — the array is authored oldest-first.
+const featured = [...blogPosts].reverse().slice(0, 6)
 
 function Card({ path, h1, metaDescription, readingTime, tag }: { path: string; h1: string; metaDescription: string; readingTime?: string; tag: string }) {
   return (
