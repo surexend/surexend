@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { blogPosts, getSeoPage, seoUrl, getRelated } from '@/lib/content'
+import { blogPosts, seoUrl, getRelated } from '@/lib/content'
 import { buildSchemas } from '@/lib/content/seo-jsonld'
 import JsonLd from '@/components/seo/JsonLd'
 import SeoShell from '@/components/seo/SeoShell'
@@ -11,10 +11,17 @@ export function generateStaticParams() {
   return blogPosts.map((p) => ({ slug: p.slug }))
 }
 
+// Look up ONLY in blogPosts. getSeoPage() searches landing pages first, and
+// 'buy-airtime-with-crypto' exists as BOTH a landing page and a blog post —
+// the landing entry used to shadow the blog post and 404 this route.
+function getBlogPost(slug: string) {
+  return blogPosts.find((p) => p.slug === slug)
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
-  const page = getSeoPage(slug)
-  if (!page || page.kind !== 'blog') return {}
+  const page = getBlogPost(slug)
+  if (!page) return {}
   return {
     title: page.metaTitle,
     description: page.metaDescription,
@@ -36,8 +43,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const page = getSeoPage(slug)
-  if (!page || page.kind !== 'blog') notFound()
+  const page = getBlogPost(slug)
+  if (!page) notFound()
   return (
     <>
       <JsonLd schemas={buildSchemas(page)} />
