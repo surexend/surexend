@@ -96,28 +96,10 @@ export default function MobileResilienceScript() {
     // Fix: iOS PWA sometimes shows address bar on scroll — prevent it
     const isIOSPWA = (window.navigator as any).standalone === true
     if (isIOSPWA) {
-      document.body.style.height = '100vh'
-      document.body.style.overflow = 'hidden'
-      // Allow scroll within app shell, not the body itself
-      const appShell = document.getElementById('app-shell')
-      if (appShell) {
-        appShell.style.overflow = 'auto'
-        appShell.style.height = '100%'
-        const appShellStyle = appShell.style as CSSStyleDeclaration & { webkitOverflowScrolling: string }
-        appShellStyle.webkitOverflowScrolling = 'touch'
-      }
+      document.documentElement.dataset.standalone = 'ios'
     }
 
     // ── 6. Prevent double-tap zoom on iOS (causes layout jumps) ────────
-    let lastTouchEnd = 0
-    const preventDoubleTapZoom = (e: TouchEvent) => {
-      const now = Date.now()
-      if (now - lastTouchEnd <= 300) {
-        e.preventDefault()
-      }
-      lastTouchEnd = now
-    }
-    document.addEventListener('touchend', preventDoubleTapZoom, { passive: false })
 
     // ── 7. Preload critical fonts to avoid FOIT ─────────────────────────
     const fonts = [
@@ -136,7 +118,7 @@ export default function MobileResilienceScript() {
       window.removeEventListener('error', handleResourceError, true)
       window.removeEventListener('offline', showOffline)
       window.removeEventListener('online', showOnline)
-      document.removeEventListener('touchend', preventDoubleTapZoom)
+      if (isIOSPWA) delete document.documentElement.dataset.standalone
     }
   }, [])
 

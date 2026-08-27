@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "check:mobile-safety": "node scripts/check-mobile-safety.js"
   },
   "dependencies": {
     "@circle-fin/adapter-viem-v2": "^1.15.0",
