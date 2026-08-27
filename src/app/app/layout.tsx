@@ -132,10 +132,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex h-dvh-force overflow-hidden bg-[var(--app-bg)] relative">
         {/* Ambient morphing mesh background — the "morphe" (static in lite mode & on mobile) */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-          {(lite || isMobile) ? (
-            /* Phones/lite: ONE flat pre-painted gradient. Separate orb divs are
-               their own composited surfaces; a single background-image paints
-               once into the base layer and gives the GPU nothing to corrupt. */
+          {isMobile ? null : lite ? (
             <div
               className="absolute inset-0"
               style={{
@@ -180,7 +177,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
           {/* Vignette is a full-screen blend layer — desktop-only. On phones
               every extra blend over the scroll content is corruption fuel. */}
-          {!(lite || isMobile) && <div className="absolute inset-0 bg-radial-vignette" />}
+          {!lite && !isMobile && <div className="absolute inset-0 bg-radial-vignette" />}
         </div>
         {/* Desktop Sidebar */}
         <aside className="hidden md:flex flex-col w-60 md:w-64 h-full border-r border-[rgba(255,255,255,0.06)] bg-[#121419] p-4 flex-shrink-0 z-20 overflow-y-auto">

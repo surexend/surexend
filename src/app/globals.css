@@ -626,6 +626,17 @@ html.lite-mode *::after {
    blur() surfaces (orbs, mesh, glass rings). Premium on phones is achieved
    with solid gradients, borders, shadows and brand accents — not GPU blur. */
 @media (max-width: 767px) {
+  .mobile-flat-surface {
+    background: #121419 !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transform: none !important;
+    isolation: auto !important;
+  }
+
   /* Stop every per-frame animation/repaint globally on phones. */
   body {
     animation: none;

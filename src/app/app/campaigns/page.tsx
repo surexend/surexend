@@ -112,7 +112,7 @@ export default function CampaignsPage() {
       </div>
 
       {/* Leaderboard */}
-      <div className="liquid-glass rounded-2xl border border-white/10 overflow-hidden">
+      <div className="mobile-flat-surface liquid-glass rounded-2xl border border-white/10 overflow-hidden">
         <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
           <p className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">
             {type === 'crypto' ? 'Total USD moved' : 'Share of all real bills'}

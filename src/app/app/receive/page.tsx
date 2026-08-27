@@ -283,7 +283,7 @@ export default function ReceivePage() {
         </div>
       ) : (
         <>
-          <div className="liquid-glass p-5 rounded-3xl flex flex-col items-center gap-4 border border-white/10">
+          <div className="mobile-flat-surface liquid-glass p-5 rounded-3xl flex flex-col items-center gap-4 border border-white/10">
             {/* Chain info banner */}
             <div className="flex items-center gap-3 w-full p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
               <activeNet.Logo size={32} />
