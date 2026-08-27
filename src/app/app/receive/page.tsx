@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
 import { Copy, Share2, AlertTriangle, CheckCircle2, Landmark } from 'lucide-react'
 import QRCode from 'qrcode'
 import toast from 'react-hot-toast'
@@ -116,16 +115,16 @@ function MonadLogo({ size = 32 }: { size?: number }) {
 }
 
 const NETWORKS = [
-  { id: 'ETHEREUM' as const, label: 'Ethereum', sublabel: 'ERC20 Network', color: '#627EEA', Logo: EthereumLogo },
-  { id: 'POLYGON' as const, label: 'Polygon', sublabel: 'Amoy/POS Network', color: '#8247E5', Logo: PolygonLogo },
-  { id: 'AVALANCHE' as const, label: 'Avalanche', sublabel: 'Fuji/C-Chain', color: '#E84142', Logo: AvalancheLogo },
-  { id: 'ARBITRUM' as const, label: 'Arbitrum', sublabel: 'Sepolia/One', color: '#28A0F0', Logo: ArbitrumLogo },
-  { id: 'BASE' as const, label: 'Base', sublabel: 'Sepolia/L2', color: '#0052FF', Logo: BaseLogo },
-  { id: 'OPTIMISM' as const, label: 'Optimism', sublabel: 'Sepolia/L2', color: '#FF0420', Logo: OptimismLogo },
-  { id: 'SOLANA' as const, label: 'Solana', sublabel: 'Devnet/Mainnet', color: '#14F195', Logo: SolanaLogo },
-  { id: 'BSC' as const, label: 'BSC', sublabel: 'BNB Smart Chain', color: '#F3BA2F', Logo: BNBLogo },
-  { id: 'MONAD' as const, label: 'Monad', sublabel: 'Monad Testnet', color: '#836EF9', Logo: MonadLogo },
-  { id: 'ARC' as const, label: 'Arc', sublabel: 'Arc L1 Network', color: '#FF5E00', Logo: ArcLogo },
+  { id: 'ETHEREUM' as const, label: 'Ethereum', sublabel: 'Mainnet', color: '#627EEA', Logo: EthereumLogo },
+  { id: 'POLYGON' as const, label: 'Polygon', sublabel: 'PoS Mainnet', color: '#8247E5', Logo: PolygonLogo },
+  { id: 'AVALANCHE' as const, label: 'Avalanche', sublabel: 'C-Chain', color: '#E84142', Logo: AvalancheLogo },
+  { id: 'ARBITRUM' as const, label: 'Arbitrum', sublabel: 'One Mainnet', color: '#28A0F0', Logo: ArbitrumLogo },
+  { id: 'BASE' as const, label: 'Base', sublabel: 'Mainnet', color: '#0052FF', Logo: BaseLogo },
+  { id: 'OPTIMISM' as const, label: 'Optimism', sublabel: 'Mainnet', color: '#FF0420', Logo: OptimismLogo },
+  { id: 'SOLANA' as const, label: 'Solana', sublabel: 'Mainnet', color: '#14F195', Logo: SolanaLogo },
+  { id: 'BSC' as const, label: 'BNB Smart Chain', sublabel: 'Mainnet', color: '#F3BA2F', Logo: BNBLogo },
+  { id: 'MONAD' as const, label: 'Monad', sublabel: 'Mainnet', color: '#836EF9', Logo: MonadLogo },
+  { id: 'ARC' as const, label: 'Arc', sublabel: 'Mainnet', color: '#FF5E00', Logo: ArcLogo },
 ]
 
 function BankFundingCard() {
@@ -260,7 +259,7 @@ export default function ReceivePage() {
           <button
             key={net.id}
             onClick={() => setNetwork(net.id)}
-            className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-2xl border transition-all active:scale-95"
+            className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-2xl border transition-colors active:bg-white/[0.04]"
             style={network === net.id
               ? { background: `rgba(${colors.glowRgb},0.12)`, borderColor: colors.primary }
               : { background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)' }
@@ -284,13 +283,7 @@ export default function ReceivePage() {
         </div>
       ) : (
         <>
-          <motion.div
-            key={network}
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.2 }}
-            className="liquid-glass p-5 rounded-3xl flex flex-col items-center gap-4 border border-white/10"
-          >
+          <div className="liquid-glass p-5 rounded-3xl flex flex-col items-center gap-4 border border-white/10">
             {/* Chain info banner */}
             <div className="flex items-center gap-3 w-full p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
               <activeNet.Logo size={32} />
@@ -326,7 +319,7 @@ export default function ReceivePage() {
             <p className="text-[11px] text-[#64748B] text-center font-medium">
               Scan QR code or copy address below
             </p>
-          </motion.div>
+          </div>
 
           {/* Address Card */}
           <div className="liquid-glass p-4 rounded-2xl border border-white/10">

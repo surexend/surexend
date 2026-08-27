@@ -3,14 +3,15 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
-import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check, RefreshCcw } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { walletAPI, transactionAPI, userAPI, conversionAPI, campaignsAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 import CurrencyFlag from '@/components/CurrencyFlag'
+import ComingSoon from '@/components/ui/ComingSoon'
 import { useLite } from '@/lib/lite'
 import toast from 'react-hot-toast'
 
@@ -60,9 +61,11 @@ export default function DashboardPage() {
   const [showSendModal, setShowSendModal] = useState(false)
   const [showFundModal, setShowFundModal] = useState(false)
   const [showVBAModal, setShowVBAModal] = useState(false)
+  const [showBankComingSoon, setShowBankComingSoon] = useState(false)
   const [copiedVBA, setCopiedVBA] = useState(false)
   const [avatar, setAvatar] = useState<string | null>(null)
   const [showMarketPicker, setShowMarketPicker] = useState(false)
+  const queryClient = useQueryClient()
 
   // ── LIVE MARKET DATA ─────────────────────────────────────────────
   // Real history comes from the backend market-chart proxy (Yahoo/CoinGecko),
@@ -204,7 +207,7 @@ export default function DashboardPage() {
     if (saved) setAvatar(saved)
   }, [])
 
-  const { data: balanceData, isLoading: isLoadingBalance } = useQuery({
+  const { data: balanceData, isLoading: isLoadingBalance, dataUpdatedAt: balanceUpdatedAt } = useQuery({
     queryKey: ['balance'],
     queryFn: walletAPI.getBalance,
     retry: false,
@@ -473,6 +476,24 @@ export default function DashboardPage() {
                   : `Deposited via local bank transfer or converted from USD. Convert on Convert tab to get ${selectedLocalCurrency} or USD.`}
               </p>
             )}
+
+            {/* Last-synced + manual refresh — gives the user (and you) a way to
+                spot when a displayed balance is stale vs a backend update. */}
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[10px] text-[#475569]">
+                {balanceUpdatedAt
+                  ? `Synced ${new Date(balanceUpdatedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`
+                  : 'Not synced yet'}
+              </span>
+              <button
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['balance'] })}
+                className="text-[#64748B] hover:text-white transition-colors p-0.5"
+                title="Refresh balance"
+                aria-label="Refresh balance"
+              >
+                <RefreshCcw className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -913,27 +934,31 @@ export default function DashboardPage() {
                   <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all flex-shrink-0" />
                 </Link>
 
-                {/* Option 3: Bank Account Withdrawal */}
-                <Link
-                  href="/app/withdraw"
-                  onClick={() => setShowSendModal(false)}
-                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-emerald-500/40 transition-all duration-300"
+                {/* Option 3: Bank Account — gated until bank rails are live. */}
+                <div
+                  onClick={() => { setShowSendModal(false); setShowBankComingSoon(true) }}
+                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] transition-colors duration-300 relative cursor-pointer"
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform flex-shrink-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform flex-shrink-0">
                       <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
                     <div>
-                      <h4 className="font-semibold text-white text-sm sm:text-base group-hover:text-emerald-400 transition-colors">
-                        Send to Local Bank Account
-                      </h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-semibold text-white text-sm sm:text-base group-hover:text-emerald-400 transition-colors">
+                          Send to Local Bank Account
+                        </h4>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-white/10 text-[#94A3B8] border border-white/10">
+                          Coming soon
+                        </span>
+                      </div>
                       <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
-                        Send funds directly to any local bank account (NGN, GHS, KES, ZAR and more)
+                        Send USDC straight to any local bank (NGN, GHS, KES, ZAR and more)
                       </p>
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all flex-shrink-0" />
-                </Link>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -979,27 +1004,30 @@ export default function DashboardPage() {
 
               {/* Options */}
               <div className="space-y-3">
-                {/* PRIMARY OPTION 1: Deposit Local Currency (Virtual Bank Transfer) */}
+                {/* PRIMARY OPTION 1: Deposit Local Currency (Bank Transfer) — gated until Flutterwave is live. */}
                 <div
-                  onClick={() => { setShowFundModal(false); setShowVBAModal(true) }}
-                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.08] transition-all duration-300 relative cursor-pointer"
+                  onClick={() => { setShowFundModal(false); setShowBankComingSoon(true) }}
+                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.08] transition-colors duration-300 relative cursor-pointer"
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform flex-shrink-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform flex-shrink-0">
                       <Landmark className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="font-bold text-white text-sm sm:text-base text-emerald-400 transition-colors">
                           Deposit Local Currency (Bank Transfer)
                         </h4>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-white/10 text-[#94A3B8] border border-white/10">
+                          Coming soon
+                        </span>
                       </div>
                       <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
-                        Get your dedicated NGN Virtual Account details for instant bank transfers
+                        Get a dedicated NGN Virtual Account for instant bank transfers
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                  <ChevronRight className="w-5 h-5 text-emerald-400 group-hover:translate-x-1 transition-transform flex-shrink-0" />
                 </div>
 
                 {/* OPTION 2: Deposit Crypto (USDC) */}
@@ -1029,81 +1057,7 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ── VIRTUAL BANK ACCOUNT MODAL (Local Currency Deposit) ── */}
-      <AnimatePresence>
-        {showVBAModal && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 liquid-backdrop">
-            <motion.div
-              initial={{ opacity: 0, y: 60 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 60 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="liquid-glass-strong w-full sm:w-[420px] rounded-t-3xl sm:rounded-3xl p-5 pb-8 sm:p-6 border border-emerald-500/30 shadow-2xl space-y-4"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
-                    <Landmark className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white text-base">Fund via Bank Transfer</h3>
-                    <p className="text-xs text-[#64748B]">Transfer to your dedicated account</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowVBAModal(false)} className="p-2 rounded-full hover:bg-white/10 text-[#64748B] hover:text-white">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Account Details */}
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Bank</span>
-                  <span className="text-sm font-bold text-emerald-400">Wema Bank / Moniepoint</span>
-                </div>
-                <div className="h-px bg-white/5" />
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Account Number</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-black text-white font-mono tracking-widest">9824018420</span>
-                    <button
-                      onClick={copyVBA}
-                      className="p-1.5 rounded-lg bg-white/[0.08] hover:bg-white/15 text-[#94A3B8] hover:text-white transition-colors"
-                    >
-                      {copiedVBA
-                        ? <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                        : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-                <div className="h-px bg-white/5" />
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Account Name</span>
-                  <span className="text-sm font-bold text-white">SureXend / {profile?.firstName || 'User'} {profile?.lastName || ''}</span>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/20 flex items-start gap-2">
-                <span className="text-amber-400 text-base flex-shrink-0">⚡</span>
-                <p className="text-[11px] text-[#94A3B8] leading-relaxed">
-                  Transfer any amount in <strong className="text-white">Naira (NGN)</strong> to this account. Funds will credit your <strong className="text-white">Local Wallet</strong> within minutes. <em className="text-amber-400">These funds stay in NGN — use the Convert tab to move to USD.</em>
-                </p>
-              </div>
-
-              <button
-                onClick={copyVBA}
-                className="w-full py-3.5 rounded-2xl font-bold text-black flex items-center justify-center gap-2 shadow-xl transition-all active:scale-[0.98]"
-                style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}
-              >
-                <Copy className="w-4 h-4" />
-                {copiedVBA ? 'Account Number Copied!' : 'Copy Account Number'}
-              </button>
-            </motion.div>
-          </div>
-        )}
-
-        {/* ── Local Currency Picker ── */}
+      {/* ── Local Currency Picker ── */}
         <AnimatePresence>
           {showLocalCurrencyPicker && (
             <div className="fixed inset-0 z-[80] flex items-end justify-center liquid-backdrop">
@@ -1179,7 +1133,22 @@ export default function DashboardPage() {
             </div>
           )}
         </AnimatePresence>
-      </AnimatePresence>
+
+      {/* ── Bank flows (deposit + send-to-bank) — Coming Soon until Flutterwave ships ── */}
+      <ComingSoon
+        open={showBankComingSoon}
+        onClose={() => setShowBankComingSoon(false)}
+        title="Bank Transfer Funding & Payouts"
+        subtitle="We're wiring up direct bank deposits and USDC → local-bank withdrawals through our payment partner. Until then, the easiest way in is depositing USDC on a low-fee network."
+        eta="Rolling out soon — payments partner integration in progress"
+        notifyEmail="support@surexend.com"
+        features={[
+          'Dedicated NGN virtual account for instant bank deposits (auto-credited in minutes).',
+          'Send USDC straight to any local bank in NGN, GHS, KES, ZAR and more — settled at a live rate.',
+          'Single flow for both deposit and payout, with the same PIN + biometrics you use today.',
+          'Full transaction receipts you can download as PNG or PDF.',
+        ]}
+      />
     </div>
   )
 }
