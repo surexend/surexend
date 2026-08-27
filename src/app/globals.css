@@ -25,18 +25,30 @@
 
 html {
   scroll-behavior: smooth;
+  min-height: 100%;
+  overflow-y: auto;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
+  min-height: 100%;
   font-family: var(--font-dm);
   background-color: var(--app-bg);
   color: var(--text);
   line-height: 1.6;
   overflow-x: hidden;
+  overflow-y: visible;
+  touch-action: pan-y;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html[data-standalone="ios"], html[data-standalone="ios"] body {
+  height: auto;
+  min-height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── Performance polish ─────────────────────────────────────────────────── */
