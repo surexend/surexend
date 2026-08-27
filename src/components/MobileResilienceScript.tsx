@@ -55,6 +55,9 @@ export default function MobileResilienceScript() {
 
     // ── 3. Service Worker update detection ─────────────────────────────
     if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(registration => {
+        registration.update().catch(() => {})
+      }).catch(() => {})
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         // New SW activated — reload for fresh assets (only once)
         if (!sessionStorage.getItem('sw_reloaded')) {

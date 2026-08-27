@@ -1,4 +1,4 @@
-const CACHE_NAME = 'surexend-v53'
+const CACHE_NAME = 'surexend-v54'
 const OFFLINE_URL = '/offline.html'
 
 // Assets to cache immediately on install. Each is added individually so a
@@ -62,8 +62,20 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Static assets — Stale-While-Revalidate
+  if (url.pathname.match(/\.(js|css)$/)) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()))
+          return response
+        })
+        .catch(() => caches.match(request))
+    )
+    return
+  }
+
   if (
-    url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf)$/)
+    url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff|woff2|ttf)$/)
   ) {
     event.respondWith(
       caches.open(CACHE_NAME).then(cache => {
