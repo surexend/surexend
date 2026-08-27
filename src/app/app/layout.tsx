@@ -129,7 +129,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <Toaster position="top-center" toastOptions={{ style: { background: '#121419', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
-      <div className="flex h-dvh-force overflow-hidden bg-[var(--app-bg)] relative">
+      <div className="flex min-h-dvh-force bg-[var(--app-bg)] relative md:h-dvh-force md:overflow-hidden">
         {/* Ambient morphing mesh background — the "morphe" (static in lite mode & on mobile) */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
           {isMobile ? null : lite ? (
@@ -242,7 +242,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Main Content Area — flex column so header is a normal flex item
              (not sticky inside overflow-y-auto, which causes Android Chrome
               compositor layer conflicts and the scanline corruption bug). */}
-        <main className="flex-1 min-w-0 flex flex-col h-dvh-force max-w-full relative bg-[var(--app-bg)]">
+        <main className="flex-1 min-w-0 flex flex-col min-h-dvh-force max-w-full relative bg-[var(--app-bg)] md:h-dvh-force md:min-h-0">
           {/* Header sits OUTSIDE the scroll container as a flex child.
                No sticky needed — it's pinned by the flex layout. */}
           <header className="flex-shrink-0 h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-white/5 bg-[#000000] z-30">
@@ -315,7 +315,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 to auto, so any page content a few px too wide gives the whole
                 shell a horizontal scrollbar — the trigger for the Android
                 compositor scanline corruption. Clip it here for EVERY page. */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-none w-full max-w-full pb-nav-safe md:pb-0">
+          <div className="w-full max-w-full overflow-x-hidden pb-nav-safe md:flex-1 md:overflow-y-auto md:overscroll-none md:pb-0">
             <div className="w-full max-w-full relative">
               {profile && !profile.pinSet && !pathname.includes('/settings/change-pin') && (
                 <button
