@@ -124,30 +124,24 @@ export class DepositMonitorService implements OnModuleInit {
       for (const r of results) grossUsdc += r.balance;
 
       // Persist deposits discovered in the log window (idempotent, deduped by hash).
+      let discoveredDeposits = 0;
       for (const r of results) {
         for (const tx of r.transfers) {
-          await this.recordDeposit(userId, tx);
+          const recorded = await this.recordDeposit(userId, tx);
+          if (recorded) discoveredDeposits += tx.amount;
         }
       }
 
-      // Preserve the app-ledger net from internal SureX tag transfers. Those
-      // transfers do not appear on-chain, so replacing the wallet balance with
-      // gross chain state alone would erase a just-received internal payment.
-      const internalRows = await this.prisma.transaction.findMany({
-        where: { userId, status: 'COMPLETED' },
-        select: { type: true, amount: true, metadata: true },
-      });
-      const internalNet = internalRows.reduce((total, row) => {
-        const metadata = row.metadata as any;
-        if (metadata?.delivery !== 'internal' || metadata?.method !== 'surex-tag') return total;
-        return total + (row.type === 'RECEIVE' ? row.amount : row.type === 'SEND' ? -row.amount : 0);
-      }, 0);
-
-      // Update from live chain state plus the internal ledger adjustment.
-      await this.prisma.wallet.update({
-        where: { id: walletId },
-        data: { usdcBalance: Math.max(0, grossUsdc + internalNet) },
-      });
+      // Do not overwrite the internal ledger from a raw balance snapshot. RPC
+      // providers can return balances for stale/shared addresses that have no
+      // matching transaction record. Only apply an on-chain increase when a
+      // new transfer was actually discovered and recorded in this pass.
+      if (discoveredDeposits > 0) {
+        await this.prisma.wallet.update({
+          where: { id: walletId },
+          data: { usdcBalance: { increment: discoveredDeposits } },
+        });
+      }
 
       await this.backfillDepositNotifications(userId);
 
@@ -197,7 +191,7 @@ export class DepositMonitorService implements OnModuleInit {
     return transfers;
   }
 
-  private async recordDeposit(userId: string, tx: OnChainTransfer) {
+  private async recordDeposit(userId: string, tx: OnChainTransfer): Promise<boolean> {
     const reference = `RECV-ONCHAIN-${tx.chainKey}-${tx.txHash}`;
     let existing = await this.prisma.transaction.findUnique({
       where: { reference },
@@ -211,7 +205,7 @@ export class DepositMonitorService implements OnModuleInit {
         where: { userId, metadata: { path: ['txHash'], equals: tx.txHash } },
       });
     }
-    if (existing) return;
+    if (existing) return false;
 
     await this.prisma.transaction.create({
       data: {
@@ -235,6 +229,7 @@ export class DepositMonitorService implements OnModuleInit {
       },
     });
     this.logger.log(`Detected deposit: ${tx.amount} USDC on ${tx.network} (${tx.txHash})`);
+    return true;
   }
 
   // Ensure every completed RECEIVE transaction has a matching in-app DEPOSIT
