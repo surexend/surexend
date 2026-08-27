@@ -96,7 +96,7 @@ export async function renderReceiptCanvas(opts: {
     ? 'Failed'
     : swap
       ? `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)}`
-      : `${isDebit ? '-' : ''}${symbol}${Number(tx?.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+      : `${symbol}${Number(tx?.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
   const amountColor = '#ffffff'
   // Subtitle under the amount — currency only, no network (user wanted USDC not "USDC · ARC")
   const amountSub = isFailed
@@ -141,7 +141,7 @@ export async function renderReceiptCanvas(opts: {
   }
   if (swap) {
     addRow('You swapped', `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from}`)
-    addRow('You received', `+${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}`, false, true)
+    addRow('You received', `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}`, false, true)
     if (swap.rate) addRow('Rate', `1 ${swap.from} = ${formatAmount(swap.rate, 6)} ${swap.to}`)
   } else {
     const internal = meta?.delivery === 'internal'

@@ -857,7 +857,7 @@ function TransactionDetailModal({
   const rows: { label: string; value: string; copyable?: string; mono?: boolean; accent?: boolean }[] = swap
     ? [
         { label: 'You swapped', value: `${currencySymbol(swap.from)}${formatAmount(swap.fromAmount)} ${swap.from}` },
-        { label: 'You received', value: `+${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}`, accent: true },
+        { label: 'You received', value: `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)} ${swap.to}`, accent: true },
         ...(swap.rate ? [{ label: 'Rate', value: `1 ${swap.from} = ${formatAmount(swap.rate, 6)} ${swap.to}` }] : []),
         { label: 'Fee', value: feeTxt },
         { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
@@ -882,13 +882,13 @@ function TransactionDetailModal({
             ...(typeUpper !== 'RECEIVE' && toParty ? [{ label: 'To', value: toParty, accent: true }] : []),
             { label: 'Delivery', value: 'Instant · SureX Tag' },
             { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
-            { label: 'Amount', value: `${sign}${symbol}${formatAmount(Number(details?.amount || 0))}` },
+            { label: 'Amount', value: `${symbol}${formatAmount(Number(details?.amount || 0))}` },
             { label: 'Fee', value: feeTxt },
             { label: 'Date', value: dateValue },
           ]
         : [
           { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
-          { label: 'Amount', value: `${sign}${symbol}${formatAmount(Number(details?.amount || 0))}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}`, accent: true },
+          { label: 'Amount', value: `${symbol}${formatAmount(Number(details?.amount || 0))}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}`, accent: true },
           { label: 'Fee', value: feeTxt },
           { label: 'Network', value: displayNetwork },
           { label: 'Date', value: dateValue },
@@ -999,7 +999,7 @@ function TransactionDetailModal({
             ) : (
               <>
                 <p className="text-4xl font-black tracking-tight text-white leading-none">
-                  {sign}{symbol}{formatAmount(Number(details?.amount || 0))}
+                  {symbol}{formatAmount(Number(details?.amount || 0))}
                 </p>
                 <p className="text-[#94A3B8] text-xs mt-2.5">
                   {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'USDC'}
