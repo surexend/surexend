@@ -68,6 +68,18 @@ export async function renderReceiptCanvas(opts: {
   const meta = tx?.metadata || {}
   const swap = getSwapInfo(tx)
   const statusU = statusLabel(tx?.status)
+  const isFailed = statusU === 'FAILED'
+  const isDebit = !isFailed && ['SEND', 'BILL_PAYMENT', 'CONVERT', 'WITHDRAWAL'].includes((tx?.type || '').toUpperCase())
+  const isSwap = !!swap
+  // Type pill (small, top-left) — credit / debit / swap / failed
+  const typePill = isFailed
+    ? { label: 'Failed', bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.25)', text: '#F87171', dot: '#F87171' }
+    : isSwap
+      ? { label: 'Swap', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.25)', text: '#FBBF24', dot: '#FBBF24' }
+      : isDebit
+        ? { label: 'Debit', bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.20)', text: '#E2E8F0', dot: '#E2E8F0' }
+        : { label: 'Credit', bg: 'rgba(16,185,129,0.10)', border: 'rgba(16,185,129,0.25)', text: '#34D399', dot: '#34D399' }
+  // Status palette only for the legacy status pill (kept for backwards compat / future use)
   const palette: Record<string, { bg: string; border: string; text: string; dot: string }> = {
     COMPLETED: { bg: 'rgba(16,185,129,0.10)', border: 'rgba(16,185,129,0.25)', text: '#34D399', dot: '#34D399' },
     FAILED: { bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.25)', text: '#F87171', dot: '#F87171' },
@@ -78,15 +90,20 @@ export async function renderReceiptCanvas(opts: {
     year: 'numeric', month: 'short', day: 'numeric',
   })
 
-  const isDebit = statusU !== 'FAILED' && ['SEND', 'BILL_PAYMENT', 'CONVERT', 'WITHDRAWAL'].includes((tx?.type || '').toUpperCase())
   const symbol = tx?.currency === 'NGN' ? '₦' : tx?.currency === 'GHS' ? 'GH₵' : tx?.currency === 'KES' ? 'KSh' : '$'
-  const amountValue = swap
-    ? `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)}`
-    : `${isDebit ? '-' : ''}${symbol}${Number(tx?.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  // Amount: show "Failed" text instead of a number when the transaction didn't complete
+  const amountValue = isFailed
+    ? 'Failed'
+    : swap
+      ? `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)}`
+      : `${isDebit ? '-' : ''}${symbol}${Number(tx?.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
   const amountColor = '#ffffff'
-  const amountSub = swap
+  // Subtitle under the amount — currency only, no network (user wanted USDC not "USDC · ARC")
+  const amountSub = isFailed
     ? null
-    : tx?.currency && tx?.currency !== 'USDT' ? `${tx.currency} · ${meta.network || 'ARC'}` : `US Dollar · ${meta.network || 'ARC'}`
+    : swap
+      ? null
+      : (tx?.currency && tx?.currency !== 'USDT' ? tx.currency : 'USDC')
 
   let amountSize = 40
   while (amountSize > 22 && measure(amountValue, `900 ${amountSize}px ${font}`) > CW) amountSize -= 2
@@ -208,23 +225,24 @@ export async function renderReceiptCanvas(opts: {
   const rightX = W - PX
   spaced('OFFICIAL RECEIPT', `700 9px ${font}`, rightX, PY + 21, '#475569', 2.5, 'right')
 
-  // Status row
+  // Type pill row (credit / debit / swap / failed) — same position the status pill used
   const statusY = PY + 32 + 22
-  const statusW = measure(statusU, `700 10px ${font}`) + 12 + 8 + 10 + 12
-  roundRect(PX, statusY, statusW, 24, 999)
-  ctx.fillStyle = sc.bg
+  const typeLabel = typePill.label
+  const typeW = measure(typeLabel, `700 10px ${font}`) + 12 + 8 + 10 + 12
+  roundRect(PX, statusY, typeW, 24, 999)
+  ctx.fillStyle = typePill.bg
   ctx.fill()
-  roundRect(PX, statusY, statusW, 24, 999)
-  ctx.strokeStyle = sc.border
+  roundRect(PX, statusY, typeW, 24, 999)
+  ctx.strokeStyle = typePill.border
   ctx.lineWidth = 1
   ctx.stroke()
   ctx.beginPath()
   ctx.arc(PX + 14, statusY + 12, 3, 0, Math.PI * 2)
-  ctx.fillStyle = sc.dot
+  ctx.fillStyle = typePill.dot
   ctx.fill()
   ctx.font = `700 10px ${font}`
-  ctx.fillStyle = sc.text
-  ctx.fillText(statusU, PX + 22, statusY + 15.5)
+  ctx.fillStyle = typePill.text
+  ctx.fillText(typeLabel, PX + 22, statusY + 15.5)
   ctx.font = `500 10px ${font}`
   ctx.fillStyle = '#475569'
   ctx.textAlign = 'right'
@@ -323,25 +341,21 @@ export async function renderReceiptCanvas(opts: {
   ctx.stroke()
   ctx.font = `500 9px ${font}`
   ctx.fillStyle = '#475569'
-  ctx.fillText('Powered by SureXend', PX, fy + 12)
-  ctx.font = `400 9px ${font}`
-  ctx.fillStyle = '#334155'
-  ctx.fillText('Verified digital transaction record', PX, fy + 24)
+  ctx.textAlign = 'center'
+  ctx.fillText('Powered by SureXend · Verified digital transaction record', W / 2, fy + 12)
+  ctx.textAlign = 'left'
+  // Reference below, centered, copyable-looking
   const refFont = `600 9px ${mono}`
-  const leftWidest = Math.max(
-    measure('Powered by SureXend', `500 9px ${font}`),
-    measure('Verified digital transaction record', `400 9px ${font}`)
-  )
-  const maxRefW = Math.max(60, CW - leftWidest - 24)
   let refTxt = tx?.reference || tx?.id || '—'
+  const maxRefW = CW
   if (measure(refTxt, refFont) > maxRefW) {
     while (refTxt.length > 1 && measure(refTxt + '…', refFont) > maxRefW) refTxt = refTxt.slice(0, -1)
     refTxt += '…'
   }
   ctx.font = refFont
-  ctx.fillStyle = '#475569'
-  ctx.textAlign = 'right'
-  ctx.fillText(refTxt, W - PX, fy + 24)
+  ctx.fillStyle = '#94A3B8'
+  ctx.textAlign = 'center'
+  ctx.fillText(refTxt, W / 2, fy + 26)
   ctx.textAlign = 'left'
 
   return canvas

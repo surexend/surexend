@@ -787,9 +787,11 @@ export default function DashboardPage() {
           <div className="space-y-2.5">
             {list.slice(0, 5).map((tx: any) => {
               const typeUpper = (tx.type || '').toUpperCase()
+              const statusUpper = (tx.status || '').toUpperCase()
               const isSend = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
               const isReceive = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING'
               const swap = getSwapInfo(tx)
+              const isFailed = statusUpper === 'FAILED'
               return (
                 <Link
                   key={tx.id}
@@ -798,7 +800,7 @@ export default function DashboardPage() {
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      isSend ? 'bg-red-500/10 text-red-400' : isReceive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                      isSend ? 'bg-white/[0.06] text-white' : isReceive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
                     }`}>
                       {isSend ? <ArrowUpRight className="w-5 h-5" /> : isReceive ? <ArrowDownLeft className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
                     </div>
@@ -820,7 +822,9 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="text-right">
-                    {swap ? (
+                    {isFailed ? (
+                      <p className="text-sm font-bold text-white">Failed</p>
+                    ) : swap ? (
                       <>
                         <p className="text-sm font-bold text-emerald-400">
                           +{currencySymbol(swap.to)}{formatAmount(swap.toAmount)} {swap.to}
@@ -830,14 +834,18 @@ export default function DashboardPage() {
                         </p>
                       </>
                     ) : (
-                      <p className={`text-sm font-bold ${isSend ? 'text-red-400' : isReceive ? 'text-emerald-400' : 'text-emerald-400'}`}>
+                      <p className={`text-sm font-bold ${isSend ? 'text-white' : 'text-emerald-400'}`}>
                         {isSend ? '-' : '+'}${tx.amount} {tx.currency || 'USD'}
                       </p>
                     )}
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${
-                      (tx.status || '').toUpperCase() === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      isFailed
+                        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        : statusUpper === 'COMPLETED'
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                     }`}>
-                      {tx.status}
+                      {isFailed ? 'Failed' : statusUpper === 'COMPLETED' ? 'Completed' : (tx.status || 'Pending')}
                     </span>
                   </div>
                 </Link>

@@ -30,7 +30,7 @@ interface FilterState {
 // ── Transaction icon ───────────────────────────────────────────────────────
 function TxIcon({ type, accentHex }: { type: string; accentHex: string }) {
   const map: Record<string, { icon: any; bg: string; color: string }> = {
-    SEND: { icon: ArrowUpRight, bg: 'rgba(239,68,68,0.12)', color: '#EF4444' },
+    SEND: { icon: ArrowUpRight, bg: 'rgba(255,255,255,0.06)', color: '#E2E8F0' },
     RECEIVE: { icon: ArrowDownLeft, bg: 'rgba(16,185,129,0.12)', color: '#10B981' },
     CONVERT: { icon: RefreshCw, bg: 'rgba(245,158,11,0.12)', color: '#F59E0B' },
     BILL_PAYMENT: { icon: Zap, bg: `rgba(${accentHex},0.12)`, color: accentHex },
@@ -945,12 +945,24 @@ function TransactionDetailModal({
             </div>
           </div>
 
-          {/* Status + date */}
+          {/* Type pill + date — credit/debit/swap/failed in the same position, small and clean */}
           <div className="flex items-center justify-between mt-6">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${statusColor(details?.status)}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${(details?.status || '').toUpperCase() === 'COMPLETED' ? 'bg-emerald-400' : (details?.status || '').toUpperCase() === 'FAILED' ? 'bg-red-400' : 'bg-amber-400'}`} />
-              {statusLabel(details?.status)}
-            </span>
+            {(() => {
+              const isFailed = (details?.status || '').toUpperCase() === 'FAILED'
+              const typePill = isFailed
+                ? { label: 'Failed', cls: 'bg-red-500/10 text-red-400 border-red-500/20' }
+                : swap
+                  ? { label: 'Swap', cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20' }
+                  : isDebit
+                    ? { label: 'Debit', cls: 'bg-white/[0.06] text-white border-white/15' }
+                    : { label: 'Credit', cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
+              return (
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${typePill.cls}`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                  {typePill.label}
+                </span>
+              )
+            })()}
             <span className="text-[10px] text-[#475569] font-medium">
               {new Date(details?.createdAt || details?.date || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
             </span>
@@ -979,13 +991,18 @@ function TransactionDetailModal({
                   </span>
                 </div>
               </>
+            ) : (details?.status || '').toUpperCase() === 'FAILED' ? (
+              <>
+                <p className="text-4xl font-black tracking-tight text-white leading-none">Failed</p>
+                <p className="text-[#94A3B8] text-xs mt-2.5">This transaction was not completed.</p>
+              </>
             ) : (
               <>
-                <p className={`text-4xl font-black tracking-tight text-white leading-none`}>
+                <p className="text-4xl font-black tracking-tight text-white leading-none">
                   {sign}{symbol}{formatAmount(Number(details?.amount || 0))}
                 </p>
                 <p className="text-[#94A3B8] text-xs mt-2.5">
-                  {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'US Dollar'} · {displayNetwork}
+                  {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'USDC'}
                 </p>
               </>
             )}
@@ -1046,14 +1063,18 @@ function TransactionDetailModal({
           )}
 
           {/* Receipt footer */}
-          <div className="mt-6 pt-5 border-t border-white/5 flex items-center justify-between">
-            <div>
-              <p className="text-[9px] text-[#475569] font-medium">Powered by SureXend</p>
-              <p className="text-[9px] text-[#334155] mt-0.5">Verified digital transaction record</p>
-            </div>
-            <p className="text-[9px] text-[#475569] font-mono font-semibold max-w-[45%] truncate text-right" title={details?.reference || ''}>
+          <div className="mt-6 pt-5 border-t border-white/5">
+            <p className="text-[9px] text-[#475569] font-medium text-center">Powered by SureXend · Verified digital transaction record</p>
+            <button
+              onClick={() => details?.reference && copy('Reference', details.reference)}
+              className="mt-2 w-full text-[10px] text-[#64748B] font-mono font-semibold text-center break-all hover:text-white transition-colors"
+              title="Copy reference"
+            >
               {details?.reference || '—'}
-            </p>
+              {details?.reference && (
+                <span className="ml-1.5 text-[#475569]">↗</span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -1297,10 +1318,11 @@ export default function HistoryPage() {
                 <div className="liquid-glass rounded-2xl overflow-hidden">
                   {(txs as any[]).map((tx: any, idx: number) => {
                     const typeUpper = (tx.type || '').toUpperCase()
+                    const statusUpper = (tx.status || '').toUpperCase()
                     const isCredit = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING' || typeUpper === 'CONVERT'
                     const isDebit = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
                     const sign = isCredit ? '+' : isDebit ? '-' : ''
-                    const amtColor = isCredit ? 'text-emerald-400' : isDebit ? 'text-red-400' : 'text-[#64748B]'
+                    const isFailed = statusUpper === 'FAILED'
                     const symbol = tx.currency === 'NGN' ? '₦' : tx.currency === 'GHS' ? 'GH₵' : tx.currency === 'KES' ? 'KSh' : '$'
                     const swap = getSwapInfo(tx)
                     const dateStr = new Date(tx.createdAt || tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -1333,7 +1355,9 @@ export default function HistoryPage() {
                         </div>
 
                         <div className="text-right flex-shrink-0 ml-3">
-                          {swap ? (
+                          {isFailed ? (
+                            <p className="font-bold text-sm text-white">Failed</p>
+                          ) : swap ? (
                             <>
                               <p className="font-bold text-sm text-emerald-400">
                                 +{currencySymbol(swap.to)}{formatAmount(swap.toAmount)} {swap.to}
@@ -1343,7 +1367,7 @@ export default function HistoryPage() {
                               </p>
                             </>
                           ) : (
-                            <p className={`font-bold text-sm ${amtColor}`}>
+                            <p className={`font-bold text-sm ${isDebit ? 'text-white' : 'text-emerald-400'}`}>
                               {sign}{symbol}{tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
                             </p>
                           )}
