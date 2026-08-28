@@ -47,7 +47,7 @@ export default function AdminBroadcastPage() {
 
     try {
       const result = await adminAPI.broadcastMessage({ title, body, type })
-      setSuccess(result.message || `Broadcast sent successfully! Sent to ${result.userCount} users.")
+      setSuccess(result.message || `Broadcast sent successfully! Sent to ${result.userCount} users.`)
       setTitle('')
       setBody('')
       setUserCount(0)
