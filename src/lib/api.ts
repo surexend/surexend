@@ -754,6 +754,10 @@ export const adminAPI = {
     apiClient.get('/admin/kyc', { params }).then(r => r.data),
   decideKyc: (id: string, body: { approve: boolean; reason?: string }) =>
     apiClient.post(`/admin/kyc/${id}/decision`, body).then(r => r.data),
+  broadcastMessage: (body: { title: string; body: string; type?: string; data?: any }) =>
+    apiClient.post('/admin/broadcast-message', body).then(r => r.data),
+  getBroadcastHistory: (params?: { page?: number; limit?: number }) =>
+    apiClient.get('/admin/broadcast-message-history', { params }).then(r => r.data),
 }
 
 export const campaignsAPI = {

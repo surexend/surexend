@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useTheme } from '@/context/ThemeContext'
 import { Send, Bell, Users, Clock, AlertCircle, CheckCircle } from 'lucide-react'
 import { adminAPI } from '@/lib/api'
@@ -25,14 +25,12 @@ export default function AdminBroadcastPage() {
     { value: 'MAINTENANCE', label: 'Maintenance', icon: Clock, color: '#EF4444' },
   ]
 
-  const handleUserCount = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setBody(e.target.value)
-    setSuccess('')
-    setError('')
-    const preview = e.target.value.substring(0, 100)
-    const sampleUsers = Math.min(Math.floor(preview.length / 20), 50)
-    setUserCount(sampleUsers > 0 ? sampleUsers : 0)
-  }
+  // Fetch real active user count on mount
+  useEffect(() => {
+    adminAPI.getUsers({ limit: 1, page: 1 })
+      .then(res => setUserCount(res.total || 0))
+      .catch(() => setUserCount(0))
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,7 +48,6 @@ export default function AdminBroadcastPage() {
       setSuccess(result.message || `Broadcast sent successfully! Sent to ${result.userCount} users.`)
       setTitle('')
       setBody('')
-      setUserCount(0)
     } catch (err: any) {
       setError(err.message || 'Failed to send broadcast. Please try again.')
     } finally {
