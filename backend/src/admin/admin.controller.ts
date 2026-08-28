@@ -105,3 +105,4 @@ export class AdminController {
   getBroadcastHistory(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.adminService.getBroadcastHistory({ page, limit });
   }
+}
