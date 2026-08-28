@@ -444,4 +444,62 @@ export class AdminService {
 
     return { ...transaction, invoiceNumber: transaction.reference, bill };
   }
+
+  // ── Broadcast / announcement ────────────────────────────────────────────────────
+
+  async broadcastMessage(body: { title: string; body: string; type?: string; data?: any }, adminId: string) {
+    const users = await this.prisma.user.findMany({
+      select: { id: true, email: true },
+      where: { isActive: true, isBanned: false },
+    })
+    if (users.length === 0) return { success: true, message: 'No users to notify', userCount: 0 }
+
+    const title = body.title
+    const msgBody = body.body
+    const type = body.type || 'BROADCAST'
+    const data = body.data || {}
+
+    for (const user of users) {
+      await this.prisma.notification.create({
+        data: {
+          userId: user.id,
+          title,
+          body: msgBody,
+          type,
+          data,
+        },
+      })
+
+      this.notificationsService.sendPushNotification(user.id, {
+        title,
+        body: msgBody,
+        data: { ...data, type, source: 'admin' },
+      }).catch(() => null)
+    }
+
+    await this.notificationsService.markAllRead('admin')
+      .catch(() => null)
+
+    return { success: true, message: 'Broadcast sent to all users', userCount: users.length }
+  }
+
+  async getBroadcastHistory(query: { page?: string; limit?: string }) {
+    const page = Math.max(1, Number(query.page) || 1)
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20))
+
+    const where: Record<string, unknown> = { type: 'BROADCAST' }
+
+    const [total, broadcasts] = await Promise.all([
+      this.prisma.notification.count({ where }),
+      this.prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+      }),
+    ])
+
+    return { total, page, limit, broadcasts }
+  }
 }

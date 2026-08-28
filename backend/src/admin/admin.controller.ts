@@ -96,8 +96,12 @@ export class AdminController {
 
   // ── Transaction detail (any user) ───────────────────────────────────────
 
-  @Get('transactions/:id')
-  getTransactionDetail(@Param('id') id: string) {
-    return this.adminService.getTransactionDetail(id);
+  @Post('broadcast-message')
+  broadcastMessage(@Body() body: { title: string; body: string; type?: string; data?: any }, @CurrentUser() admin: any) {
+    return this.adminService.broadcastMessage(body, admin.id);
   }
-}
+
+  @Get('broadcast-message-history')
+  getBroadcastHistory(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.adminService.getBroadcastHistory({ page, limit });
+  }
