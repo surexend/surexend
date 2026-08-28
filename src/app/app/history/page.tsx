@@ -1360,14 +1360,14 @@ export default function HistoryPage() {
                           ) : swap ? (
                             <>
                               <p className="font-bold text-sm text-emerald-400">
-                                +{currencySymbol(swap.to)}{formatAmount(swap.toAmount)} {swap.to}
+                                {currencySymbol(swap.to)}{formatAmount(swap.toAmount)} {swap.to}
                               </p>
                               <p className="text-[#94A3B8] text-xs mt-1 font-medium">
                                 {currencySymbol(swap.from)}{formatAmount(swap.fromAmount)} {swap.from}
                               </p>
                             </>
                           ) : (
-                            <p className={`font-bold text-sm ${isDebit ? 'text-white' : 'text-emerald-400'}`}>
+                            <p className={`font-bold text-sm ${isDebit ? 'text-red-400' : 'text-white'}`}>
                               {sign}{symbol}{tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
                             </p>
                           )}

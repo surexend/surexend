@@ -834,7 +834,7 @@ export default function DashboardPage() {
                         </p>
                       </>
                     ) : (
-                      <p className={`text-sm font-bold ${isSend ? 'text-white' : 'text-emerald-400'}`}>
+                      <p className={`text-sm font-bold ${isSend ? 'text-red-400' : 'text-white'}`}>
                         {isSend ? '-' : '+'}${tx.amount} {tx.currency || 'USD'}
                       </p>
                     )}
