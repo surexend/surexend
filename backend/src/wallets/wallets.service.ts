@@ -564,6 +564,13 @@ export class WalletsService implements OnModuleInit {
                         }
                       : { lockedBalance: { decrement: totalLocked } },
                 });
+
+                if (status === 'FAILED') {
+                  // Undo the initiation debit in the double-entry ledger too:
+                  // the ledger must not keep the send debit after the funds
+                  // were refunded, or reconciliation reports permanent drift.
+                  await this.ledger.reverse(pendingMatch.reference, prisma);
+                }
               });
               this.logger.log(`Merged Circle ${type} history into PENDING tx ${pendingMatch.reference}: ${amount || 0} ${symbol} on ${chainLabel} status=${status}`);
               continue;
@@ -1249,6 +1256,18 @@ export class WalletsService implements OnModuleInit {
               usdcBalance: { increment: release },
             },
           });
+        }
+
+        // Undo the initiation debit in the double-entry ledger. Guarded by the
+        // status === 'PENDING' check above, so a refund that was already
+        // settled here can never reverse the ledger twice. If the float could
+        // only be partially refunded (anomalous lockedBalance), do NOT reverse
+        // the full ledger — that would fabricate a bigger refund than the
+        // wallet actually received; reconciliation will flag the anomaly.
+        if (release > 0 && release >= totalDebit) {
+          await this.ledger.reverse(reference, prisma);
+        } else if (release < totalDebit) {
+          this.logger.warn(`Partial release for ${reference}: ${release}/${totalDebit} — ledger reversal skipped`);
         }
 
         const current = (tx.metadata as Record<string, unknown>) || {};

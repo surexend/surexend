@@ -320,10 +320,14 @@ export class ConversionsService {
         return localBalances;
       })();
 
-      // Deduct from source
+      // Deduct from source. USD is a combined pool: consume USDT first, then
+      // USDC. The ledger records BOTH floats exactly as they move so
+      // per-currency reconciliation stays clean (previously the whole debit
+      // was booked as USDC while the float drew from USDT first -> permanent
+      // drift on every conversion).
+      const deductUsdt = fromCode === 'USD' ? Math.min(amount, w.usdtBalance || 0) : 0;
+      const deductUsdc = fromCode === 'USD' ? Math.max(0, amount - deductUsdt) : 0;
       if (fromCode === 'USD') {
-        const deductUsdt = Math.min(amount, w.usdtBalance || 0);
-        const deductUsdc = Math.max(0, amount - deductUsdt);
         await prisma.wallet.update({
           where: { id: w.id },
           data: {
@@ -333,7 +337,9 @@ export class ConversionsService {
         });
       }
 
-      // Credit destination
+      // Credit destination. USD credits always land in USDT, so the ledger
+      // credits USDT too (matching the float movement exactly).
+      const creditedUsdt = toCode === 'USD' ? result.receiveAmount : 0;
       if (toCode === 'USD') {
         await prisma.wallet.update({
           where: { id: w.id },
@@ -376,13 +382,20 @@ export class ConversionsService {
       }
 
       const ledgerReference = `CONV-${conversionId ?? `SKIPPED-${Date.now()}-${Math.floor(Math.random() * 1000)}`}`;
-      const sourceCurrency = fromCode === 'USD' ? 'USDC' : fromCode;
-      await this.ledger.record([
-        { transferId: ledgerReference, account: this.ledger.userAccount(userId, sourceCurrency), currency: sourceCurrency, amountMinor: -toMinor(amount, sourceCurrency), reference: ledgerReference, kind: 'CONVERSION_DEBIT' },
-        { transferId: ledgerReference, account: this.ledger.treasuryAccount(sourceCurrency), currency: sourceCurrency, amountMinor: toMinor(amount, sourceCurrency), reference: ledgerReference, kind: 'CONVERSION_SETTLEMENT' },
-        { transferId: ledgerReference, account: this.ledger.treasuryAccount(toCode), currency: toCode, amountMinor: -toMinor(result.receiveAmount, toCode), reference: ledgerReference, kind: 'CONVERSION_SETTLEMENT' },
-        { transferId: ledgerReference, account: this.ledger.userAccount(userId, toCode), currency: toCode, amountMinor: toMinor(result.receiveAmount, toCode), reference: ledgerReference, kind: 'CONVERSION_CREDIT' },
-      ], prisma);
+      const sourceCurrencies = fromCode === 'USD' ? ['USDT', 'USDC'] : [fromCode];
+      const sourceAmounts = fromCode === 'USD' ? [deductUsdt, deductUsdc] : [amount];
+      const entries = sourceCurrencies.flatMap((ccy, i) => {
+        if (sourceAmounts[i] <= 0) return [];
+        return [
+          { transferId: ledgerReference, account: this.ledger.userAccount(userId, ccy), currency: ccy, amountMinor: -toMinor(sourceAmounts[i], ccy), reference: ledgerReference, kind: 'CONVERSION_DEBIT' },
+          { transferId: ledgerReference, account: this.ledger.treasuryAccount(ccy), currency: ccy, amountMinor: toMinor(sourceAmounts[i], ccy), reference: ledgerReference, kind: 'CONVERSION_SETTLEMENT' },
+        ];
+      });
+      entries.push(
+        { transferId: ledgerReference, account: this.ledger.treasuryAccount(toCode), currency: toCode, amountMinor: -toMinor(toCode === 'USD' ? creditedUsdt : result.receiveAmount, toCode), reference: ledgerReference, kind: 'CONVERSION_SETTLEMENT' },
+        { transferId: ledgerReference, account: this.ledger.userAccount(userId, toCode), currency: toCode, amountMinor: toMinor(toCode === 'USD' ? creditedUsdt : result.receiveAmount, toCode), reference: ledgerReference, kind: 'CONVERSION_CREDIT' },
+      );
+      await this.ledger.record(entries, prisma);
 
       await this.transactionsService.createTransaction(prisma, {
         userId,

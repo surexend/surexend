@@ -19,12 +19,42 @@ export class LedgerService {
       sums.set(e.currency, (sums.get(e.currency) || 0n) + amount);
     }
     for (const [currency, amount] of sums) if (amount !== 0n) throw new BadRequestException(`Unaccounted amount for ${currency}: ${amount}`);
-    try {
-      return await Promise.all(entries.map(e => tx.ledgerEntry.create({ data: { transferId: e.transferId, account: e.account, currency: e.currency, amountMinor: guardMinor(e.amountMinor), reference: e.reference, kind: e.kind || 'TRANSFER' } })));
-    } catch (error: any) {
-      if (error?.code === 'P2002') { this.logger.debug(`Ledger replay ignored for ${entries[0].transferId}`); return []; }
-      throw error;
+    // Single atomic CREATE ... ON CONFLICT DO NOTHING. The old per-row
+    // Promise.all could leave a PARTIAL transfer when one row conflicted (e.g.
+    // a webhook replay), which permanently skews the balance — reconciliation
+    // would then always report drift that nothing will ever fix. skipDuplicates
+    // also self-heals: rows missing from a partially-written transfer are
+    // inserted; a full replay writes nothing.
+    const result = await tx.ledgerEntry.createMany({
+      data: entries.map(e => ({ transferId: e.transferId, account: e.account, currency: e.currency, amountMinor: guardMinor(e.amountMinor), reference: e.reference, kind: e.kind || 'TRANSFER' })),
+      skipDuplicates: true,
+    });
+    if (result.count < entries.length) {
+      this.logger.debug(`Ledger replay/partial write for ${entries[0].transferId}: ${result.count}/${entries.length} rows`);
+      return [];
     }
+    return entries;
+  }
+  /**
+   * Mirror every entry of a previously recorded transfer under `<transferId>-REFUND`.
+   * Used by refund paths (failed sends, reverted bills) so the ledger is
+   * reversed in exactly the amounts it was written, regardless of fee splits.
+   * Callers must guard on the source transaction still being unsettled.
+   */
+  async reverse(transferId: string, tx: Prisma.TransactionClient | PrismaService = this.prisma) {
+    const entries = await tx.ledgerEntry.findMany({ where: { transferId }, orderBy: { createdAt: 'asc' } });
+    if (!entries.length) {
+      this.logger.warn(`No ledger entries to reverse for ${transferId}`);
+      return [];
+    }
+    return this.record(entries.map(e => ({
+      transferId: `${transferId}-REFUND`,
+      account: e.account,
+      currency: e.currency,
+      amountMinor: -e.amountMinor,
+      reference: e.reference || transferId,
+      kind: `${e.kind}_REFUND`,
+    })), tx);
   }
   async balanceOf(account: string, currency: string) { const r = await this.prisma.ledgerEntry.aggregate({ where: { account, currency }, _sum: { amountMinor: true } }); return r._sum.amountMinor || 0n; }
   async balancesOf(account: string) { const rows = await this.prisma.ledgerEntry.groupBy({ by: ['currency'], where: { account }, _sum: { amountMinor: true } }); return Object.fromEntries(rows.map(r => [r.currency, r._sum.amountMinor || 0n])); }

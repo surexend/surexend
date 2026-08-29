@@ -96,10 +96,18 @@ Before these pages can go live: provision the invoice payout accounts and
 complete the payout registration, then replace the waitlist with the real flow.
 
 ## Next up (in order)
-1. Integer minor units + a double-entry ledger; checked-in migrations instead of
-   `prisma db push` (section 5 of the assessment).
-2. Revenue engine: FX spread on every on-ramp/off-ramp leg (section 7).
-3. KYC/KYB via Smile Identity and the SEC ARIP filing (sections 6 and 8).
+1. ~~Integer minor units + a double-entry ledger~~ **done** (minor units via
+   `toMinor`/`guardMinor`; double-entry ledger via `LedgerService`, written on
+   every money path as of 2026-08-30 — see `docs/rollout-status.md`). Still
+   open: **checked-in migrations instead of `prisma db push`** (section 5 of
+   the assessment) — required before legacy float columns can be removed.
+2. Ledger migration rollout (reads from floats → ledger, then stop float
+   writes, then remove columns): E2E testnet verification per path → switch
+   reads path-by-path → `npm run ledger:report` must be clean between steps.
+3. Revenue engine: FX spread on every on-ramp/off-ramp leg (section 7).
+4. KYC/KYB via Smile Identity and the SEC ARIP filing (sections 6 and 8).
+5. Mainnet config review: `CHAIN_ENV`/`MAINNET_ENABLED` are dead flags today;
+   mainnet needs a reviewed value matrix + boot-time assertions.
 
 ## How We Work
 1. Symptom → investigate (read actual code, verify on-chain) → fix → verify

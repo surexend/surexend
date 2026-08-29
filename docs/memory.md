@@ -462,3 +462,47 @@ typecheck + build.
 - Frontend `npm run typecheck` passes locally.
 - Building depends on reaching `fonts.googleapis.com` at build time. Self-host
   the fonts to remove that dependency.
+
+## 2026-08-30 — ledger rollout: closed all write gaps, made reconciliation monitorable
+
+Audit of the rollout checklist (`docs/rollout-status.md`) found the ledger was
+not complete: five money paths updated float balances with NO ledger entry, and
+conversions booked the entire USD debit as USDC while the float drew USDT first
+(permanent per-currency drift). All were fixed, additively:
+
+1. **`LedgerService.record()` is now atomic.** Replaced per-row `Promise.all`
+   with `createMany({ skipDuplicates: true })`. The old code could commit a
+   PARTIAL ledger transfer when one row conflicted (webhook replay), skewing
+   balances forever; `skipDuplicates` also self-heals missing rows.
+2. **`LedgerService.reverse(transferId)`** mirrors a transfer under
+   `<transferId>-REFUND` with negated amounts. Every refund path now calls it
+   (guarded by the PENDING status claim so it can never double-fire):
+   - webhook Circle outbound FAILED + syncCircleHistory FAILED settlement
+   - `releaseReservedSend` (chain rejection)
+   - bill failure refund
+3. **New ledger writes added:** Flutterwave bank credit, Circle inbound
+   deposit, referral commission (treasury → user USDT).
+4. **Conversion ledger now matches the float movement exactly** (USDT/USDC
+   split debit, USDT credit) instead of booking everything as USDC.
+5. **`LedgerReconciliationService` covers all currencies** (USDC, USDT, every
+   local via `localBalances` JSON + NGN fallback), compares at display
+   precision, and persists drift to `AuditLog` (`action='LEDGER_DRIFT'`,
+   deduped per hour / only when the mismatch changes) so monitoring can alert
+   without log scraping.
+6. **`npm run ledger:report`** (`scripts/ledger-drift-report.js`) renders the
+   same comparison plus the per-currency zero-sum double-entry invariant; exit
+   code 1 on drift. Runs locally/CI; use on testnet after each E2E pass.
+
+Verification: backend `npx tsc -p tsconfig.json --noEmit` exit 0 and `npx jest`
+42/42 green. NOTE: in this sandbox `prisma generate` cannot run (binaries.prisma.sh
+is unreachable); a temporary local typing stub
+(`backend/node_modules/.prisma/client/*`) was used for typecheck and jest. It
+is gitignored and never committed. On a machine with engine access, re-run
+`npx prisma generate` (which overwrites it) before trusting tsc.
+
+Still pending (rollout order): E2E testnet verification per path → gradual
+read switch to ledger (tag send → conversions → bills → cross-chain reserve →
+`getBalance()`) → stop float writes per path → checked-in Prisma migrations →
+column removal → mainnet config review (the `CHAIN_ENV`/`MAINNET_ENABLED` flags
+are currently dead code; mainnet needs a real value matrix + boot-time
+assertions).

@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
+import { LedgerService } from '../common/ledger.service';
+import { toMinor } from '../common/money';
 
 @Injectable()
 export class ReferralsService {
   constructor(
     private prisma: PrismaService,
     private transactionsService: TransactionsService,
+    private ledger: LedgerService,
   ) {}
 
   async getStats(userId: string) {
@@ -114,6 +117,7 @@ export class ReferralsService {
     const commissionAmount = txFeeAmount * commissionRate;
     if (commissionAmount <= 0) return;
 
+    const reference = `REF-EARN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     await this.prisma.$transaction(async (prisma) => {
       const wallet = await prisma.wallet.findUnique({
         where: { userId: referrerId },
@@ -132,8 +136,15 @@ export class ReferralsService {
         amount: commissionAmount,
         fee: 0,
         currency: 'USDT',
-        reference: `REF-EARN-${Date.now()}`
+        reference
       });
+
+      // The commission is minted by the platform (treasury pays the referral),
+      // so record both sides of the credit in the double-entry ledger.
+      await this.ledger.record([
+        { transferId: reference, account: this.ledger.treasuryAccount('USDT'), currency: 'USDT', amountMinor: -toMinor(commissionAmount, 'USDT'), reference, kind: 'REFERRAL_EARNING_SOURCE' },
+        { transferId: reference, account: this.ledger.userAccount(referrerId, 'USDT'), currency: 'USDT', amountMinor: toMinor(commissionAmount, 'USDT'), reference, kind: 'REFERRAL_EARNING' },
+      ], prisma);
     });
   }
 }

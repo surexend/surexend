@@ -78,6 +78,28 @@ You are the senior full-stack developer for **SureXend**, an African fintech app
 - Frontend shows a hint "use default PIN 0000" on the convert PIN step and the change-pin page ONLY when `NEXT_PUBLIC_TESTING_ENABLED === 'true'`.
 - **Deploy pending**: user must set `TESTING_ENABLED=true` (+ optionally `DEFAULT_PIN=0000`) on Railway, and `NEXT_PUBLIC_TESTING_ENABLED=true` on Vercel + redeploy. The backend one actually gates PIN acceptance; the Vercel one only shows hints. When going live: remove/disable both → custom PIN becomes mandatory automatically. **This deploy step has been explained to the user but not yet confirmed done.**
 
+## LEDGER ROLLOUT — current state (2026-08-30, see docs/rollout-status.md)
+
+- Double-entry ledger (`LedgerService` → `LedgerEntry`, minor units via
+  `toMinor`) is now written on EVERY money path (floats and ledger change in
+  the same DB transaction). Missing writes were added to: webhooks (Circle
+  deposit, Flutterwave bank credit, Circle FAILED refund), referrals
+  (commission), bills (failure refund), wallets (sync FAILED settlement +
+  `releaseReservedSend`). Conversions now book the ledger exactly as the float
+  moved (USDT/USDC split) instead of everything as USDC.
+- `LedgerService.record()` is atomic (`createMany` + `skipDuplicates`) —
+  partial ledger writes are impossible. `LedgerService.reverse(transferId)`
+  mirrors a transfer under `<transferId>-REFUND`; all refund paths use it.
+- Reconciliation (`LedgerReconciliationService`, hourly) covers USDC/USDT/local
+  currencies and persists drift to `AuditLog` (`LEDGER_DRIFT`); `npm run
+  ledger:report` runs the same check on demand (CI-friendly, exit 1 on drift).
+- **Still float-reads everywhere; floats NOT removed. Code stays additive and
+  testnet-safe. Mainnet NOT enabled.** Next: E2E testnet verification per path,
+  then gradually switch reads (tag send → conversions → bills → cross-chain
+  reserve → getBalance), then stop float writes, then checked-in migrations +
+  column removal. `CHAIN_ENV`/`MAINNET_ENABLED` are dead flags — mainnet needs
+  a reviewed config matrix + boot-time assertions.
+
 ## THE PIN CONFIRM BUG (already fixed, do not regress)
 
 Old bug: in `/app/settings/change-pin`, the confirm step compared stale state — `submit(newPin.join(''), confirmPin.join(''))` read the pre-update `confirmPin`. Fix: pass the just-built array: `submit(newPin.join(''), next.join(''))`. The page now flows: (if pinSet) Current → New → Confirm; (else) New → Confirm. Mismatch → toast + reset to New.

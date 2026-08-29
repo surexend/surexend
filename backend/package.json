@@ -8,6 +8,7 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
     "register:wallets": "node scripts/register-all-wallets.js",
+    "ledger:report": "node scripts/ledger-drift-report.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
