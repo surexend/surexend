@@ -21,9 +21,9 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
-      # `npm ci` would fail while package-lock.json is behind package.json, so
-      # install (and let the lock update) until the lockfile is regenerated.
-      - run: npm install --no-audit --no-fund
+      # Regenerated backend/package-lock.json is now consistent with package.json,
+      # so `npm ci` gives a reproducible, pinned install.
+      - run: npm ci --no-audit --no-fund
 
       # Prisma client must exist before TypeScript can resolve @prisma/client.
       - run: npx prisma generate
@@ -45,7 +45,7 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
@@ -56,8 +56,18 @@ jobs:
           NEXT_PUBLIC_BRAND_VARIANT: gold
 
 # ---------------------------------------------------------------------------
-# To enable: move this file to .github/workflows/ci.yml and push. The Arena
-# GitHub App cannot create files under .github/workflows/ itself, which is why
-# it lives here for now:
-#   mkdir -p .github/workflows && git mv docs/ci-workflow.yml .github/workflows/ci.yml
-#   git commit -m "ci: enable" && git push
+# TO ENABLE
+# The GitHub App used to authenticate this sandbox lacks the `workflows`
+# permission, so it CANNOT push this file into .github/workflows/ (GitHub
+# rejects the push). To turn CI on, either:
+#   1. Grant the app/identity `workflows` (read & write) permission, or
+#   2. On main, run yourself:
+#        mkdir -p .github/workflows
+#        git mv docs/ci-workflow.yml .github/workflows/ci.yml
+#        git commit -m "ci: enable" && git push
+# Both backend (npm ci + prisma generate + tsc + jest) and frontend
+# (npm ci + typecheck + build) jobs run on ubuntu-latest / node 22.
+# Verified locally: `npm ci --dry-run` passes for both lockfiles; frontend
+# `npm run typecheck` is clean. Backend tsc/jest and `next build` cannot run
+# in this sandbox (Prisma binary host + Google Fonts are network-blocked) but
+# run on GitHub Actions which has full network access.
