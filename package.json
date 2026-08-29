@@ -28,6 +28,7 @@
     "canvas-confetti": "^1.9.3",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "firebase": "^12.18.0",
     "framer-motion": "^11.3.8",
     "gsap": "^3.12.5",
     "jspdf": "^2.5.1",
