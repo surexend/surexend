@@ -491,15 +491,15 @@ export default function AISupportWidget() {
               </div>
 
               {/* Quick Prompt Suggestions */}
-              <div className="p-2 border-t border-white/5 bg-black/20 flex gap-2 overflow-x-auto no-scrollbar">
+              <div className="px-3 py-2 border-t border-white/5 bg-black/40 flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none">
                 {QUICK_QUESTIONS.map((q, idx) => (
                   <button
                     key={idx}
                     onClick={() => handleSend(q)}
                     disabled={executing}
-                    className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-gray-300 font-medium whitespace-nowrap transition-all flex items-center gap-1 disabled:opacity-40"
+                    className="flex-shrink-0 shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-[#E2E8F0] font-semibold whitespace-nowrap transition-all disabled:opacity-40 active:scale-95"
                   >
-                    <Sparkles className="w-3 h-3 text-amber-400" /> {q}
+                    <Sparkles className="w-3 h-3 text-amber-400 flex-shrink-0" /> {q}
                   </button>
                 ))}
               </div>

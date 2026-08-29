@@ -328,10 +328,15 @@ export class SupportService {
 
     // ── FAQ topics ──
     const kb: Array<[RegExp, string]> = [
-      [/naira|convert|rate|usd.*ngn/, 'To convert USD to Naira (NGN), open the Conversion tab, enter your USD amount, pick NGN, choose your saved bank account and confirm with your 4-digit PIN. Funds typically arrive in under 2 minutes, with a 1.2% conversion fee shown live before you confirm.'],
-      [/invoice|europe|euro|iban|sepa/, 'SureXend Invoices let you get paid from Europe (SEPA EUR, GBP, CHF, PLN, SEK…). Clients pay into your generated IBAN and the funds auto-convert to your USD wallet.'],
-      [/fee|charge|cost/, 'Internal Xend Tag P2P transfers are free. Crypto withdrawals and fiat conversions are capped at 1.2%, with the exact rate shown before you confirm.'],
-      [/deposit|fund|bank|top.?up/, 'You can fund your account two ways: 1) local transfers via your dedicated Virtual Bank Account, or 2) crypto — copy your USDC/USDT deposit address or scan the QR code in the Deposit section.'],
+      [/naira|convert|rate|usd.*ngn|exchange|swap/, 'To convert USD or USDC to local currency (NGN, GHS, KES, ZAR), open the Convert tab or tell me "convert 100 to NGN". Live rates are displayed before you authorize with your PIN or biometrics.'],
+      [/invoice|europe|euro|iban|sepa/, 'SureXend Invoices allow you to receive payments from Europe (SEPA EUR, GBP, CHF, PLN, SEK). Clients pay into your dedicated IBAN and funds auto-convert to your USD wallet.'],
+      [/fee|charge|cost/, 'Internal SureX tag transfers are 100% free! Crypto network withdrawals and fiat conversions carry a transparent 1.2% fee shown before you confirm.'],
+      [/deposit|fund|bank deposit|top.?up/, 'You can deposit USDC via Polygon, Solana, Base, Ethereum, Arbitrum, Avalanche, Optimism, Monad, or BSC on the Deposit page. Direct local bank transfer deposits are coming soon!'],
+      [/withdraw|bank account|local bank/, 'Direct local bank account payouts are coming soon! Currently, you can convert USDC to local currencies or transfer instantly to any user via @surexTag.'],
+      [/bill|airtime|data|dstv|electricity|meter/, 'You can pay bills directly from your wallet balance! Tell me "pay DSTV" or "buy 2000 airtime" to start a PIN-protected bill payment.'],
+      [/pin|biometric|face id|fingerprint|security/, 'Every transaction is protected by your 4-digit transaction PIN and optional WebAuthn biometrics (Face ID / Fingerprint). Never share your PIN with anyone.'],
+      [/campaign|leaderboard|reward|rank|referral/, 'Earn rewards through SureXend campaigns and referrals! Top users unlock Rank Crowns (👑 Gold, Silver, Bronze) on their profile and dashboard.'],
+      [/receipt|download receipt|statement/, 'You can download official receipts for any transaction from your History or ask me to "download receipt". Account statements can also be exported as PDFs.'],
     ];
     for (const [re, text] of kb) {
       if (re.test(lower)) {
@@ -340,7 +345,7 @@ export class SupportService {
     }
 
     return {
-      response: 'I can help you check your balance, send crypto, pay bills, convert currencies, or fetch a receipt. For example: "send 20 USDT to Chidi", "pay DSTV", "convert 100 to NGN", or "what is my balance?".',
+      response: 'AI natural language processing for this specific query is coming soon! In the meantime, I can assist you with all SureXend platform features, transaction guidance, conversion rates, sending crypto, paying bills, and downloading receipts below.',
       escalate: false,
       action: { type: null, params: {} },
     };
