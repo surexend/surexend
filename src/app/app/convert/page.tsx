@@ -349,7 +349,7 @@ export default function ConvertPage() {
 
         {/* ─── STEP 2: PIN ─── */}
         {step === 2 && (
-          <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="w-full pb-8 pt-4">
+          <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="w-full py-2 flex justify-center">
             <PinKeypad
               title="Enter 4-Digit PIN"
               subtitle={`Convert ${fromSymbol}${numAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${fromCode} → ${toSymbol}${(preview?.receiveAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${toCode}`}

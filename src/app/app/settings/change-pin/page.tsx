@@ -126,9 +126,9 @@ export default function ChangePinPage() {
 
   // ── PIN entry screen ───────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col w-full min-h-screen pb-28">
+    <div className="flex flex-col w-full min-h-screen pb-6">
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 pt-4 pb-2">
+      <div className="flex items-center gap-3 px-4 pt-3 pb-1">
         <button
           onClick={() => router.back()}
           className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center text-[#94A3B8] hover:text-white transition-colors"
@@ -142,7 +142,7 @@ export default function ChangePinPage() {
 
       {/* Step indicators */}
       {pinAlreadySet && (
-        <div className="flex items-center justify-center gap-2 mt-4 mb-2">
+        <div className="flex items-center justify-center gap-2 mt-2 mb-1">
           {(['current', 'new', 'confirm'] as Field[]).map((f, i) => (
             <div
               key={f}
@@ -161,12 +161,12 @@ export default function ChangePinPage() {
       )}
 
       {/* Icon */}
-      <div className="flex justify-center mt-8 mb-2">
+      <div className="flex justify-center mt-3 mb-1">
         <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center"
+          className="w-12 h-12 rounded-2xl flex items-center justify-center"
           style={{ background: `rgba(${accentRgb}, 0.12)`, boxShadow: `0 0 24px rgba(${accentRgb}, 0.15)` }}
         >
-          <Lock className="w-7 h-7" style={{ color: colors.primary }} />
+          <Lock className="w-6 h-6" style={{ color: colors.primary }} />
         </div>
       </div>
 

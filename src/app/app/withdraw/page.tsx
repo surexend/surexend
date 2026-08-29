@@ -271,7 +271,7 @@ export default function WithdrawPage() {
 
         {/* STEP 3: SECURITY PIN */}
         {step === 'pin' && (
-          <motion.div key="pin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="w-full pb-8 pt-4">
+          <motion.div key="pin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="w-full py-2 flex justify-center">
             <PinKeypad
               title="Enter Transaction PIN"
               subtitle={`Authorize withdrawal of ${selectedFiat.symbol}${fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} to ${selectedBank.bankName}`}

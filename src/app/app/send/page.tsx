@@ -422,7 +422,7 @@ export default function SendPage() {
 
         {/* Step 4: PIN Security */}
         {step === 4 && (
-          <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full pb-8 pt-4">
+          <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full py-2 flex justify-center">
             <PinKeypad
               title="Security Verification"
               subtitle={`Authorize sending $${formData.amount} USD${cctpFee > 0 ? ` + $${cctpFee.toFixed(2)} network fee` : ''} ($${(Number(formData.amount || 0) + cctpFee).toFixed(2)} total)`}
