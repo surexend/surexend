@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 import { walletAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
+import PinKeypad from '@/components/PinKeypad'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useBackLayer } from '@/context/BackNavigationContext'
@@ -420,52 +421,17 @@ export default function SendPage() {
 
         {/* Step 4: PIN Security */}
         {step === 4 && (
-          <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="liquid-glass p-6 text-center space-y-6">
-            <h2 className="text-xl font-extrabold text-white">Security Verification</h2>
-            <p className="text-xs text-[#94A3B8]">Enter your 4-digit transaction PIN to authorize sending ${formData.amount} USD{cctpFee > 0 ? ` + $${cctpFee.toFixed(2)} network fee` : ''} (${(Number(formData.amount || 0) + cctpFee).toFixed(2)} USD total)</p>
-
-            <div className="flex justify-center gap-3.5 my-6">
-              {pin.map((digit, idx) => (
-                <motion.div
-                  key={idx}
-                  animate={{ scale: digit ? 1 : 0.92 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                  className={`w-11 h-[52px] rounded-2xl border flex items-center justify-center text-xl font-bold transition-colors ${digit ? 'border-emerald-500/60 bg-emerald-500/10 text-white' : 'border-white/10 bg-white/[0.03]'}`}
-                >
-                  {digit ? '•' : ''}
-                </motion.div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                <button
-                  key={num}
-                  onClick={() => handlePinInput(num.toString())}
-                  disabled={isLoading}
-                  className="py-4 rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/10 active:scale-90 active:bg-white/[0.08] transition-all text-white font-extrabold text-lg disabled:opacity-40 select-none"
-                >
-                  {num}
-                </button>
-              ))}
-              <button onClick={() => setStep(3)} disabled={isLoading} className="py-4 rounded-2xl bg-transparent border border-white/10 text-gray-400 text-xs font-bold active:scale-90 transition-transform disabled:opacity-40">Cancel</button>
-              <button onClick={() => handlePinInput('0')} disabled={isLoading} className="py-4 rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/10 active:scale-90 transition-all text-white font-extrabold text-lg disabled:opacity-40 select-none">0</button>
-              <button onClick={handlePinDelete} disabled={isLoading} className="py-4 rounded-2xl border border-white/10 bg-transparent text-red-400 font-bold text-sm active:scale-90 transition-transform disabled:opacity-40">⌫</button>
-            </div>
-
-            {isLoading && (
-              <div className="flex items-center justify-center gap-2 text-emerald-400 text-xs font-bold">
-                <span className="w-3.5 h-3.5 rounded-full border-2 border-emerald-400/30 border-t-emerald-400 animate-spin" />
-                Authorizing transfer…
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 my-2">
-              <div className="flex-1 h-px bg-white/5"></div>
-              <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
-              <div className="flex-1 h-px bg-white/5"></div>
-            </div>
-            <BiometricApproveButton onApproved={(token) => executeSend(undefined, token)} disabled={isLoading} />
+          <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full pb-8 pt-4">
+            <PinKeypad
+              title="Security Verification"
+              subtitle={`Authorize sending $${formData.amount} USD${cctpFee > 0 ? ` + $${cctpFee.toFixed(2)} network fee` : ''} ($${(Number(formData.amount || 0) + cctpFee).toFixed(2)} total)`}
+              onComplete={(p) => executeSend(p)}
+              disabled={isLoading}
+              accentHex={colors.primary}
+              accentRgb={isGold ? '212, 160, 23' : '181, 226, 61'}
+              onCancel={() => setStep(3)}
+              extra={<BiometricApproveButton onApproved={(token) => executeSend(undefined, token)} disabled={isLoading} />}
+            />
           </motion.div>
         )}
 

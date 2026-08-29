@@ -10,6 +10,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
 import CurrencyFlag from '@/components/CurrencyFlag'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
+import PinKeypad from '@/components/PinKeypad'
 import { useBackLayer } from '@/context/BackNavigationContext'
 
 const USD_ASSET = { code: 'USD', name: 'US Dollar', symbol: '$', flag: '💵', countryCode: 'US' }
@@ -348,34 +349,17 @@ export default function ConvertPage() {
 
         {/* ─── STEP 2: PIN ─── */}
         {step === 2 && (
-          <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="liquid-glass p-6 text-center space-y-6 rounded-2xl">
-            <button onClick={() => setStep(1)} className="text-[#94A3B8] hover:text-white text-xs font-semibold flex items-center gap-1">← Back</button>
-            <h2 className="text-xl font-bold text-white">Enter 4-Digit PIN</h2>
-            <p className="text-xs text-[#94A3B8]">
-              Convert {fromSymbol}{numAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {fromCode} → {toSymbol}{(preview?.receiveAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {toCode}
-            </p>
-            <div className="flex justify-center gap-3 my-4">
-              {pin.map((digit, idx) => (
-                <div key={idx} className={`w-11 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all ${digit ? 'border-emerald-500 bg-emerald-500/10 text-white' : 'border-white/10 bg-white/5 text-transparent'}`}>
-                  {digit ? '•' : ''}
-                </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-3 gap-3 max-w-[240px] mx-auto">
-              {[1,2,3,4,5,6,7,8,9].map(n => (
-                <button key={n} onClick={() => handlePinInput(n.toString())} className="p-3.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] text-white font-bold text-lg active:scale-95 transition-all">{n}</button>
-              ))}
-              <button onClick={() => setStep(1)} className="p-3.5 rounded-2xl bg-white/[0.04] text-[#94A3B8] text-xs font-bold">Cancel</button>
-              <button onClick={() => handlePinInput('0')} className="p-3.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] text-white font-bold text-lg active:scale-95">0</button>
-              <button onClick={handlePinDelete} className="p-3.5 rounded-2xl bg-white/[0.06] text-red-400 font-bold text-lg active:scale-95">⌫</button>
-            </div>
-
-            <div className="flex items-center gap-3 my-2">
-              <div className="flex-1 h-px bg-white/5"></div>
-              <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
-              <div className="flex-1 h-px bg-white/5"></div>
-            </div>
-            <BiometricApproveButton onApproved={(token) => executeConversion(undefined, token)} disabled={isLoading} />
+          <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="w-full pb-8 pt-4">
+            <PinKeypad
+              title="Enter 4-Digit PIN"
+              subtitle={`Convert ${fromSymbol}${numAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${fromCode} → ${toSymbol}${(preview?.receiveAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${toCode}`}
+              onComplete={(p) => executeConversion(p)}
+              disabled={isLoading}
+              accentHex={accentHex}
+              accentRgb={accentRgb}
+              onCancel={() => setStep(1)}
+              extra={<BiometricApproveButton onApproved={(token) => executeConversion(undefined, token)} disabled={isLoading} />}
+            />
           </motion.div>
         )}
 
