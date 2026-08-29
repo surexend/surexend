@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check, RefreshCcw } from 'lucide-react'
+import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check, RefreshCcw, Crown } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { walletAPI, transactionAPI, userAPI, conversionAPI, campaignsAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
@@ -264,6 +264,13 @@ export default function DashboardPage() {
     staleTime: 60000,
   })
   const isGolden = !!(standing?.bills?.golden || standing?.crypto?.golden)
+  // Best rank across both campaigns (1, 2, 3, or undefined)
+  const bestRank = (() => {
+    const cryptoRank = standing?.crypto?.rank
+    const billsRank = standing?.bills?.rank
+    if (cryptoRank && billsRank) return Math.min(cryptoRank, billsRank)
+    return cryptoRank || billsRank
+  })()
 
   // Persisted wallet preference: 'AUTO' (highest balance) | 'USD' | 'LOCAL'
   const prefDefaultWallet = (profile?.defaultWallet as 'AUTO' | 'USD' | 'LOCAL' | undefined) || 'AUTO'
@@ -404,7 +411,14 @@ export default function DashboardPage() {
               color: colors.primary,
             }}
           >
-            {isGolden ? '★ Top 5 Leaderboard' : '✓ Verified Member'}
+            {bestRank === 1 && <Crown className="w-3.5 h-3.5 text-[#FBBF24]" />}
+            {bestRank === 2 && <Crown className="w-3.5 h-3.5 text-[#C0C0C0]" />}
+            {bestRank === 3 && <Crown className="w-3.5 h-3.5 text-[#CD7F32]" />}
+            {!bestRank && isGolden && <VerifiedCheckmark size={11} variant={isGold ? 'gold' : 'lemon'} />}
+            {!bestRank && !isGolden && <Check className="w-3.5 h-3.5" />}
+            <span className="font-extrabold">
+              {bestRank === 1 ? '#1' : bestRank === 2 ? '#2' : bestRank === 3 ? '#3' : isGolden ? 'Top 5' : 'Verified'}
+            </span>
           </span>
           <span className="sm:hidden text-[10px] text-[#94A3B8] font-mono font-bold truncate max-w-[120px]">
             @{profile?.surexTag || profile?.firstName?.toLowerCase() || 'surex'}

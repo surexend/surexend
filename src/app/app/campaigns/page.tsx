@@ -40,8 +40,8 @@ export default function CampaignsPage() {
 
   const rankIcon = (rank: number) => {
     if (rank === 1) return <Crown className="w-4 h-4 text-[#FBBF24]" />
-    if (rank === 2) return <Medal className="w-4 h-4 text-[#CBD5E1]" />
-    if (rank === 3) return <Medal className="w-4 h-4 text-[#D97706]" />
+    if (rank === 2) return <Crown className="w-4 h-4 text-[#C0C0C0]" />
+    if (rank === 3) return <Crown className="w-4 h-4 text-[#CD7F32]" />
     return <span className="text-[11px] font-bold text-[#64748B] w-4 text-center">{rank}</span>
   }
 

@@ -741,6 +741,9 @@ export const adminAPI = {
     apiClient.post('/admin/broadcast-message', body).then(r => r.data),
   getBroadcastHistory: (params?: { page?: number; limit?: number }) =>
     apiClient.get('/admin/broadcast-message-history', { params }).then(r => r.data),
+
+  getCampaignOverview: () =>
+    apiClient.get('/admin/campaigns/overview').then(r => r.data),
 }
 
 export const campaignsAPI = {

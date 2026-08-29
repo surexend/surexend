@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BillsService } from '../bills/bills.service';
+import { CampaignsService } from '../campaigns/campaigns.service';
 import { getLocalRate } from '../common/currency.constants';
 
 // Normalize any recorded transaction amount to its USD value. Transactions
@@ -54,6 +55,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly billsService: BillsService,
+    private readonly campaignsService: CampaignsService,
   ) {}
 
   async getOverview() {
@@ -503,5 +505,55 @@ export class AdminService {
     ])
 
     return { total, page, limit, broadcasts }
+  }
+
+  async getCampaignOverview() {
+    const [cryptoAll, billsAll, crypto7d, bills7d] = await Promise.all([
+      this.campaignsService.getLeaderboard('crypto', 'all'),
+      this.campaignsService.getLeaderboard('bills', 'all'),
+      this.campaignsService.getLeaderboard('crypto', '7d'),
+      this.campaignsService.getLeaderboard('bills', '7d'),
+    ]);
+
+    const totalParticipants = new Set([
+      ...cryptoAll.entries.map(e => e.userId),
+      ...billsAll.entries.map(e => e.userId),
+    ]).size;
+
+    const goldenUsers = new Set([
+      ...cryptoAll.goldenUserIds,
+      ...billsAll.goldenUserIds,
+    ]).size;
+
+    return {
+      crypto: {
+        allTime: {
+          grandTotal: cryptoAll.grandTotal,
+          participants: cryptoAll.count,
+          top10: cryptoAll.entries.slice(0, 10),
+        },
+        last7Days: {
+          grandTotal: crypto7d.grandTotal,
+          participants: crypto7d.count,
+          top10: crypto7d.entries.slice(0, 10),
+        },
+      },
+      bills: {
+        allTime: {
+          grandTotal: billsAll.grandTotal,
+          participants: billsAll.count,
+          top10: billsAll.entries.slice(0, 10),
+        },
+        last7Days: {
+          grandTotal: bills7d.grandTotal,
+          participants: bills7d.count,
+          top10: bills7d.entries.slice(0, 10),
+        },
+      },
+      summary: {
+        totalUniqueParticipants: totalParticipants,
+        goldenUsers,
+      },
+    };
   }
 }

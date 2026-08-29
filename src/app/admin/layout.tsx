@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useTheme } from '@/context/ThemeContext'
-import { LayoutDashboard, Users, FileText, ShieldCheck, ArrowLeft, Tags, Bell } from 'lucide-react'
+import { LayoutDashboard, Users, FileText, ShieldCheck, ArrowLeft, Tags, Bell, Trophy } from 'lucide-react'
 import { userAPI } from '@/lib/api'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -50,6 +50,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { label: 'Pricing', icon: Tags, href: '/admin/pricing' },
     { label: 'KYC Review', icon: ShieldCheck, href: '/admin/kyc' },
     { label: 'Broadcast', icon: Bell, href: '/admin/broadcast' },
+    { label: 'Campaigns', icon: Trophy, href: '/admin/campaigns' },
   ]
 
   return (

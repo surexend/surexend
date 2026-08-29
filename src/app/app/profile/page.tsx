@@ -227,21 +227,33 @@ export default function ProfilePage() {
         </div>
       </motion.div>
 
-      {/* ⬛ BLACK TICK MEMBERSHIP & LEADERBOARD CARD (REAL — NO FAKE NUMBERS) */}
+      {/* ⬛ CAMPAIGN STATUS CARD (REAL — NO FAKE NUMBERS) */}
       <div className="glass-card py-3 px-4 rounded-2xl border border-white/10 bg-black/50 text-xs">
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center gap-2.5 min-w-0">
-            {/* Black Verified Tick — every member has it */}
-            <div className="w-7 h-7 rounded-full bg-black border border-white/30 flex items-center justify-center text-white font-black text-[13px] shadow-md flex-shrink-0">
-              ✓
-            </div>
+            {/* Campaign Rank Badge */}
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="font-extrabold text-white text-xs truncate">Black Tick Member</span>
-              {isGolden && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D4A017]/15 text-[#D4A017] border border-[#D4A017]/30 flex-shrink-0">
-                  <VerifiedCheckmark size={10} variant={isGold ? 'gold' : 'lemon'} /> Top 5
-                </span>
-              )}
+              {(() => {
+                const cryptoRank = standing?.crypto?.rank
+                const billsRank = standing?.bills?.rank
+                const bestRank = cryptoRank && billsRank ? Math.min(cryptoRank, billsRank) : (cryptoRank || billsRank)
+                if (bestRank === 1) return <Crown className="w-5 h-5 text-[#FBBF24]" />
+                if (bestRank === 2) return <Crown className="w-5 h-5 text-[#C0C0C0]" />
+                if (bestRank === 3) return <Crown className="w-5 h-5 text-[#CD7F32]" />
+                return <span className="w-5 h-5 flex items-center justify-center text-[11px] font-bold text-[#64748B] bg-white/5 rounded-full">{bestRank || '—'}</span>
+              })()}
+              <span className="font-extrabold text-white text-xs truncate">
+                Campaign
+                {(() => {
+                  const cryptoRank = standing?.crypto?.rank
+                  const billsRank = standing?.bills?.rank
+                  const bestRank = cryptoRank && billsRank ? Math.min(cryptoRank, billsRank) : (cryptoRank || billsRank)
+                  if (bestRank === 1) return ' — #1 🥇'
+                  if (bestRank === 2) return ' — #2 🥈'
+                  if (bestRank === 3) return ' — #3 🥉'
+                  return ''
+                })()}
+              </span>
             </div>
           </div>
           <button
