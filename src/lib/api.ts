@@ -693,7 +693,6 @@ export const notificationsAPI = {
       () => ({ message: 'All notifications marked as read' })
     ),
 
-  markRead: (id: string) => apiClient.patch(`/notifications/${id}/read`).then(r => r.data),
 }
 
 // ── Admin API (requires the ADMIN role on the JWT) ──────────────────────

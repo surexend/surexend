@@ -1,19 +1,19 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Toaster } from 'react-hot-toast'
 import { useTheme } from '@/context/ThemeContext'
 import { useBackLayer } from '@/context/BackNavigationContext'
-import NotificationCenter from '@/components/NotificationCenter'
 import { 
-  Home, Repeat, User, Bell, FileSpreadsheet, X,
-  ShieldCheck, Zap, Clock, ChevronRight, Fingerprint
+  Home, Send, Repeat, FileText, User, Bell, ArrowUpRight, ArrowDownLeft,
+  Smartphone, Building2, FileSpreadsheet, X, Check, ShieldCheck, Zap, Clock, ChevronRight, Fingerprint
 } from 'lucide-react'
+import toast from 'react-hot-toast'
 // Lazy-load the AI widget — it's 24 KB and only needed on demand.
 // Loading it eagerly on every page adds parse cost on low-end phones.
 const AISupportWidget = dynamic(() => import('@/components/AISupportWidget'), { ssr: false })
@@ -121,11 +121,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { label: 'Profile', icon: User, href: '/app/profile' },
   ]
 
+  const markAllRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+    setUnreadCount(0)
+    notificationsAPI.markAllRead().catch(() => {})
+    toast.success('All notifications marked as read')
+  }
+
   if (!mounted) return null
 
   return (
     <QueryClientProvider client={queryClient}>
-        <Toaster position="top-center" toastOptions={{ style: { background: '#121419', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
       <div className="flex min-h-dvh-force bg-[var(--app-bg)] relative md:h-dvh-force md:overflow-hidden">
         {/* Ambient morphing mesh background — the "morphe" (static in lite mode & on mobile) */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
@@ -413,14 +419,45 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* ── NOTIFICATIONS GLASSMORPHIC DRAWER / MODAL ────────────────── */}
-        <NotificationCenter
-          open={showNotifications}
-          notifications={notifications}
-          unreadCount={unreadCount}
-          onClose={() => setShowNotifications(false)}
-          onNotificationsChange={setNotifications}
-          onUnreadCountChange={setUnreadCount}
-        />
+        {createPortal(
+          <AnimatePresence>
+            {showNotifications && (
+              <div className="fixed inset-0 z-[80] flex items-start justify-end p-2 sm:p-4 liquid-backdrop">
+                <motion.div
+                  initial={{ opacity: 0, x: 50, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 50, scale: 0.95 }}
+                  className="liquid-glass-strong w-[94vw] sm:w-96 max-h-[85vh] overflow-y-auto p-4 sm:p-5 relative rounded-3xl shadow-2xl border space-y-4"
+                  style={{ borderColor: colors.cardBorder }}
+                >
+                  <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-emerald-400" /><h3 className="font-bold text-white text-base">Notifications</h3></div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={markAllRead} className="text-[11px] text-emerald-400 font-semibold hover:underline">Mark read</button>
+                      <button onClick={() => setShowNotifications(false)} className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white"><X className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                  <div className="space-y-2.5">
+                    {notifications.length === 0 && <div className="text-center py-10"><Bell className="w-8 h-8 text-[#64748B] mx-auto mb-2 opacity-50" /><p className="text-sm text-[#94A3B8]">No notifications yet</p></div>}
+                    {notifications.map((n) => (
+                      <div key={n.id} className={`p-3 rounded-2xl border transition-all ${!n.isRead ? 'bg-white/[0.04] border-white/15' : 'bg-white/[0.01] border-white/5 opacity-75'}`}>
+                        <div className="flex justify-between items-start mb-1">
+                          <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
+                            {n.type === 'LOGIN' ? <ShieldCheck className="w-3.5 h-3.5 text-blue-400" /> : n.type === 'SWAP' ? <Repeat className="w-3.5 h-3.5 text-purple-400" /> : n.type === 'SEND' || n.type === 'WITHDRAWAL' ? <ArrowUpRight className="w-3.5 h-3.5 text-amber-400" /> : n.type === 'DEPOSIT' || n.type === 'RECEIVE' ? <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-400" /> : <Bell className="w-3.5 h-3.5 text-[#64748B]" />}
+                            {n.title}
+                          </h4>
+                          <span className="text-[10px] text-[#64748B] flex-shrink-0 ml-2">{new Date(n.createdAt || Date.now()).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <p className="text-[11px] text-[#94A3B8] leading-relaxed">{n.body}</p>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
         <AISupportWidget />
         <FirebaseMessaging />
       </div>
