@@ -672,13 +672,10 @@ html.lite-mode *::after {
      remove it on phones. The specular hairline (::before) is just a 1px
      linear-gradient — zero compositing cost — keep it for premium look. */
   .liquid-glass::after,
-  .liquid-glass-strong::after {
-    display: none;
-  }
-
+  .liquid-glass-strong::after,
   .liquid-glass::before,
   .liquid-glass-strong::before {
-    opacity: 0.7;
+    display: none !important;
   }
 
   .glass-card,
