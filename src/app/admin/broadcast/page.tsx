@@ -130,7 +130,7 @@ export default function AdminBroadcastPage() {
                 <textarea
                   id="body"
                   value={body}
-                  onChange={handleUserCount}
+                  onChange={(e) => setBody(e.target.value)}
                   placeholder="Type your broadcast message here..."
                   className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/10 text-white placeholder-[#64748B] focus:outline-none focus:border-white/30 transition-colors resize-none min-h-[120px]"
                   disabled={loading}
