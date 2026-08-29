@@ -358,29 +358,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   </button>
                 </div>
               )}
-              {/* Page transition: desktop only. Even a 0.12s CSS opacity fade
-                  promotes the ENTIRE page subtree to a blended compositor
-                  layer on phones — the trigger for the Android scanline /
-                  static-noise corruption on low-end Mali GPUs. Phones now
-                  render children directly: zero promoted layers, zero blends. */}
-              {isMobile ? (
-                <div key={pathname} className="w-full">
-                  {children}
-                </div>
-              ) : (
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={pathname}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.12 }}
-                    className="w-full"
-                  >
-                    {children}
-                  </motion.div>
-                </AnimatePresence>
-              )}
+              {/* Page container — standard clean React render. Zero motion wrappers
+                  or layer promotions on route transitions. */}
+              <div key={pathname} className="w-full">
+                {children}
+              </div>
             </div>
           </div>
         </main>

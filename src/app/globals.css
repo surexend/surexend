@@ -735,6 +735,21 @@ html.lite-mode *::after {
     backdrop-filter: none !important;
   }
 
+  /* Strip inline 3D hardware transforms and opacity transitions injected by motion.div
+     on phones — prevents mobile Android Chrome from promoting elements to 3D GPU
+     compositing layers that corrupt tile memory into scanlines and ghosted elements. */
+  [style*="transform"],
+  [style*="Transform"],
+  [style*="translate3d"],
+  [style*="translateZ"] {
+    transform: none !important;
+  }
+
+  [style*="opacity: 0"],
+  [style*="opacity:0"] {
+    opacity: 1 !important;
+  }
+
   /* Momentum scrolling on ALL scrollable containers, not just tagged classes.
      Android Chrome + iOS Safari both benefit from this for smooth lists. */
   [style*="overflow"],
