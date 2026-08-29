@@ -135,8 +135,10 @@ export class TransactionsController {
       else if (st === 'FAILED') doc.fillColor('#F87171').text('FAILED', 370, y + 5);
       else doc.fillColor('#F59E0B').text('PENDING', 370, y + 5);
 
-      const symbol = t.currency === 'NGN' ? '₦' : '$';
-      doc.fillColor('#FFFFFF').text(`${symbol}${Number(t.amount || 0).toFixed(2)}`, 480, y + 5, { align: 'right' });
+      const code = (t.currency || 'USD').toUpperCase();
+      const amtStr = Number(t.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const displayAmount = (code === 'USD' || code === 'USDC' || code === 'USDT') ? `$${amtStr}` : `${amtStr} ${code}`;
+      doc.fillColor('#FFFFFF').text(displayAmount, 480, y + 5, { align: 'right' });
       y += 18;
     });
 

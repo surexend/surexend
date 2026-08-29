@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf'
-import { currencySymbol, formatAmount } from '@/lib/utils'
+import { currencySymbol, formatAmount, getSwapInfo } from '@/lib/utils'
 
 export interface StatementTx {
   id: string
@@ -28,6 +28,21 @@ export interface GenerateStatementOpts {
   accentHex: string
 }
 
+/**
+ * Format currency amounts safely for standard PDF fonts (Helvetica).
+ * Standard PDF Helvetica fonts do not include Unicode glyphs like Naira (₦),
+ * Cedi (GH₵), or Shilling (KSh), causing PDF engines to output broken '¦' symbols.
+ * Using standard ISO codes or safe symbols ensures 100% crisp, uncorrupted output.
+ */
+export function formatPdfAmount(amount: number, currency: string = 'USD'): string {
+  const code = (currency || 'USD').toUpperCase()
+  const numStr = formatAmount(amount)
+  if (code === 'USD' || code === 'USDC' || code === 'USDT') return `$${numStr}`
+  if (code === 'EUR') return `€${numStr}`
+  if (code === 'GBP') return `£${numStr}`
+  return `${numStr} ${code}`
+}
+
 export async function generateStatementPDF(opts: GenerateStatementOpts) {
   const { user, transactions, periodLabel, variant, accentHex } = opts
 
@@ -49,7 +64,6 @@ export async function generateStatementPDF(opts: GenerateStatementOpts) {
   const textWhite = [255, 255, 255]
   const textMuted = [148, 163, 184] // #94a3b8
   const textDarkMuted = [100, 116, 139] // #64748b
-  const borderCol = [255, 255, 255, 0.1]
   const greenCol = [52, 211, 153]
   const redCol = [248, 113, 113]
 
@@ -178,9 +192,9 @@ export async function generateStatementPDF(opts: GenerateStatementOpts) {
   // 4. Ledger Table Header
   const colX = {
     date: margin + 4,
-    type: margin + 34,
-    ref: margin + 86,
-    status: margin + 138,
+    type: margin + 30,
+    ref: margin + 92,
+    status: margin + 140,
     amount: W - margin - 4,
   }
 
@@ -238,10 +252,24 @@ export async function generateStatementPDF(opts: GenerateStatementOpts) {
     })
     const typeUpper = (tx.type || '').toUpperCase()
     const statusUpper = (tx.status || '').toUpperCase()
+    const swap = getSwapInfo(tx)
 
     const isCredit = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING' || typeUpper === 'CONVERT'
-    const symbol = tx.currency === 'NGN' ? '₦' : tx.currency === 'GHS' ? 'GH₵' : '$'
-    const amountFormatted = `${symbol}${formatAmount(Number(tx.amount || 0))}`
+
+    let amountFormatted = ''
+    if (swap) {
+      amountFormatted = formatPdfAmount(swap.toAmount, swap.to)
+    } else {
+      amountFormatted = formatPdfAmount(Number(tx.amount || 0), tx.currency)
+    }
+
+    // Description text
+    let descText = tx.type
+    if (swap) {
+      descText = `CONVERT (${swap.from} -> ${swap.to})`
+    } else if (tx.metadata?.planName) {
+      descText = `${tx.type} (${tx.metadata.planName})`
+    }
 
     // Date
     doc.setFontSize(7.5)
@@ -252,10 +280,7 @@ export async function generateStatementPDF(opts: GenerateStatementOpts) {
     // Type / Description
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(textWhite[0], textWhite[1], textWhite[2])
-    const descText = tx.metadata?.planName
-      ? `${tx.type} (${tx.metadata.planName})`
-      : tx.type
-    doc.text(descText.slice(0, 24), colX.type, curY + 5.2)
+    doc.text(descText.slice(0, 28), colX.type, curY + 5.2)
 
     // Reference ID
     doc.setFont('courier', 'normal')
