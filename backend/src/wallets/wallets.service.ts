@@ -992,6 +992,7 @@ export class WalletsService implements OnModuleInit {
       throw new BadRequestException('Destination network is required when sending from Arc.');
     }
     const destNet = destinationNetwork.toUpperCase();
+    const delivery = destNet === 'ARC' ? 'native' : 'cctp';
 
     // Same spendable figure the app shows: gross on-chain USDC, net of the
     // CONVERT ledger (conversions out of USD reduce spendable without any chain
@@ -999,23 +1000,7 @@ export class WalletsService implements OnModuleInit {
     const spendable = await this.computeSpendableUsdc(userId, wallet, amount);
     if (spendable < amount) {
       const reason = `Insufficient balance. You can send up to ${spendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`;
-      await this.transactionsService.createTransaction(this.prisma, {
-        userId,
-        type: 'SEND',
-        status: 'FAILED',
-        amount,
-        fee: 0,
-        currency: 'USDC',
-        reference: `TX-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-        metadata: {
-          toAddress,
-          network: 'ARC',
-          destinationNetwork: destNet,
-          delivery: destNet === 'ARC' ? 'native' : 'cctp',
-          errorReason: reason,
-          failedAt: 'send-initiation'
-        }
-      });
+      await this.recordRejectedSend({ userId, amount, fee: 0, toAddress, destNet, delivery, errorReason: reason, failedAt: 'send-initiation' });
       throw new BadRequestException(reason);
     }
 
@@ -1026,81 +1011,42 @@ export class WalletsService implements OnModuleInit {
       throw new BadRequestException('Please generate an Arc deposit address first.');
     }
 
-    const reference = `TX-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-
-    let result: any;
+    // Circle's CCTP forwarder deducts a dynamic relay fee from the minted USDC,
+    // so the recipient would otherwise receive amount - fee. Burn amount + fee
+    // so the recipient nets the full amount, and debit the fee from the
+    // sender's balance so it is transparent.
     let fee = 0;
-    try {
-      if (destNet === 'ARC') {
-        result = await this.sendNativeArcTransfer(
-          userId,
-          sourceAddressRecord.address,
-          toAddress,
-          amount,
-        );
-      } else {
-        // Circle's CCTP forwarder deducts a dynamic relay fee from the minted
-        // USDC, so the recipient would otherwise receive amount - fee. Burn
-        // amount + fee so the recipient nets the full amount, and debit the
-        // fee from the sender's balance so it is transparent.
-        fee = await this.cctpService.estimateFee({
-          sourceNetwork: 'ARC',
-          sourceAddress: sourceAddressRecord.address,
-          destNetwork: destNet,
-          recipientAddress: toAddress,
-          amount,
-        });
-        if (spendable < amount + fee) {
-          const reason = `Insufficient balance. This send needs ${(amount + fee).toFixed(2)} USDC including a ${fee.toFixed(2)} USDC cross-chain network fee.`;
-          throw new BadRequestException(reason);
-        }
-        result = await this.cctpService.bridge({
-          sourceNetwork: 'ARC',
-          sourceAddress: sourceAddressRecord.address,
-          destNetwork: destNet,
-          recipientAddress: toAddress,
-          amount: amount + fee,
-        });
-      }
-    } catch (err: any) {
-      const reason = err?.response?.data?.message
-        || err?.message
-        || 'Transfer failed on Arc.';
-      const delivery = destNet === 'ARC' ? 'native' : 'cctp';
-      await this.transactionsService.createTransaction(this.prisma, {
-        userId,
-        type: 'SEND',
-        status: 'FAILED',
+    if (delivery === 'cctp') {
+      fee = await this.cctpService.estimateFee({
+        sourceNetwork: 'ARC',
+        sourceAddress: sourceAddressRecord.address,
+        destNetwork: destNet,
+        recipientAddress: toAddress,
         amount,
-        fee,
-        currency: 'USDC',
-        reference,
-        metadata: {
-          toAddress,
-          network: 'ARC',
-          destinationNetwork: destNet,
-          cctp: delivery === 'cctp',
-          delivery,
-          errorReason: reason,
-          failedAt: 'circle-rejection'
-        }
       });
-      this.logger.error(`Transfer rejected ${reference} (${delivery}): ${reason}`);
-      throw new BadRequestException(reason);
+      if (spendable < amount + fee) {
+        const reason = `Insufficient balance. This send needs ${(amount + fee).toFixed(2)} USDC including a ${fee.toFixed(2)} USDC cross-chain network fee.`;
+        await this.recordRejectedSend({ userId, amount, fee, toAddress, destNet, delivery, errorReason: reason, failedAt: 'send-initiation' });
+        throw new BadRequestException(reason);
+      }
     }
 
+    const reference = `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const totalDebit = amount + fee;
+
+    // ── 1. Reserve the funds BEFORE the chain leg ───────────────────────────
+    // An on-chain transfer cannot be undone, so the ledger must already hold
+    // the debit at the moment it is submitted. The chain used to be called
+    // first and the balance re-checked afterwards, which let real USDC leave a
+    // wallet while the ledger recorded nothing.
     await this.prisma.$transaction(async (prisma) => {
-      // SECURITY: re-verify spendable against a FOR UPDATE row lock before the
-      // ledger debit. The chain leg has already moved (external call above), but
-      // concurrent sends must not each pass the unlocked pre-check and drive the
-      // internal balance negative. If this fails the ledger stays consistent;
-      // deposit-monitor reconciliation flags any on-chain/ledger divergence.
       const lockedRows = await prisma.$queryRawUnsafe<Array<{ id: string; usdcBalance: number; lockedBalance: number }>>(
         `SELECT "id", "usdcBalance", "lockedBalance" FROM "Wallet" WHERE "id" = $1 FOR UPDATE`,
         wallet.id
       );
       const lw = lockedRows[0];
       if (!lw) throw new BadRequestException('Wallet not found.');
+
       let lockedSpendable = lw.usdcBalance || 0;
       try {
         const netRows = await prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
@@ -1124,15 +1070,16 @@ export class WalletsService implements OnModuleInit {
         this.logger.warn(`In-tx conversion netting failed (${netErr.message}); using gross-locked`);
       }
       lockedSpendable = Math.max(0, lockedSpendable - (lw.lockedBalance || 0));
-      if (lockedSpendable < amount + fee) {
+
+      if (lockedSpendable < totalDebit) {
         throw new BadRequestException(`Insufficient balance for this send. Spendable: ${lockedSpendable.toFixed(2)} USDC.`);
       }
 
       await prisma.wallet.update({
         where: { id: wallet.id },
         data: {
-          usdcBalance: { decrement: amount + fee },
-          lockedBalance: { increment: amount + fee }
+          usdcBalance: { decrement: totalDebit },
+          lockedBalance: { increment: totalDebit }
         }
       });
 
@@ -1148,14 +1095,43 @@ export class WalletsService implements OnModuleInit {
           toAddress,
           network: 'ARC',
           destinationNetwork: destNet,
-          cctp: destNet !== 'ARC',
-          delivery: destNet === 'ARC' ? 'native' : 'cctp',
-          txState: result.state,
-          txId: result.txId,
-          txHashes: result.txHashes || [],
+          cctp: delivery === 'cctp',
+          delivery,
+          txState: 'INITIATED'
         }
       });
     });
+
+    // ── 2. Submit to the chain ──────────────────────────────────────────────
+    try {
+      const result = delivery === 'cctp'
+        ? await this.cctpService.bridge({
+            sourceNetwork: 'ARC',
+            sourceAddress: sourceAddressRecord.address,
+            destNetwork: destNet,
+            recipientAddress: toAddress,
+            amount: totalDebit,
+          })
+        : await this.sendNativeArcTransfer(userId, sourceAddressRecord.address, toAddress, amount);
+
+      await this.mergeTransactionMetadata(reference, {
+        txState: result?.state,
+        txId: result?.txId,
+        txHashes: result?.txHashes || [],
+      });
+    } catch (err: any) {
+      const reason = err?.response?.data?.message
+        || err?.message
+        || 'Transfer failed on Arc.';
+      // Nothing left the wallet, so give the money back instead of leaving it
+      // locked against a send that never happened.
+      await this.releaseReservedSend(wallet.id, reference, totalDebit, {
+        errorReason: reason,
+        failedAt: 'chain-rejection'
+      });
+      this.logger.error(`Transfer rejected ${reference} (${delivery}): ${reason}`);
+      throw new BadRequestException(reason);
+    }
 
     // In-app SEND notification so the bell drawer reflects real money movement.
     try {
@@ -1172,6 +1148,106 @@ export class WalletsService implements OnModuleInit {
     return { message: destNet === 'ARC'
       ? 'Arc transfer initiated successfully'
       : 'Cross-chain transfer initiated successfully via CCTP' };
+  }
+
+  // A send that never reached the chain. No reservation exists yet, so all
+  // this does is leave an honest FAILED row in the user's history.
+  private async recordRejectedSend(params: {
+    userId: string;
+    amount: number;
+    fee: number;
+    toAddress: string;
+    destNet: string;
+    delivery: string;
+    errorReason: string;
+    failedAt: string;
+  }) {
+    try {
+      await this.transactionsService.createTransaction(this.prisma, {
+        userId: params.userId,
+        type: 'SEND',
+        status: 'FAILED',
+        amount: params.amount,
+        fee: params.fee,
+        currency: 'USDC',
+        reference: `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        metadata: {
+          toAddress: params.toAddress,
+          network: 'ARC',
+          destinationNetwork: params.destNet,
+          cctp: params.delivery === 'cctp',
+          delivery: params.delivery,
+          errorReason: params.errorReason,
+          failedAt: params.failedAt,
+        },
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to record rejected send: ${err.message}`);
+    }
+  }
+
+  private async mergeTransactionMetadata(reference: string, patch: Record<string, unknown>) {
+    try {
+      const existing = await this.prisma.transaction.findUnique({
+        where: { reference },
+        select: { metadata: true },
+      });
+      const current = (existing?.metadata as Record<string, unknown>) || {};
+      await this.prisma.transaction.update({
+        where: { reference },
+        data: { metadata: { ...current, ...patch } as any },
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to update metadata for ${reference}: ${err.message}`);
+    }
+  }
+
+  /**
+   * Release funds reserved for a send the chain rejected. Safe to call twice:
+   * if the webhook or history sync already settled this row the status is no
+   * longer PENDING and nothing is released — releasing twice would create
+   * balance out of nothing.
+   */
+  private async releaseReservedSend(
+    walletId: string,
+    reference: string,
+    totalDebit: number,
+    meta: Record<string, unknown>,
+  ) {
+    try {
+      await this.prisma.$transaction(async (prisma) => {
+        const tx = await prisma.transaction.findUnique({
+          where: { reference },
+          select: { id: true, status: true, metadata: true },
+        });
+        if (!tx || tx.status !== 'PENDING') return;
+
+        const walletRow = await prisma.wallet.findUnique({
+          where: { id: walletId },
+          select: { lockedBalance: true },
+        });
+        const release = Math.min(totalDebit, Math.max(0, Number(walletRow?.lockedBalance || 0)));
+        if (release > 0) {
+          await prisma.wallet.update({
+            where: { id: walletId },
+            data: {
+              lockedBalance: { decrement: release },
+              usdcBalance: { increment: release },
+            },
+          });
+        }
+
+        const current = (tx.metadata as Record<string, unknown>) || {};
+        await prisma.transaction.update({
+          where: { reference },
+          data: { status: 'FAILED', metadata: { ...current, ...meta, releasedAmount: release } as any },
+        });
+      });
+    } catch (err: any) {
+      // A stuck reservation is recoverable by reconciliation, but it must never
+      // turn into a second attempt at the same send.
+      this.logger.error(`Failed to release reserved send ${reference}: ${err.message}`);
+    }
   }
 
   // Native same-chain USDC transfer on Arc (no bridge required). Uses Circle's

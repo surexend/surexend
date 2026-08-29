@@ -29,6 +29,13 @@ export default registerAs('app', () => ({
     publicKey: process.env.VTPASS_PUBLIC_KEY,
     secretKey: process.env.VTPASS_SECRET_KEY,
     baseUrl: process.env.VTPASS_BASE_URL,
+    webhookSecret: process.env.VTPASS_WEBHOOK_SECRET,
+  },
+  webhooks: {
+    // Fail closed. Every inbound webhook is cryptographically verified before
+    // it is allowed to move money. Set to 'false' ONLY to replay a captured
+    // payload against a local dev database.
+    requireSignature: process.env.WEBHOOK_REQUIRE_SIGNATURE !== 'false',
   },
   smartspeed: {
     apiKey: process.env.SMARTSPEED_API_TOKEN,

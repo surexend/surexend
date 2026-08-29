@@ -399,3 +399,66 @@ repointed to surexendofficial@gmail.com).
   eventually Flutterwave payouts. Crypto on-chain = TESTNET now (Circle TEST_ key
   + testnet RPC), so on-chain tokens are worthless; manual deposits + bank
   transfer are the only real funding paths until mainnet is configured.
+
+## 2026-08-29 — full review, then safety & correctness pass
+
+The whole repo was reviewed end to end; findings are in `docs/assessment.md`.
+Nine P0 defects were fixed in the same session:
+
+1. **`/app/invoice` was rendering fabricated bank accounts** — IBANs/BICs for
+   "SureXend Europe B.V.", "SureXend UK Ltd.", "SureXend Inc.", UBS, ClearBank
+   and eight more entities that do not exist. Anyone could have paid them. The
+   page is now an honest waitlist (`FeatureComingSoon`) and the data is gone.
+   **Lesson: a money product must never render account details it does not
+   own, even as placeholder UI.**
+2. **`/app/withdraw` faked success** with `setTimeout(..., 1500)` and no API
+   call. Same treatment. Payouts need a completed registration that does not
+   exist yet.
+3. `jwt.strategy.ts` fell back to a hardcoded secret committed in the repo.
+   Removed; `main.ts` now refuses to boot without `JWT_SECRET`,
+   `JWT_REFRESH_SECRET` and `DATABASE_URL`, and refuses `TESTING_ENABLED=true`
+   when `NODE_ENV=production`.
+4. Webhooks were effectively unauthenticated. Flutterwave compared
+   `hash !== secretHash`, which passed when the secret was unset AND the header
+   was absent. Circle had no verification at all (the comment said "in Sandbox,
+   we process the payload directly"). Now: constant-time compares, Circle
+   verified with ECDSA-SHA256 against `/v2/notifications/publicKey/{keyId}` on
+   the **raw** body (`rawBody: true` is required or the signature never
+   matches), and unconfigured providers return 503 instead of accepting
+   everything.
+5. `ThrottlerModule` was registered in `app.module.ts` but `ThrottlerGuard` was
+   never applied anywhere — there was no rate limiting at all. Now global via
+   `APP_GUARD`, proxy-aware (we sit behind the Next rewrite, so the socket
+   address is Vercel's, not the user's), with tighter limits on auth routes.
+6. **PIN brute force**: a 4-digit PIN is 10,000 combinations and nothing
+   counted attempts. `TransactionAuthService` now counts failures in Redis and
+   locks for 15 minutes after 5, degrading to an in-memory counter if Redis is
+   down (never fail open silently — log loudly).
+7. No idempotency anywhere → a retried send could double-spend. Added
+   `IdempotencyService` + `IdempotencyRecord` on send / bill purchase /
+   conversion execute; the frontend sends a fresh `Idempotency-Key` per
+   attempt.
+8. **Send ordering**: `sendCrossChainFromArc` submitted the chain transfer
+   *before* the ledger debit, so a later failed balance check left real USDC
+   gone with nothing recorded. Order is now: reserve under
+   `SELECT … FOR UPDATE` → submit to chain → settle, or refund via
+   `releaseReservedSend` (guarded on `status === 'PENDING'` so it can never
+   release twice).
+9. `typescript.ignoreBuildErrors: true` hid four real type errors. Fixed them,
+   set it to `false`, excluded `backend/` from the root tsconfig (Nest
+   decorators need the backend's own tsconfig), added `npm run typecheck`.
+
+Also added: the repo's first tests (Jest + ts-jest — webhook signature
+verification, idempotency replay semantics, throttler tracker) and
+`.github/workflows/ci.yml` running backend typecheck + tests and frontend
+typecheck + build.
+
+### Verification notes for this session
+- `npx next build` cannot run in this sandbox (Google Fonts is blocked), and
+  the backend `npm install` kept failing (the configured npm mirror resets
+  connections). **The backend changes were reviewed by hand, not typechecked —
+  run `npx tsc -p tsconfig.json --noEmit` and `npm test` in `backend/` before
+  trusting them.**
+- Frontend `npm run typecheck` passes locally.
+- Building depends on reaching `fonts.googleapis.com` at build time. Self-host
+  the fonts to remove that dependency.

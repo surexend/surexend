@@ -27,7 +27,7 @@ export function getSeoPages(kind: SeoPageKind): SeoPage[] {
 export function getRelated(page: SeoPage, limit = 3): SeoPage[] {
   const related = (page.related || [])
     .map((path) => getSeoPageByPath(path))
-    .filter((p): p is SeoPage => Boolean(p) && p.path !== page.path)
+    .filter((p): p is SeoPage => !!p && p.path !== page.path)
   if (related.length >= limit) return related.slice(0, limit)
   const rest = allPages.filter(
     (p) => p.path !== page.path && !related.some((r) => r.path === p.path)

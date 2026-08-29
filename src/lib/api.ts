@@ -268,6 +268,18 @@ export const passkeyAPI = {
 }
 
 // ── Wallet API ────────────────────────────────────────────────────────────
+
+// Every money-moving request carries a fresh Idempotency-Key. If the same
+// request reaches the server twice — double tap, dropped connection, automatic
+// retry — the backend replays the first response instead of charging twice.
+function idempotencyHeaders(extra?: Record<string, string>): Record<string, string> {
+  const key =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return { 'Idempotency-Key': key, ...(extra || {}) }
+}
+
 export const walletAPI = {
   getBalance: () =>
     tryWithMock(
@@ -313,7 +325,7 @@ export const walletAPI = {
         network: payload.network,
         pin: payload.pin,
         passkeyToken: payload.passkeyToken,
-      }, { timeout: 180000, headers }).then(r => r.data),
+      }, { timeout: 180000, headers: idempotencyHeaders(headers) }).then(r => r.data),
       () => ({
         success: true,
         reference: 'TX-' + Math.random().toString(36).substring(2, 9).toUpperCase(),
@@ -466,7 +478,7 @@ export const conversionAPI = {
         amount: payload.amount,
         pin: payload.pin,
         passkeyToken: payload.passkeyToken,
-      }, { headers }).then(r => r.data),
+      }, { headers: idempotencyHeaders(headers) }).then(r => r.data),
       () => ({
         success: true,
         reference: 'CNV-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
@@ -557,7 +569,7 @@ export const billsAPI = {
     amount?: number; planCode?: string; pin?: string; passkeyToken?: string
   }, headers?: Record<string, string>) =>
     tryWithMock(
-      () => apiClient.post('/bills/purchase', payload, { headers }).then(r => r.data),
+      () => apiClient.post('/bills/purchase', payload, { headers: idempotencyHeaders(headers) }).then(r => r.data),
       () => ({
         success: true,
         reference: 'VTP-' + Math.random().toString(36).substring(2, 9).toUpperCase(),

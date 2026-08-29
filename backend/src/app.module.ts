@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bull';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import configuration from './config/configuration';
+import { ThrottlerProxyGuard } from './common/guards/throttler-proxy.guard';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
@@ -28,9 +30,12 @@ import { PasskeysModule } from './passkeys/passkeys.module';
       isGlobal: true,
       load: [configuration],
     }),
+    // Generous baseline: the dashboard polls, so this only has to stop abuse.
+    // Sensitive endpoints tighten it with @Throttle, and transaction PINs are
+    // protected by a Redis-backed attempt lockout.
     ThrottlerModule.forRoot([{
       ttl: 60000,
-      limit: 100,
+      limit: 300,
     }]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
@@ -56,6 +61,11 @@ import { PasskeysModule } from './passkeys/passkeys.module';
     AdminModule,
     CampaignsModule,
     PasskeysModule,
+  ],
+  providers: [
+    // Applied globally so no new endpoint ships unthrottled by default.
+    // Webhooks opt out with @SkipThrottle (they come from provider IPs).
+    { provide: APP_GUARD, useClass: ThrottlerProxyGuard },
   ],
 })
 export class AppModule {}

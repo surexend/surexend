@@ -1,12 +1,16 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, Headers } from '@nestjs/common';
 import { BillsService } from './bills.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { IdempotencyService } from '../common/idempotency/idempotency.service';
 
 @Controller('bills')
 @UseGuards(JwtAuthGuard)
 export class BillsController {
-  constructor(private readonly billsService: BillsService) {}
+  constructor(
+    private readonly billsService: BillsService,
+    private readonly idempotency: IdempotencyService,
+  ) {}
 
   @Get('providers')
   async getProviders(@Query('type') type: string, @Query('country') country: string) {
@@ -26,6 +30,7 @@ export class BillsController {
   @Post('purchase')
   async purchase(
     @CurrentUser() user: any,
+    @Headers('idempotency-key') idempotencyKey: string,
     @Body('type') type: string,
     @Body('provider') provider: string,
     @Body('recipient') recipient: string,
@@ -34,6 +39,10 @@ export class BillsController {
     @Body('planCode') planCode?: string,
     @Body('passkeyToken') passkeyToken?: string,
   ) {
-    return this.billsService.purchaseBill(user.id, type, provider, recipient, amount, pin, planCode, passkeyToken);
+    const { result } = await this.idempotency.run(
+      { userId: user.id, scope: 'bills.purchase', key: idempotencyKey },
+      () => this.billsService.purchaseBill(user.id, type, provider, recipient, amount, pin, planCode, passkeyToken),
+    );
+    return result;
   }
 }

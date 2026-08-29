@@ -4,9 +4,10 @@ import { BillsController } from './bills.controller';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ConversionsModule } from '../conversions/conversions.module';
 import { TransactionAuthModule } from '../common/transaction-auth/transaction-auth.module';
+import { IdempotencyModule } from '../common/idempotency/idempotency.module';
 
 @Module({
-  imports: [TransactionsModule, ConversionsModule, TransactionAuthModule],
+  imports: [TransactionsModule, ConversionsModule, TransactionAuthModule, IdempotencyModule],
   providers: [BillsService],
   controllers: [BillsController],
   exports: [BillsService],

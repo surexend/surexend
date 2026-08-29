@@ -1,13 +1,17 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, Headers } from '@nestjs/common';
 import { ConversionsService } from './conversions.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateConversionDto, PreviewConversionDto } from './dto/create-conversion.dto';
+import { IdempotencyService } from '../common/idempotency/idempotency.service';
 
 @Controller('conversions')
 @UseGuards(JwtAuthGuard)
 export class ConversionsController {
-  constructor(private readonly conversionsService: ConversionsService) {}
+  constructor(
+    private readonly conversionsService: ConversionsService,
+    private readonly idempotency: IdempotencyService,
+  ) {}
 
   @Get('currencies')
   async getCurrencies() {
@@ -33,14 +37,23 @@ export class ConversionsController {
   }
 
   @Post('execute')
-  async execute(@CurrentUser() user: any, @Body() dto: CreateConversionDto) {
-    return this.conversionsService.execute(
-      user.id,
-      dto.from,
-      dto.to,
-      dto.amount,
-      dto.pin,
-      dto.passkeyToken
+  async execute(
+    @CurrentUser() user: any,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @Body() dto: CreateConversionDto,
+  ) {
+    const { result } = await this.idempotency.run(
+      { userId: user.id, scope: 'conversions.execute', key: idempotencyKey },
+      () =>
+        this.conversionsService.execute(
+          user.id,
+          dto.from,
+          dto.to,
+          dto.amount,
+          dto.pin,
+          dto.passkeyToken,
+        ),
     );
+    return result;
   }
 }

@@ -46,9 +46,13 @@ const nextConfig: NextConfig = {
     },
   ],
 
-  // Ignore TypeScript errors during build so preview builds always succeed
+  // Type errors fail the build. This used to be `ignoreBuildErrors: true`,
+  // which silently shipped broken code — notably a bills page that imported an
+  // icon that does not exist. `npm run typecheck` runs the same check locally,
+  // and root tsconfig.json excludes backend/ (the NestJS decorators need the
+  // backend's own tsconfig, checked separately in CI).
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 }
 

@@ -223,7 +223,7 @@ export default function DashboardPage() {
   // percent-padded axis flattens the line into invisibility. For near-constant
   // series we zoom into the data range so the REAL wiggle is visible instead of
   // a boring straight line. Normal pairs keep the classic percent padding.
-  const chartYDomain = useMemo(() => {
+  const chartYDomain = useMemo<[number | string, number | string]>(() => {
     const vals = chartSeries.map(d => d.value).filter(v => typeof v === 'number')
     if (vals.length === 0) return (['auto', 'auto'] as unknown) as [number, number]
     const dataMin = Math.min(...vals)

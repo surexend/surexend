@@ -10,10 +10,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private configService: ConfigService,
     private prisma: PrismaService,
   ) {
+    const secret = configService.get<string>('app.jwt.secret') || process.env.JWT_SECRET;
+    if (!secret) {
+      // No fallback secret: a hardcoded default would let anyone mint a valid
+      // token for any user id. main.ts fails the boot before we get here.
+      throw new Error('JWT_SECRET is not configured');
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('app.jwt.secret') || process.env.JWT_SECRET || 'surexend-default-jwt-secret-key-12345',
+      secretOrKey: secret,
     });
   }
 
