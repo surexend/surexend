@@ -32,6 +32,7 @@ type SendFormValues = z.infer<typeof sendSchema>
 
 export default function SendPage() {
   const { variant, colors } = useTheme()
+  const isGold = variant === 'gold'
   const router = useRouter()
   const searchParams = useSearchParams()
   const initialType = searchParams.get('type') === 'tag' ? 'TAG' : 'CRYPTO'
