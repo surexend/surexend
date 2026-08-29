@@ -22,6 +22,10 @@ export const initFirebase = async () => {
       const supported = await isSupported()
       if (supported) {
         messagingInstance = getMessaging(app)
+        // Register service worker for background push notifications (system-level)
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+          navigator.serviceWorker.register('/firebase-messaging-sw.js').catch(() => {})
+        }
         return messagingInstance
       }
       return null
