@@ -75,13 +75,14 @@ export default function CampaignsPage() {
             <button
               key={t.key}
               onClick={() => setType(t.key)}
-              className="rounded-2xl p-4 text-left border transition-colors"
-              style={active
-                ? { background: `rgba(${accentRgb}, 0.08)`, borderColor: `rgba(${accentRgb}, 0.4)` }
-                : { background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.08)' }}
+              className={`rounded-2xl p-4 text-left border transition-all ${
+                active
+                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-md'
+                  : 'bg-white/[0.03] border-white/10 text-[#94A3B8] hover:bg-white/[0.06] hover:text-white'
+              }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <Icon className="w-4 h-4" style={{ color: active ? accentHex : '#64748B' }} />
+                <Icon className={`w-4 h-4 ${active ? 'text-amber-400' : 'text-[#64748B]'}`} />
                 <span className={`text-sm font-bold ${active ? 'text-white' : 'text-[#94A3B8]'}`}>{t.label}</span>
               </div>
               <p className="text-[10px] text-[#64748B] leading-snug">{t.desc}</p>
@@ -90,22 +91,24 @@ export default function CampaignsPage() {
         })}
       </div>
 
-      {/* Range pills — wrapped, not a horizontal scroll layer. A composited
-          overflow-x row inside a page that could itself scroll sideways was
-          the trigger for Android's scanline corruption on this screen. */}
+      {/* Range pills — wrapped flex row with pure CSS styling to prevent GPU layer duplication */}
       <div className="flex flex-wrap justify-center gap-1.5">
-        {RANGES.map((r) => (
-          <button
-            key={r.key}
-            onClick={() => setRange(r.key)}
-            className="px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-colors border"
-            style={range === r.key
-              ? { background: `rgba(${accentRgb}, 0.12)`, borderColor: `rgba(${accentRgb}, 0.4)`, color: accentHex }
-              : { background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)', color: '#94A3B8' }}
-          >
-            {r.label}
-          </button>
-        ))}
+        {RANGES.map((r) => {
+          const active = range === r.key
+          return (
+            <button
+              key={r.key}
+              onClick={() => setRange(r.key)}
+              className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-all border ${
+                active
+                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm'
+                  : 'bg-white/[0.03] border-white/10 text-[#94A3B8] hover:bg-white/[0.06] hover:text-white'
+              }`}
+            >
+              {r.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Leaderboard */}
