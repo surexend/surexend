@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
-import { transactionAPI } from '@/lib/api'
+import { transactionAPI, authAPI } from '@/lib/api'
 import { formatDate, formatCurrency, getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -16,6 +16,7 @@ import {
 import toast from 'react-hot-toast'
 import { useBackLayer } from '@/context/BackNavigationContext'
 import { renderReceiptCanvas as renderReceiptCanvasUtil, downloadReceiptFile } from '@/lib/receipt'
+import { generateStatementPDF } from '@/lib/statement'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type TxType = 'ALL' | 'SEND' | 'RECEIVE' | 'CONVERT' | 'BILL_PAYMENT' | 'REFERRAL_EARNING'
@@ -84,24 +85,47 @@ function StatementModal({
     'July','August','September','October','November','December'
   ]
 
+  const { variant } = useTheme()
+
   const download = async () => {
     setLoading(true)
     try {
-      const params: any = { format: 'pdf' }
-      if (period === 'year') params.year = year
-      if (period === 'month') { params.year = year; params.month = month }
-      if (period === 'week') { params.year = year; params.week = week }
-      const blob = await transactionAPI.downloadStatement(params)
-      const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `surexend-statement-${period}-${year}${period !== 'year' ? `-${month}` : ''}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
+      const filterParams: any = { limit: 1000 }
+      if (period === 'year') filterParams.year = year
+      if (period === 'month') { filterParams.year = year; filterParams.month = month }
+      if (period === 'week') { filterParams.year = year; filterParams.week = week }
+
+      const [txRes, profileRes] = await Promise.all([
+        transactionAPI.getTransactions(filterParams).catch(() => null),
+        authAPI.getProfile().catch(() => null),
+      ])
+
+      const txList = txRes?.transactions || []
+      const userObj = {
+        name: profileRes ? `${profileRes.firstName || ''} ${profileRes.lastName || ''}`.trim() || 'Account Holder' : 'Account Holder',
+        email: profileRes?.email || 'user@surexend.com',
+        surexTag: profileRes?.surexTag || undefined,
+        accountNumber: profileRes?.accountNumber || profileRes?.email || undefined,
+      }
+
+      const periodLabel = period === 'year'
+        ? `${year}`
+        : period === 'month'
+          ? `${months[month - 1]} ${year}`
+          : `Week ${week}, ${year}`
+
+      await generateStatementPDF({
+        user: userObj,
+        transactions: txList,
+        periodLabel,
+        variant,
+        accentHex,
+      })
+
       toast.success('Statement downloaded!')
       onClose()
-    } catch {
-      toast.error('Failed to download statement. Please try again.')
+    } catch (err) {
+      toast.error('Failed to generate statement. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -648,13 +672,13 @@ function TransactionDetailModal({
           )}
 
           {/* Detail rows */}
-          <div className="mt-7 space-y-4">
+          <div className="mt-7 space-y-3.5">
             {rows.map((row) => (
-              <div key={row.label} className="flex items-start justify-between gap-4">
-                <span className="text-[#64748B] text-[11px] font-medium mt-0.5 flex-shrink-0">{row.label}</span>
+              <div key={row.label} className="flex items-center justify-between gap-4">
+                <span className="text-[#64748B] text-[11px] font-medium leading-none flex-shrink-0">{row.label}</span>
                 <span className="flex items-center gap-2 min-w-0 justify-end flex-1">
                   <span
-                    className={`text-right text-[11px] font-semibold break-all ${row.mono ? 'font-mono text-[10px]' : ''} ${row.accent ? '' : 'text-white'}`}
+                    className={`text-right text-[11px] font-semibold leading-none break-all ${row.mono ? 'font-mono text-[10.5px] tracking-tight' : ''} ${row.accent ? '' : 'text-white'}`}
                     style={row.accent ? { color: accentHex } : undefined}
                   >
                     {row.value}
@@ -662,7 +686,7 @@ function TransactionDetailModal({
                   {row.copyable && (
                     <button
                       onClick={() => copy(row.label, row.copyable!)}
-                      className="text-[#475569] hover:text-white transition-colors flex-shrink-0"
+                      className="text-[#475569] hover:text-white transition-colors flex-shrink-0 inline-flex items-center"
                       title="Copy"
                     >
                       {copiedField === row.label ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
