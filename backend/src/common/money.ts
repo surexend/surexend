@@ -25,7 +25,7 @@ export function toMinor(amount: number, currency: string): bigint { return guard
 export function fromMinor(amount: bigint | number | string, currency: string): number { return Number(guardMinor(amount)) / 10 ** decimalsFor(currency); }
 export function addMinor(a: bigint | number, b: bigint | number): bigint { return guardMinor(a) + guardMinor(b); }
 export function subtractMinor(a: bigint | number, b: bigint | number): bigint { return guardMinor(a) - guardMinor(b); }
-export function sumMinor(values: (bigint | number)[]): bigint { return values.reduce((s, v) => s + guardMinor(v), 0n); }
+export function sumMinor(values: (bigint | number)[]): bigint { return values.reduce<bigint>((s, v) => s + guardMinor(v), 0n); }
 export function allocateMinor(amount: bigint | number, ratios: number[]): bigint[] {
   const total = guardMinor(amount); if (!ratios.length || ratios.some(r => !Number.isFinite(r) || r < 0)) throw new TypeError('Invalid allocation ratios');
   const denominator = ratios.reduce((a, b) => a + b, 0); if (!denominator) throw new TypeError('Allocation ratios must not be zero');
