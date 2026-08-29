@@ -17,6 +17,7 @@ import toast from 'react-hot-toast'
 // Lazy-load the AI widget — it's 24 KB and only needed on demand.
 // Loading it eagerly on every page adds parse cost on low-end phones.
 const AISupportWidget = dynamic(() => import('@/components/AISupportWidget'), { ssr: false })
+const FirebaseMessaging = dynamic(() => import('@/components/FirebaseMessaging'), { ssr: false })
 import { notificationsAPI, userAPI } from '@/lib/api'
 import { useLite } from '@/lib/lite'
 
@@ -490,6 +491,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           document.body
         )}
         <AISupportWidget />
+        <FirebaseMessaging />
       </div>
     </QueryClientProvider>
   )

@@ -85,4 +85,14 @@ export class UsersController {
   ) {
     return this.usersService.submitKyc(user.id, tier, documentUrl, type);
   }
+
+  @Post('fcm-token')
+  async saveFcmToken(@CurrentUser() user: any, @Body('token') token: string) {
+    return this.usersService.saveFcmToken(user.id, token);
+  }
+
+  @Post('fcm-topic')
+  async subscribeTopic(@CurrentUser() user: any, @Body('topic') topic: string) {
+    return this.usersService.subscribeToTopic(user.id, topic);
+  }
 }

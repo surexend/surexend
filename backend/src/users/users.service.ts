@@ -3,10 +3,34 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import * as speakeasy from 'speakeasy';
 import * as qrcode from 'qrcode';
+import * as admin from 'firebase-admin';
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
+
+  async saveFcmToken(userId: string, token: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { fcmToken: token }
+    });
+    return { success: true };
+  }
+
+  async subscribeToTopic(userId: string, topic: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { fcmToken: true }
+    });
+    if (user?.fcmToken) {
+      try {
+        await admin.messaging().subscribeToTopic([user.fcmToken], topic);
+      } catch {
+        // ignore — best effort
+      }
+    }
+    return { success: true };
+  }
 
   async getProfile(userId: string) {
     const user = await this.prisma.user.findUnique({

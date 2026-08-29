@@ -32,6 +32,7 @@ model User {
   isActive         Boolean   @default(true)
   isBanned         Boolean   @default(false)
   role             String    @default("USER")
+  fcmToken        String?
 
   wallet          Wallet?
   bankAccounts    BankAccount[]
