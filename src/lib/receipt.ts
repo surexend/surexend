@@ -75,7 +75,6 @@ export async function renderReceiptCanvas(opts: {
   const typeUpper = (tx?.type || '').toUpperCase()
   const isCredit = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING' || typeUpper === 'CONVERT'
   const isDebit = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
-  const sign = isCredit ? '+' : isDebit ? '-' : ''
   const isSwap = !!swap
 
   // Type pill (small, top-left) — Credit / Debit / Swap / Failed
@@ -100,7 +99,7 @@ export async function renderReceiptCanvas(opts: {
     ? 'Failed'
     : swap
       ? `${currencySymbol(swap.to)}${formatAmount(swap.toAmount)}`
-      : `${sign}${symbol}${formatAmount(Number(tx?.amount || 0))}`
+      : `${symbol}${formatAmount(Number(tx?.amount || 0))}`
   const amountSub = isFailed
     ? null
     : swap

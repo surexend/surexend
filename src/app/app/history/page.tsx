@@ -418,7 +418,6 @@ function TransactionDetailModal({
   const typeUpper = (details?.type || '').toUpperCase()
   const isCredit = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING' || typeUpper === 'CONVERT'
   const isDebit = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
-  const sign = isCredit ? '+' : isDebit ? '-' : ''
   const amtColor = isCredit ? 'text-emerald-400' : isDebit ? 'text-red-400' : 'text-[#64748B]'
   const symbol = details?.currency === 'NGN' ? '₦' : details?.currency === 'GHS' ? 'GH₵' : details?.currency === 'KES' ? 'KSh' : '$'
 
