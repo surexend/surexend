@@ -44,20 +44,23 @@ function NetworkLogo({ id, size = 32, className = '' }: NetworkLogoProps) {
   const logoSrc = LOGO_PATHS[id] || LOGO_PATHS.ETHEREUM
   const bgAccent = ACCENT_COLORS[id] || 'rgba(255, 255, 255, 0.08)'
 
+  // Full-cover circular clip for logos with square background cards (e.g. Arc)
+  const isFullCover = id === 'ARC'
+
   return (
     <div
       className={`relative inline-flex items-center justify-center rounded-full overflow-hidden flex-shrink-0 transition-transform ${className}`}
       style={{
         width: `${size}px`,
         height: `${size}px`,
-        backgroundColor: bgAccent,
-        padding: `${Math.max(2, size * 0.1)}px`,
+        backgroundColor: isFullCover ? 'transparent' : bgAccent,
+        padding: isFullCover ? '0px' : `${Math.max(2, size * 0.08)}px`,
       }}
     >
       <img
         src={logoSrc}
         alt={`${id} logo`}
-        className="w-full h-full object-contain filter drop-shadow-sm"
+        className={`w-full h-full rounded-full filter drop-shadow-sm ${isFullCover ? 'object-cover' : 'object-contain'}`}
         onError={(e) => {
           ;(e.target as HTMLImageElement).src = '/logos/ethereum.png'
         }}
