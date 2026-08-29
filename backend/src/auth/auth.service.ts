@@ -52,10 +52,16 @@ export class AuthService {
       throw new BadRequestException(`The SureX tag @${surexTag} is already taken.`);
     }
 
-    let referredById = null;
-    if (dto.referralCode) {
-      const referrer = await this.prisma.user.findUnique({ where: { referralCode: dto.referralCode } });
-      if (referrer) referredById = referrer.id;
+    let referrer: { id: string; firstName: string } | null = null;
+    const submittedReferralCode = dto.referralCode?.trim().toUpperCase();
+    if (submittedReferralCode) {
+      referrer = await this.prisma.user.findUnique({
+        where: { referralCode: submittedReferralCode },
+        select: { id: true, firstName: true },
+      });
+      if (!referrer) {
+        throw new BadRequestException('This referral code is invalid or no longer available');
+      }
     }
 
     const user = await this.prisma.user.create({
@@ -67,19 +73,26 @@ export class AuthService {
         lastName: dto.lastName,
         surexTag,
         referralCode,
-        referredById,
+        referredById: referrer?.id || null,
         wallet: {
           create: {} // Create an empty wallet
         }
       }
     });
 
-    if (referredById) {
+    if (referrer) {
       await this.prisma.referral.create({
         data: {
-          referrerId: referredById,
+          referrerId: referrer.id,
           referredId: user.id
         }
+      });
+
+      await this.notificationsService.createNotification(referrer.id, {
+        title: 'A friend joined with your invite',
+        body: `${user.firstName} ${user.lastName} signed up using your referral code.`,
+        type: 'REFERRAL',
+        data: { referredUserId: user.id },
       });
     }
 

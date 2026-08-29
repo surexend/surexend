@@ -158,4 +158,12 @@ export class NotificationsService {
     });
     return { message: 'All notifications marked as read' };
   }
+
+  async markRead(userId: string, notificationId: string) {
+    await this.prisma.notification.updateMany({
+      where: { id: notificationId, userId },
+      data: { isRead: true },
+    });
+    return { message: 'Notification marked as read' };
+  }
 }

@@ -10,7 +10,10 @@ export class ReferralsService {
   ) {}
 
   async getStats(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { referralCode: true },
+    });
     
     const totalReferrals = await this.prisma.referral.count({ where: { referrerId: userId } });
     const activeReferrals = await this.prisma.referral.count({ where: { referrerId: userId, isActive: true } });
@@ -46,6 +49,7 @@ export class ReferralsService {
       totalEarned,
       thisMonthEarned,
       referralCode: user.referralCode,
+      referralLink: `https://surexend.com/ref/${user.referralCode}`,
       commissionRate
     };
   }
@@ -58,13 +62,26 @@ export class ReferralsService {
         skip,
         take: limit,
         include: {
-          referred: { select: { firstName: true, lastName: true, createdAt: true } }
+          referred: { select: { id: true, firstName: true, lastName: true, createdAt: true } }
         }
       }),
       this.prisma.referral.count({ where: { referrerId: userId } })
     ]);
 
-    return { data, total, page, limit };
+    return {
+      referrals: data.map((referral) => ({
+        id: referral.id,
+        userId: referral.referred.id,
+        firstName: referral.referred.firstName,
+        lastName: referral.referred.lastName,
+        joinedAt: referral.referred.createdAt,
+        isActive: referral.isActive,
+        earnings: referral.earnings,
+      })),
+      total,
+      page,
+      limit,
+    };
   }
 
   async getEarningsBreakdown(userId: string) {
@@ -81,7 +98,9 @@ export class ReferralsService {
       return acc;
     }, {});
 
-    return breakdown;
+    return Object.entries(breakdown)
+      .map(([month, amount]) => ({ month, amount }))
+      .sort((a, b) => b.month.localeCompare(a.month));
   }
 
   async processReferralEarning(referrerId: string, txFeeAmount: number) {
@@ -100,6 +119,7 @@ export class ReferralsService {
         where: { userId: referrerId },
         select: { id: true }
       });
+      if (!wallet) return;
       await prisma.wallet.update({
         where: { id: wallet.id },
         data: { usdtBalance: { increment: commissionAmount } }

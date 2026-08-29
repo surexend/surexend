@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { adminAPI } from '@/lib/api'
-import { ArrowLeft, Ban, CheckCircle2, ShieldCheck, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Ban, CheckCircle2, ShieldCheck, Plus, Trash2, Users, Gift } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -225,6 +225,42 @@ export default function AdminUserDetailPage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="liquid-glass p-5 relative overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="font-semibold text-sm text-white flex items-center gap-2"><Users className="w-4 h-4 text-cyan-400" /> Referral network</h3>
+            <p className="text-[11px] text-[#64748B] mt-1">Verified signup attribution for this account.</p>
+          </div>
+          <div className="text-right"><p className="text-xl font-black text-white">{data.referralsMade?.length || 0}</p><p className="text-[10px] text-[#64748B]">users invited</p></div>
+        </div>
+
+        {data.referredUsers?.[0]?.referrer && (
+          <div className="mb-4 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.05] px-3 py-2.5 text-xs">
+            <span className="text-[#64748B]">Referred by </span>
+            <Link href={`/admin/users/${data.referredUsers[0].referrer.id}`} className="text-cyan-300 font-semibold hover:underline">
+              {data.referredUsers[0].referrer.firstName} {data.referredUsers[0].referrer.lastName}
+            </Link>
+            <span className="text-[#64748B]"> · {data.referredUsers[0].referrer.referralCode}</span>
+          </div>
+        )}
+
+        {!data.referralsMade?.length ? (
+          <div className="py-8 text-center"><Gift className="w-6 h-6 mx-auto text-[#475569]" /><p className="text-xs text-[#64748B] mt-2">This user has not referred anyone yet.</p></div>
+        ) : (
+          <div className="divide-y divide-white/5 border border-white/5 rounded-xl overflow-hidden">
+            {data.referralsMade.map((referral: any) => (
+              <div key={referral.id} className="flex items-center justify-between gap-3 px-3 py-3 bg-white/[0.02]">
+                <div className="min-w-0">
+                  <Link href={`/admin/users/${referral.referred.id}`} className="text-xs text-white font-semibold hover:underline truncate block">{referral.referred.firstName} {referral.referred.lastName}</Link>
+                  <p className="text-[10px] text-[#64748B] truncate">{referral.referred.email} · joined {formatDate(referral.referred.createdAt)}</p>
+                </div>
+                <div className="text-right flex-shrink-0"><p className="text-xs font-semibold text-emerald-400">{fmt(referral.earnings)} USDC</p><p className="text-[9px] text-[#64748B]">{referral.isActive ? 'ACTIVE' : 'INACTIVE'}</p></div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="liquid-glass p-5 relative overflow-hidden">

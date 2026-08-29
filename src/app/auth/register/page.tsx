@@ -50,10 +50,16 @@ export default function RegisterPage() {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
   })
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('ref')?.trim().toUpperCase()
+    if (code) setValue('referralCode', code, { shouldValidate: true })
+  }, [setValue])
 
   const passwordValue = watch('password')
 
@@ -80,7 +86,7 @@ export default function RegisterPage() {
         email: data.email,
         phone: '+234' + data.whatsapp.replace(/^0+/, ''),
         password: data.password,
-        referralCode: data.referralCode
+        referralCode: data.referralCode?.trim().toUpperCase() || undefined
       })
       toast.success('Registration successful! Please verify your email.')
       if (res.data?.otpDelivered === false) {

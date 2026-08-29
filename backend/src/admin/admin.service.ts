@@ -179,6 +179,7 @@ export class AdminService {
           isBanned: true,
           role: true,
           createdAt: true,
+          _count: { select: { referralsMade: true } },
           wallet: { select: { usdtBalance: true, usdcBalance: true, localBalance: true, localBalances: true } },
         },
       }),
@@ -211,7 +212,8 @@ export class AdminService {
         wallet: { select: { usdtBalance: true, usdcBalance: true, lockedBalance: true, localBalance: true, localBalances: true, realLocalBalance: true, pendingBalance: true } },
         bankAccounts: true,
         kycDocuments: { orderBy: { createdAt: 'desc' } },
-        referralsMade: { include: { referred: { select: { firstName: true, lastName: true, email: true, createdAt: true } } } },
+        referralsMade: { include: { referred: { select: { id: true, firstName: true, lastName: true, email: true, createdAt: true } } } },
+        referredUsers: { include: { referrer: { select: { id: true, firstName: true, lastName: true, email: true, referralCode: true } } } },
       },
     });
     if (!user) return null;

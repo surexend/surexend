@@ -1,256 +1,199 @@
 'use client'
 
-import React, { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useTheme } from '@/context/ThemeContext'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTheme } from '@/context/ThemeContext'
 import { referralAPI } from '@/lib/api'
 import {
-  Copy, Share2, Gift, Users, DollarSign,
-  TrendingUp, Star, Award, Crown, CheckCircle
+  Award, Check, Copy, Crown, Gift, RefreshCw, Share2,
+  Sparkles, Star, TrendingUp, UserPlus, Users,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const TIERS = [
-  { name: 'Bronze', icon: Star, min: 0, max: 9, color: '#CD7F32', bg: 'rgba(205,127,50,0.12)', desc: '0.3% of fees' },
-  { name: 'Silver', icon: Award, min: 10, max: 49, color: '#94A3B8', bg: 'rgba(148,163,184,0.12)', desc: '0.4% of fees' },
-  { name: 'Gold', icon: Crown, min: 50, max: 199, color: '#FFD700', bg: 'rgba(255,215,0,0.12)', desc: '0.5% of fees' },
-  { name: 'Platinum', icon: Crown, min: 200, max: Infinity, color: '#00D4FF', bg: 'rgba(0,212,255,0.12)', desc: '0.6% of fees' },
+  { name: 'Bronze', icon: Star, min: 0, max: 9, color: '#D69E6B', rate: 0.3 },
+  { name: 'Silver', icon: Award, min: 10, max: 49, color: '#CBD5E1', rate: 0.4 },
+  { name: 'Gold', icon: Crown, min: 50, max: 199, color: '#FFD966', rate: 0.5 },
+  { name: 'Platinum', icon: Sparkles, min: 200, max: Infinity, color: '#67E8F9', rate: 0.6 },
 ]
 
 function getTier(count: number) {
-  return TIERS.find(t => count >= t.min && count <= t.max) || TIERS[0]
+  return TIERS.find((tier) => count >= tier.min && count <= tier.max) || TIERS[0]
 }
 
 export default function ReferralsPage() {
   const { variant, colors } = useTheme()
-  const isGold = variant === 'gold'
-  const accentRgb = isGold ? '212, 160, 23' : '181, 226, 61'
-  const accentHex = isGold ? '#D4A017' : '#B5E23D'
+  const accentRgb = variant === 'gold' ? '212, 160, 23' : '181, 226, 61'
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null)
+  const [activeTab, setActiveTab] = useState<'overview' | 'people' | 'earnings'>('overview')
 
-  const [copied, setCopied] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'referrals' | 'earnings'>('overview')
-
-  const { data: stats } = useQuery({
-    queryKey: ['referral-stats'],
-    queryFn: referralAPI.getStats,
-    retry: false
-  })
-
-  const { data: referrals } = useQuery({
-    queryKey: ['referrals'],
+  const statsQuery = useQuery({ queryKey: ['referral-stats'], queryFn: referralAPI.getStats, retry: 1 })
+  const peopleQuery = useQuery({
+    queryKey: ['referrals', 1, 50],
     queryFn: () => referralAPI.getReferrals(1, 50),
-    enabled: activeTab === 'referrals',
+    enabled: activeTab === 'people',
+  })
+  const earningsQuery = useQuery({
+    queryKey: ['referral-earnings'],
+    queryFn: referralAPI.getEarnings,
+    enabled: activeTab === 'earnings',
   })
 
-  const referralLink = `https://surexend.com/ref/${stats?.referralCode || 'ALEX928'}`
-
-  const copyLink = () => {
-    navigator.clipboard.writeText(referralLink)
-    setCopied(true)
-    toast.success('Referral link copied!')
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const shareLink = async () => {
-    if (navigator.share) {
-      await navigator.share({
-        title: 'Join SureXend',
-        text: '🚀 I use SureXend for instant crypto & bill payments in Africa! Join using my referral link and earn rewards:',
-        url: referralLink,
-      })
-    } else {
-      copyLink()
-    }
-  }
-
-  const totalReferrals = stats?.totalReferrals || 0
-  const tier = getTier(totalReferrals)
-  const TierIcon = tier.icon
+  const stats = statsQuery.data
+  const code = stats?.referralCode || ''
+  const link = stats?.referralLink || (code ? `https://surexend.com/ref/${code}` : '')
+  const total = stats?.totalReferrals || 0
+  const tier = getTier(total)
   const nextTier = TIERS[TIERS.indexOf(tier) + 1]
-  const tierProgress = nextTier
-    ? ((totalReferrals - tier.min) / (nextTier.min - tier.min)) * 100
-    : 100
+  const progress = nextTier ? Math.min(100, ((total - tier.min) / (nextTier.min - tier.min)) * 100) : 100
+  const TierIcon = tier.icon
+
+  const copy = async (value: string, type: 'code' | 'link') => {
+    if (!value) return
+    await navigator.clipboard.writeText(value)
+    setCopied(type)
+    toast.success(type === 'code' ? 'Referral code copied' : 'Invite link copied')
+    window.setTimeout(() => setCopied(null), 1800)
+  }
+
+  const share = async () => {
+    if (!link) return
+    const shareData = {
+      title: 'Join me on SureXend',
+      text: `Use my SureXend invite code ${code} when you create your account.`,
+      url: link,
+    }
+    if (navigator.share) await navigator.share(shareData).catch(() => {})
+    else await copy(link, 'link')
+  }
+
+  if (statsQuery.isLoading) {
+    return <div className="min-h-[65vh] grid place-items-center"><RefreshCw className="w-6 h-6 animate-spin text-[#94A3B8]" /></div>
+  }
+
+  if (statsQuery.isError) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-20 text-center">
+        <div className="w-12 h-12 mx-auto rounded-2xl bg-red-500/10 text-red-400 grid place-items-center mb-4"><Gift className="w-5 h-5" /></div>
+        <h1 className="text-white font-bold">Referral details are unavailable</h1>
+        <p className="text-sm text-[#64748B] mt-1">Your account data was not replaced with demo information. Try again when the connection is restored.</p>
+        <button onClick={() => statsQuery.refetch()} className="mt-5 px-4 py-2.5 rounded-xl bg-white/10 text-white text-sm font-semibold">Try again</button>
+      </div>
+    )
+  }
 
   return (
-    <div className="w-full max-w-full overflow-x-hidden px-3 py-4 sm:p-6 md:p-8 max-w-2xl mx-auto space-y-4 pb-28 sm:pb-32">
-      {/* Header */}
-      <div className="border-b border-white/5 pb-3">
-        <h1 className="text-white font-extrabold text-xl sm:text-2xl tracking-tight">Peak Referral Program</h1>
-        <p className="text-[#94A3B8] text-xs sm:text-sm mt-0.5">
-          Invite friends & earn lifetime USDC cashbacks on every payment they make.
-        </p>
-      </div>
-
-      {/* Referral Link Card */}
-      <div 
-        className="rounded-2xl p-4 sm:p-5 relative overflow-hidden shadow-xl"
-        style={{
-          background: colors.gradientBg,
-          boxShadow: `0 10px 40px rgba(${accentRgb}, 0.2)`,
-        }}
-      >
-        <div className="relative z-10 space-y-3">
-          <div className="flex items-center gap-2">
-            <Gift className="w-5 h-5 text-black" />
-            <p className="font-extrabold text-black text-sm uppercase tracking-wider">Your Personal Referral Link</p>
-          </div>
-
-          <div className="bg-black/20 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 border border-black/10">
-            <p className="text-black font-mono font-bold text-xs sm:text-sm truncate flex-1">{referralLink}</p>
-            <button 
-              onClick={copyLink}
-              className="p-1.5 rounded-lg bg-black/20 text-black hover:bg-black/30 transition-colors flex-shrink-0"
-              title="Copy"
-            >
-              {copied ? <CheckCircle className="w-4 h-4 text-emerald-950" /> : <Copy className="w-4 h-4" />}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <button
-              onClick={copyLink}
-              className="py-2.5 rounded-xl text-xs font-extrabold bg-black/20 hover:bg-black/30 text-black flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Copy className="w-4 h-4" /> Copy Link
-            </button>
-            <button
-              onClick={shareLink}
-              className="py-2.5 rounded-xl text-xs font-extrabold bg-black text-white hover:bg-black/80 flex items-center justify-center gap-1.5 transition-all shadow-md"
-            >
-              <Share2 className="w-4 h-4" /> Share Link
-            </button>
-          </div>
+    <div className="w-full max-w-3xl mx-auto px-3 py-4 sm:p-6 md:p-8 pb-28 sm:pb-32 space-y-5">
+      <header className="flex items-end justify-between gap-4 border-b border-white/5 pb-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: colors.primary }}>Invite program</p>
+          <h1 className="text-white text-xl sm:text-2xl font-extrabold mt-1">Grow your circle</h1>
+          <p className="text-[#94A3B8] text-xs sm:text-sm mt-1">Share your unique invite. New registrations appear here automatically.</p>
         </div>
-      </div>
-
-      {/* Tier Badge & Progress Card */}
-      <div className="liquid-glass p-4 sm:p-5 rounded-2xl border border-white/10 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-[#94A3B8] font-medium">Your Cashback Tier</span>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold" style={{ background: tier.bg, color: tier.color, borderColor: `${tier.color}40` }}>
-            <TierIcon className="w-3.5 h-3.5" />
-            <span>{tier.name} Tier</span>
-          </div>
+        <div className="hidden sm:grid w-11 h-11 rounded-2xl place-items-center border border-white/10 bg-white/[0.04]">
+          <UserPlus className="w-5 h-5" style={{ color: colors.primary }} />
         </div>
+      </header>
 
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: tier.bg }}>
-            <TierIcon className="w-6 h-6" style={{ color: tier.color }} />
-          </div>
+      <section className="relative overflow-hidden rounded-[28px] border border-white/15 bg-white/[0.065] p-4 sm:p-6 shadow-2xl backdrop-blur-2xl">
+        <div className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, rgba(${accentRgb}, .8), transparent)` }} />
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-white font-extrabold text-xl font-mono">{totalReferrals} Friends Invited</p>
-            <p className="text-xs text-[#94A3B8]">{tier.desc} Cashback Rate</p>
+            <p className="text-[11px] text-[#94A3B8] font-medium">Your invite code</p>
+            <button onClick={() => copy(code, 'code')} className="mt-1 flex items-center gap-2 text-left group">
+              <span className="font-mono text-2xl sm:text-3xl font-black text-white tracking-wider">{code}</span>
+              {copied === 'code' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-[#64748B] group-hover:text-white" />}
+            </button>
+          </div>
+          <div className="px-2.5 py-1.5 rounded-full border text-[10px] font-bold flex items-center gap-1.5" style={{ color: tier.color, borderColor: `${tier.color}55`, background: `${tier.color}14` }}>
+            <TierIcon className="w-3 h-3" /> {tier.name}
           </div>
         </div>
 
-        {nextTier && (
-          <div className="space-y-1.5 pt-1">
-            <div className="flex justify-between text-[11px] text-[#64748B] font-medium">
-              <span>{totalReferrals} referrals</span>
-              <span>{nextTier.min} needed for {nextTier.name} Tier</span>
-            </div>
-            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-              <div 
-                className="h-full rounded-full transition-all duration-500" 
-                style={{ width: `${Math.min(100, tierProgress)}%`, background: colors.primary }} 
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 2-Column Stats Grid (Fixed layout - no overlapping glitch) */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="liquid-glass p-4 rounded-2xl border border-white/10 space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-[#94A3B8] font-medium">Total Earned</span>
-            <DollarSign className="w-4 h-4 text-emerald-400" />
-          </div>
-          <p className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">${(stats?.totalEarned || 0).toFixed(2)} USDC</p>
-          <p className="text-[10px] text-emerald-400/80 font-medium">+${(stats?.thisMonthEarned || 0).toFixed(2)} this month</p>
+        <div className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-2 flex items-center gap-2">
+          <p className="min-w-0 flex-1 truncate px-2 text-xs text-[#CBD5E1] font-mono">{link}</p>
+          <button onClick={() => copy(link, 'link')} title="Copy invite link" className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/15 grid place-items-center text-white flex-shrink-0">
+            {copied === 'link' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+          </button>
+          <button onClick={share} title="Share invite" className="w-10 h-10 rounded-xl grid place-items-center text-black flex-shrink-0" style={{ background: colors.primary }}>
+            <Share2 className="w-4 h-4" />
+          </button>
         </div>
+      </section>
 
-        <div className="liquid-glass p-4 rounded-2xl border border-white/10 space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-[#94A3B8] font-medium">Active Referrals</span>
-            <Users className="w-4 h-4 text-blue-400" />
-          </div>
-          <p className="text-xl sm:text-2xl font-black text-white font-mono">{stats?.activeReferrals || 0}</p>
-          <p className="text-[10px] text-[#64748B] font-medium">{stats?.totalReferrals || 0} total registered</p>
-        </div>
-      </div>
-
-      {/* Tab Switcher */}
-      <div className="grid grid-cols-3 gap-1 bg-white/[0.03] p-1 rounded-2xl border border-white/10 text-xs font-bold">
+      <section className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
-          { key: 'overview', label: 'How It Works' },
-          { key: 'referrals', label: 'Invited Friends' },
-          { key: 'earnings', label: 'Payout History' },
-        ].map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key as any)}
-            className={`py-2 rounded-xl transition-all ${
-              activeTab === tab.key 
-                ? 'bg-white/10 text-white border border-white/15 shadow-md' 
-                : 'text-[#94A3B8] hover:text-white'
-            }`}
-            style={activeTab === tab.key ? { color: colors.primary } : {}}
-          >
-            {tab.label}
+          ['Invited', total, Users, '#E2E8F0'],
+          ['Active', stats?.activeReferrals || 0, TrendingUp, '#34D399'],
+          ['Earned', `${Number(stats?.totalEarned || 0).toFixed(2)}`, Gift, colors.primary],
+        ].map(([label, value, Icon, color]) => (
+          <div key={String(label)} className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.035] p-3 sm:p-4">
+            <Icon className="w-4 h-4 mb-3" style={{ color: String(color) }} />
+            <p className="text-lg sm:text-2xl font-black text-white truncate">{value}</p>
+            <p className="text-[10px] sm:text-xs text-[#64748B]">{label}{label === 'Earned' ? ' USDC' : ''}</p>
+          </div>
+        ))}
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+        <div className="flex justify-between text-xs mb-2"><span className="text-white font-semibold">{tier.name} tier · {tier.rate}% of eligible fees</span><span className="text-[#64748B]">{nextTier ? `${nextTier.min - total} to ${nextTier.name}` : 'Top tier'}</span></div>
+        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${progress}%`, background: colors.primary }} /></div>
+      </section>
+
+      <div className="grid grid-cols-3 border-b border-white/10">
+        {([['overview', 'How it works'], ['people', 'Invited people'], ['earnings', 'Earnings']] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setActiveTab(key)} className={`relative py-3 text-xs font-semibold ${activeTab === key ? 'text-white' : 'text-[#64748B]'}`}>
+            {label}
+            {activeTab === key && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full" style={{ background: colors.primary }} />}
           </button>
         ))}
       </div>
 
-      {/* Tab Content */}
-      <div className="space-y-2 pt-1">
-        {activeTab === 'overview' && (
-          <div className="space-y-2.5">
-            {[
-              { step: '1', title: 'Share Your Code', desc: 'Send your unique referral link to friends and family across Africa.' },
-              { step: '2', title: 'Friends Sign Up & Transact', desc: 'They register on SureXend and convert currency, pay bills, or send crypto.' },
-              { step: '3', title: 'Earn Automatic USDC Cashbacks', desc: 'You get 0.3% to 0.6% fee cashback on every payment they make, settled directly in USDC.' },
-            ].map(({ step, title, desc }) => (
-              <div key={step} className="liquid-glass p-3.5 rounded-2xl border border-white/10 flex items-start gap-3">
-                <div className="w-7 h-7 rounded-full bg-white/10 border border-white/20 flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5">
-                  {step}
-                </div>
-                <div>
-                  <h4 className="font-bold text-white text-xs sm:text-sm">{title}</h4>
-                  <p className="text-[11px] text-[#94A3B8] leading-relaxed mt-0.5">{desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === 'referrals' && (
-          <div className="liquid-glass p-4 rounded-2xl border border-white/10 text-center text-xs text-[#94A3B8] space-y-2">
-            <p className="font-semibold text-white">Your Invited Friends (12 Active)</p>
-            <div className="space-y-2 text-left pt-2">
-              {['David K. (Nigeria)', 'Sarah M. (Kenya)', 'Kwame A. (Ghana)'].map((name, i) => (
-                <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs">
-                      {name[0]}
-                    </div>
-                    <span className="font-semibold text-white text-xs">{name}</span>
-                  </div>
-                  <span className="text-emerald-400 font-mono text-xs font-bold">+0.3% Active</span>
-                </div>
-              ))}
+      {activeTab === 'overview' && (
+        <div className="divide-y divide-white/5 rounded-2xl border border-white/10 bg-white/[0.025] px-4">
+          {[
+            ['Share your personal invite', 'Friends open the link and your code is attached to registration automatically.'],
+            ['Registration is attributed', 'As soon as their account is created, they appear in your invited people list.'],
+            ['Eligible activity earns rewards', 'Referral earnings are credited to your wallet and recorded in your earnings history.'],
+          ].map(([title, body], index) => (
+            <div key={title} className="flex gap-3 py-4">
+              <span className="w-7 h-7 rounded-full border border-white/10 bg-white/5 grid place-items-center text-[11px] font-bold text-white flex-shrink-0">{index + 1}</span>
+              <div><p className="text-sm font-semibold text-white">{title}</p><p className="text-xs text-[#64748B] mt-1 leading-relaxed">{body}</p></div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+      )}
 
-        {activeTab === 'earnings' && (
-          <div className="liquid-glass p-4 rounded-2xl border border-white/10 text-center text-xs text-[#94A3B8] space-y-2">
-            <p className="font-semibold text-white">Monthly Cashback Settlement</p>
-            <p className="text-[11px] text-[#64748B]">All cashbacks are automatically credited to your USDC balance on the 1st of every month.</p>
-          </div>
-        )}
-      </div>
+      {activeTab === 'people' && (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.025] overflow-hidden">
+          {peopleQuery.isLoading ? <div className="py-12 grid place-items-center"><RefreshCw className="w-5 h-5 animate-spin text-[#64748B]" /></div> :
+          peopleQuery.isError ? <div className="p-6 text-center text-xs text-red-300">Could not load invited users.</div> :
+          !peopleQuery.data?.referrals?.length ? (
+            <div className="py-12 px-6 text-center"><Users className="w-7 h-7 mx-auto text-[#475569]" /><p className="text-white text-sm font-semibold mt-3">No invited users yet</p><p className="text-xs text-[#64748B] mt-1">Share your link. New signups will appear here.</p></div>
+          ) : peopleQuery.data.referrals.map((person: any) => (
+            <div key={person.id} className="flex items-center gap-3 p-4 border-b border-white/5 last:border-0">
+              <div className="w-9 h-9 rounded-full bg-white/10 grid place-items-center text-xs font-bold text-white">{person.firstName?.[0]}{person.lastName?.[0]}</div>
+              <div className="min-w-0 flex-1"><p className="text-sm text-white font-semibold truncate">{person.firstName} {person.lastName}</p><p className="text-[11px] text-[#64748B]">Joined {new Date(person.joinedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p></div>
+              <div className="text-right"><p className="text-xs font-semibold text-emerald-400">{Number(person.earnings || 0).toFixed(2)} USDC</p><p className="text-[10px] text-[#64748B]">{person.isActive ? 'Active' : 'Inactive'}</p></div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'earnings' && (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.025] overflow-hidden">
+          {earningsQuery.isLoading ? <div className="py-12 grid place-items-center"><RefreshCw className="w-5 h-5 animate-spin text-[#64748B]" /></div> :
+          earningsQuery.isError ? <div className="p-6 text-center text-xs text-red-300">Could not load earnings history.</div> :
+          !earningsQuery.data?.length ? (
+            <div className="py-12 px-6 text-center"><TrendingUp className="w-7 h-7 mx-auto text-[#475569]" /><p className="text-white text-sm font-semibold mt-3">No referral earnings yet</p><p className="text-xs text-[#64748B] mt-1">Completed rewards will be listed by month.</p></div>
+          ) : earningsQuery.data.map((row: any) => (
+            <div key={row.month} className="flex items-center justify-between p-4 border-b border-white/5 last:border-0">
+              <p className="text-sm text-white font-medium">{new Date(`${row.month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</p>
+              <p className="text-sm text-emerald-400 font-bold">+{Number(row.amount || 0).toFixed(2)} USDC</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -78,6 +78,7 @@ export default function AdminUsersPage() {
                     <th className="py-2 pr-3">Contact</th>
                     <th className="py-2 pr-3">Wallets (USDC)</th>
                     <th className="py-2 pr-3">KYC</th>
+                    <th className="py-2 pr-3">Referrals</th>
                     <th className="py-2 pr-3">Status</th>
                     <th className="py-2 pr-3">Joined</th>
                     <th className="py-2">Actions</th>
@@ -89,6 +90,9 @@ export default function AdminUsersPage() {
                       <td className="py-3 pr-3">
                         <p className="text-white font-semibold">{u.firstName} {u.lastName}</p>
                         <p className="text-[10px] text-[#64748B]">@{u.surexTag || '—'} · {u.role}</p>
+                      </td>
+                      <td className="py-3 pr-3 text-[#94A3B8]">
+                        <span className="font-semibold text-white">{u._count?.referralsMade || 0}</span> invited
                       </td>
                       <td className="py-3 pr-3 text-[#94A3B8]">
                         <p>{u.email}</p>

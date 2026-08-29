@@ -581,41 +581,12 @@ export const billsAPI = {
 
 // ── Referrals API ─────────────────────────────────────────────────────────
 export const referralAPI = {
-  getStats: () =>
-    tryWithMock(
-      () => apiClient.get('/referrals/stats').then(r => r.data),
-      () => ({
-        totalReferrals: 14,
-        activeReferrals: 9,
-        totalEarnedUsdt: 68.50,
-        thisMonthUsdt: 22.00,
-        referralCode: 'SUREXEND-AFRICA',
-        referralLink: 'https://surexend.com/auth/register?ref=SUREXEND-AFRICA'
-      })
-    ),
+  getStats: () => apiClient.get('/referrals/stats').then(r => r.data),
 
   getReferrals: (page = 1, limit = 20) =>
-    tryWithMock(
-      () => apiClient.get(`/referrals?page=${page}&limit=${limit}`).then(r => r.data),
-      () => ({
-        referrals: [
-          { id: 'ref_1', name: 'Emmanuel A.', date: '2026-08-01', status: 'ACTIVE', earned: '10.00 USDC' },
-          { id: 'ref_2', name: 'Chidimma O.', date: '2026-08-03', status: 'ACTIVE', earned: '8.50 USDC' },
-          { id: 'ref_3', name: 'Kwame M.', date: '2026-08-05', status: 'PENDING', earned: '0.00 USDC' },
-        ],
-        total: 3
-      })
-    ),
+    apiClient.get(`/referrals?page=${page}&limit=${limit}`).then(r => r.data),
 
-  getEarnings: () =>
-    tryWithMock(
-      () => apiClient.get('/referrals/earnings').then(r => r.data),
-      () => [
-        { month: 'May 2026', amount: 15.00 },
-        { month: 'Jun 2026', amount: 18.50 },
-        { month: 'Jul 2026', amount: 22.00 },
-      ]
-    ),
+  getEarnings: () => apiClient.get('/referrals/earnings').then(r => r.data),
 }
 
 // ── User API ──────────────────────────────────────────────────────────────
@@ -632,7 +603,6 @@ export const userAPI = {
         phone: '+2348012345678',
         kycStatus: 'VERIFIED',
         avatar: '',
-        referralCode: 'SUREXEND-AFRICA',
         pinSet: true,
       })
     ),
@@ -722,6 +692,8 @@ export const notificationsAPI = {
       () => apiClient.patch('/notifications/read-all').then(r => r.data),
       () => ({ message: 'All notifications marked as read' })
     ),
+
+  markRead: (id: string) => apiClient.patch(`/notifications/${id}/read`).then(r => r.data),
 }
 
 // ── Admin API (requires the ADMIN role on the JWT) ──────────────────────
