@@ -8,6 +8,9 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
     "register:wallets": "node scripts/register-all-wallets.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
     "prestart": "prisma db push || echo \"[prestart] prisma db push failed; continuing anyway\"",
     "prestart:prod": "prisma db push || echo \"[prestart] prisma db push failed; continuing anyway\""
   },
@@ -55,6 +58,27 @@
     "speakeasy": "^2.0.0",
     "uuid": "^10.0.0"
   },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": ".",
+    "roots": [
+      "<rootDir>/src/",
+      "<rootDir>/test/"
+    ],
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "collectCoverageFrom": [
+      "src/**/*.(t|j)s"
+    ],
+    "coverageDirectory": "./coverage",
+    "testEnvironment": "node"
+  },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
     "@nestjs/testing": "^10.0.0",
@@ -65,8 +89,11 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
     "@types/pdfkit": "^0.13.5",
+    "@types/jest": "^29.5.2",
     "@types/qrcode": "^1.5.5",
     "@types/speakeasy": "^2.0.10",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
     "typescript": "^5.1.3"
   }
 }

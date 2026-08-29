@@ -7,9 +7,10 @@ import { OnchainService } from './onchain.service';
 import { DepositMonitorService } from './deposit-monitor.service';
 import { LocalFundingService } from './local-funding.service';
 import { TransactionAuthModule } from '../common/transaction-auth/transaction-auth.module';
+import { IdempotencyModule } from '../common/idempotency/idempotency.module';
 
 @Module({
-  imports: [TransactionsModule, TransactionAuthModule],
+  imports: [TransactionsModule, TransactionAuthModule, IdempotencyModule],
   providers: [WalletsService, CctpService, OnchainService, DepositMonitorService, LocalFundingService],
   controllers: [WalletsController],
   exports: [WalletsService, CctpService],

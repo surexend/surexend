@@ -12,7 +12,7 @@ import {
   Search, CheckCircle, AlertCircle, Loader2, Trophy,
   Lock, Coins, Gamepad2, Sun, GraduationCap, Globe,
   CreditCard, FileText, Heart, Landmark, ShoppingBag,
-  ShoppingCart, Store, Fuel, Plane, Grid, MoreHorizontal, Wallet, NairaSign
+  ShoppingCart, Store, Fuel, Plane, Grid, MoreHorizontal, Wallet
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useBackLayer } from '@/context/BackNavigationContext'
@@ -573,7 +573,7 @@ export default function BillsPage() {
                 <p className="text-[#64748B] text-sm mt-1">Cost: <span className="text-white font-bold">₦{effectiveNgn.toLocaleString()}</span></p>
               </div>
 
-              <button
+              <motion.button
                 onClick={() => { setSelectedWallet('NGN'); setStep('pin') }}
                 className="w-full rounded-2xl p-5 text-left border transition-all relative overflow-hidden"
                 style={{
@@ -596,7 +596,7 @@ export default function BillsPage() {
                   </div>
                   <ChevronRight size={18} className="text-[#64748B]" />
                 </div>
-              </button>
+              </motion.button>
 
               <button
                 onClick={() => toast('USDC wallet payments go live at mainnet launch. For now, bills are paid with real naira.', { duration: 5000 })}

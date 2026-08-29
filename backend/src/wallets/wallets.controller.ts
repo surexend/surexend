@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, Headers } from '@nestjs/common';
 import { WalletsService } from './wallets.service';
 import { LocalFundingService } from './local-funding.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PinGuard } from '../common/guards/pin.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { IdempotencyService } from '../common/idempotency/idempotency.service';
 
 @Controller('wallets')
 @UseGuards(JwtAuthGuard)
@@ -11,6 +12,7 @@ export class WalletsController {
   constructor(
     private readonly walletsService: WalletsService,
     private readonly localFundingService: LocalFundingService,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
   @Get('balance')
@@ -57,12 +59,19 @@ export class WalletsController {
   @UseGuards(PinGuard)
   async sendCrypto(
     @CurrentUser() user: any,
+    @Headers('idempotency-key') idempotencyKey: string,
     @Body('toAddress') toAddress: string,
     @Body('amount') amount: number,
     @Body('network') network: string,
     @Body('destinationNetwork') destinationNetwork?: string,
     @Body('pin') pin?: string, // PIN is validated by PinGuard
   ) {
-    return this.walletsService.sendCrypto(user.id, toAddress, amount, network, destinationNetwork);
+    // A retry with the same key replays the first response instead of sending
+    // a second time.
+    const { result } = await this.idempotency.run(
+      { userId: user.id, scope: 'wallets.send', key: idempotencyKey },
+      () => this.walletsService.sendCrypto(user.id, toAddress, amount, network, destinationNetwork),
+    );
+    return result;
   }
 }

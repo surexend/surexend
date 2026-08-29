@@ -295,6 +295,21 @@ model FeeConfig {
   maxAmount  Float?
 }
 
+// Replay protection for money-moving endpoints. The client sends a UUID as an
+// `Idempotency-Key` header; the first response is stored here and replayed for
+// any retry carrying the same key, so a double-tap can only ever charge once.
+model IdempotencyRecord {
+  id        String   @id @default(uuid())
+  userId    String
+  scope     String
+  key       String
+  response  Json
+  createdAt DateTime @default(now())
+
+  @@unique([userId, scope, key])
+  @@index([createdAt])
+}
+
 // Admin-controlled pricing overrides for billed services (Smartspeed).
 // - data: planCode = Smartspeed dataplan_id. A row with empty planCode is the
 //   network-wide auto margin %; a row with a planCode and sellPrice is a

@@ -1,6 +1,13 @@
 # SureXend — Project Plan
 
-Last updated: 2026-08-15
+Last updated: 2026-08-29
+
+> **Read `docs/assessment.md` first.** It is the current full-product review:
+> what is built, the P0 money/legal defects found on 2026-08-29 (fabricated
+> invoice bank accounts, fake withdraw success, hardcoded JWT fallback secret,
+> unverified webhooks, no rate limiting, no idempotency, send-ordering race),
+> the strategic wedge decision, and the recommended 90-day sequence. This file
+> remains the living roadmap; the phases below are retained for history.
 
 ## Principle
 
@@ -70,10 +77,36 @@ mainnet-vs-testnet. Mainnet is the future target (see Phase 3).
 - Diagnostic scripts (`backend/scripts/*.js`) are untracked; decide whether to
   keep them committed.
 
+## 2026-08-29 — safety & correctness pass
+
+The review in `docs/assessment.md` turned up nine money/legal/security defects.
+All nine are fixed, plus the test/CI gap. Details are in the status table at the
+top of `docs/assessment.md`. The two product-facing changes:
+
+- **`/app/invoice` and `/app/withdraw` are now honest "coming soon" pages.**
+  Invoice payout accounts are not provisioned and the payout registration for
+  withdrawals is not complete, so neither may render anything that looks like
+  live money movement. Both share `src/components/ui/FeatureComingSoon.tsx`
+  (waitlist + what-to-expect).
+- **Money endpoints are now idempotent and rate-limited**, transaction PINs lock
+  after five failures, every inbound webhook is cryptographically verified, and
+  the send path reserves funds before it touches the chain.
+
+Before these pages can go live: provision the invoice payout accounts and
+complete the payout registration, then replace the waitlist with the real flow.
+
+## Next up (in order)
+1. Integer minor units + a double-entry ledger; checked-in migrations instead of
+   `prisma db push` (section 5 of the assessment).
+2. Revenue engine: FX spread on every on-ramp/off-ramp leg (section 7).
+3. KYC/KYB via Smile Identity and the SEC ARIP filing (sections 6 and 8).
+
 ## How We Work
 1. Symptom → investigate (read actual code, verify on-chain) → fix → verify
-   (backend `npx tsc -p tsconfig.json --noEmit`; frontend temp tsconfig trick
-   or `npx next build`) → commit + push.
+   (backend `npx tsc -p tsconfig.json --noEmit` and `npm test`; frontend
+   `npm run typecheck` or `npm run build`) → commit + push.
 2. NEVER assert without verification. On-chain receipts and mint logs are the
    ground truth.
 3. Update docs/project_plan/memory/handover in the same commit as the work.
+4. CI (`.github/workflows/ci.yml`) must stay green. Type errors are no longer
+   ignored at build time — fix them, don't suppress them.
