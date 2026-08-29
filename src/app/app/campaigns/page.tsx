@@ -64,10 +64,10 @@ export default function CampaignsPage() {
       </div>
 
       {/* Campaign tabs */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="bg-[#121419] p-1.5 rounded-2xl border border-white/10 flex gap-1.5">
         {([
-          { key: 'crypto', label: 'Crypto', icon: Trophy, desc: 'Total USD moved (send, receive, convert)' },
-          { key: 'bills', label: 'Bills', icon: ReceiptText, desc: 'Share of all real bill payments' },
+          { key: 'crypto', label: 'Crypto Volume', icon: Trophy },
+          { key: 'bills', label: 'Bills Spending', icon: ReceiptText },
         ] as const).map((t) => {
           const active = type === t.key
           const Icon = t.icon
@@ -75,34 +75,31 @@ export default function CampaignsPage() {
             <button
               key={t.key}
               onClick={() => setType(t.key)}
-              className={`rounded-2xl p-4 text-left border ${
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 ${
                 active
-                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
-                  : 'bg-white/[0.03] border-white/10 text-[#94A3B8]'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'text-[#94A3B8] hover:text-white'
               }`}
             >
-              <div className="flex items-center gap-2 mb-1">
-                <Icon className={`w-4 h-4 ${active ? 'text-amber-400' : 'text-[#64748B]'}`} />
-                <span className={`text-sm font-bold ${active ? 'text-white' : 'text-[#94A3B8]'}`}>{t.label}</span>
-              </div>
-              <p className="text-[10px] text-[#64748B] leading-snug">{t.desc}</p>
+              <Icon className={`w-4 h-4 ${active ? 'text-amber-400' : 'text-[#64748B]'}`} />
+              <span>{t.label}</span>
             </button>
           )
         })}
       </div>
 
-      {/* Range pills — wrapped flex row with zero transition classes to prevent Webview layer leaks */}
-      <div className="flex flex-wrap justify-center gap-1.5">
+      {/* Timeframe selector row */}
+      <div className="bg-[#121419] p-1 rounded-xl border border-white/10 flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
         {RANGES.map((r) => {
           const active = range === r.key
           return (
             <button
               key={r.key}
               onClick={() => setRange(r.key)}
-              className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold border ${
+              className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold text-center whitespace-nowrap ${
                 active
-                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                  : 'bg-white/[0.03] border-white/10 text-[#94A3B8]'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-extrabold'
+                  : 'text-[#94A3B8] hover:text-white'
               }`}
             >
               {r.label}
