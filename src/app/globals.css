@@ -732,6 +732,14 @@ html.lite-mode *::after {
     backdrop-filter: none !important;
   }
 
+  /* Disable CSS property transitions on phones to eliminate Android Webview GPU layer leaks */
+  .transition-all,
+  .transition-colors,
+  .transition-opacity,
+  .transition-transform {
+    transition: none !important;
+  }
+
   /* Momentum scrolling on ALL scrollable containers, not just tagged classes.
      Android Chrome + iOS Safari both benefit from this for smooth lists. */
   [style*="overflow"],
