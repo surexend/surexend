@@ -24,7 +24,7 @@ const LOGO_PATHS: Record<string, string> = {
   SOLANA: '/logos/solana.png',
   BSC: '/logos/bnb.png',
   MONAD: '/logos/monad.png',
-  ARC: '/logos/arc.svg',
+  ARC: '/logos/arc.png',
 }
 
 const ACCENT_COLORS: Record<string, string> = {
