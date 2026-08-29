@@ -13,6 +13,7 @@ import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 import CurrencyFlag from '@/components/CurrencyFlag'
 import ComingSoon from '@/components/ui/ComingSoon'
 import { useLite } from '@/lib/lite'
+import { useBackHandler } from '@/context/BackHandlerContext'
 import toast from 'react-hot-toast'
 
 // recharts is heavy (~130KB gz) — load it only when charts actually render.
@@ -66,6 +67,38 @@ export default function DashboardPage() {
   const [avatar, setAvatar] = useState<string | null>(null)
   const [showMarketPicker, setShowMarketPicker] = useState(false)
   const queryClient = useQueryClient()
+
+  // Back handler for modals — closes the top-most open modal on back press
+  useBackHandler(
+    useCallback(() => {
+      if (showBankComingSoon) {
+        setShowBankComingSoon(false)
+        return true
+      }
+      if (showVBAModal) {
+        setShowVBAModal(false)
+        return true
+      }
+      if (showFundModal) {
+        setShowFundModal(false)
+        return true
+      }
+      if (showSendModal) {
+        setShowSendModal(false)
+        return true
+      }
+      if (showLocalCurrencyPicker) {
+        setShowLocalCurrencyPicker(false)
+        return true
+      }
+      if (showMarketPicker) {
+        setShowMarketPicker(false)
+        return true
+      }
+      return false
+    }, [showBankComingSoon, showVBAModal, showFundModal, showSendModal, showLocalCurrencyPicker, showMarketPicker]),
+    20 // Higher than drawer
+  )
 
   // ── LIVE MARKET DATA ─────────────────────────────────────────────
   // Real history comes from the backend market-chart proxy (Yahoo/CoinGecko),

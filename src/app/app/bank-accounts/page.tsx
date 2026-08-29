@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { bankAPI } from '@/lib/api'
-import { useRouter } from 'next/navigation'
 import { Building2, Plus, Trash2, Loader2, Rocket, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useBackHandler } from '@/context/BackHandlerContext'
 
 export default function BankAccountsPage() {
   const { variant, colors } = useTheme()
@@ -21,6 +21,20 @@ export default function BankAccountsPage() {
   const [bankCode, setBankCode] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
   const [adding, setAdding] = useState(false)
+
+  // Back handler for add account modal
+  useBackHandler(
+    useCallback(() => {
+      if (showAdd) {
+        setShowAdd(false)
+        setBankCode('')
+        setAccountNumber('')
+        return true
+      }
+      return false
+    }, [showAdd]),
+    30
+  )
 
   const load = async () => {
     try {
@@ -67,7 +81,7 @@ export default function BankAccountsPage() {
   return (
     <div className="w-full max-w-full px-3 py-4 max-w-md mx-auto flex flex-col pb-28 sm:pb-36">
       <div className="flex items-center gap-2 mb-4">
-        <button onClick={() => router.back()} className="text-[#94A3B8] hover:text-white text-sm font-semibold">← Back</button>
+        <button onClick={() => window.history.back()} className="text-[#94A3B8] hover:text-white text-sm font-semibold">← Back</button>
       </div>
 
       {/* Fun mainnet notice */}

@@ -4,7 +4,6 @@ import { motion } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useQuery } from '@tanstack/react-query'
 import { userAPI } from '@/lib/api'
-import { useRouter } from 'next/navigation'
 import { Shield, ShieldCheck, Clock, XCircle } from 'lucide-react'
 
 const STATUS: Record<string, { label: string; color: string; bg: string; icon: any; desc: string }> = {
@@ -32,7 +31,7 @@ export default function KYCPage() {
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 py-4 max-w-md mx-auto flex flex-col pb-28 sm:pb-36">
       <div className="flex items-center gap-2 mb-4">
-        <button onClick={() => router.back()} className="text-[#94A3B8] hover:text-white text-sm font-semibold">← Back</button>
+        <button onClick={() => window.history.back()} className="text-[#94A3B8] hover:text-white text-sm font-semibold">← Back</button>
       </div>
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="liquid-glass p-6 rounded-2xl space-y-6">

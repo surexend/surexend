@@ -13,6 +13,7 @@ import { useTheme } from '@/context/ThemeContext'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useBackHandler } from '@/context/BackHandlerContext'
 
 // Funds live on Arc (native USDC). The recipient picks the network they want
 // to receive on — the backend handles delivery automatically (native when both
@@ -41,6 +42,22 @@ export default function SendPage() {
   const [isSuccess, setIsSuccess] = useState(false)
   const [windowSize, setWindowSize] = useState({ width: 1200, height: 800 })
   const queryClient = useQueryClient()
+
+  // Back handler for multi-step form
+  useBackHandler(
+    useCallback(() => {
+      if (step > 1) {
+        setStep(prev => prev - 1)
+        return true
+      }
+      if (isSuccess) {
+        setIsSuccess(false)
+        return true
+      }
+      return false
+    }, [step, isSuccess]),
+    30
+  )
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

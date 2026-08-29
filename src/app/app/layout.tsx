@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { useTheme } from '@/context/ThemeContext'
+import { BackHandlerProvider } from '@/context/BackHandlerContext'
 import { 
   Home, Send, Repeat, FileText, User, Bell, ArrowUpRight, ArrowDownLeft,
   Smartphone, Building2, FileSpreadsheet, X, Check, ShieldCheck, Zap, Clock, ChevronRight, Fingerprint
@@ -20,6 +21,7 @@ const AISupportWidget = dynamic(() => import('@/components/AISupportWidget'), { 
 const FirebaseMessaging = dynamic(() => import('@/components/FirebaseMessaging'), { ssr: false })
 import { notificationsAPI, userAPI } from '@/lib/api'
 import { useLite } from '@/lib/lite'
+import { useBackHandler } from '@/context/BackHandlerContext'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +45,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<any>(null)
   const [isMobile, setIsMobile] = useState(false)
   const [showBioPrompt, setShowBioPrompt] = useState(false)
+
+  // Register notification drawer with back handler
+  useBackHandler(
+    useCallback(() => {
+      if (showNotifications) {
+        setShowNotifications(false)
+        return true
+      }
+      return false
+    }, [showNotifications]),
+    10 // High priority for drawer
+  )
 
   useEffect(() => {
     let active = true
@@ -129,7 +143,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Toaster position="top-center" toastOptions={{ style: { background: '#121419', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
+      <BackHandlerProvider>
+        <Toaster position="top-center" toastOptions={{ style: { background: '#121419', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
       <div className="flex min-h-dvh-force bg-[var(--app-bg)] relative md:h-dvh-force md:overflow-hidden">
         {/* Ambient morphing mesh background — the "morphe" (static in lite mode & on mobile) */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
@@ -493,6 +508,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <AISupportWidget />
         <FirebaseMessaging />
       </div>
+    </BackHandlerProvider>
     </QueryClientProvider>
   )
 }

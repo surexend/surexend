@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { campaignsAPI, userAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import { Trophy, Medal, Crown, Users, ReceiptText, ArrowLeft } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useBackHandler } from '@/context/BackHandlerContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 
 const RANGES: { key: 'day' | '7d' | '30d' | '365d' | 'all'; label: string }[] = [
@@ -21,8 +21,6 @@ export default function CampaignsPage() {
   const isGold = variant === 'gold'
   const accentRgb = isGold ? '212, 160, 23' : '181, 226, 61'
   const accentHex = isGold ? '#D4A017' : '#B5E23D'
-  const router = useRouter()
-
   const [type, setType] = useState<'bills' | 'crypto'>('crypto')
   const [range, setRange] = useState<'day' | '7d' | '30d' | '365d' | 'all'>('all')
 
@@ -53,7 +51,7 @@ export default function CampaignsPage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.back()}
+          onClick={() => window.history.back()}
           className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-[#94A3B8] hover:text-white hover:bg-white/10 transition-all active:scale-95"
         >
           <ArrowLeft size={17} />
