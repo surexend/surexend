@@ -19,11 +19,11 @@ const LOGO_PATHS: Record<string, string> = {
   POLYGON: '/logos/polygon.png',
   AVALANCHE: '/logos/avalanche.png',
   ARBITRUM: '/logos/arbitrum.png',
-  BASE: '/logos/base.svg',
-  OPTIMISM: '/logos/optimism.svg',
-  SOLANA: '/logos/solana.svg',
-  BSC: '/logos/bnb.svg',
-  MONAD: '/logos/monad.svg',
+  BASE: '/logos/base.png',
+  OPTIMISM: '/logos/optimism.png',
+  SOLANA: '/logos/solana.png',
+  BSC: '/logos/bnb.png',
+  MONAD: '/logos/monad.png',
   ARC: '/logos/arc.svg',
 }
 
