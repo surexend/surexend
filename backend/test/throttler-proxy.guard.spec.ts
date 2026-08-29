@@ -8,7 +8,7 @@ class ExposedGuard extends ThrottlerProxyGuard {
 }
 
 describe('ThrottlerProxyGuard', () => {
-  const guard = new ExposedGuard();
+  const guard = new ExposedGuard({} as any, {} as any, {} as any);
 
   it('uses the left-most forwarded address when behind a proxy', async () => {
     // The frontend reaches the API through a Next.js rewrite, so req.ip is the
