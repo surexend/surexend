@@ -241,6 +241,12 @@ export const authAPI = {
       storeTokens(accessToken, refreshToken)
     }
   },
+
+  getProfile: () =>
+    tryWithMock(
+      () => apiClient.get('/auth/me').then(r => r.data),
+      () => ({ firstName: 'User', lastName: '', email: 'user@surexend.com', surexTag: 'surexuser' })
+    ),
 }
 
 // ── Passkey / Biometrics API (WebAuthn) ───────────────────────────────────
@@ -361,6 +367,9 @@ export const walletAPI = {
 
 // ── Transaction API ───────────────────────────────────────────────────────
 export const transactionAPI = {
+  getTransactions: (params: { page?: number; limit?: number; year?: number; month?: number; week?: number; day?: string; type?: string }) =>
+    transactionAPI.getHistory(params),
+
   getHistory: (params: { page?: number; limit?: number; year?: number; month?: number; week?: number; day?: string; type?: string }) =>
     tryWithMock(
       () => apiClient.get('/transactions', { params }).then(r => r.data),
