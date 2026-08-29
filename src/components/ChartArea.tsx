@@ -63,6 +63,7 @@ export default function ChartArea({
   }
 
   if (section === 'market') {
+    const gradientId = `cryptoMarketGradient_${section}`
     return (
       <div className="h-64 sm:h-72 w-full pt-2 relative">
         {chartLoading && chartSeries.length === 0 && (
@@ -78,8 +79,8 @@ export default function ChartArea({
           ) : (
             <AreaChart data={chartSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
-                <linearGradient id="cryptoMarketGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={primary} stopOpacity={0.45} />
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={primary} stopOpacity={0.35} />
                   <stop offset="100%" stopColor={primary} stopOpacity={0.0} />
                 </linearGradient>
               </defs>
@@ -98,7 +99,7 @@ export default function ChartArea({
                 content={({ active, payload }: any) => {
                   if (active && payload && payload.length) {
                     return (
-                      <div className="bg-[#191B21] border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
+                      <div className="bg-[#191B21] border border-white/10 p-3 rounded-xl shadow-2xl">
                         <p className="font-bold text-white text-sm">{symbol}{(payload[0].value)?.toLocaleString(undefined, { maximumFractionDigits: decimals })}</p>
                         <p className="text-[10px] text-[#94A3B8] mt-0.5">{pair?.label} · {payload[0].payload.time}</p>
                       </div>
@@ -112,10 +113,10 @@ export default function ChartArea({
                 dataKey="value"
                 stroke={primary}
                 strokeWidth={2.5}
-                fill="url(#cryptoMarketGradient)"
+                fill={`url(#${gradientId})`}
                 activeDot={{ r: 6, fill: primary, stroke: '#ffffff', strokeWidth: 2 }}
-                animationDuration={800}
-                isAnimationActive={chartSeries.length < 20}
+                animationDuration={400}
+                isAnimationActive={false}
               />
             </AreaChart>
           )}
@@ -124,17 +125,20 @@ export default function ChartArea({
     )
   }
 
+  const inflowGradId = `inflowGradient_${section}`
+  const outflowGradId = `outflowGradient_${section}`
+
   return (
     <div className="h-52 w-full pt-1">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <defs>
-            <linearGradient id="inflowGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10B981" stopOpacity={0.4} />
+            <linearGradient id={inflowGradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
               <stop offset="100%" stopColor="#10B981" stopOpacity={0.0} />
             </linearGradient>
-            <linearGradient id="outflowGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#EF4444" stopOpacity={0.3} />
+            <linearGradient id={outflowGradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#EF4444" stopOpacity={0.25} />
               <stop offset="100%" stopColor="#EF4444" stopOpacity={0.0} />
             </linearGradient>
           </defs>
@@ -155,8 +159,8 @@ export default function ChartArea({
               return null
             }}
           />
-          <Area type="monotone" dataKey="moneyIn" stroke="#10B981" strokeWidth={2.5} fill="url(#inflowGradient)" />
-          <Area type="monotone" dataKey="moneyOut" stroke="#EF4444" strokeWidth={2.5} fill="url(#outflowGradient)" />
+          <Area type="monotone" dataKey="moneyIn" stroke="#10B981" strokeWidth={2.5} fill={`url(#${inflowGradId})`} isAnimationActive={false} />
+          <Area type="monotone" dataKey="moneyOut" stroke="#EF4444" strokeWidth={2.5} fill={`url(#${outflowGradId})`} isAnimationActive={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
