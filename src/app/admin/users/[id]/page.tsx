@@ -7,12 +7,14 @@ import { ArrowLeft, Ban, CheckCircle2, ShieldCheck, Plus, Trash2, Users, Gift } 
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
+import { AdminTransactionDetailModal } from '@/components/AdminTransactionDetailModal'
 
 export default function AdminUserDetailPage() {
   const { id } = useParams()
   const router = useRouter()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [selectedTxId, setSelectedTxId] = useState<string | null>(null)
   const [role, setRole] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -264,13 +266,17 @@ export default function AdminUserDetailPage() {
       </div>
 
       <div className="liquid-glass p-5 relative overflow-hidden">
-        <h3 className="font-semibold text-sm text-white mb-3">Recent activity</h3>
+        <h3 className="font-semibold text-sm text-white mb-3">Recent activity (tap to view receipt)</h3>
         <div className="space-y-3">
           {data.activity.transactions.slice(0, 8).map((t: any) => (
-            <div key={t.id} className="flex items-center justify-between py-2 px-3 rounded-xl bg-white/[0.03] border border-white/5">
+            <div
+              key={t.id}
+              onClick={() => setSelectedTxId(t.id)}
+              className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] cursor-pointer transition-colors"
+            >
               <div>
-                <p className="text-xs text-white font-semibold">{t.type}</p>
-                <p className="text-[10px] text-[#64748B]">{t.reference}</p>
+                <p className="text-xs text-white font-semibold flex items-center gap-1.5">{t.type} <span className="text-[10px] text-[#64748B] font-normal">· tap to view</span></p>
+                <p className="text-[10px] text-[#64748B] font-mono">{t.reference}</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-white font-semibold">${fmt(t.amount)}</p>
@@ -283,6 +289,10 @@ export default function AdminUserDetailPage() {
           ))}
         </div>
       </div>
+
+      {selectedTxId && (
+        <AdminTransactionDetailModal id={selectedTxId} onClose={() => setSelectedTxId(null)} />
+      )}
     </div>
   )
 }
