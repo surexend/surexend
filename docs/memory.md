@@ -506,3 +506,21 @@ read switch to ledger (tag send → conversions → bills → cross-chain reserv
 column removal → mainnet config review (the `CHAIN_ENV`/`MAINNET_ENABLED` flags
 are currently dead code; mainnet needs a real value matrix + boot-time
 assertions).
+
+## 2026-08-30 (2) — testnet E2E runbook + mainnet-prep guard
+
+- `docs/testnet-e2e-runbook.md`: operator checklist for the unexecuted
+  testnet E2E leg (step 1) — 8 rows + failure legs + replay checks, expected
+  float/ledger deltas, receipt table, final `npm run ledger:report` gate.
+- `docs/mainnet-config.md` + `assertNetworkConfig()` in `main.ts`: boot-time
+  refusal on mixed testnet/mainnet config (non-test CIRCLE_API_KEY without
+  MAINNET_ENABLED; mainnet enabled with TEST_ key, testnet ARC RPC, or missing
+  ARC_USDC_CONTRACT_ADDRESS; unknown CHAIN_ENV). Current TEST_-key prod passes.
+  Mainnet remains NOT enabled.
+- Reconciliation service now has unit tests (drift persistence, dedupe,
+  local-currency/JSON-string/localBalance fallback, platform-account skip).
+- Checked-in migrations intentionally NOT attempted in the sandbox: Prisma CLI
+  needs binaries.prisma.sh (unreachable); hand-written baseline SQL is not
+  acceptable for a money product. Generate on an engine-capable machine and
+  baseline the live DB (`prisma migrate resolve --applied`) before flipping
+  `prestart:prod` to `migrate deploy`.

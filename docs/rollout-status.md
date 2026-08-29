@@ -6,20 +6,18 @@
 
 Status key: ✅ done · ⏳ in progress · ⛔ blocked/pre-requisite missing.
 
-## 1. End-to-end testnet transaction verification — ⛔ not started
+## 1. End-to-end testnet transaction verification — ⏳ runbook ready, execution pending testnet keys
 
-- No E2E suite or recorded runbook exists. `backend/test/` covers unit-level
-  behavior only (ledger, money, idempotency, webhook signatures, throttler).
-- Manual testnet checks that should be run once and recorded here (with tx
-  hashes + explorer links):
-  - ARC deposit detected by `ArcListenerService` → float + ledger credit.
-  - Circle inbound deposit webhook → float + ledger credit.
-  - SureXend-tag internal send → both wallets float + ledger.
-  - Cross-chain CCTP send: reserve → burn → forwarder mint → settle.
-  - Failed chain send → `releaseReservedSend` reverses float AND ledger.
-  - Conversion (USD→NGN, NGN→USD, NGN→GHS) → float + ledger match per currency.
-  - Bill purchase + Smartspeed failure refund → float + ledger restored.
-  - Reference commission → USDT float + ledger credit.
+- **Runbook exists: `docs/testnet-e2e-runbook.md`** — ordered operator
+  checklist covering every money path (Arc deposit, Circle deposit, tag send,
+  CCTP send + failure leg, 3 conversion shapes, bill success + failure refund,
+  bank credit + replay, admin credit, referral) with the exact expected float
+  and ledger deltas, a receipt table, and a final `npm run ledger:report` gate.
+- Execution requires: Circle `TEST_` key, Arc testnet RPC, Flutterwave
+  sandbox, `TESTING_ENABLED=true`. Not executable in the CI sandbox.
+- `backend/test/` additionally covers unit-level behavior (ledger, money,
+  reconciliation, idempotency, webhook signatures, throttler) — the runbook is
+  the missing real-chain leg.
 - After each path passes, run `npm run ledger:report` (backend) — it must print
   `RECONCILIATION CLEAN`.
 
@@ -88,22 +86,20 @@ reversal cannot double-fire.
 - `LedgerEntry.amountMinor` is `BigInt`; the record service converts via
   `toMinor` (6dp USDC/USDT, 0dp XOF-class currencies, 2dp others).
 
-## 6. Mainnet configuration preparation / review — ⛔ not prepared
+## 6. Mainnet configuration preparation / review — ⏳ prepared (guard + matrix), pending separate review
 
-- `configuration.ts` defines `network.environment` (`CHAIN_ENV`) and
-  `network.mainnetEnabled` (`MAINNET_ENABLED`) but **nothing consumes them** —
-  dead flags.
-- Testnet safety currently comes from hardcoded constants: `NETWORK_TO_CHAIN`
-  (all testnet BridgeChains), ARC RPC default `rpc.testnet.arc.network`, ARC
-  USDC `0x3600…0000`, and `getBlockchainName()` selecting testnet strings when
-  the Circle key starts with `TEST_`.
-- ⚠️ Landmine: swapping in a mainnet Circle key makes `getBlockchainName()`
-  emit mainnet blockchain strings while `NETWORK_TO_CHAIN` still hardcodes
-  testnet BridgeChains — mixed mapping with no gate.
-- Required before mainnet: reviewed value matrix (chain ids, USDC addresses,
-  RPCs, Circle blocks, env names) + a boot-time assertion that rejects a
-  testnet/mainnet key mapping mismatch; wire `network.environment` into the
-  mappings or delete the dead flags.
+- **`docs/mainnet-config.md`** is the review reference: the two-mapping system
+  (`NETWORK_TO_CHAIN` vs `getBlockchainName()`), the value matrix to source
+  from Circle/Arc (no addresses fabricated), the switchover sequence, and a
+  "never" list.
+- **Boot guard added**: `assertNetworkConfig()` in `main.ts` refuses to start on
+  (a) mainnet enabled with a `TEST_` key, testnet ARC RPC, or missing explicit
+  `ARC_USDC_CONTRACT_ADDRESS`, (b) a non-test Circle key while `MAINNET_ENABLED`
+  is false (the mixed-mapping landmine), and (c) an unknown `CHAIN_ENV`.
+  Current prod config (TEST_ key, `CHAIN_ENV` unset) passes.
+- Still required before launch: fill the matrix with real, separately reviewed
+  values; make `NETWORK_TO_CHAIN`/ARC defaults mainnet-aware behind
+  `MAINNET_ENABLED`; E2E verification + read migration first (items 1–5).
 
 ## 7. Additive / testnet-safe — ✅ holds
 
@@ -116,7 +112,22 @@ reversal cannot double-fire.
 ## Current baseline (verified 2026-08-30)
 
 - Backend `npx tsc -p tsconfig.json --noEmit` → exit 0.
-- `npx jest` → 5 suites / 42 tests green (ledger suite covers atomic record,
-  replay, partial write, reverse mirror + replay-safety).
+- `npx jest` → 6 suites / 51 tests green (ledger + reconciliation suites cover
+  atomic record, replay, partial write, reverse mirror + replay-safety, drift
+  persistence/dedupe, local-currency fallbacks).
 - No production/frontend behavior change; all changes are additive backend
   ledger writes + reconciliation tooling.
+
+----
+
+### 2026-08-30 follow-up
+- `docs/testnet-e2e-runbook.md` added (step 1 execution checklist).
+- `docs/mainnet-config.md` + `assertNetworkConfig()` boot guard added (step 6
+  preparation; mainnet still NOT enabled).
+- Reconciliation unit tests added (`backend/test/ledger-reconciliation.spec.ts`).
+- Checked-in Prisma migrations: still NOT done (step 5 prerequisite). The
+  sandbox cannot run `prisma migrate diff` (engine host unreachable); do NOT
+  hand-write baseline SQL for a money product — generate it on a machine with
+  engine access, then baseline the existing prod DB with
+  `prisma migrate resolve --applied` before switching `prestart:prod` from
+  `prisma db push` to `prisma migrate deploy`.

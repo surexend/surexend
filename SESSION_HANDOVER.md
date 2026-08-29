@@ -94,11 +94,16 @@ You are the senior full-stack developer for **SureXend**, an African fintech app
   currencies and persists drift to `AuditLog` (`LEDGER_DRIFT`); `npm run
   ledger:report` runs the same check on demand (CI-friendly, exit 1 on drift).
 - **Still float-reads everywhere; floats NOT removed. Code stays additive and
-  testnet-safe. Mainnet NOT enabled.** Next: E2E testnet verification per path,
-  then gradually switch reads (tag send → conversions → bills → cross-chain
-  reserve → getBalance), then stop float writes, then checked-in migrations +
-  column removal. `CHAIN_ENV`/`MAINNET_ENABLED` are dead flags — mainnet needs
-  a reviewed config matrix + boot-time assertions.
+  testnet-safe. Mainnet NOT enabled.** Next: run the E2E runbook
+  (`docs/testnet-e2e-runbook.md`) per path, then gradually switch reads (tag
+  send → conversions → bills → cross-chain reserve → getBalance), then stop
+  float writes, then checked-in migrations + column removal.
+- Mainnet prep: `docs/mainnet-config.md` + `assertNetworkConfig()` boot guard
+  (`main.ts`) — refuses mixed testnet/mainnet configs. On a machine with Prisma
+  engine access: `npx prisma generate` (the sandbox uses a gitignored typing
+  stub in `node_modules/.prisma/client`), and generate the checked-in baseline
+  migration + `migrate resolve --applied` the live DB before switching
+  `prestart:prod` off `prisma db push`.
 
 ## THE PIN CONFIRM BUG (already fixed, do not regress)
 
