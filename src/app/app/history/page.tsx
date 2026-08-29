@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useBackLayer } from '@/context/BackNavigationContext'
-import { renderReceiptCanvas as renderReceiptCanvasUtil, downloadReceiptFile } from '@/lib/receipt'
+import { downloadReceiptFromElement, renderReceiptCanvas as renderReceiptCanvasUtil, downloadReceiptFile } from '@/lib/receipt'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type TxType = 'ALL' | 'SEND' | 'RECEIVE' | 'CONVERT' | 'BILL_PAYMENT' | 'REFERRAL_EARNING'
@@ -400,13 +400,12 @@ function TransactionDetailModal({
   // text is impossible by construction, and the real brand logo + app font are
   // used. jsPDF is lazy-loaded only for the PDF path.
   const downloadReceipt = async (format: 'pdf' | 'png') => {
-    if (downloading) return
+    if (downloading || !receiptRef.current) return
     setDownloading(format)
     try {
       await document.fonts.ready
-      const canvas = await renderReceiptCanvasUtil({ tx: details, variant, accentHex })
       const refSlug = (details?.reference || details?.id || 'receipt').replace(/[^a-zA-Z0-9_-]/g, '')
-      await downloadReceiptFile(canvas, refSlug, format)
+      await downloadReceiptFromElement(receiptRef.current, refSlug, format)
       toast.success(`Receipt downloaded as ${format.toUpperCase()}`)
     } catch {
       toast.error('Failed to generate receipt. Please try again.')

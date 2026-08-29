@@ -448,6 +448,40 @@ export async function renderReceiptCanvas(opts: {
   return canvas
 }
 
+import { toPng, toCanvas } from 'html-to-image'
+
+export async function downloadReceiptFromElement(
+  element: HTMLElement,
+  refSlug: string,
+  format: 'png' | 'pdf'
+) {
+  const dataUrl = await toPng(element, {
+    pixelRatio: 2,
+    cacheBust: true,
+    backgroundColor: '#0a0b0e',
+  })
+
+  if (format === 'png') {
+    const link = document.createElement('a')
+    link.href = dataUrl
+    link.download = `surexend-receipt-${refSlug}.png`
+    link.click()
+    return
+  }
+
+  const canvas = await toCanvas(element, {
+    pixelRatio: 2,
+    cacheBust: true,
+    backgroundColor: '#0a0b0e',
+  })
+
+  const { jsPDF } = await import('jspdf')
+  const img = canvas.toDataURL('image/png')
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [canvas.width, canvas.height] })
+  pdf.addImage(img, 'PNG', 0, 0, canvas.width, canvas.height)
+  pdf.save(`surexend-receipt-${refSlug}.pdf`)
+}
+
 export async function downloadReceiptFile(canvas: HTMLCanvasElement, refSlug: string, format: 'png' | 'pdf') {
   if (format === 'png') {
     const link = document.createElement('a')
