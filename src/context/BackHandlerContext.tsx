@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useRef, useCallback } from 'react'
 
 interface BackHandler {
   id: number
@@ -10,55 +10,43 @@ interface BackHandler {
 
 interface BackHandlerContextValue {
   register: (handler: () => boolean | Promise<boolean>, priority?: number) => () => void
-  unregister: (id: number) => void
 }
 
 const BackHandlerContext = createContext<BackHandlerContextValue | null>(null)
 
-let handlerIdCounter = 0
-
 export function BackHandlerProvider({ children }: { children: React.ReactNode }) {
-  const [handlers, setHandlers] = useState<BackHandler[]>([])
-  const isHandling = useRef(false)
+  const handlersRef = useRef(new Map<number, BackHandler>())
+  const nextIdRef = useRef(0)
+  const restoringHistoryRef = useRef(false)
 
   const register = useCallback((handler: () => boolean | Promise<boolean>, priority = 0) => {
-    const id = ++handlerIdCounter
-    const newHandler: BackHandler = { id, priority, handler }
-    
-    setHandlers(prev => {
-      const updated = [...prev, newHandler].sort((a, b) => b.priority - a.priority)
-      return updated
-    })
+    const id = ++nextIdRef.current
+    handlersRef.current.set(id, { id, priority, handler })
 
     return () => {
-      setHandlers(prev => prev.filter(h => h.id !== id))
+      handlersRef.current.delete(id)
     }
-  }, [])
-
-  const unregister = useCallback((id: number) => {
-    setHandlers(prev => prev.filter(h => h.id !== id))
   }, [])
 
   useEffect(() => {
     const handlePopState = async () => {
-      if (isHandling.current || handlers.length === 0) return
+      if (restoringHistoryRef.current) {
+        restoringHistoryRef.current = false
+        return
+      }
 
-      // Get highest priority handler
-      const handler = handlers[0]
-      if (!handler) return
+      const handlers = [...handlersRef.current.values()].sort(
+        (a, b) => b.priority - a.priority || b.id - a.id
+      )
 
-      isHandling.current = true
-      try {
-        const handled = await handler.handler()
-        if (!handled && handlers.length > 1) {
-          // If not handled, try next handler
-          for (let i = 1; i < handlers.length; i++) {
-            const nextHandled = await handlers[i].handler()
-            if (nextHandled) break
-          }
+      for (const entry of handlers) {
+        if (await entry.handler()) {
+          // popstate fires after the browser moves. Restore the current route
+          // when transient UI consumes Back, without fabricating history on mount.
+          restoringHistoryRef.current = true
+          window.history.forward()
+          return
         }
-      } finally {
-        isHandling.current = false
       }
     }
 
@@ -68,7 +56,7 @@ export function BackHandlerProvider({ children }: { children: React.ReactNode })
     // Also handle hardware back button on Android
     const handleBackButton = (e: Event) => {
       e.preventDefault()
-      handlePopState()
+      void handlePopState()
     }
     window.addEventListener('backbutton', handleBackButton)
 
@@ -76,41 +64,32 @@ export function BackHandlerProvider({ children }: { children: React.ReactNode })
       window.removeEventListener('popstate', handlePopState)
       window.removeEventListener('backbutton', handleBackButton)
     }
-  }, [handlers])
+  }, [])
 
-  // Push a dummy state on mount so there's always something to pop
-  // Disabled — was interfering with Next.js client-side navigation
-  // useEffect(() => {
-  //   if (typeof window !== 'undefined') {
-  //     window.history.pushState({ surexend: Date.now() }, '')
-  //   }
-  // }, [])
+  const value = useMemo(() => ({ register }), [register])
 
   return (
-    <BackHandlerContext.Provider value={{ register, unregister }}>
+    <BackHandlerContext.Provider value={value}>
       {children}
     </BackHandlerContext.Provider>
   )
 }
 
-export function useBackHandler(handler: () => boolean | Promise<boolean>, priority = 0, deps: React.DependencyList = []) {
+export function useBackHandler(handler: () => boolean | Promise<boolean>, priority = 0) {
   const context = useContext(BackHandlerContext)
-  if (!context) {
-    // During SSR/static generation, context may not be available
-    // Return a no-op cleanup function
-    return () => {}
-  }
+  const handlerRef = useRef(handler)
+  handlerRef.current = handler
 
   useEffect(() => {
-    const unregister = context.register(handler, priority)
-    return unregister
-  }, [context, priority, ...deps])
+    if (!context) return
+    return context.register(() => handlerRef.current(), priority)
+  }, [context, priority])
 }
 
 export function useBackHandlerContext() {
   const context = useContext(BackHandlerContext)
   if (!context) {
-    return { register: () => () => {}, unregister: () => {} }
+    throw new Error('useBackHandlerContext must be used within BackHandlerProvider')
   }
   return context
 }

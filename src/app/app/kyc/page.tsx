@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useQuery } from '@tanstack/react-query'
 import { userAPI } from '@/lib/api'
+import { useRouter } from 'next/navigation'
 import { Shield, ShieldCheck, Clock, XCircle } from 'lucide-react'
 
 const STATUS: Record<string, { label: string; color: string; bg: string; icon: any; desc: string }> = {

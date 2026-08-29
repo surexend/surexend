@@ -508,7 +508,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <AISupportWidget />
         <FirebaseMessaging />
       </div>
-    </BackHandlerProvider>
+      </BackHandlerProvider>
     </QueryClientProvider>
   )
 }
