@@ -21,7 +21,10 @@ export function roundTo(amount: number, currency: string): number {
   const factor = 10 ** decimalsFor(currency);
   return Number((amount * factor).toPrecision(15)) / factor;
 }
-export function toMinor(amount: number, currency: string): bigint { return guardMinor(Math.round(roundTo(amount, currency) * 10 ** decimalsFor(currency))); }
+export function toMinor(amount: number, currency: string): bigint {
+  const factor = 10 ** decimalsFor(currency);
+  return guardMinor(Math.round(Number((roundTo(amount, currency) * factor).toPrecision(15))));
+}
 export function fromMinor(amount: bigint | number | string, currency: string): number { return Number(guardMinor(amount)) / 10 ** decimalsFor(currency); }
 export function addMinor(a: bigint | number, b: bigint | number): bigint { return guardMinor(a) + guardMinor(b); }
 export function subtractMinor(a: bigint | number, b: bigint | number): bigint { return guardMinor(a) - guardMinor(b); }
