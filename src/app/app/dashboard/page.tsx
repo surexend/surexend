@@ -861,7 +861,7 @@ export default function DashboardPage() {
                       <p className="text-sm font-bold text-white">Failed</p>
                     ) : swap ? (
                       <>
-                        <p className="text-sm font-bold text-emerald-400">
+                        <p className="text-sm font-bold text-white">
                           +{currencySymbol(swap.to)}{formatAmount(swap.toAmount)} {swap.to}
                         </p>
                         <p className="text-xs text-[#94A3B8] mt-0.5">

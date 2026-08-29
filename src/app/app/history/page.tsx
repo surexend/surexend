@@ -917,7 +917,7 @@ function TransactionDetailModal({
         onClick={onClose} />
       <div className="fixed inset-0 z-[90] flex items-end sm:items-center sm:justify-center pointer-events-none">
       <motion.div
-        className="w-full sm:w-[520px] sm:max-w-[94vw] max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl pointer-events-auto liquid-glass-strong"
+        className="w-full sm:w-[520px] sm:max-w-[94vw] max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl pointer-events-auto bg-[#0a0b0e] border border-white/10 shadow-2xl"
         initial={{ opacity: 0, y: 80 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 80 }}
@@ -1366,7 +1366,7 @@ export default function HistoryPage() {
                             <p className="font-bold text-sm text-white">Failed</p>
                           ) : swap ? (
                             <>
-                              <p className="font-bold text-sm text-emerald-400">
+                              <p className="font-bold text-sm text-white">
                                 {currencySymbol(swap.to)}{formatAmount(swap.toAmount)} {swap.to}
                               </p>
                               <p className="text-[#94A3B8] text-xs mt-1 font-medium">
