@@ -56,8 +56,17 @@ export class LedgerService {
       kind: `${e.kind}_REFUND`,
     })), tx);
   }
-  async balanceOf(account: string, currency: string) { const r = await this.prisma.ledgerEntry.aggregate({ where: { account, currency }, _sum: { amountMinor: true } }); return r._sum.amountMinor || 0n; }
-  async balancesOf(account: string) { const rows = await this.prisma.ledgerEntry.groupBy({ by: ['currency'], where: { account }, _sum: { amountMinor: true } }); return Object.fromEntries(rows.map(r => [r.currency, r._sum.amountMinor || 0n])); }
+  // tx-scoped variants let callers read the ledger INSIDE the same DB
+  // transaction that locks the wallet row, so the spendable check is
+  // serialised with concurrent conversions/deposits (same guarantee the float
+  // reads get from SELECT ... FOR UPDATE).
+  async balanceOf(account: string, currency: string, tx: Prisma.TransactionClient | PrismaService = this.prisma) { const r = await tx.ledgerEntry.aggregate({ where: { account, currency }, _sum: { amountMinor: true } }); return r._sum.amountMinor || 0n; }
+  async balancesOf(account: string, tx: Prisma.TransactionClient | PrismaService = this.prisma) { const rows = await tx.ledgerEntry.groupBy({ by: ['currency'], where: { account }, _sum: { amountMinor: true } }); return Object.fromEntries(rows.map(r => [r.currency, r._sum.amountMinor || 0n])); }
+  /** All currency balances for a user's account set (`user:<id>:<ccy>`). */
+  async balancesOfUser(userId: string, tx: Prisma.TransactionClient | PrismaService = this.prisma) {
+    const rows = await tx.ledgerEntry.groupBy({ by: ['currency'], where: { account: { startsWith: `user:${userId}:` } }, _sum: { amountMinor: true } });
+    return Object.fromEntries(rows.map(r => [r.currency, r._sum.amountMinor || 0n]));
+  }
   entriesForTransfer(transferId: string) { return this.prisma.ledgerEntry.findMany({ where: { transferId }, orderBy: { createdAt: 'asc' } }); }
   userAccount(id: string, ccy: string) { return `user:${id}:${ccy}`; }
   feesAccount(ccy: string) { return `platform:fees:${ccy}`; }

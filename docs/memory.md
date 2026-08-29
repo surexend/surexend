@@ -524,3 +524,25 @@ assertions).
   acceptable for a money product. Generate on an engine-capable machine and
   baseline the live DB (`prisma migrate resolve --applied`) before flipping
   `prestart:prod` to `migrate deploy`.
+
+## 2026-08-30 (3) — ledger read cutover: flag-gated implementation + baseline backfill
+
+- `LEDGER_READS_ENABLED` (config `app.ledger.reads`, default **false**) switches
+  balance READS to `LedgerEntry` when true, with a per-currency fallback to the
+  legacy float for currencies the ledger has no rows for — safe to enable
+  before backfill, per currency rather than all-or-nothing.
+- Read sites switched (flag-gated): `getBalance()` (USDC/USDT + all locals),
+  internal tag-send spendable, cross-chain send reserve, conversion checks
+  (USD pool + locals). Spendable reads run inside the same FOR UPDATE
+  transaction as the float lock (`ledger.balanceOf(..., prisma)` /
+  `balancesOfUser(userId, prisma)`).
+- `scripts/backfill-ledger-baseline.js` (`npm run ledger:baseline`, `--dry-run`)
+  seeds `BASELINE-<userId>-<ccy>` opening entries per wallet currency where
+  floatMinor != ledgerMinor — idempotent, double-entry balanced.
+- `LedgerService` gained `balancesOfUser()` (startsWith prefix) and tx-scoped
+  `balanceOf()`/`balancesOf()`.
+- Flow to go live: deploy flag-off → `ledger:baseline` → `ledger:report` clean
+  → set `LEDGER_READS_ENABLED=true` → verify dashboard/send/convert →
+  re-check report. Reversion = flip flag back (floats still written in both
+  modes). Still on floats: bills' `realLocalBalance` partition (by design),
+  pending/locked fields.

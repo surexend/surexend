@@ -34,6 +34,23 @@ describe('LedgerService', () => {
   });
   it('rejects an unbalanced currency independently', async () => await expect(service.record([...lines(), { transferId: 't1', account: 'user:u:NGN', currency: 'NGN', amountMinor: 1n }])).rejects.toThrow(/NGN/));
   it('derives a balance', async () => { prisma.ledgerEntry.aggregate.mockResolvedValue({ _sum: { amountMinor: 42n } }); await expect(service.balanceOf('a', 'USDC')).resolves.toBe(42n); });
+  it('reads a balance through a supplied transaction client', async () => {
+    const txAggregate = jest.fn().mockResolvedValue({ _sum: { amountMinor: 7n } });
+    const tx: any = { ledgerEntry: { aggregate: txAggregate } };
+    await expect(service.balanceOf('a', 'USDC', tx)).resolves.toBe(7n);
+    expect(txAggregate).toHaveBeenCalledWith({ where: { account: 'a', currency: 'USDC' }, _sum: { amountMinor: true } });
+  });
+  it('derives multiple balances through a supplied transaction client', async () => {
+    const txGroupBy = jest.fn().mockResolvedValue([{ currency: 'USDC', _sum: { amountMinor: 3n } }]);
+    const tx: any = { ledgerEntry: { groupBy: txGroupBy } };
+    await expect(service.balancesOf('a', tx)).resolves.toEqual({ USDC: 3n });
+  });
+  it('derives all user currency balances via the user account prefix', async () => {
+    const txGroupBy = jest.fn().mockResolvedValue([{ currency: 'USDC', _sum: { amountMinor: 3n } }, { currency: 'NGN', _sum: { amountMinor: 400n } }]);
+    const tx: any = { ledgerEntry: { groupBy: txGroupBy } };
+    await expect(service.balancesOfUser('u', tx)).resolves.toEqual({ USDC: 3n, NGN: 400n });
+    expect(txGroupBy).toHaveBeenCalledWith({ by: ['currency'], where: { account: { startsWith: 'user:u:' } }, _sum: { amountMinor: true } });
+  });
   it('returns zero for an empty balance', async () => { prisma.ledgerEntry.aggregate.mockResolvedValue({ _sum: { amountMinor: null } }); await expect(service.balanceOf('a', 'USDC')).resolves.toBe(0n); });
   it('derives multiple currency balances', async () => { prisma.ledgerEntry.groupBy.mockResolvedValue([{ currency: 'USDC', _sum: { amountMinor: 3n } }, { currency: 'NGN', _sum: { amountMinor: 4n } }]); await expect(service.balancesOf('a')).resolves.toEqual({ USDC: 3n, NGN: 4n }); });
   it('builds canonical account names', () => { expect(service.userAccount('u', 'USDC')).toBe('user:u:USDC'); expect(service.externalAccount('arc', 'USDC')).toBe('external:arc:USDC'); });

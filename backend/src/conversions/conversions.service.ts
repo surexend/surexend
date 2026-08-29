@@ -5,7 +5,7 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TransactionAuthService } from '../common/transaction-auth/transaction-auth.service';
 import { LedgerService } from '../common/ledger.service';
-import { toMinor } from '../common/money';
+import { fromMinor, toMinor } from '../common/money';
 import * as crypto from 'crypto';
 import axios from 'axios';
 import Redis from 'ioredis';
@@ -31,6 +31,11 @@ export class ConversionsService {
     private ledger: LedgerService,
   ) {
     this.redis = new Redis(this.configService.get<string>('app.redisUrl') || 'redis://localhost:6379');
+  }
+
+  /** True when balance READS should come from the ledger instead of floats. */
+  private ledgerReads(): boolean {
+    return this.configService.get<boolean>('app.ledger.reads') === true;
   }
 
   getSupportedCurrencies() {
@@ -291,12 +296,30 @@ export class ConversionsService {
       if (parsed && typeof parsed === 'object') localBalances = { ...parsed };
       if ((w.localBalance || 0) > 0 && !localBalances['NGN']) localBalances['NGN'] = w.localBalance;
 
+      // LEDGER READS: the ledger is authoritative for both the USD pool and
+      // every local currency, read inside the same locked transaction so a
+      // concurrent conversion/send cannot interleave. Per-currency fallback to
+      // the float for currencies the ledger has no rows for yet.
+      let usdtPool = w.usdtBalance || 0;
+      let usdcPool = w.usdcBalance || 0;
+      const usdAvailable = usdtPool + usdcPool;
+      if (this.ledgerReads()) {
+        const lb: Record<string, bigint> = await this.ledger.balancesOfUser(userId, prisma);
+        if (lb.USDT !== undefined) usdtPool = fromMinor(lb.USDT, 'USDT');
+        if (lb.USDC !== undefined) usdcPool = fromMinor(lb.USDC, 'USDC');
+        for (const [ccy, minor] of Object.entries(lb)) {
+          // Skip stablecoin denominations; 'USD' is a legacy ledger
+          // pseudo-currency from pre-cutover conversion rows.
+          if (ccy === 'USDC' || ccy === 'USDT' || ccy === 'USD') continue;
+          localBalances[ccy] = fromMinor(minor, ccy);
+        }
+      }
+
       const fromRate = fromCode === 'USD' ? 1 : getLocalRate(fromCode);
       const toRate = toCode === 'USD' ? 1 : getLocalRate(toCode);
 
       // Sufficient-balance checks against the LOCKED row
       if (fromCode === 'USD') {
-        const usdAvailable = (w.usdtBalance || 0) + (w.usdcBalance || 0);
         if (usdAvailable < amount) {
           throw new BadRequestException(`Insufficient USD balance. Available: $${usdAvailable.toFixed(2)}`);
         }
@@ -325,7 +348,7 @@ export class ConversionsService {
       // per-currency reconciliation stays clean (previously the whole debit
       // was booked as USDC while the float drew from USDT first -> permanent
       // drift on every conversion).
-      const deductUsdt = fromCode === 'USD' ? Math.min(amount, w.usdtBalance || 0) : 0;
+      const deductUsdt = fromCode === 'USD' ? Math.min(amount, usdtPool) : 0;
       const deductUsdc = fromCode === 'USD' ? Math.max(0, amount - deductUsdt) : 0;
       if (fromCode === 'USD') {
         await prisma.wallet.update({

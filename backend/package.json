@@ -9,6 +9,7 @@
     "start:prod": "node dist/main",
     "register:wallets": "node scripts/register-all-wallets.js",
     "ledger:report": "node scripts/ledger-drift-report.js",
+    "ledger:baseline": "node scripts/backfill-ledger-baseline.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",

@@ -93,11 +93,15 @@ You are the senior full-stack developer for **SureXend**, an African fintech app
 - Reconciliation (`LedgerReconciliationService`, hourly) covers USDC/USDT/local
   currencies and persists drift to `AuditLog` (`LEDGER_DRIFT`); `npm run
   ledger:report` runs the same check on demand (CI-friendly, exit 1 on drift).
-- **Still float-reads everywhere; floats NOT removed. Code stays additive and
-  testnet-safe. Mainnet NOT enabled.** Next: run the E2E runbook
-  (`docs/testnet-e2e-runbook.md`) per path, then gradually switch reads (tag
-  send → conversions → bills → cross-chain reserve → getBalance), then stop
-  float writes, then checked-in migrations + column removal.
+- **Read cutover is implemented but OFF**: `LEDGER_READS_ENABLED` (default
+  false) switches `getBalance`, tag send, cross-chain reserve and conversion
+  reads to `LedgerEntry` with per-currency float fallback; floats are still
+  written in both modes. To go live: deploy (flag off) → `npm run
+  ledger:baseline` → `npm run ledger:report` clean → set
+  `LEDGER_READS_ENABLED=true` → verify → re-check report. Floats NOT removed;
+  code stays additive and testnet-safe; **Mainnet NOT enabled.** Next: run the
+  E2E runbook (`docs/testnet-e2e-runbook.md`) per path, then enable the flag,
+  then stop float writes, then checked-in migrations + column removal.
 - Mainnet prep: `docs/mainnet-config.md` + `assertNetworkConfig()` boot guard
   (`main.ts`) — refuses mixed testnet/mainnet configs. On a machine with Prisma
   engine access: `npx prisma generate` (the sandbox uses a gitignored typing

@@ -38,16 +38,31 @@ Status key: ✅ done · ⏳ in progress · ⛔ blocked/pre-requisite missing.
 - Remaining: an alerting hook (e.g. check `AuditLog` with action
   `LEDGER_DRIFT` in the last hour) and a Grafana/GCP/Datadog query.
 
-## 3. Switching balance reads from legacy floats to ledger balances — ⛔ not started (by design)
+## 3. Switching balance reads from legacy floats to ledger balances — ⏳ implemented, flag-gated (not enabled)
 
-- `getBalance()` and every spendable check still read the legacy float columns.
-- All **writes** now have a matching ledger entry (see below), so float ==
-  ledger on every path going forward — that is the precondition that makes the
-  read switch safe.
-- Migration order (per path, after E2E verification): internal tag send →
-  conversions → bills → cross-chain send reserve → `getBalance()`.
-- Keep float writes until each path's reads are switched and reconciliation is
-  clean — do not remove columns before that.
+- **`LEDGER_READS_ENABLED=true` switches reads to `LedgerEntry`** with a
+  per-currency fallback to the float for any currency that has no ledger rows
+  yet, so flipping the flag is safe even before backfill. Default `false` =
+  current behavior (floats); no behavior change until enabled.
+- Switched read sites: `getBalance()` (USDC/USDT + all locals), internal
+  tag-send spendable check, cross-chain send reserve, conversion balance checks
+  (USD pool + locals). All spendable checks read the ledger INSIDE the same
+  `SELECT … FOR UPDATE` transaction as the float lock, so the cutover keeps the
+  concurrency guarantee.
+- **`scripts/backfill-ledger-baseline.js`** (`npm run ledger:baseline`,
+  supports `--dry-run`) writes `BASELINE-<userId>-<ccy>` opening entries for
+  every wallet currency where `floatMinor - ledgerMinor !== 0` — idempotent
+  (keyed per currency), also writes the source side so double-entry holds.
+- Rollout order when verifying: (1) deploy this code (flag off), (2) run
+  `npm run ledger:baseline`, (3) `npm run ledger:report` must be CLEAN across
+  all accounts, (4) set `LEDGER_READS_ENABLED=true` (Railway + restart /
+  Vercel env only if frontend needs to know — currently backend-only), (5)
+  verify dashboard + one tag send + one conversion, (6) re-check
+  `ledger:report` before/after each path (floats still written alongside, so
+  reversion is just flipping the flag back).
+- Still reading floats: bill purchase pool (`realLocalBalance` stays float by
+  design — it is a distinct "real-money" partition), pending/locked/legacy
+  fields until their paths are verified.
 
 ## 4. Stopping legacy float writes after each path is verified — ⛔ not started; ledger writes now complete
 
