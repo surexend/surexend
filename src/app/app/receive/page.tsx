@@ -8,123 +8,75 @@ import { walletAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import { useQuery } from '@tanstack/react-query'
 
-function EthereumLogo({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#627EEA" />
-      <path d="M50 18v29.5l25.8-11.7L50 18z" fill="white" fillOpacity="0.8" />
-      <path d="M50 18L24.2 35.8 50 47.5V18z" fill="white" />
-      <path d="M50 79v-20L75.8 47.3 50 79z" fill="white" fillOpacity="0.8" />
-      <path d="M50 79L24.2 47.3 50 59v20z" fill="white" />
-      <path d="M50 59v-11.5l25.8-11.7L50 59z" fill="white" fillOpacity="0.5" />
-      <path d="M50 59L24.2 35.8 50 47.5V59z" fill="white" fillOpacity="0.6" />
-    </svg>
-  )
+interface NetworkLogoProps {
+  id: string
+  size?: number
+  className?: string
 }
 
-function ArbitrumLogo({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#28A0F0" />
-      <path d="M50 20L80 70H20L50 20Z" fill="white" fillOpacity="0.2" />
-      <path d="M50 35L70 68H30L50 35Z" fill="white" />
-    </svg>
-  )
+const LOGO_PATHS: Record<string, string> = {
+  ETHEREUM: '/logos/ethereum.png',
+  POLYGON: '/logos/polygon.png',
+  AVALANCHE: '/logos/avalanche.png',
+  ARBITRUM: '/logos/arbitrum.png',
+  BASE: '/logos/base.svg',
+  OPTIMISM: '/logos/optimism.svg',
+  SOLANA: '/logos/solana.svg',
+  BSC: '/logos/bnb.svg',
+  MONAD: '/logos/monad.svg',
+  ARC: '/logos/arc.svg',
 }
 
-function AvalancheLogo({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#E84142" />
-      <path d="M50 22L78 72H60L50 54L40 72H22L50 22Z" fill="white" />
-    </svg>
-  )
+const ACCENT_COLORS: Record<string, string> = {
+  ETHEREUM: 'rgba(98, 126, 234, 0.18)',
+  POLYGON: 'rgba(130, 71, 229, 0.18)',
+  AVALANCHE: 'rgba(232, 65, 66, 0.18)',
+  ARBITRUM: 'rgba(40, 160, 240, 0.18)',
+  BASE: 'rgba(0, 82, 255, 0.18)',
+  OPTIMISM: 'rgba(255, 4, 32, 0.18)',
+  SOLANA: 'rgba(20, 241, 149, 0.18)',
+  BSC: 'rgba(243, 186, 47, 0.18)',
+  MONAD: 'rgba(131, 110, 249, 0.18)',
+  ARC: 'rgba(255, 94, 0, 0.18)',
 }
 
-function BaseLogo({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#0052FF" />
-      <circle cx="50" cy="50" r="22" stroke="white" strokeWidth="8" />
-    </svg>
-  )
-}
+function NetworkLogo({ id, size = 32, className = '' }: NetworkLogoProps) {
+  const logoSrc = LOGO_PATHS[id] || LOGO_PATHS.ETHEREUM
+  const bgAccent = ACCENT_COLORS[id] || 'rgba(255, 255, 255, 0.08)'
 
-function OptimismLogo({ size = 32 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#FF0420" />
-      <path d="M35 50a15 15 0 0 1 30 0v5a15 15 0 0 1-30 0v-5z" stroke="white" strokeWidth="8" />
-    </svg>
-  )
-}
-
-function SolanaLogo({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#14F195" />
-      <path d="M72 32H28l-8 8h44l8-8zm0 28H28l-8 8h44l8-8zM28 46h44l8 8H36l-8-8z" fill="white" />
-    </svg>
-  )
-}
-
-function BNBLogo({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#F3BA2F" />
-      <path d="M32 50L50 32L68 50L50 68L32 50Z" fill="white" />
-      <path d="M50 20L56 26L50 32L44 26L50 20Z" fill="white" />
-      <path d="M50 68L56 74L50 80L44 74L50 68Z" fill="white" />
-      <path d="M20 50L26 44L32 50L26 56L20 50Z" fill="white" />
-      <path d="M68 50L74 44L80 50L74 56L68 50Z" fill="white" />
-    </svg>
-  )
-}
-
-function PolygonLogo({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#8247E5" />
-      <path d="M63 37L50 30L37 37V51L50 58L63 51V37Z" fill="white" />
-      <path d="M37 51L24 44V58L37 65V51Z" fill="white" fillOpacity="0.7" />
-      <path d="M63 51L76 44V58L63 65V51Z" fill="white" fillOpacity="0.7" />
-    </svg>
-  )
-}
-
-function ArcLogo({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#FF5E00" />
-      <path d="M50 25L75 68H25L50 25Z" stroke="white" strokeWidth="8" strokeLinejoin="round" fill="none" />
-      <circle cx="50" cy="54" r="8" fill="white" />
-    </svg>
-  )
-}
-
-function MonadLogo({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="50" fill="#836EF9" />
-      <path d="M36 24c8 0 14 6 14 14v32M36 24c-8 0-14 6-14 14v32c0 8 6 14 14 14s14-6 14-14V38c0-8 6-14 14-14s14 6 14 14v32" stroke="white" strokeWidth="7" strokeLinecap="round" fill="none" />
-      <circle cx="36" cy="24" r="7" fill="white" />
-      <circle cx="50" cy="84" r="7" fill="white" />
-      <circle cx="64" cy="24" r="7" fill="white" />
-    </svg>
+    <div
+      className={`relative inline-flex items-center justify-center rounded-full overflow-hidden flex-shrink-0 transition-transform ${className}`}
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        backgroundColor: bgAccent,
+        padding: `${Math.max(2, size * 0.1)}px`,
+      }}
+    >
+      <img
+        src={logoSrc}
+        alt={`${id} logo`}
+        className="w-full h-full object-contain filter drop-shadow-sm"
+        onError={(e) => {
+          ;(e.target as HTMLImageElement).src = '/logos/ethereum.png'
+        }}
+      />
+    </div>
   )
 }
 
 const NETWORKS = [
-  { id: 'ETHEREUM' as const, label: 'Ethereum', sublabel: 'Mainnet', color: '#627EEA', Logo: EthereumLogo },
-  { id: 'POLYGON' as const, label: 'Polygon', sublabel: 'PoS Mainnet', color: '#8247E5', Logo: PolygonLogo },
-  { id: 'AVALANCHE' as const, label: 'Avalanche', sublabel: 'C-Chain', color: '#E84142', Logo: AvalancheLogo },
-  { id: 'ARBITRUM' as const, label: 'Arbitrum', sublabel: 'One Mainnet', color: '#28A0F0', Logo: ArbitrumLogo },
-  { id: 'BASE' as const, label: 'Base', sublabel: 'Mainnet', color: '#0052FF', Logo: BaseLogo },
-  { id: 'OPTIMISM' as const, label: 'Optimism', sublabel: 'Mainnet', color: '#FF0420', Logo: OptimismLogo },
-  { id: 'SOLANA' as const, label: 'Solana', sublabel: 'Mainnet', color: '#14F195', Logo: SolanaLogo },
-  { id: 'BSC' as const, label: 'BNB Smart Chain', sublabel: 'Mainnet', color: '#F3BA2F', Logo: BNBLogo },
-  { id: 'MONAD' as const, label: 'Monad', sublabel: 'Mainnet', color: '#836EF9', Logo: MonadLogo },
-  { id: 'ARC' as const, label: 'Arc', sublabel: 'Mainnet', color: '#FF5E00', Logo: ArcLogo },
+  { id: 'ETHEREUM' as const, label: 'Ethereum', sublabel: 'Mainnet', color: '#627EEA' },
+  { id: 'POLYGON' as const, label: 'Polygon', sublabel: 'PoS Mainnet', color: '#8247E5' },
+  { id: 'AVALANCHE' as const, label: 'Avalanche', sublabel: 'C-Chain', color: '#E84142' },
+  { id: 'ARBITRUM' as const, label: 'Arbitrum', sublabel: 'One Mainnet', color: '#28A0F0' },
+  { id: 'BASE' as const, label: 'Base', sublabel: 'Mainnet', color: '#0052FF' },
+  { id: 'OPTIMISM' as const, label: 'Optimism', sublabel: 'Mainnet', color: '#FF0420' },
+  { id: 'SOLANA' as const, label: 'Solana', sublabel: 'Mainnet', color: '#14F195' },
+  { id: 'BSC' as const, label: 'BNB Smart Chain', sublabel: 'Mainnet', color: '#F3BA2F' },
+  { id: 'MONAD' as const, label: 'Monad', sublabel: 'Mainnet', color: '#836EF9' },
+  { id: 'ARC' as const, label: 'Arc', sublabel: 'Mainnet', color: '#FF5E00' },
 ]
 
 function BankFundingCard() {
@@ -151,7 +103,14 @@ function BankFundingCard() {
           <Landmark className="w-4 h-4" style={{ color: colors.primary }} />
           <h2 className="text-sm font-extrabold text-white">Fund Local Currency</h2>
         </div>
-        <span className="px-2 py-1 rounded-full text-[10px] font-bold border" style={{ color: colors.primary, borderColor: `rgba(${colors.glowRgb},0.4)`, background: `rgba(${colors.glowRgb},0.1)` }}>
+        <span
+          className="px-2 py-1 rounded-full text-[10px] font-bold border"
+          style={{
+            color: colors.primary,
+            borderColor: `rgba(${colors.glowRgb},0.4)`,
+            background: `rgba(${colors.glowRgb},0.1)`,
+          }}
+        >
           Bank Transfer
         </span>
       </div>
@@ -173,7 +132,10 @@ function BankFundingCard() {
                 <p className="text-[9px] uppercase tracking-wider text-[#64748B] font-bold">Account Number</p>
                 <p className="text-base font-black text-white tracking-wider">{data.account.accountNumber}</p>
               </div>
-              <button onClick={copyNum} className="px-3 py-2 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-colors">
+              <button
+                onClick={copyNum}
+                className="px-3 py-2 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+              >
                 {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-white" />}
               </button>
             </div>
@@ -196,17 +158,24 @@ function BankFundingCard() {
 }
 
 export default function ReceivePage() {
-  const { variant, colors } = useTheme()
-  const [network, setNetwork] = useState<'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC' | 'MONAD' | 'ARC'>('POLYGON')
+  const { colors } = useTheme()
+  const [network, setNetwork] = useState<
+    'POLYGON' | 'AVALANCHE' | 'ARBITRUM' | 'ETHEREUM' | 'BASE' | 'OPTIMISM' | 'SOLANA' | 'BSC' | 'MONAD' | 'ARC'
+  >('POLYGON')
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
   const [isCopied, setIsCopied] = useState(false)
 
-  const activeNet = NETWORKS.find(n => n.id === network)!
+  const activeNet = NETWORKS.find((n) => n.id === network)!
 
-  const { data: addressData, isLoading, isError, error } = useQuery({
+  const {
+    data: addressData,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ['depositAddress', network],
     queryFn: () => walletAPI.getDepositAddress(network),
-    retry: false
+    retry: false,
   })
 
   const address = addressData?.address || ''
@@ -216,8 +185,10 @@ export default function ReceivePage() {
       QRCode.toDataURL(address, {
         width: 220,
         margin: 2,
-        color: { dark: '#020203', light: '#FFFFFF' }
-      }).then(setQrCodeDataUrl).catch(console.error)
+        color: { dark: '#020203', light: '#FFFFFF' },
+      })
+        .then(setQrCodeDataUrl)
+        .catch(console.error)
     }
   }, [address])
 
@@ -238,7 +209,6 @@ export default function ReceivePage() {
 
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 py-4 max-w-md mx-auto pb-28 sm:pb-32 space-y-4">
-
       {/* Page title */}
       <div className="flex items-center justify-between">
         <div>
@@ -247,7 +217,11 @@ export default function ReceivePage() {
         </div>
         <span
           className="px-2.5 py-1 rounded-full text-[10px] font-bold border"
-          style={{ color: colors.primary, borderColor: `rgba(${colors.glowRgb},0.4)`, background: `rgba(${colors.glowRgb},0.1)` }}
+          style={{
+            color: colors.primary,
+            borderColor: `rgba(${colors.glowRgb},0.4)`,
+            background: `rgba(${colors.glowRgb},0.1)`,
+          }}
         >
           USDC
         </span>
@@ -259,13 +233,14 @@ export default function ReceivePage() {
           <button
             key={net.id}
             onClick={() => setNetwork(net.id)}
-            className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-2xl border transition-colors active:bg-white/[0.04]"
-            style={network === net.id
-              ? { background: `rgba(${colors.glowRgb},0.12)`, borderColor: colors.primary }
-              : { background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)' }
+            className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-2xl border transition-all active:bg-white/[0.04]"
+            style={
+              network === net.id
+                ? { background: `rgba(${colors.glowRgb},0.12)`, borderColor: colors.primary, boxShadow: `0 0 12px rgba(${colors.glowRgb},0.2)` }
+                : { background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)' }
             }
           >
-            <net.Logo size={28} />
+            <NetworkLogo id={net.id} size={32} />
             <span className={`text-[11px] font-extrabold ${network === net.id ? 'text-white' : 'text-[#64748B]'}`}>{net.label}</span>
             <span className="text-[9px] text-[#475569] leading-none text-center">{net.sublabel}</span>
           </button>
@@ -278,7 +253,9 @@ export default function ReceivePage() {
           <AlertTriangle className="w-10 h-10 text-red-500" />
           <h3 className="text-sm font-bold text-white">Address Generation Failed</h3>
           <p className="text-xs text-[#94A3B8] max-w-xs leading-relaxed">
-            {error instanceof Error ? error.message : 'Circle Web3 wallet creation failed for this network. Please ensure this chain is enabled in your Developer Console.'}
+            {error instanceof Error
+              ? error.message
+              : 'Circle Web3 wallet creation failed for this network. Please ensure this chain is enabled in your Developer Console.'}
           </p>
         </div>
       ) : (
@@ -286,7 +263,7 @@ export default function ReceivePage() {
           <div className="mobile-flat-surface liquid-glass p-5 rounded-3xl flex flex-col items-center gap-4 border border-white/10">
             {/* Chain info banner */}
             <div className="flex items-center gap-3 w-full p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
-              <activeNet.Logo size={32} />
+              <NetworkLogo id={activeNet.id} size={34} />
               <div>
                 <p className="text-sm font-bold text-white">{activeNet.label} Network</p>
                 <p className="text-xs text-[#64748B]">{activeNet.sublabel}</p>
@@ -306,7 +283,7 @@ export default function ReceivePage() {
                   <img src={qrCodeDataUrl} alt="QR Code" className="w-[200px] h-[200px] rounded-xl" />
                   {/* Centered chain logo overlay */}
                   <div className="absolute flex items-center justify-center w-12 h-12 rounded-xl bg-white shadow-lg border-2 border-gray-100">
-                    <activeNet.Logo size={30} />
+                    <NetworkLogo id={activeNet.id} size={32} />
                   </div>
                 </>
               ) : (
@@ -316,9 +293,7 @@ export default function ReceivePage() {
               )}
             </div>
 
-            <p className="text-[11px] text-[#64748B] text-center font-medium">
-              Scan QR code or copy address below
-            </p>
+            <p className="text-[11px] text-[#64748B] text-center font-medium">Scan QR code or copy address below</p>
           </div>
 
           {/* Address Card */}
@@ -360,11 +335,12 @@ export default function ReceivePage() {
         <div>
           <p className="text-xs font-semibold text-red-400 mb-0.5">Important</p>
           <p className="text-[11px] text-[#94A3B8] leading-relaxed">
-            Only send <strong className="text-white">USDC</strong> to this address via the <strong className="text-white">{activeNet.sublabel}</strong>. Sending any other asset or network will result in <strong className="text-red-400">permanent loss</strong>.
+            Only send <strong className="text-white">USDC</strong> to this address via the{' '}
+            <strong className="text-white">{activeNet.sublabel}</strong>. Sending any other asset or network will result in{' '}
+            <strong className="text-red-400">permanent loss</strong>.
           </p>
         </div>
       </div>
-
     </div>
   )
 }
