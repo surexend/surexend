@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { ConversionsService } from '../conversions/conversions.service';
 import { TransactionAuthService } from '../common/transaction-auth/transaction-auth.service';
+import { LedgerService } from '../common/ledger.service';
+import { toMinor } from '../common/money';
 import axios from 'axios';
 
 // Static provider lists for categories not yet wired to Smartspeed (electricity,
@@ -58,6 +60,7 @@ export class BillsService {
     private transactionsService: TransactionsService,
     private conversionsService: ConversionsService,
     private transactionAuth: TransactionAuthService,
+    private ledger: LedgerService,
   ) {}
 
   // ── Smartspeed plumbing ─────────────────────────────────────────────────
@@ -535,6 +538,11 @@ export class BillsService {
           metadata: billMeta
         }
       });
+
+      await this.ledger.record([
+        { transferId: reference, account: this.ledger.userAccount(userId, 'NGN'), currency: 'NGN', amountMinor: -toMinor(chargeAmount, 'NGN'), reference, kind: 'BILL_PAYMENT' },
+        { transferId: reference, account: this.ledger.treasuryAccount('NGN'), currency: 'NGN', amountMinor: toMinor(chargeAmount, 'NGN'), reference, kind: 'BILL_PAYMENT_SETTLEMENT' },
+      ], prisma);
 
       const transaction = await this.transactionsService.createTransaction(prisma, {
         userId,

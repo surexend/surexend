@@ -1,4 +1,4 @@
-﻿import { Injectable, BadRequestException, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -6,6 +6,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { CctpService } from './cctp.service';
 import { DepositMonitorService } from './deposit-monitor.service';
 import { getLocalRate } from '../common/currency.constants';
+import { LedgerService } from '../common/ledger.service';
+import { toMinor } from '../common/money';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
@@ -27,6 +29,7 @@ export class WalletsService implements OnModuleInit {
     private cctpService: CctpService,
     private depositMonitor: DepositMonitorService,
     private notifications: NotificationsService,
+    private ledger: LedgerService,
   ) {
     this.apiKey = this.configService.get<string>('app.circle.apiKey') || '';
     this.entitySecret = this.configService.get<string>('app.circle.entitySecret');
@@ -883,6 +886,10 @@ export class WalletsService implements OnModuleInit {
           method: 'surex-tag',
         },
       });
+      await this.ledger.record([
+        { transferId: reference, account: this.ledger.userAccount(senderUserId, 'USDC'), currency: 'USDC', amountMinor: -toMinor(sendAmount, 'USDC'), reference, kind: 'SEND' },
+        { transferId: reference, account: this.ledger.userAccount(recipient.id, 'USDC'), currency: 'USDC', amountMinor: toMinor(sendAmount, 'USDC'), reference, kind: 'RECEIVE' },
+      ], prisma);
       await this.transactionsService.createTransaction(prisma, {
         userId: recipient.id,
         type: 'RECEIVE',
@@ -1100,6 +1107,13 @@ export class WalletsService implements OnModuleInit {
           txState: 'INITIATED'
         }
       });
+      // The external destination is represented as a control account. The fee
+      // is retained by the platform so every currency remains balanced.
+      await this.ledger.record([
+        { transferId: reference, account: this.ledger.userAccount(userId, 'USDC'), currency: 'USDC', amountMinor: -toMinor(totalDebit, 'USDC'), reference, kind: 'SEND' },
+        { transferId: reference, account: this.ledger.externalAccount(destNet, 'USDC'), currency: 'USDC', amountMinor: toMinor(amount, 'USDC'), reference, kind: 'EXTERNAL_SEND' },
+        ...(fee > 0 ? [{ transferId: reference, account: this.ledger.feesAccount('USDC'), currency: 'USDC', amountMinor: toMinor(fee, 'USDC'), reference, kind: 'FEE' }] : []),
+      ], prisma);
     });
 
     // ── 2. Submit to the chain ──────────────────────────────────────────────

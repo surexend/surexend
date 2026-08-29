@@ -640,14 +640,17 @@ export default function LandingPage() {
                             { icon: Download, label: 'Receive' },
                             { icon: Smartphone, label: 'Bills' },
                           ].map((a) => (
-                            <div key={a.label} className="flex flex-col items-center gap-1">
-                              <div
-                                className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/[0.06] border border-white/10"
-                              >
+                            <Link
+                              key={a.label}
+                              href={a.label === 'Fund' || a.label === 'Receive' ? '/app/receive' : a.label === 'Send' ? '/app/send' : '/app/bills'}
+                              className="flex flex-col items-center gap-1 cursor-pointer rounded-xl hover:bg-white/[0.06] transition-colors"
+                              aria-label={a.label}
+                            >
+                              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/[0.06] border border-white/10">
                                 <a.icon size={14} className="text-white" />
                               </div>
                               <span className="text-[8px] font-semibold text-white">{a.label}</span>
-                            </div>
+                            </Link>
                           ))}
                         </div>
                       </div>

@@ -316,6 +316,22 @@ model IdempotencyRecord {
 //   per-plan override. Sell price = override ?? cost * (1 + margin/100) ?? cost.
 // - airtime: planCode always empty; marginPct is the markup added on top of the
 //   face value the user enters. Sell price = face * (1 + margin/100).
+model LedgerEntry {
+  id         String   @id @default(uuid())
+  transferId String
+  account    String
+  currency   String
+  amountMinor BigInt
+  reference  String?
+  kind       String
+  createdAt  DateTime @default(now())
+
+  @@unique([transferId, account, currency])
+  @@index([account, currency])
+  @@index([reference])
+  @@index([kind, createdAt])
+}
+
 model ServicePricing {
   id        String   @id @default(uuid())
   category  String   // 'data' | 'airtime'

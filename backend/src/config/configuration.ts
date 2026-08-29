@@ -84,6 +84,10 @@ export default registerAs('app', () => ({
     walletSetId: process.env.CIRCLE_WALLET_SET_ID,
     webhookSecret: process.env.CIRCLE_WEBHOOK_SECRET,
   },
+  network: {
+    environment: process.env.CHAIN_ENV || 'testnet',
+    mainnetEnabled: process.env.MAINNET_ENABLED === 'true',
+  },
   arc: {
     rpcUrl: process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network',
     chainId: parseInt(process.env.ARC_CHAIN_ID || '5042002', 10),
