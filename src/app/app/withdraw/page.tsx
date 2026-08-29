@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { ArrowLeft, Building2, CheckCircle2, ChevronRight, AlertCircle, Loader2, ShieldCheck, ArrowUpRight, DollarSign } from 'lucide-react'
@@ -10,6 +10,8 @@ import { useQuery } from '@tanstack/react-query'
 import { walletAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import CurrencyFlag from '@/components/CurrencyFlag'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
+import { useRouter } from 'next/navigation'
+import { useBackLayer } from '@/context/BackNavigationContext'
 
 // ── Fiat Options (all African countries) ──────────────────────────────────
 const FIAT_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.name, flag: c.flag, symbol: c.symbol, rate: c.rate, countryCode: c.countryCode }))
@@ -71,6 +73,7 @@ function PinPad({ onComplete, accentHex, accentRgb }: {
 
 export default function WithdrawPage() {
   const { variant, colors } = useTheme()
+  const router = useRouter()
   const isGold = variant === 'gold'
   const accentRgb = isGold ? '212, 160, 23' : '181, 226, 61'
   const accentHex = isGold ? '#D4A017' : '#B5E23D'
@@ -80,6 +83,16 @@ export default function WithdrawPage() {
   const [amountUsdt, setAmountUsdt] = useState('')
   const [selectedBank, setSelectedBank] = useState<any>(SAVED_BANKS[0])
   const [isProcessing, setIsProcessing] = useState(false)
+
+  useBackLayer(step !== 'form', useCallback(() => {
+    if (step === 'success') {
+      router.replace('/app/dashboard')
+    } else if (step === 'pin') {
+      setStep('bank')
+    } else {
+      setStep('form')
+    }
+  }, [step, router]), 30)
 
   const { data: balanceData } = useQuery({
     queryKey: ['balance'],

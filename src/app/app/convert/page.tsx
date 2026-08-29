@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowUpDown, CheckCircle2, ChevronDown, Check, X, Globe, ArrowDown, Wallet } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -10,6 +10,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
 import CurrencyFlag from '@/components/CurrencyFlag'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
+import { useBackLayer } from '@/context/BackNavigationContext'
 
 const USD_ASSET = { code: 'USD', name: 'US Dollar', symbol: '$', flag: '💵', countryCode: 'US' }
 
@@ -29,6 +30,20 @@ export default function ConvertPage() {
   const [pin, setPin] = useState(['', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
+
+  useBackLayer(pickerTarget !== null, () => {
+    setPickerTarget(null)
+    setCurrencySearch('')
+  }, 40)
+
+  useBackLayer(step > 1, useCallback(() => {
+    if (step === 3) {
+      router.replace('/app/dashboard')
+      return
+    }
+    setStep(1)
+    setPin(['', '', '', ''])
+  }, [step, router]), 30)
 
   // ── Real balances ────────────────────────────────────────────────────────
   const { data: balanceData, refetch: refetchBalance } = useQuery({

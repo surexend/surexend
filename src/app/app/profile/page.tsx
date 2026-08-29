@@ -17,6 +17,7 @@ import { getInitials } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 import CurrencyFlag from '@/components/CurrencyFlag'
+import { useBackLayer } from '@/context/BackNavigationContext'
 
 function MenuSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -91,6 +92,11 @@ export default function ProfilePage() {
   const [currencySearch, setCurrencySearch] = useState('')
   const [savingCurrency, setSavingCurrency] = useState(false)
   const queryClient = useQueryClient()
+
+  useBackLayer(showLogoutConfirm || showCurrencyPicker, () => {
+    if (showLogoutConfirm) setShowLogoutConfirm(false)
+    else setShowCurrencyPicker(false)
+  }, 30)
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],

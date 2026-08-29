@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query'
 import { campaignsAPI, userAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import { Trophy, Medal, Crown, Users, ReceiptText, ArrowLeft } from 'lucide-react'
-import { useBackHandler } from '@/context/BackHandlerContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 
 const RANGES: { key: 'day' | '7d' | '30d' | '365d' | 'all'; label: string }[] = [

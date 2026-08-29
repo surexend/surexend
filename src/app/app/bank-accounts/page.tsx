@@ -7,7 +7,7 @@ import { bankAPI } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import { Building2, Plus, Trash2, Loader2, Rocket, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useBackHandler } from '@/context/BackHandlerContext'
+import { useBackLayer } from '@/context/BackNavigationContext'
 
 export default function BankAccountsPage() {
   const { variant, colors } = useTheme()
@@ -24,15 +24,12 @@ export default function BankAccountsPage() {
   const [adding, setAdding] = useState(false)
 
   // Back handler for add account modal
-  useBackHandler(
+  useBackLayer(
+    showAdd,
     useCallback(() => {
-      if (showAdd) {
-        setShowAdd(false)
-        setBankCode('')
-        setAccountNumber('')
-        return true
-      }
-      return false
+      setShowAdd(false)
+      setBankCode('')
+      setAccountNumber('')
     }, [showAdd]),
     30
   )

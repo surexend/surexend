@@ -13,7 +13,7 @@ import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 import CurrencyFlag from '@/components/CurrencyFlag'
 import ComingSoon from '@/components/ui/ComingSoon'
 import { useLite } from '@/lib/lite'
-import { useBackHandler } from '@/context/BackHandlerContext'
+import { useBackLayer } from '@/context/BackNavigationContext'
 import toast from 'react-hot-toast'
 
 // recharts is heavy (~130KB gz) — load it only when charts actually render.
@@ -69,35 +69,37 @@ export default function DashboardPage() {
   const queryClient = useQueryClient()
 
   // Back handler for modals — closes the top-most open modal on back press
-  useBackHandler(
+  const hasOpenDashboardLayer = showBankComingSoon || showVBAModal || showFundModal || showSendModal || showLocalCurrencyPicker || showMarketPicker
+
+  useBackLayer(
+    hasOpenDashboardLayer,
     useCallback(() => {
       if (showBankComingSoon) {
         setShowBankComingSoon(false)
-        return true
+        return
       }
       if (showVBAModal) {
         setShowVBAModal(false)
-        return true
+        return
       }
       if (showFundModal) {
         setShowFundModal(false)
-        return true
+        return
       }
       if (showSendModal) {
         setShowSendModal(false)
-        return true
+        return
       }
       if (showLocalCurrencyPicker) {
         setShowLocalCurrencyPicker(false)
-        return true
+        return
       }
       if (showMarketPicker) {
         setShowMarketPicker(false)
-        return true
+        return
       }
-      return false
     }, [showBankComingSoon, showVBAModal, showFundModal, showSendModal, showLocalCurrencyPicker, showMarketPicker]),
-    20 // Higher than drawer
+    20
   )
 
   // ── LIVE MARKET DATA ─────────────────────────────────────────────

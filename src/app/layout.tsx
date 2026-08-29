@@ -5,6 +5,7 @@ import './globals.css'
 import { ThemeProvider } from '@/context/ThemeContext'
 import PWAInstallPrompt from '@/components/PWAInstallPrompt'
 import MobileResilienceScript from '@/components/MobileResilienceScript'
+import { BackNavigationProvider } from '@/context/BackNavigationContext'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -161,9 +162,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Anti-white-screen-of-death mobile resilience */}
         <MobileResilienceScript />
         <ThemeProvider>
-          {children}
-          <PWAInstallPrompt />
-          <Toaster position="top-center" toastOptions={{ style: { background: '#121419', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
+          <BackNavigationProvider>
+            {children}
+            <PWAInstallPrompt />
+            <Toaster position="top-center" toastOptions={{ style: { background: '#121419', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
+          </BackNavigationProvider>
         </ThemeProvider>
       </body>
     </html>

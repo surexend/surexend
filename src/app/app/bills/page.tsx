@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
@@ -15,6 +15,7 @@ import {
   ShoppingCart, Store, Fuel, Plane, Grid, MoreHorizontal, Wallet, NairaSign
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useBackLayer } from '@/context/BackNavigationContext'
 
 // ── Essential Crypto Fintech Bill Categories ────────────────────────────────
 const CATEGORIES = [
@@ -101,6 +102,22 @@ export default function BillsPage() {
   const [validating, setValidating] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<any>(null)
+
+  useBackLayer(step !== 'categories', useCallback(() => {
+    if (step === 'providers') {
+      setStep('categories')
+      setSelectedCategory(null)
+    } else if (step === 'form') {
+      setStep('providers')
+      setSelectedProvider(null)
+    } else if (step === 'wallet') {
+      setStep('form')
+    } else if (step === 'pin') {
+      setStep('wallet')
+    } else {
+      reset()
+    }
+  }, [step]), 30)
 
   // Real wallet balances — shows what can actually pay bills.
   const { data: walletBal } = useQuery({

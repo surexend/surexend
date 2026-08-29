@@ -14,6 +14,7 @@ import {
   CheckCircle, XCircle, Clock, FileText, X, Copy, Check, Hash, ExternalLink, ArrowRight, BarChart3
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useBackLayer } from '@/context/BackNavigationContext'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type TxType = 'ALL' | 'SEND' | 'RECEIVE' | 'CONVERT' | 'BILL_PAYMENT' | 'REFERRAL_EARNING'
@@ -1128,6 +1129,12 @@ export default function HistoryPage() {
   const [showStatement, setShowStatement] = useState(false)
   const [selectedTx, setSelectedTx] = useState<any>(null)
   const [page, setPage] = useState(1)
+
+  useBackLayer(showFilters || showStatement || !!selectedTx, () => {
+    if (selectedTx) setSelectedTx(null)
+    else if (showStatement) setShowStatement(false)
+    else setShowFilters(false)
+  }, 30)
 
   // Build query params
   const queryParams = {

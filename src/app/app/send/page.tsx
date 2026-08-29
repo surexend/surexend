@@ -11,9 +11,9 @@ import toast from 'react-hot-toast'
 import { walletAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useBackHandler } from '@/context/BackHandlerContext'
+import { useBackLayer } from '@/context/BackNavigationContext'
 
 // Funds live on Arc (native USDC). The recipient picks the network they want
 // to receive on — the backend handles delivery automatically (native when both
@@ -31,6 +31,7 @@ type SendFormValues = z.infer<typeof sendSchema>
 
 export default function SendPage() {
   const { variant, colors } = useTheme()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const initialType = searchParams.get('type') === 'tag' ? 'TAG' : 'CRYPTO'
 
@@ -44,18 +45,17 @@ export default function SendPage() {
   const queryClient = useQueryClient()
 
   // Back handler for multi-step form
-  useBackHandler(
+  useBackLayer(
+    step > 1 || isSuccess,
     useCallback(() => {
+      if (isSuccess) {
+        router.replace('/app/dashboard')
+        return
+      }
       if (step > 1) {
         setStep(prev => prev - 1)
-        return true
       }
-      if (isSuccess) {
-        setIsSuccess(false)
-        return true
-      }
-      return false
-    }, [step, isSuccess]),
+    }, [step, isSuccess, router]),
     30
   )
 
@@ -485,8 +485,8 @@ export default function SendPage() {
                 <span className="font-bold text-white truncate max-w-[200px]">{sendMode === 'TAG' ? `@${formData.address}` : `${formData.address?.slice(0, 8)}…${formData.address?.slice(-6)}`}</span>
               </p>
             </div>
-            <button onClick={() => { setStep(1); setPin(['','','','']); setIsSuccess(false) }} className="w-full py-3.5 rounded-xl font-bold text-black shadow-lg active:scale-[0.98] transition-transform" style={{ background: colors.gradientBg }}>
-              Done / Send Again
+            <button onClick={() => router.replace('/app/dashboard')} className="w-full py-3.5 rounded-xl font-bold text-black shadow-lg active:scale-[0.98] transition-transform" style={{ background: colors.gradientBg }}>
+              Done
             </button>
           </motion.div>
         )}
