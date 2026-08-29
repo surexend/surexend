@@ -133,9 +133,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex min-h-dvh-force bg-[var(--app-bg)] relative md:h-dvh-force md:overflow-hidden">
-        {/* Ambient morphing mesh background — the "morphe" (static in lite mode & on mobile) */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-          {isMobile ? null : lite ? (
+        {/* Ambient morphing mesh background — desktop-only (hidden md:block).
+            Pure CSS responsive hiding guarantees mobile browsers NEVER mount
+            or render giant filter:blur(60px) animated layers during hydration. */}
+        <div className="hidden md:block absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+          {lite ? (
             <div
               className="absolute inset-0"
               style={{
@@ -178,9 +180,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               />
             </>
           )}
-          {/* Vignette is a full-screen blend layer — desktop-only. On phones
-              every extra blend over the scroll content is corruption fuel. */}
-          {!lite && !isMobile && <div className="absolute inset-0 bg-radial-vignette" />}
+          {!lite && <div className="absolute inset-0 bg-radial-vignette" />}
         </div>
         {/* Desktop Sidebar */}
         <aside className="hidden md:flex flex-col w-60 md:w-64 h-full border-r border-[rgba(255,255,255,0.06)] bg-[#121419] p-4 flex-shrink-0 z-20 overflow-y-auto">
