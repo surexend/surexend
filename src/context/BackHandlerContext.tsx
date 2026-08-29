@@ -79,11 +79,12 @@ export function BackHandlerProvider({ children }: { children: React.ReactNode })
   }, [handlers])
 
   // Push a dummy state on mount so there's always something to pop
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.history.pushState({ surexend: Date.now() }, '')
-    }
-  }, [])
+  // Disabled — was interfering with Next.js client-side navigation
+  // useEffect(() => {
+  //   if (typeof window !== 'undefined') {
+  //     window.history.pushState({ surexend: Date.now() }, '')
+  //   }
+  // }, [])
 
   return (
     <BackHandlerContext.Provider value={{ register, unregister }}>
