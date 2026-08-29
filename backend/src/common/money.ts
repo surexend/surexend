@@ -29,6 +29,11 @@ export function sumMinor(values: (bigint | number)[]): bigint { return values.re
 export function allocateMinor(amount: bigint | number, ratios: number[]): bigint[] {
   const total = guardMinor(amount); if (!ratios.length || ratios.some(r => !Number.isFinite(r) || r < 0)) throw new TypeError('Invalid allocation ratios');
   const denominator = ratios.reduce((a, b) => a + b, 0); if (!denominator) throw new TypeError('Allocation ratios must not be zero');
-  let allocated = 0n; const result = ratios.map((r, i) => i === ratios.length - 1 ? total - allocated : (total * BigInt(Math.floor(r * 1e12 / denominator))) / 1000000000000n);
-  result.forEach(v => allocated += v); return result;
+  const scaled = ratios.map(r => r / denominator * Number(total));
+  const result = scaled.map(v => BigInt(Math.floor(v)));
+  let remainder = total - sumMinor(result);
+  const order = scaled.map((v, i) => ({ i, fraction: v - Math.floor(v) })).sort((a, b) => b.fraction - a.fraction);
+  for (let n = 0; n < Number(remainder); n++) result[order[n % order.length].i] += 1n;
+  if (remainder < 0n) result[0] += remainder;
+  return result;
 }
