@@ -54,3 +54,8 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_BRAND_VARIANT: gold
+
+# ---------------------------------------------------------------------------
+# To enable: rename this file to ci.yml and push (the Arena GitHub App cannot
+# create files under .github/workflows/ itself):
+#   git mv .github/workflows/ci.yml.disabled .github/workflows/ci.yml && git commit -m "ci: enable" && git push
