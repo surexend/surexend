@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TransactionAuthService } from '../common/transaction-auth/transaction-auth.service';
+import { LedgerService } from '../common/ledger.service';
+import { toMinor } from '../common/money';
 import * as crypto from 'crypto';
 import axios from 'axios';
 import Redis from 'ioredis';
@@ -26,6 +28,7 @@ export class ConversionsService {
     private transactionsService: TransactionsService,
     private notificationsService: NotificationsService,
     private transactionAuth: TransactionAuthService,
+    private ledger: LedgerService,
   ) {
     this.redis = new Redis(this.configService.get<string>('app.redisUrl') || 'redis://localhost:6379');
   }
@@ -372,6 +375,15 @@ export class ConversionsService {
         this.logger.warn(`Conversion record unavailable; skipping: ${err.message}`);
       }
 
+      const ledgerReference = `CONV-${conversionId ?? `SKIPPED-${Date.now()}-${Math.floor(Math.random() * 1000)}`}`;
+      const sourceCurrency = fromCode === 'USD' ? 'USDC' : fromCode;
+      await this.ledger.record([
+        { transferId: ledgerReference, account: this.ledger.userAccount(userId, sourceCurrency), currency: sourceCurrency, amountMinor: -toMinor(amount, sourceCurrency), reference: ledgerReference, kind: 'CONVERSION_DEBIT' },
+        { transferId: ledgerReference, account: this.ledger.treasuryAccount(sourceCurrency), currency: sourceCurrency, amountMinor: toMinor(amount, sourceCurrency), reference: ledgerReference, kind: 'CONVERSION_SETTLEMENT' },
+        { transferId: ledgerReference, account: this.ledger.treasuryAccount(toCode), currency: toCode, amountMinor: -toMinor(result.receiveAmount, toCode), reference: ledgerReference, kind: 'CONVERSION_SETTLEMENT' },
+        { transferId: ledgerReference, account: this.ledger.userAccount(userId, toCode), currency: toCode, amountMinor: toMinor(result.receiveAmount, toCode), reference: ledgerReference, kind: 'CONVERSION_CREDIT' },
+      ], prisma);
+
       await this.transactionsService.createTransaction(prisma, {
         userId,
         type: 'CONVERT',
@@ -379,7 +391,7 @@ export class ConversionsService {
         amount: amount,
         fee: result.feeUsd,
         currency: fromCode,
-        reference: `CONV-${conversionId ?? `SKIPPED-${Date.now()}-${Math.floor(Math.random() * 1000)}`}`,
+        reference: ledgerReference,
         metadata: {
           ...(conversionId ? { conversionId } : { conversionRecordSkipped: true }),
           from: fromCode,

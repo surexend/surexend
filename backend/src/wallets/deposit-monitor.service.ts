@@ -3,6 +3,8 @@ import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OnchainService, OnChainTransfer, EVM_CHAINS } from './onchain.service';
+import { LedgerService } from '../common/ledger.service';
+import { toMinor } from '../common/money';
 
 // Rolling log-scan window (in blocks) used to detect deposits. Scans run every
 // 60s, so any deposit necessarily falls inside a window covering the recent
@@ -37,6 +39,7 @@ export class DepositMonitorService implements OnModuleInit {
     private prisma: PrismaService,
     private onchain: OnchainService,
     private notifications: NotificationsService,
+    private ledger: LedgerService,
   ) {}
 
   async onModuleInit() {
@@ -132,17 +135,8 @@ export class DepositMonitorService implements OnModuleInit {
         }
       }
 
-      // Do not overwrite the internal ledger from a raw balance snapshot. RPC
-      // providers can return balances for stale/shared addresses that have no
-      // matching transaction record. Only apply an on-chain increase when a
-      // new transfer was actually discovered and recorded in this pass.
-      if (discoveredDeposits > 0) {
-        await this.prisma.wallet.update({
-          where: { id: walletId },
-          data: { usdcBalance: { increment: discoveredDeposits } },
-        });
-      }
-
+      // Balance changes are applied by recordDeposit in the same transaction as
+      // the corresponding ledger entries. Raw RPC snapshots never credit funds.
       await this.backfillDepositNotifications(userId);
 
       this.lastReconcileAt.set(walletId, Date.now());
@@ -227,6 +221,13 @@ export class DepositMonitorService implements OnModuleInit {
         },
         createdAt: new Date(tx.timestamp * 1000),
       },
+    });
+    await this.prisma.$transaction(async (prisma) => {
+      await prisma.wallet.update({ where: { userId }, data: { usdcBalance: { increment: tx.amount } } });
+      await this.ledger.record([
+        { transferId: reference, account: this.ledger.externalAccount(tx.chainKey, 'USDC'), currency: 'USDC', amountMinor: -toMinor(tx.amount, 'USDC'), reference, kind: 'DEPOSIT_SOURCE' },
+        { transferId: reference, account: this.ledger.userAccount(userId, 'USDC'), currency: 'USDC', amountMinor: toMinor(tx.amount, 'USDC'), reference, kind: 'DEPOSIT' },
+      ], prisma);
     });
     this.logger.log(`Detected deposit: ${tx.amount} USDC on ${tx.network} (${tx.txHash})`);
     return true;

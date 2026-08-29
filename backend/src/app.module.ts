@@ -23,6 +23,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { AdminModule } from './admin/admin.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { PasskeysModule } from './passkeys/passkeys.module';
+import { LedgerModule } from './common/ledger.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { PasskeysModule } from './passkeys/passkeys.module';
     AdminModule,
     CampaignsModule,
     PasskeysModule,
+    LedgerModule,
   ],
   providers: [
     // Applied globally so no new endpoint ships unthrottled by default.

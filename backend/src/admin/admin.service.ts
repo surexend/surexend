@@ -4,6 +4,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { BillsService } from '../bills/bills.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { getLocalRate } from '../common/currency.constants';
+import { LedgerService } from '../common/ledger.service';
+import { toMinor } from '../common/money';
 
 // Normalize any recorded transaction amount to its USD value. Transactions
 // store `amount` in `currency` (e.g. CONVERT rows record the LOCAL amount, bill
@@ -56,6 +58,7 @@ export class AdminService {
     private readonly notificationsService: NotificationsService,
     private readonly billsService: BillsService,
     private readonly campaignsService: CampaignsService,
+    private readonly ledger: LedgerService,
   ) {}
 
   async getOverview() {
@@ -304,6 +307,11 @@ export class AdminService {
         const field = currency === 'USDT' ? 'usdtBalance' : 'usdcBalance';
         await prisma.wallet.update({ where: { userId }, data: { [field]: { increment: amount } } });
       }
+
+      await this.ledger.record([
+        { transferId: reference, account: this.ledger.externalAccount('manual', currency), currency, amountMinor: -toMinor(amount, currency), reference, kind: 'ADMIN_CREDIT_SOURCE' },
+        { transferId: reference, account: this.ledger.userAccount(userId, currency), currency, amountMinor: toMinor(amount, currency), reference, kind: 'ADMIN_CREDIT' },
+      ], prisma);
 
       const transaction = await prisma.transaction.create({
         data: {
