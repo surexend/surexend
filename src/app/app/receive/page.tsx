@@ -100,7 +100,7 @@ function BankFundingCard() {
   }
 
   return (
-    <div className="liquid-glass p-4 rounded-3xl border border-white/10 space-y-3">
+    <div className="mobile-flat-surface liquid-glass p-4 rounded-3xl border border-white/10 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Landmark className="w-4 h-4" style={{ color: colors.primary }} />
@@ -300,7 +300,7 @@ export default function ReceivePage() {
           </div>
 
           {/* Address Card */}
-          <div className="liquid-glass p-4 rounded-2xl border border-white/10">
+          <div className="mobile-flat-surface liquid-glass p-4 rounded-2xl border border-white/10">
             <p className="text-[10px] text-[#64748B] uppercase tracking-wider mb-2 font-bold">{network} Deposit Address</p>
             <p className="text-xs font-mono text-white break-all leading-relaxed bg-white/[0.03] p-3 rounded-xl border border-white/[0.08] select-all">
               {isLoading ? 'Loading address...' : address}
