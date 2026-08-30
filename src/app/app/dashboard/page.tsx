@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check, RefreshCcw, Crown } from 'lucide-react'
 import dynamic from 'next/dynamic'
@@ -48,6 +49,7 @@ const LOCAL_CURRENCIES = AFRICAN_CURRENCIES.map(c => ({ code: c.code, name: c.na
 
 
 export default function DashboardPage() {
+  const router = useRouter()
   const { variant, colors } = useTheme()
   const isGold = variant === 'gold'
   const { lite } = useLite()
@@ -67,6 +69,12 @@ export default function DashboardPage() {
   const [avatar, setAvatar] = useState<string | null>(null)
   const [showMarketPicker, setShowMarketPicker] = useState(false)
   const queryClient = useQueryClient()
+
+  const handleModalNavigate = (path: string) => {
+    setShowSendModal(false)
+    setShowFundModal(false)
+    router.push(path)
+  }
 
   // Back handler for modals — closes the top-most open modal on back press
   const hasOpenDashboardLayer = showBankComingSoon || showVBAModal || showFundModal || showSendModal || showLocalCurrencyPicker || showMarketPicker
@@ -945,10 +953,9 @@ export default function DashboardPage() {
               {/* Options */}
               <div className="space-y-3">
                 {/* Option 1: Send via SureX Tag (Zero Fee) */}
-                <Link
-                  href="/app/send?type=tag"
-                  onClick={() => setShowSendModal(false)}
-                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-purple-500/40 transition-all duration-300 relative overflow-hidden"
+                <button
+                  onClick={() => handleModalNavigate('/app/send?type=tag')}
+                  className="w-full text-left group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-purple-500/40 transition-all duration-300 relative overflow-hidden"
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform flex-shrink-0">
@@ -967,13 +974,12 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all flex-shrink-0" />
-                </Link>
+                </button>
 
                 {/* Option 2: Crypto Wallet */}
-                <Link
-                  href="/app/send?type=crypto"
-                  onClick={() => setShowSendModal(false)}
-                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-blue-500/40 transition-all duration-300"
+                <button
+                  onClick={() => handleModalNavigate('/app/send?type=crypto')}
+                  className="w-full text-left group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-blue-500/40 transition-all duration-300"
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform flex-shrink-0">
@@ -989,7 +995,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all flex-shrink-0" />
-                </Link>
+                </button>
 
                 {/* Option 3: Bank Account — gated until bank rails are live. */}
                 <div
@@ -1053,7 +1059,7 @@ export default function DashboardPage() {
                 </div>
                 <button
                   onClick={() => setShowFundModal(false)}
-                  className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                  className="p-2 rounded-full hover:bg-[#121419] text-gray-400 hover:text-white transition-colors flex-shrink-0"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1088,10 +1094,9 @@ export default function DashboardPage() {
                 </div>
 
                 {/* OPTION 2: Deposit Crypto (USDC) */}
-                <Link
-                  href="/app/receive"
-                  onClick={() => setShowFundModal(false)}
-                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-amber-500/40 transition-all duration-300"
+                <button
+                  onClick={() => handleModalNavigate('/app/receive')}
+                  className="w-full text-left group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-amber-500/40 transition-all duration-300"
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform flex-shrink-0">
@@ -1107,7 +1112,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all flex-shrink-0" />
-                </Link>
+                </button>
               </div>
             </motion.div>
           </div>
