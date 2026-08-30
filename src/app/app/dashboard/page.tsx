@@ -71,10 +71,15 @@ export default function DashboardPage() {
   const queryClient = useQueryClient()
 
   const handleModalNavigate = (path: string) => {
-    setShowSendModal(false)
-    setShowFundModal(false)
+    // IMPORTANT: Navigate BEFORE closing the modal state.
+    // If we close the modal first, BackNavigationContext.deactivate() fires
+    // window.history.back() to remove the pushState entry it created when the
+    // modal opened. That history.back() races with and ultimately cancels
+    // any forward navigation we then attempt. By navigating first, we leave
+    // the Back layer intact — the destination page mounts cleanly and the
+    // stale pushState entry is left behind harmlessly.
     if (typeof window !== 'undefined') {
-      window.location.href = path
+      window.location.replace(path)
     } else {
       router.push(path)
     }
