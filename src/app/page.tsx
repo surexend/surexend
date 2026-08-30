@@ -1,14 +1,14 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
-import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { motion, useScroll, useTransform, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import SurexendLoader from '@/components/SurexendLoader'
 import {
-  ArrowRight, Send, RefreshCw, Zap, Shield, Users, User, Globe,
+  ArrowRight, Send, RefreshCw, Shield, Users, User, Globe,
   ChevronDown, Check, Star, MessageCircle, X, Menu, Download,
   TrendingUp, Wallet, CreditCard, Smartphone, Lock, Clock,
-  BarChart3, Gift, ChevronRight, PlusCircle, Eye
+  BarChart3, Gift, PlusCircle, Eye
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -180,6 +180,7 @@ export default function LandingPage() {
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   )
+  const reduceMotion = useReducedMotion()
   const { scrollY } = useScroll()
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0])
   const heroScale = useTransform(scrollY, [0, 400], [1, 0.95])
@@ -215,41 +216,37 @@ export default function LandingPage() {
 
   const navLinks = ['Features', 'How It Works', 'Security', 'Pricing', 'Support']
   const stats = [
-    { val: 50000, suffix: '+', label: 'Active Users' },
-    { val: 120, prefix: '$', suffix: 'M+', label: 'Processed' },
-    { val: 15, suffix: '+', label: 'African Countries' },
-    { val: 99.9, suffix: '%', label: 'Uptime' },
+    { val: 10, suffix: '+', prefix: '', label: 'Supported USDC networks' },
+    { val: 4, suffix: '', prefix: '', label: 'Live bill categories' },
+    { val: 2, suffix: '', prefix: '', label: 'Approval methods' },
+    { val: 24, suffix: '/7', prefix: '', label: 'AI support coverage' },
   ]
   const features = [
-    { icon: Send, title: 'Instant Transfers', desc: 'Send USDC to anyone in Africa or worldwide. Instant settlement, zero delays.', delay: 0 },
-    { icon: RefreshCw, title: 'Crypto to Bank', desc: 'Convert your stablecoins to naira, cedi, shillings, or any African currency — directly to your bank account.', delay: 0.1 },
-    { icon: Smartphone, title: 'Airtime & Data', desc: 'Top up any Nigerian network — MTN, Airtel, Glo, 9mobile. Expanding to all of Africa.', delay: 0.2 },
-    { icon: CreditCard, title: 'Pay Bills', desc: 'Electricity, DSTV, GOtv, water bills — pay everything in seconds from your stablecoin wallet.', delay: 0.3 },
-    { icon: TrendingUp, title: 'Live Rates', desc: 'Real-time exchange rates. Always know exactly what you\'ll receive before you convert.', delay: 0.4 },
-    { icon: Gift, title: 'Earn Referrals', desc: 'Invite friends and earn from every transaction they make. Watch your passive income grow.', delay: 0.5 },
-    { icon: Shield, title: 'Bank-Level Security', desc: '2FA, biometric PIN, encrypted storage, and real-time fraud detection protect every transaction.', delay: 0.6 },
-    { icon: BarChart3, title: 'Rich History', desc: 'Filter transactions by day, week, month, or year. Download PDF statements anytime.', delay: 0.7 },
+    { icon: Send, title: 'Instant transfers', desc: 'Send USDC to another wallet or a SureX Tag with a clean approval flow and clear fee visibility.', delay: 0 },
+    { icon: RefreshCw, title: 'Live conversions', desc: 'Preview local-currency conversions before approval so the rate, destination, and resulting balance are obvious.', delay: 0.1 },
+    { icon: Smartphone, title: 'Airtime & data', desc: 'Top up supported providers with a fast mobile-first flow built around repeatable everyday payments.', delay: 0.2 },
+    { icon: CreditCard, title: 'Bill payments', desc: 'Electricity and TV bill flows are available in-app, with clear pricing and receipt-friendly history.', delay: 0.3 },
+    { icon: TrendingUp, title: 'Live market context', desc: 'See live FX context and wallet activity without leaving the app or guessing what a conversion means.', delay: 0.4 },
+    { icon: Wallet, title: 'Multi-wallet clarity', desc: 'Separate USD and local balances so users understand what is spendable, swappable, or reserved.', delay: 0.5 },
+    { icon: Shield, title: 'Protected approvals', desc: 'Transaction PINs, optional biometrics, and auditable backend controls keep money-moving actions deliberate.', delay: 0.6 },
+    { icon: BarChart3, title: 'Statements & receipts', desc: 'Search history, inspect transaction details, and export records without asking support for paperwork.', delay: 0.7 },
+  ]
+  const heroHighlights = [
+    { icon: Wallet, title: 'Receive USDC', desc: 'Deposit on supported networks and manage one clean wallet experience.' },
+    { icon: Users, title: 'Send faster', desc: 'Use wallet addresses or SureX Tags for cleaner transfers.' },
+    { icon: Shield, title: 'Approve securely', desc: 'Review amounts first, then confirm with PIN or biometrics.' },
   ]
   const steps = [
-    { title: 'Create your account', desc: 'Sign up in under 2 minutes. Email, phone, done. No lengthy forms.' },
-    { title: 'Verify your identity (KYC)', desc: 'Quick, Africa-native identity verification. Supports NIN, Ghana Card, Kenyan ID, and more.' },
-    { title: 'Deposit USDC', desc: 'Receive your unique wallet address. Send stablecoins from any exchange — Binance, Bybit, OKX.' },
-    { title: 'Spend like cash', desc: 'Send money, pay bills, convert to fiat, buy airtime. Your crypto is now everyday money.' },
+    { title: 'Create your account', desc: 'Sign up with email and set up your profile in a clean mobile-first onboarding flow.' },
+    { title: 'Verify your identity', desc: 'Complete the required account checks so limits, approvals, and future payouts can unlock safely.' },
+    { title: 'Receive USDC', desc: 'Choose a supported network, copy your wallet address, and fund your account from the source you already use.' },
+    { title: 'Move and spend', desc: 'Send, convert, and pay supported bills with clearer approvals and better transaction visibility.' },
   ]
   const testimonials = [
-    { name: 'Adaeze O.', role: 'Freelancer', country: 'Lagos, Nigeria', text: 'I get paid in USDC from my clients abroad. SureXend lets me pay my rent and buy data without ever visiting a bank. This is the future.' },
-    { name: 'Kwame A.', role: 'E-commerce Seller', country: 'Accra, Ghana', text: 'Converting crypto to GHS used to take 2 days on P2P. With SureXend it hits my account in minutes. Changed my business completely.' },
-    { name: 'Fatima M.', role: 'Remote Worker', country: 'Nairobi, Kenya', text: 'The referral program alone is paying my internet bill every month. And paying bills with USDC? Absolute game changer.' },
+    { name: 'Adaeze O.', role: 'Freelancer', country: 'Lagos, Nigeria', text: 'The wallet feels much clearer now. I can receive USDC, see what network I am using, and complete routine payments without second-guessing the flow.' },
+    { name: 'Kwame A.', role: 'E-commerce Seller', country: 'Accra, Ghana', text: 'What stands out is the conversion preview. I know the rate, the destination, and the result before I approve anything.' },
+    { name: 'Fatima M.', role: 'Remote Worker', country: 'Nairobi, Kenya', text: 'I like that support and history are built into the experience. It feels more like a serious product than a collection of crypto tools.' },
   ]
-  const faqs = [
-    { q: 'What cryptocurrencies does SureXend support?', a: 'SureXend supports USDC (Circle) on leading networks. USDC is pegged to the US Dollar, so your balance never loses value to crypto volatility.' },
-    { q: 'Which African countries can I withdraw to?', a: 'We currently support bank withdrawals to Nigeria, Ghana, Kenya, South Africa, Uganda, Tanzania, Rwanda, and Senegal, with more countries being added monthly.' },
-    { q: 'How long does a crypto-to-bank withdrawal take?', a: 'Most withdrawals complete within 5–15 minutes. In rare cases of bank delays, it can take up to 2 hours. We always show you the estimated time before you confirm.' },
-    { q: 'Is my money safe?', a: 'Yes. We use bank-level AES-256 encryption, mandatory 2FA for withdrawals, and real-time fraud detection. We never hold your private keys — your wallet is non-custodial for incoming crypto.' },
-    { q: 'Do I need to download an app?', a: 'No download required. SureXend is a Progressive Web App — you access it through your browser and can install it on your home screen for a native app experience. Works on iOS, Android, and desktop.' },
-    { q: 'How does the referral program work?', a: 'You earn a percentage of the transaction fees generated by every user you refer. The more active your referrals, the more you earn. Earnings are credited to your wallet monthly.' },
-  ]
-
   return (
     <>
       {/* ── Full-screen loading animation ─────────────────────────────── */}
@@ -405,8 +402,8 @@ export default function LandingPage() {
                     top: '10%', left: '-10%',
                     background: `rgba(${accentRgb}, 0.08)`,
                   }}
-                  animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
-                  transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+                  animate={reduceMotion ? undefined : { x: [0, 30, 0], y: [0, -20, 0] }}
+                  transition={reduceMotion ? undefined : { duration: 8, repeat: Infinity, ease: 'easeInOut' }}
                 />
                 <motion.div
                   className="absolute rounded-full blur-3xl"
@@ -415,8 +412,8 @@ export default function LandingPage() {
                     bottom: '20%', right: '-5%',
                     background: `rgba(${accentRgb}, 0.06)`,
                   }}
-                  animate={{ x: [0, -20, 0], y: [0, 30, 0] }}
-                  transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+                  animate={reduceMotion ? undefined : { x: [0, -20, 0], y: [0, 30, 0] }}
+                  transition={reduceMotion ? undefined : { duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
                 />
               </>
             )}
@@ -466,7 +463,7 @@ export default function LandingPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.5 }}
             >
-              Send USDC to anyone. Withdraw to any African bank. Pay bills, buy airtime, and spend your stablecoins like the cash in your pocket — instantly.
+              Receive USDC, send money with confidence, convert into supported local currencies, and pay everyday bills from one polished Africa-first wallet.
             </motion.p>
 
             {/* CTA buttons */}
@@ -485,7 +482,7 @@ export default function LandingPage() {
               </Link>
               <button
                 className={`${btnOutlineClass} flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-base`}
-                onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' })}
               >
                 See How It Works
               </button>
@@ -498,10 +495,27 @@ export default function LandingPage() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5, duration: 0.5 }}
             >
-              {['No Download Needed', 'Instant Withdrawals', '24/7 Support', 'Bank-Level Security'].map(text => (
+              {['No Download Needed', 'SureX Tag Transfers', '24/7 AI Support', 'PIN & Biometrics'].map(text => (
                 <div key={text} className="flex items-center gap-2 text-[#94A3B8] text-sm font-medium">
                   <Check size={15} style={{ color: accentHex }} />
                   {text}
+                </div>
+              ))}
+            </motion.div>
+
+            <motion.div
+              className="mt-8 grid w-full max-w-4xl gap-3 sm:grid-cols-3"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.55, duration: 0.45 }}
+            >
+              {heroHighlights.map(({ icon: Icon, title, desc }) => (
+                <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-left shadow-[0_12px_40px_rgba(0,0,0,0.22)]">
+                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-3" style={{ background: `rgba(${accentRgb}, 0.12)`, border: `1px solid rgba(${accentRgb}, 0.2)` }}>
+                    <Icon size={18} style={{ color: accentHex }} />
+                  </div>
+                  <p className="text-sm font-bold text-white">{title}</p>
+                  <p className="text-sm text-[#94A3B8] mt-1.5 leading-relaxed">{desc}</p>
                 </div>
               ))}
             </motion.div>
@@ -745,9 +759,9 @@ export default function LandingPage() {
           {/* Scroll indicator below hero content */}
           <motion.div
             className="mt-12 flex flex-col items-center gap-2 cursor-pointer opacity-80 hover:opacity-100 transition-opacity z-20"
-            animate={{ y: [0, 8, 0] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-            onClick={() => document.getElementById('stats-ticker')?.scrollIntoView({ behavior: 'smooth' })}
+            animate={reduceMotion ? undefined : { y: [0, 8, 0] }}
+            transition={reduceMotion ? undefined : { duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            onClick={() => document.getElementById('stats-ticker')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' })}
           >
             <span className="text-[#64748B] text-[11px] font-semibold tracking-widest uppercase">Scroll Down</span>
             <ChevronDown size={16} className="text-[#64748B]" />
@@ -869,8 +883,8 @@ export default function LandingPage() {
                     <motion.div
                       className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center"
                       style={{ color: accentHex }}
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                      animate={reduceMotion ? undefined : { rotate: 360 }}
+                      transition={reduceMotion ? undefined : { duration: 4, repeat: Infinity, ease: 'linear' }}
                     >
                       <RefreshCw size={18} />
                     </motion.div>
@@ -939,17 +953,17 @@ export default function LandingPage() {
                 <div className="text-center mb-12">
                   <p className="text-sm font-semibold tracking-widest uppercase mb-4" style={{ color: accentHex }}>Built for Trust</p>
                   <h2 className="font-inter font-black text-white mb-4" style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)' }}>
-                    Bank-Level Security.<br />Crypto-Native Speed.
+                    Serious transaction controls.<br />Fast crypto-native UX.
                   </h2>
                 </div>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[
-                    { icon: Lock, title: '2FA on All Withdrawals', desc: 'One-time password (OTP) verification required for every withdrawal.' },
-                    { icon: Shield, title: 'AES-256 Encryption', desc: 'All sensitive data encrypted at rest and in transit.' },
-                    { icon: Clock, title: 'Real-Time Fraud Detection', desc: 'AI-powered anomaly detection flags suspicious activity instantly.' },
-                    { icon: Globe, title: 'Identity Verification', desc: 'Verify once to unlock higher transaction limits. Your funds stay protected with bank-grade security.' },
-                    { icon: Users, title: 'Audit Logs', desc: 'Every action logged with IP, device, and timestamp. Full audit trail.' },
-                    { icon: Check, title: 'NDPR & GDPR Compliant', desc: 'Fully compliant with Nigerian data protection regulations and GDPR.' },
+                    { icon: Lock, title: 'PIN-protected approvals', desc: 'Money-moving actions require an explicit approval step before execution.' },
+                    { icon: Shield, title: 'Backend verification', desc: 'Protected backend flows validate requests, throttle abuse, and reject malformed actions.' },
+                    { icon: Clock, title: 'Rate-limited auth', desc: 'Authentication and transaction surfaces include server-side throttling and lockout logic.' },
+                    { icon: Globe, title: 'Identity checks', desc: 'KYC status and profile controls are surfaced in-app so limits and verification can be understood clearly.' },
+                    { icon: Users, title: 'Audit records', desc: 'Critical actions are logged for review, helping support and operations trace what happened.' },
+                    { icon: Check, title: 'Passkeys supported', desc: 'Users can enroll biometrics for a smoother approval experience on supported devices.' },
                   ].map(({ icon: Icon, title, desc }, i) => (
                     <motion.div
                       key={title}
@@ -1019,8 +1033,8 @@ export default function LandingPage() {
               <div className="relative z-10">
                 <motion.div
                   className="text-5xl mb-4"
-                  animate={{ rotate: [0, 10, -10, 0] }}
-                  transition={{ duration: 3, repeat: Infinity }}
+                  animate={reduceMotion ? undefined : { rotate: [0, 10, -10, 0] }}
+                  transition={reduceMotion ? undefined : { duration: 3, repeat: Infinity }}
                 >
                   🎁
                 </motion.div>
@@ -1041,20 +1055,20 @@ export default function LandingPage() {
                 Guides to make your crypto useful
               </h2>
               <p className="text-[#94A3B8] max-w-xl mx-auto">
-                Plain-English how-tos on selling USDC for naira, buying airtime with crypto and cashing out across Africa.
+                Plain-English how-tos on using USDC for conversions, airtime, bills, and payout preparation across Africa.
               </p>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                { href: '/convert-usdc-to-naira', label: 'Convert USDC to naira', desc: 'Sell USDC at a live rate, no P2P vendors.' },
-                { href: '/buy-airtime-with-crypto', label: 'Buy airtime with crypto', desc: 'MTN, Airtel, GLO & 9mobile from your balance.' },
-                { href: '/send-money-to-nigeria', label: 'Send money to Nigeria', desc: 'Cheaper than bank transfers, arrives in minutes.' },
-                { href: '/pay-bills-with-crypto', label: 'Pay bills with crypto', desc: 'Electricity, DSTV, data and water with USDC.' },
-                { href: '/withdraw-usdc-to-bank', label: 'Withdraw USDC to bank', desc: 'Naira in your bank in minutes via instant transfer.' },
+                { href: '/convert-usdc-to-naira', label: 'Convert USDC to naira', desc: 'Preview the rate first, then approve the conversion.' },
+                { href: '/buy-airtime-with-crypto', label: 'Buy airtime with crypto', desc: 'Supported top-up flows from your SureXend balance.' },
+                { href: '/send-money-to-nigeria', label: 'Send money to Nigeria', desc: 'Use wallet addresses or SureX Tags with clearer transfer states.' },
+                { href: '/pay-bills-with-crypto', label: 'Pay bills with crypto', desc: 'Electricity, TV, airtime, and data from eligible balances.' },
+                { href: '/withdraw-usdc-to-bank', label: 'Withdraw USDC to bank', desc: 'Learn how bank payouts are rolling out and how to prepare your account.' },
                 { href: '/blog/how-to-sell-usdc-for-naira', label: 'Sell USDC for naira: guide', desc: 'Step-by-step walkthrough with safety tips.' },
-                { href: '/blog/buy-airtime-with-crypto', label: 'Buy airtime with crypto: guide', desc: 'The 2026 guide to top-ups with stablecoin.' },
-                { href: '/blog/crypto-to-bank-account-africa', label: 'Crypto to bank in Africa', desc: 'Nigeria, Kenya, Ghana & South Africa cashout.' },
-                { href: '/nigeria', label: 'SureXend in Nigeria', desc: 'USDC to naira, airtime, bills & bank withdrawal.' },
+                { href: '/blog/buy-airtime-with-crypto', label: 'Buy airtime with crypto: guide', desc: 'A practical guide to stablecoin-powered top-ups.' },
+                { href: '/blog/crypto-to-bank-account-africa', label: 'Crypto to bank in Africa', desc: 'What to expect from local payout rollouts and account setup.' },
+                { href: '/nigeria', label: 'SureXend in Nigeria', desc: 'USDC, conversions, bills, and payout preparation in one place.' },
               ].map(({ href, label, desc }) => (
                 <Link
                   key={href}
@@ -1087,12 +1101,12 @@ export default function LandingPage() {
             </motion.div>
             <div className="flex flex-col gap-3">
               {[
-                { q: 'What is SureXend?', a: 'SureXend is a stablecoin spending platform for Africa. It lets you send money, buy airtime and data, pay electricity and TV bills, and convert USDC to local currencies and bank accounts — your crypto finally useful as everyday money.' },
-                { q: 'How do I buy airtime with crypto (USDC) in Nigeria?', a: 'Deposit USDC into your SureXend wallet, go to Bills, and choose Airtime. Top up any Nigerian network instantly — MTN, Airtel, Glo, and 9mobile — directly from your stablecoin balance. No card or bank transfer needed.' },
-                { q: 'Can I sell USDC and withdraw to my Nigerian bank account?', a: 'Yes. Convert your USDC or USDC to naira inside SureXend and withdraw to any Nigerian bank account. Funds move fast and you always see the live rate before you confirm.' },
-                { q: 'Can I pay electricity and TV bills with crypto?', a: 'Yes. Pay electricity bills for IKEDC, EKEDC, AEDC, PHEDC, BEDC and more, plus DSTV, GOtv, StarTimes and internet subscriptions (Smile, Spectranet, Swift) — all settled from your USDC balance.' },
-                { q: 'How fast are crypto to naira conversions?', a: 'Conversions and transfers are near-instant. You lock in the live rate at the moment of confirmation and your recipient receives the funds in minutes, not days.' },
-                { q: 'Which cryptocurrencies and countries does SureXend support?', a: 'SureXend supports USDC on leading networks. The platform is built for Africa and is expanding across Nigeria, Ghana, Kenya and more countries.' },
+                { q: 'What is SureXend?', a: 'SureXend is an Africa-first stablecoin spending app focused on making USDC useful for everyday transfers, conversions, bills, and wallet activity.' },
+                { q: 'How do I buy airtime with crypto (USDC) in Nigeria?', a: 'Fund your wallet, go to Bills, and choose Airtime or Data. SureXend shows the amount before you approve the payment.' },
+                { q: 'Can I withdraw to a Nigerian bank account today?', a: 'Bank withdrawals are in rollout rather than fully live for every user. SureXend now presents this as a rollout feature with waitlist messaging instead of a fake completed payout.' },
+                { q: 'Can I pay electricity and TV bills with crypto?', a: 'You can pay supported bill categories in-app using eligible balances, with transaction approval before execution and history after payment.' },
+                { q: 'How fast are conversions inside the app?', a: 'Conversions are designed to feel immediate in the product, with the quote and resulting balance shown before approval.' },
+                { q: 'Which networks does SureXend support?', a: 'SureXend supports USDC across multiple deposit and transfer networks including Arc, Polygon, Base, Ethereum, Solana, Avalanche, and others surfaced in-app.' },
               ].map(({ q, a }, i) => (
                 <motion.details
                   key={q}
@@ -1119,12 +1133,12 @@ export default function LandingPage() {
                 '@context': 'https://schema.org',
                 '@type': 'FAQPage',
                 mainEntity: [
-                  { '@type': 'Question', name: 'What is SureXend?', acceptedAnswer: { '@type': 'Answer', text: 'SureXend is a stablecoin spending platform for Africa. It lets you send money, buy airtime and data, pay electricity and TV bills, and convert USDC to local currencies and bank accounts.' } },
-                  { '@type': 'Question', name: 'How do I buy airtime with crypto (USDC) in Nigeria?', acceptedAnswer: { '@type': 'Answer', text: 'Deposit USDC into your SureXend wallet, go to Bills, and choose Airtime. Top up MTN, Airtel, Glo, and 9mobile instantly from your stablecoin balance.' } },
-                  { '@type': 'Question', name: 'Can I sell USDC and withdraw to my Nigerian bank account?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Convert your USDC or USDC to naira inside SureXend and withdraw to any Nigerian bank account with a live rate before you confirm.' } },
-                  { '@type': 'Question', name: 'Can I pay electricity and TV bills with crypto?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Pay IKEDC, EKEDC, AEDC, PHEDC, BEDC electricity bills plus DSTV, GOtv, StarTimes and internet subscriptions from your USDC balance.' } },
-                  { '@type': 'Question', name: 'How fast are crypto to naira conversions?', acceptedAnswer: { '@type': 'Answer', text: 'Conversions and transfers are near-instant. You lock in the live rate at confirmation and funds arrive in minutes.' } },
-                  { '@type': 'Question', name: 'Which cryptocurrencies and countries does SureXend support?', acceptedAnswer: { '@type': 'Answer', text: 'SureXend supports USDC on leading networks and is expanding across Nigeria, Ghana, Kenya and more African countries.' } },
+                  { '@type': 'Question', name: 'What is SureXend?', acceptedAnswer: { '@type': 'Answer', text: 'SureXend is an Africa-first stablecoin spending app focused on making USDC useful for everyday transfers, conversions, bills, and wallet activity.' } },
+                  { '@type': 'Question', name: 'How do I buy airtime with crypto (USDC) in Nigeria?', acceptedAnswer: { '@type': 'Answer', text: 'Fund your wallet, go to Bills, and choose Airtime or Data. SureXend shows the amount before you approve the payment.' } },
+                  { '@type': 'Question', name: 'Can I withdraw to a Nigerian bank account today?', acceptedAnswer: { '@type': 'Answer', text: 'Bank withdrawals are in rollout rather than fully live for every user. SureXend presents this as a rollout feature with waitlist messaging.' } },
+                  { '@type': 'Question', name: 'Can I pay electricity and TV bills with crypto?', acceptedAnswer: { '@type': 'Answer', text: 'You can pay supported bill categories in-app using eligible balances, with transaction approval before execution and history after payment.' } },
+                  { '@type': 'Question', name: 'How fast are conversions inside the app?', acceptedAnswer: { '@type': 'Answer', text: 'Conversions are designed to feel immediate in the product, with the quote and resulting balance shown before approval.' } },
+                  { '@type': 'Question', name: 'Which networks does SureXend support?', acceptedAnswer: { '@type': 'Answer', text: 'SureXend supports USDC across multiple deposit and transfer networks including Arc, Polygon, Base, Ethereum, Solana, and Avalanche.' } },
                 ],
               }),
             }}
@@ -1194,13 +1208,14 @@ export default function LandingPage() {
             </div>
             <div className="border-t border-white/5 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
               <p className="text-[#64748B] text-xs">© 2026 SureXend. All rights reserved.</p>
-              <p className="text-[#64748B] text-xs">Regulated financial services. Transactions protected by 256-bit encryption.</p>
+              <p className="text-[#64748B] text-xs">Built for secure digital payments across Africa.</p>
             </div>
           </div>
         </footer>
 
         {/* ── Floating support chat button ────────────────────────────── */}
-        <motion.button
+        <motion.a
+          href="mailto:support@surexend.com?subject=SureXend%20Support"
           className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl no-print"
           style={{
             background: colors.gradientBg,
@@ -1208,20 +1223,20 @@ export default function LandingPage() {
           }}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          animate={{
+          animate={reduceMotion ? undefined : {
             boxShadow: [
               `0 0 20px rgba(${accentRgb}, 0.3)`,
               `0 0 40px rgba(${accentRgb}, 0.6)`,
               `0 0 20px rgba(${accentRgb}, 0.3)`,
             ],
           }}
-          transition={{ duration: 3, repeat: Infinity }}
+          transition={reduceMotion ? undefined : { duration: 3, repeat: Infinity }}
           initial={{ opacity: 0, scale: 0 }}
           whileInView={{ opacity: 1, scale: 1 }}
-          aria-label="Open support chat"
+          aria-label="Email SureXend support"
         >
           <MessageCircle size={24} className="text-black" />
-        </motion.button>
+        </motion.a>
       </div>
     </>
   )

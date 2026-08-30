@@ -1,11 +1,11 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { QrCode, ArrowRight, ArrowLeft, CheckCircle2, Tag, Send, Zap, ShieldCheck, UserCheck } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Tag, Send, Zap } from 'lucide-react'
 import Confetti from 'react-confetti'
 import toast from 'react-hot-toast'
 import { walletAPI } from '@/lib/api'
@@ -15,6 +15,7 @@ import PinKeypad from '@/components/PinKeypad'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useBackLayer } from '@/context/BackNavigationContext'
+import FlowProgress from '@/components/ui/FlowProgress'
 
 // Funds live on Arc (native USDC). The recipient picks the network they want
 // to receive on — the backend handles delivery automatically (native when both
@@ -40,7 +41,6 @@ export default function SendPage() {
   const [sendMode, setSendMode] = useState<'CRYPTO' | 'TAG'>(initialType)
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState<Partial<SendFormValues>>({})
-  const [pin, setPin] = useState(['', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [windowSize, setWindowSize] = useState({ width: 1200, height: 800 })
@@ -67,7 +67,7 @@ export default function SendPage() {
     }
   }, [])
 
-  const { data: balanceData, isFetching } = useQuery({
+  const { data: balanceData } = useQuery({
     queryKey: ['sendBalance'],
     queryFn: walletAPI.getBalance,
     retry: false,
@@ -95,7 +95,6 @@ export default function SendPage() {
     staleTime: 30000
   })
   const cctpFee = (formNetwork === 'ARC' || formNetwork === 'SUREX_TAG') ? 0 : (feeData?.fee ?? 0)
-  const totalDeducted = amount + cctpFee
 
   const onSubmitStep1 = (data: { address: string; network: 'POLYGON'|'AVALANCHE'|'ARBITRUM'|'ETHEREUM'|'BASE'|'OPTIMISM'|'SOLANA'|'MONAD'|'BSC'|'BEP20'|'SUREX_TAG' }) => {
     setFormData(prev => ({ ...prev, ...data }))
@@ -117,30 +116,6 @@ export default function SendPage() {
     setStep(3)
   }
 
-  // 4-digit PIN flow only — the backend enforces exactly 4 digits. `emptyIndex`
-  // reaching slot 3 means all four are filled, so fire the send exactly once.
-  const handlePinInput = (num: string) => {
-    if (isLoading) return
-    const emptyIndex = pin.findIndex(p => p === '')
-    if (emptyIndex === -1) return
-    const newPin = [...pin]
-    newPin[emptyIndex] = num
-    setPin(newPin)
-    if (emptyIndex === 3) {
-      executeSend(newPin.join(''))
-    }
-  }
-
-  const handlePinDelete = () => {
-    if (isLoading) return
-    const lastFilledIndex = pin.map(p => p !== '').lastIndexOf(true)
-    if (lastFilledIndex !== -1) {
-      const newPin = [...pin]
-      newPin[lastFilledIndex] = ''
-      setPin(newPin)
-    }
-  }
-
   const executeSend = async (finalPin?: string, passkeyToken?: string) => {
     setIsLoading(true)
     try {
@@ -157,16 +132,24 @@ export default function SendPage() {
     } catch (error: any) {
       const message = error.response?.data?.message || 'Transaction failed'
       toast.error(message)
-      // Reset to a fresh 4-digit PIN and stay on the same step.
-      setPin(['', '', '', ''])
     } finally {
       setIsLoading(false)
     }
   }
 
+  const flowStep = step >= 4 ? 4 : step
+
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 py-4 sm:p-6 md:p-8 max-w-lg mx-auto min-h-[80vh] flex flex-col pt-2 pb-28 sm:pb-36">
       {isSuccess && <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={300} />}
+
+      <div className="mb-4 space-y-3">
+        <div>
+          <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">Send money with confidence</h1>
+          <p className="text-sm text-[#94A3B8] mt-1">Choose a recipient, review the exact amount, then approve with your PIN or biometrics.</p>
+        </div>
+        <FlowProgress steps={['Recipient', 'Amount', 'Review', 'Approve']} current={flowStep} />
+      </div>
 
       <AnimatePresence mode="wait">
         {/* Step 1: Recipient Address or SureX Tag */}
@@ -200,7 +183,7 @@ export default function SendPage() {
                 }`}
                 style={sendMode === 'TAG' ? { color: colors.primary } : {}}
               >
-                <Tag className="w-3.5 h-3.5" /> Xend Tag (@tag)
+                <Tag className="w-3.5 h-3.5" /> SureX Tag (@tag)
               </button>
             </div>
 
@@ -208,7 +191,7 @@ export default function SendPage() {
               {sendMode === 'TAG' ? (
                 <div>
                   <label className="block text-xs font-semibold text-[#94A3B8] mb-2 flex items-center justify-between">
-                    <span>Recipient Xend Tag (@username)</span>
+                    <span>Recipient SureX Tag (@username)</span>
                     <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                       <Zap className="w-3 h-3" /> Zero Fee · Instant
                     </span>
@@ -226,7 +209,7 @@ export default function SendPage() {
                   </div>
                   {errors.address && <p className="text-red-400 text-xs mt-1">{errors.address.message}</p>}
                   <p className="text-[11px] text-[#64748B] mt-1.5">
-                    Peer-to-peer transfers using Xend tags are processed instantly with zero network fees.
+                    Peer-to-peer transfers using SureX Tags are processed instantly with zero network fees.
                   </p>
                 </div>
               ) : (
@@ -407,6 +390,21 @@ export default function SendPage() {
               <div className="flex justify-between py-1">
                 <span className="text-[#94A3B8]">Total Deducted</span>
                 <span className="text-emerald-400 font-extrabold text-sm">${(Number(formData.amount || 0) + cctpFee).toFixed(2)} USD</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748B]">Delivery</p>
+                <p className="text-sm font-semibold text-white mt-1">{sendMode === 'TAG' ? 'Instant internal' : formData.network === 'ARC' ? 'Native Arc transfer' : 'Cross-network relay'}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748B]">Recipient gets</p>
+                <p className="text-sm font-semibold text-white mt-1">${Number(formData.amount || 0).toFixed(2)} USDC</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748B]">Approval</p>
+                <p className="text-sm font-semibold text-white mt-1">PIN or biometrics</p>
               </div>
             </div>
 

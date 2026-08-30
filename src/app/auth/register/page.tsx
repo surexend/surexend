@@ -1,13 +1,13 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, User, Mail, MessageCircle, Lock, Hash } from 'lucide-react'
+import { Eye, EyeOff, User, Mail, MessageCircle, Lock, Hash, CheckCircle2, ShieldCheck, Wallet } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
@@ -37,6 +37,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>
 export default function RegisterPage() {
   const { variant, colors } = useTheme()
   const router = useRouter()
+  const reduceMotion = useReducedMotion()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [passwordStrength, setPasswordStrength] = useState(0)
@@ -63,7 +64,7 @@ export default function RegisterPage() {
 
   const passwordValue = watch('password')
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!passwordValue) {
       setPasswordStrength(0)
       return
@@ -142,8 +143,26 @@ export default function RegisterPage() {
               className={`w-14 h-14 object-contain ${variant === 'gold' ? 'gold-logo-glow' : 'lemon-logo-glow'}`}
             />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
-          <p className="text-[#94A3B8]">Join SureXend and manage your crypto seamlessly</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Create your SureXend account</h1>
+          <p className="text-[#94A3B8] max-w-md mx-auto">Set up your wallet, verify your email, and start using USDC for transfers, conversions, and everyday payments.</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
+            <Wallet className="w-4 h-4 mb-2" style={{ color: colors.primary }} />
+            <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Step 1</p>
+            <p className="text-sm font-semibold text-white mt-1">Create wallet</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
+            <CheckCircle2 className="w-4 h-4 mb-2 text-emerald-400" />
+            <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Step 2</p>
+            <p className="text-sm font-semibold text-white mt-1">Verify email</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
+            <ShieldCheck className="w-4 h-4 mb-2 text-white" />
+            <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Step 3</p>
+            <p className="text-sm font-semibold text-white mt-1">Set your security</p>
+          </div>
         </div>
 
         {googleEnabled && (
@@ -268,7 +287,7 @@ export default function RegisterPage() {
               <motion.div 
                 className="h-full rounded-full"
                 animate={{ width: `${passwordStrength}%`, backgroundColor: getStrengthColor() }}
-                transition={{ duration: 0.3 }}
+                transition={reduceMotion ? { duration: 0 } : { duration: 0.3 }}
               />
             </div>
             {errors.password && <p className="text-[#EF4444] text-sm mt-1">{errors.password.message}</p>}

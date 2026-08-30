@@ -4,14 +4,14 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useTheme } from '@/context/ThemeContext'
 import { useBackLayer } from '@/context/BackNavigationContext'
-import { 
-  Home, Send, Repeat, FileText, User, Bell, ArrowUpRight, ArrowDownLeft,
-  Smartphone, Building2, FileSpreadsheet, X, Check, ShieldCheck, Zap, Clock, ChevronRight, Fingerprint
+import {
+  Home, Repeat, User, Bell, ArrowUpRight, ArrowDownLeft,
+  X, ShieldCheck, Zap, Clock, ChevronRight, Fingerprint
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 // Lazy-load the AI widget — it's 24 KB and only needed on demand.
@@ -19,7 +19,9 @@ import toast from 'react-hot-toast'
 const AISupportWidget = dynamic(() => import('@/components/AISupportWidget'), { ssr: false })
 const FirebaseMessaging = dynamic(() => import('@/components/FirebaseMessaging'), { ssr: false })
 import { notificationsAPI, userAPI } from '@/lib/api'
+import { hasClientAuthSession } from '@/lib/auth-session'
 import { useLite } from '@/lib/lite'
+import UserAvatar from '@/components/ui/UserAvatar'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,28 +37,40 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { lite, toggle: toggleLite } = useLite()
   const router = useRouter()
   const pathname = usePathname()
+  const reduceMotion = useReducedMotion()
   const [mounted, setMounted] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [avatar, setAvatar] = useState<string | null>(null)
   const [notifications, setNotifications] = useState<any[]>([])
   const [profile, setProfile] = useState<any>(null)
-  const [isMobile, setIsMobile] = useState(false)
   const [showBioPrompt, setShowBioPrompt] = useState(false)
 
   // Register notification drawer with back handler
   useBackLayer(showNotifications, () => setShowNotifications(false), 10)
 
   useEffect(() => {
+    if (!mounted || !hasClientAuthSession()) return
     let active = true
     userAPI.getProfile().then((p: any) => {
       if (active) setProfile(p || null)
     }).catch(() => {})
     return () => { active = false }
-  }, [])
+  }, [mounted])
 
   const fullName = `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'SureXend User'
   const surexTag = profile?.surexTag || profile?.firstName?.toLowerCase() || 'surex'
+  const pageLabelMap: Record<string, { title: string; subtitle?: string }> = {
+    '/app/dashboard': { title: 'Overview', subtitle: 'Wallets, activity, and quick actions' },
+    '/app/send': { title: 'Send money', subtitle: 'Transfer to a wallet or SureX Tag' },
+    '/app/receive': { title: 'Receive', subtitle: 'Fund your wallet with USDC' },
+    '/app/convert': { title: 'Convert', subtitle: 'Swap between USD and local currencies' },
+    '/app/history': { title: 'Transaction history', subtitle: 'Receipts, filters, and statements' },
+    '/app/withdraw': { title: 'Withdraw', subtitle: 'Bank payout rollout and saved accounts' },
+    '/app/profile': { title: 'Profile', subtitle: 'Identity, preferences, and security' },
+    '/app/invoice': { title: 'Invoices', subtitle: 'Feature rollout updates and waitlist' },
+  }
+  const pageMeta = pageLabelMap[pathname] || { title: (pathname.split('/').pop() || 'Dashboard').replace(/-/g, ' '), subtitle: 'SureXend app' }
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -70,8 +84,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
+    if (!mounted || !hasClientAuthSession()) return
     loadNotifications()
-  }, [loadNotifications])
+  }, [loadNotifications, mounted])
 
   useEffect(() => {
     setMounted(true)
@@ -84,18 +99,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       setShowBioPrompt(true)
     }
 
-    const token = localStorage.getItem('surexend_access_token')
-    if (!token) {
-      router.push('/auth/login')
+    if (!hasClientAuthSession()) {
+      router.replace('/auth/login')
     }
-
-    // Most users are on mobile: keep the background static there — it removes
-    // GPU-heavy blur compositing that causes backdrop-filter tearing on phones.
-    const mq = window.matchMedia('(max-width: 767px)')
-    setIsMobile(mq.matches)
-    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
   }, [router])
 
   // Service worker registration + forced update check so stale bundles don't stick
@@ -115,8 +121,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { label: 'Home', icon: Home, href: '/app/dashboard' },
-    { label: 'Invoice', icon: FileSpreadsheet, href: '/app/invoice' },
-    { label: 'Conversion', icon: Repeat, href: '/app/convert' },
+    { label: 'Receive', icon: ArrowDownLeft, href: '/app/receive' },
+    { label: 'Convert', icon: Repeat, href: '/app/convert' },
     { label: 'History', icon: Clock, href: '/app/history' },
     { label: 'Profile', icon: User, href: '/app/profile' },
   ]
@@ -159,8 +165,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   opacity: 0.7,
                   willChange: 'transform',
                 }}
-                animate={{ x: [0, 40, -20, 0], y: [0, -30, 15, 0] }}
-                transition={{ duration: 28, repeat: Infinity, ease: 'easeInOut' }}
+                animate={reduceMotion ? undefined : { x: [0, 40, -20, 0], y: [0, -30, 15, 0] }}
+                transition={reduceMotion ? undefined : { duration: 28, repeat: Infinity, ease: 'easeInOut' }}
               />
               <motion.div
                 className="absolute rounded-full"
@@ -175,8 +181,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   opacity: 0.6,
                   willChange: 'transform',
                 }}
-                animate={{ x: [0, -30, 20, 0], y: [0, 25, -15, 0] }}
-                transition={{ duration: 32, repeat: Infinity, ease: 'easeInOut', delay: 6 }}
+                animate={reduceMotion ? undefined : { x: [0, -30, 20, 0], y: [0, 25, -15, 0] }}
+                transition={reduceMotion ? undefined : { duration: 32, repeat: Infinity, ease: 'easeInOut', delay: 6 }}
               />
             </>
           )}
@@ -228,13 +234,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             )}
             <div className="p-3 rounded-xl border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20 flex-shrink-0 bg-[#212429]">
-                {avatar ? (
-                  <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" alt="Avatar" className="w-full h-full object-cover" />
-                )}
-              </div>
+              <UserAvatar
+                src={avatar}
+                name={fullName}
+                className="w-8 h-8 flex-shrink-0"
+                initialsClassName="text-[10px]"
+              />
               <div className="truncate">
                 <p className="text-xs font-bold text-white truncate">{fullName}</p>
                 <p className="text-[10px] text-[#64748B] truncate">@{surexTag}</p>
@@ -264,7 +269,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
               {/* Desktop: page title */}
               <div className="hidden md:block min-w-0">
-                <h2 className="text-base font-bold text-white capitalize truncate">{pathname.split('/').pop() || 'Dashboard'}</h2>
+                <h2 className="text-base font-bold text-white capitalize truncate">{pageMeta.title}</h2>
+                <p className="text-[11px] text-[#64748B] truncate">{pageMeta.subtitle}</p>
               </div>
             </div>
 

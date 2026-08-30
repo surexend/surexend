@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense, type KeyboardEvent } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { authAPI } from '@/lib/api'
@@ -57,7 +57,7 @@ function VerifyOTPForm() {
     }
   }
 
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace' && otp[index] === '' && index > 0) {
       inputRefs.current[index - 1]?.focus()
     }
@@ -68,7 +68,7 @@ function VerifyOTPForm() {
     try {
       await authAPI.verifyOTP({ identifier, code })
       toast.success('Account verified successfully!')
-      window.location.href = '/app/dashboard'
+      router.replace('/app/dashboard')
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Verification failed. Please check the code and try again.')
     } finally {

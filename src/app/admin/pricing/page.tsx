@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { adminAPI } from '@/lib/api'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { adminAPI, type AdminApprovalPayload } from '@/lib/api'
 import { Search, RefreshCw, Check, X, TrendingUp, TrendingDown, BadgePercent, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import AdminStepUpModal from '@/components/admin/AdminStepUpModal'
 
 const NETWORK_COLORS: Record<string, string> = {
   MTN: '#FBBF24',
@@ -25,6 +26,12 @@ export default function AdminPricingPage() {
   // Data network auto-margin % per provider
   const [dataMargin, setDataMargin] = useState<Record<string, string>>({})
   const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [approvalOpen, setApprovalOpen] = useState(false)
+  const [approvalTitle, setApprovalTitle] = useState('Confirm admin action')
+  const [approvalDescription, setApprovalDescription] = useState('Approve this sensitive admin action with your PIN or biometric.')
+  const [approvalActionLabel, setApprovalActionLabel] = useState('Approve action')
+  const [approvalLoading, setApprovalLoading] = useState(false)
+  const approvalActionRef = useRef<((approval: AdminApprovalPayload) => Promise<void>) | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -44,6 +51,31 @@ export default function AdminPricingPage() {
 
   useEffect(() => { load() }, [load])
 
+  const requestApproval = (
+    config: { title: string; description: string; actionLabel: string },
+    action: (approval: AdminApprovalPayload) => Promise<void>,
+  ) => {
+    setApprovalTitle(config.title)
+    setApprovalDescription(config.description)
+    setApprovalActionLabel(config.actionLabel)
+    approvalActionRef.current = action
+    setApprovalOpen(true)
+  }
+
+  const handleApproval = async (approval: AdminApprovalPayload) => {
+    if (!approvalActionRef.current) return
+    setApprovalLoading(true)
+    try {
+      await approvalActionRef.current(approval)
+      setApprovalOpen(false)
+      approvalActionRef.current = null
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || 'Admin action failed')
+    } finally {
+      setApprovalLoading(false)
+    }
+  }
+
   const active = useMemo(() => data?.data?.find((x: any) => x.provider === activeNet), [data, activeNet])
 
   const filteredPlans = useMemo(() => {
@@ -57,47 +89,95 @@ export default function AdminPricingPage() {
 
   const saveAirtime = async (provider: string) => {
     const pct = Math.max(0, Number(airtimeMarkup[provider]) || 0)
-    setSavingKey(`airtime:${provider}`)
-    try {
-      await adminAPI.setAirtimePricing(provider, pct)
-      toast.success(`${provider} airtime markup set to ${pct}%`)
-      load()
-    } catch { toast.error('Failed to save airtime markup') } finally { setSavingKey(null) }
+    requestApproval(
+      {
+        title: 'Approve airtime pricing change',
+        description: `Confirm the ${provider} airtime markup update before it goes live to customers.`,
+        actionLabel: 'Save markup',
+      },
+      async (approval) => {
+        setSavingKey(`airtime:${provider}`)
+        try {
+          await adminAPI.setAirtimePricing(provider, pct, approval)
+          toast.success(`${provider} airtime markup set to ${pct}%`)
+          load()
+        } finally {
+          setSavingKey(null)
+        }
+      },
+    )
   }
 
   const saveDataMargin = async (provider: string) => {
     const pct = Math.max(0, Number(dataMargin[provider]) || 0)
-    setSavingKey(`margin:${provider}`)
-    try {
-      await adminAPI.setDataMargin(provider, pct)
-      toast.success(`${provider} auto margin set to ${pct}%`)
-      load()
-    } catch { toast.error('Failed to save auto margin') } finally { setSavingKey(null) }
+    requestApproval(
+      {
+        title: 'Approve auto-margin update',
+        description: `Confirm the ${provider} auto-margin change for all data plans on this network.`,
+        actionLabel: 'Apply margin',
+      },
+      async (approval) => {
+        setSavingKey(`margin:${provider}`)
+        try {
+          await adminAPI.setDataMargin(provider, pct, approval)
+          toast.success(`${provider} auto margin set to ${pct}%`)
+          load()
+        } finally {
+          setSavingKey(null)
+        }
+      },
+    )
   }
 
   const savePlan = async (provider: string, planCode: string, value: string) => {
     const parsed = Number(value)
-    setSavingKey(`${provider}:${planCode}`)
-    try {
-      if (value.trim() === '' || !isFinite(parsed) || parsed <= 0) {
-        await adminAPI.setDataPlanPrice(provider, planCode, null)
-        toast.success('Plan reset to automatic pricing')
-      } else {
-        await adminAPI.setDataPlanPrice(provider, planCode, parsed)
-        toast.success('Plan price updated')
-      }
-      setEdits((e) => { const n = { ...e }; delete n[`${provider}:${planCode}`]; return n })
-      load()
-    } catch { toast.error('Failed to save plan price') } finally { setSavingKey(null) }
+    requestApproval(
+      {
+        title: 'Approve plan price update',
+        description: value.trim() === '' || !isFinite(parsed) || parsed <= 0
+          ? 'This will reset the plan to automatic pricing driven by cost and margin settings.'
+          : `Confirm the custom sell price override for ${provider} plan ${planCode}.`,
+        actionLabel: value.trim() === '' || !isFinite(parsed) || parsed <= 0 ? 'Reset pricing' : 'Save plan price',
+      },
+      async (approval) => {
+        setSavingKey(`${provider}:${planCode}`)
+        try {
+          if (value.trim() === '' || !isFinite(parsed) || parsed <= 0) {
+            await adminAPI.setDataPlanPrice(provider, planCode, null, approval)
+            toast.success('Plan reset to automatic pricing')
+          } else {
+            await adminAPI.setDataPlanPrice(provider, planCode, parsed, approval)
+            toast.success('Plan price updated')
+          }
+          setEdits((e) => { const n = { ...e }; delete n[`${provider}:${planCode}`]; return n })
+          load()
+        } finally {
+          setSavingKey(null)
+        }
+      },
+    )
   }
 
   const togglePlan = async (provider: string, planCode: string, disabled: boolean) => {
-    setSavingKey(`toggle:${provider}:${planCode}`)
-    try {
-      await adminAPI.setDataPlanEnabled(provider, planCode, !disabled)
-      toast.success(disabled ? 'Plan re-enabled' : 'Plan disabled — hidden from the app')
-      load()
-    } catch { toast.error('Failed to toggle plan') } finally { setSavingKey(null) }
+    requestApproval(
+      {
+        title: disabled ? 'Approve plan re-enable' : 'Approve plan disable',
+        description: disabled
+          ? 'This will make the plan available in the app again.'
+          : 'This will hide the plan from customers in the app until it is enabled again.',
+        actionLabel: disabled ? 'Enable plan' : 'Disable plan',
+      },
+      async (approval) => {
+        setSavingKey(`toggle:${provider}:${planCode}`)
+        try {
+          await adminAPI.setDataPlanEnabled(provider, planCode, !disabled, approval)
+          toast.success(disabled ? 'Plan re-enabled' : 'Plan disabled — hidden from the app')
+          load()
+        } finally {
+          setSavingKey(null)
+        }
+      },
+    )
   }
 
   if (loading) {
@@ -322,6 +402,20 @@ export default function AdminPricingPage() {
           </>
         )}
       </section>
+
+      <AdminStepUpModal
+        open={approvalOpen}
+        title={approvalTitle}
+        description={approvalDescription}
+        actionLabel={approvalActionLabel}
+        loading={approvalLoading || savingKey !== null}
+        onClose={() => {
+          if (approvalLoading || savingKey !== null) return
+          approvalActionRef.current = null
+          setApprovalOpen(false)
+        }}
+        onApprove={handleApproval}
+      />
     </div>
   )
 }

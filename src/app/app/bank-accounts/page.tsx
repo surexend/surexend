@@ -79,23 +79,39 @@ export default function BankAccountsPage() {
   return (
     <div className="w-full max-w-full px-3 py-4 max-w-md mx-auto flex flex-col pb-28 sm:pb-36">
       <div className="flex items-center gap-2 mb-4">
-        <button onClick={() => window.history.back()} className="text-[#94A3B8] hover:text-white text-sm font-semibold">← Back</button>
+        <button onClick={() => router.back()} className="text-[#94A3B8] hover:text-white text-sm font-semibold">← Back</button>
       </div>
 
-      {/* Fun mainnet notice */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl p-4 border border-white/10 bg-gradient-to-r from-[rgba(212,160,23,0.12)] via-[rgba(255,215,0,0.05)] to-[rgba(34,197,94,0.08)] flex items-start gap-3 mb-4"
+        className="rounded-3xl p-5 border border-white/10 bg-gradient-to-r from-[rgba(212,160,23,0.12)] via-[rgba(255,215,0,0.05)] to-[rgba(34,197,94,0.08)] mb-4 overflow-hidden relative"
       >
-        <div className="w-10 h-10 rounded-xl bg-[rgba(212,160,23,0.15)] border border-[rgba(212,160,23,0.35)] flex items-center justify-center flex-shrink-0">
-          <Rocket className="w-5 h-5 text-[#FFD966]" />
+        <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, rgba(${accentRgb}, 0.8), transparent)` }} />
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[rgba(212,160,23,0.15)] border border-[rgba(212,160,23,0.35)] flex items-center justify-center flex-shrink-0">
+            <Rocket className="w-5 h-5 text-[#FFD966]" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white">Prepare your payout destination</p>
+            <p className="text-[11px] text-[#94A3B8] leading-relaxed mt-1">
+              Local bank withdrawals are still rolling out. Save and verify your destination accounts now so your profile is ready once payouts are enabled for your account.
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-bold text-white">Bank payouts land on the mainnet soon</p>
-          <p className="text-[11px] text-[#94A3B8] leading-relaxed mt-1">
-            Naira withdrawals are being migrated on-chain for instant, bank-grade settlement. Your saved accounts come along automatically — no re-entry needed.
-          </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Country</p>
+            <p className="text-sm font-semibold text-white mt-1">Nigeria</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Verification</p>
+            <p className="text-sm font-semibold text-white mt-1">Bank + account match</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Status</p>
+            <p className="text-sm font-semibold text-white mt-1">Rollout in progress</p>
+          </div>
         </div>
       </motion.div>
 
@@ -154,7 +170,7 @@ export default function BankAccountsPage() {
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="liquid-glass rounded-2xl p-6 text-center">
             <Building2 className="w-8 h-8 text-[#64748B] mx-auto mb-2" />
             <p className="text-sm text-[#94A3B8]">No bank accounts yet.</p>
-            <p className="text-[11px] text-[#64748B] mt-1">Add one above to withdraw to your local bank.</p>
+            <p className="text-[11px] text-[#64748B] mt-1">Add one above so your payout destination is ready when withdrawals reach your account.</p>
           </motion.div>
         ) : (
           accounts.map((acc) => (

@@ -1,18 +1,19 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
 import { billsAPI, walletAPI } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
+import FlowProgress from '@/components/ui/FlowProgress'
+import ComingSoon from '@/components/ui/ComingSoon'
 import {
   Smartphone, Wifi, Zap, Tv, ChevronRight, ArrowLeft,
-  Search, CheckCircle, AlertCircle, Loader2, Trophy,
-  Lock, Coins, Gamepad2, Sun, GraduationCap, Globe,
-  CreditCard, FileText, Heart, Landmark, ShoppingBag,
-  ShoppingCart, Store, Fuel, Plane, Grid, MoreHorizontal, Wallet
+  CheckCircle, AlertCircle, Loader2,
+  Lock, Coins, Globe,
+  CreditCard, FileText, Landmark
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useBackLayer } from '@/context/BackNavigationContext'
@@ -23,10 +24,12 @@ const CATEGORIES = [
   { type: 'data', label: 'Data', icon: Wifi, badge: null },
   { type: 'electricity', label: 'Electricity', icon: Zap, badge: null },
   { type: 'tv', label: 'Cable TV', icon: Tv, badge: null },
-  { type: 'internet', label: 'Internet Services', icon: Globe, badge: null },
-  { type: 'school', label: 'School & Exam', icon: GraduationCap, badge: null },
-  { type: 'invoice', label: 'Invoice Payments', icon: FileText, badge: null },
-  { type: 'giftcards', label: 'Gift Cards', icon: CreditCard, badge: 'New' },
+]
+
+const UPCOMING_CATEGORIES = [
+  { label: 'Internet Services', icon: Globe },
+  { label: 'Invoice Payments', icon: FileText },
+  { label: 'Gift Cards', icon: CreditCard },
 ]
 
 // ── Amount presets for airtime ─────────────────────────────────────────────
@@ -87,6 +90,7 @@ function PinPad({ onComplete, accentHex, accentRgb }: {
 
 export default function BillsPage() {
   const { variant, colors } = useTheme()
+  const router = useRouter()
   const isGold = variant === 'gold'
   const accentRgb = isGold ? '212, 160, 23' : '181, 226, 61'
   const accentHex = isGold ? '#D4A017' : '#B5E23D'
@@ -99,6 +103,7 @@ export default function BillsPage() {
   const [recipient, setRecipient] = useState('')
   const [amount, setAmount] = useState('')
   const [meterName, setMeterName] = useState('')
+  const [showComingSoon, setShowComingSoon] = useState(false)
   const [validating, setValidating] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<any>(null)
@@ -225,7 +230,7 @@ export default function BillsPage() {
           <div>
             <h1 className="text-white font-inter font-bold text-xl">Pay Bills</h1>
             <p className="text-[#64748B] text-xs">
-              {step === 'categories' && 'Airtime · Data · Electricity · TV · Utilities'}
+              {step === 'categories' && 'Live bill categories with clear rollout status'}
               {step === 'providers' && `Select ${selectedCategory} provider`}
               {step === 'form' && selectedProvider?.name}
               {step === 'wallet' && 'Choose a wallet'}
@@ -236,27 +241,49 @@ export default function BillsPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 pt-4">
+        {step !== 'success' && step !== 'failed' && (
+          <FlowProgress
+            current={
+              step === 'categories' ? 1 :
+              step === 'providers' ? 2 :
+              step === 'form' ? 3 :
+              step === 'wallet' ? 4 : 5
+            }
+            steps={['Category', 'Provider', 'Details', 'Wallet', 'Approve']}
+            className="mb-4"
+          />
+        )}
         <AnimatePresence mode="wait">
           {/* STEP 1: Categories (4-Column Grid matching Images 2 & 3) */}
           {step === 'categories' && (
             <motion.div key="cats" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <div className="bg-[#15171C] rounded-3xl p-5 border border-white/5 mb-6">
-                <p className="text-[#64748B] text-xs font-bold uppercase tracking-widest mb-5 px-1">Utilities & Services</p>
-                <div className="grid grid-cols-4 gap-y-6 gap-x-2 sm:gap-x-4">
+              <div className="bg-[#15171C] rounded-3xl p-5 border border-white/5 mb-4 overflow-hidden relative">
+                <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, rgba(${accentRgb}, 0.8), transparent)` }} />
+                <div className="flex items-start justify-between gap-3 mb-5 px-1">
+                  <div>
+                    <p className="text-[#64748B] text-xs font-bold uppercase tracking-widest">Live categories</p>
+                    <p className="text-[#94A3B8] text-sm mt-1">Only services that can move through a real payment flow appear here.</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
+                    <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Available now</p>
+                    <p className="text-sm font-bold text-white mt-1">{CATEGORIES.length} categories</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {CATEGORIES.map((cat, i) => {
                     const Icon = cat.icon
                     return (
                       <motion.button key={cat.type}
-                        className="flex flex-col items-center gap-2 group text-center"
+                        className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 flex flex-col items-start gap-3 group text-left"
                         initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.02 }}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
+                        transition={{ delay: i * 0.03 }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                         onClick={() => { setSelectedCategory(cat.type); setStep('providers') }}
                       >
                         <div className="relative">
-                          <div className="w-12 h-12 rounded-full bg-[#212429] border border-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors shadow-inner">
-                            <Icon size={20} className="text-white" />
+                          <div className="w-11 h-11 rounded-2xl bg-[#212429] border border-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors shadow-inner">
+                            <Icon size={18} className="text-white" />
                           </div>
                           {cat.badge && (
                             <span className="absolute -top-1.5 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#FF4D6D] text-white shadow-md">
@@ -264,12 +291,46 @@ export default function BillsPage() {
                             </span>
                           )}
                         </div>
-                        <span className="text-[11px] font-medium text-[#94A3B8] group-hover:text-white transition-colors line-clamp-1 max-w-[72px]">
-                          {cat.label}
-                        </span>
+                        <div>
+                          <span className="text-sm font-semibold text-white block">
+                            {cat.label}
+                          </span>
+                          <span className="text-[11px] text-[#64748B] mt-1 block">
+                            Continue to provider
+                          </span>
+                        </div>
                       </motion.button>
                     )
                   })}
+                </div>
+              </div>
+
+              <div className="bg-[#15171C] rounded-3xl p-5 border border-white/5 mb-4">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div>
+                    <p className="text-[#64748B] text-xs font-bold uppercase tracking-widest">In rollout</p>
+                    <p className="text-[#94A3B8] text-sm mt-1">These services are planned, but not yet shown as payable inside the live flow.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowComingSoon(true)}
+                    className="px-3 py-2 rounded-xl text-xs font-semibold border border-white/10 bg-white/[0.03] text-white"
+                  >
+                    Join waitlist
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {UPCOMING_CATEGORIES.map(({ label, icon: Icon }) => (
+                    <div key={label} className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-white/[0.04] border border-white/8 flex items-center justify-center">
+                        <Icon size={17} className="text-[#94A3B8]" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">{label}</p>
+                        <p className="text-[11px] text-[#64748B] mt-1">Coming soon</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -409,6 +470,18 @@ export default function BillsPage() {
           {step === 'form' && (
             <motion.div key="form" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               className="space-y-4">
+
+              <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Selected provider</p>
+                  <p className="text-base font-semibold text-white mt-1">{selectedProvider?.name}</p>
+                  <p className="text-xs text-[#94A3B8] mt-1">Enter the payment details, then choose which wallet covers the charge.</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
+                  <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Charge preview</p>
+                  <p className="text-sm font-bold text-white mt-1">₦{effectiveNgn.toLocaleString()}</p>
+                </div>
+              </div>
 
               {/* Recipient */}
               <div>
@@ -693,7 +766,7 @@ export default function BillsPage() {
                 <button
                   className="py-3.5 rounded-xl text-sm font-bold text-black"
                   style={{ background: colors.gradientBg }}
-                  onClick={() => window.location.href = '/app/dashboard'}
+                  onClick={() => router.replace('/app/dashboard')}
                 >
                   Go to Dashboard
                 </button>
@@ -722,6 +795,20 @@ export default function BillsPage() {
 
         </AnimatePresence>
       </div>
+
+      <ComingSoon
+        open={showComingSoon}
+        onClose={() => setShowComingSoon(false)}
+        title="Expanded bill categories"
+        subtitle="We’re rolling out more payment categories carefully so live flows stay honest, reliable, and receipt-ready."
+        features={[
+          'Only categories with a complete payment journey will move into the live grid.',
+          'New services will include provider selection, approval, and receipt-ready history.',
+          'You can join the waitlist now and hear when rollout reaches your account.',
+        ]}
+        eta="Rolling out in phases"
+        notifyEmail="support@surexend.com"
+      />
     </div>
   )
 }

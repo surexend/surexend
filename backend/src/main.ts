@@ -86,9 +86,8 @@ async function bootstrap() {
   // Admin bootstrap — promote accounts listed in ADMIN_EMAILS (comma-separated)
   // on every boot. Also promoted live at sign-in (see auth.service
   // ensureAdminIfListed), so the moment a listed account logs in it becomes
-  // ADMIN — no boot-order dependency. Set e.g.
-  // ADMIN_EMAILS=surexendofficial@gmail.com in Railway, redeploy, then
-  // remove the var once promoted.
+  // ADMIN — no boot-order dependency. Set ADMIN_EMAILS to the reviewed admin
+  // addresses in the environment, redeploy, then remove the var once promoted.
   const prisma = app.get(PrismaService);
   const adminEmails = (process.env.ADMIN_EMAILS || '')
     .split(',')
@@ -117,6 +116,7 @@ async function bootstrap() {
   const allowedOrigins = [
     'https://surexend.com',
     'https://surexend.vercel.app',
+    'https://surexend.netlify.app',
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3002',
@@ -129,7 +129,9 @@ async function bootstrap() {
         !origin ||
         allowedOrigins.includes(origin) ||
         origin.endsWith('.vercel.app') ||
+        origin.endsWith('.netlify.app') ||
         origin.endsWith('.monkeycode-ai.live') ||
+        origin.endsWith('.e2b.app') ||
         origin.startsWith('http://localhost:');
       if (isAllowed) {
         callback(null, true);

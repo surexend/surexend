@@ -2,35 +2,47 @@ import { Injectable, UnauthorizedException, BadRequestException, Logger } from '
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import axios from 'axios';
+import * as speakeasy from 'speakeasy';
 import { RegisterDto, LoginDto, VerifyOtpDto } from './dto/auth.dto';
-import { v4 as uuidv4 } from 'uuid';
-import Redis from 'ioredis';
-import { BullModule } from '@nestjs/bull';
+import { RefreshSessionService } from './refresh-session.service';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  // For this implementation, we will assume a simple Redis setup using ioredis or bull
-  // In a real app we'd inject Redis properly. We use Prisma for now for simplicity,
-  // but requirements asked for OtpCode model in DB and Refresh Token in Redis.
-
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
-    private usersService: UsersService,
     private notificationsService: NotificationsService,
+    private refreshSessionService: RefreshSessionService,
   ) {}
 
+  private normalizeIdentifier(identifier: string) {
+    return String(identifier || '').trim().toLowerCase();
+  }
+
+  private normalizePhone(phone: string) {
+    return String(phone || '').trim();
+  }
+
+  private buildLoginChallengeToken(userId: string) {
+    return this.jwtService.sign(
+      { sub: userId, purpose: '2fa-login' },
+      { expiresIn: '5m' },
+    );
+  }
+
   async register(dto: RegisterDto) {
+    const email = this.normalizeIdentifier(dto.email);
+    const phone = this.normalizePhone(dto.phone);
+
     const existingUser = await this.prisma.user.findFirst({
-      where: { OR: [{ email: dto.email }, { phone: dto.phone }] }
+      where: { OR: [{ email }, { phone }] }
     });
 
     if (existingUser) {
@@ -66,8 +78,8 @@ export class AuthService {
 
     const user = await this.prisma.user.create({
       data: {
-        email: dto.email,
-        phone: dto.phone,
+        email,
+        phone,
         passwordHash,
         firstName: dto.firstName,
         lastName: dto.lastName,
@@ -96,14 +108,15 @@ export class AuthService {
       });
     }
 
-    const otpDelivered = await this.generateAndSendOtp(user.email, 'REGISTER');
+    const otpDelivered = await this.generateAndSendOtp(email, 'REGISTER');
 
     return { message: 'Registration successful, OTP sent', otpDelivered };
   }
 
   async login(dto: LoginDto, req?: any) {
+    const email = this.normalizeIdentifier(dto.email);
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email }
+      where: { email }
     });
 
     if (!user || !user.isActive) {
@@ -123,32 +136,30 @@ export class AuthService {
     if (user.twoFactorEnabled) {
       return {
         message: '2FA required',
-        userId: user.id,
-        requires2FA: true
+        requires2FA: true,
+        challengeToken: this.buildLoginChallengeToken(user.id),
       };
     }
 
-    // Record a "new login" notification with device + location so the bell
-    // drawer shows real activity (date/time/location) instead of fake entries.
+    await this.recordLoginNotification(user.id, req);
+
+    user.role = await this.ensureAdminIfListed(user);
+    return this.generateTokens(user);
+  }
+
+  private async recordLoginNotification(userId: string, req?: any) {
     try {
       const ip = (req?.ip || req?.headers?.['x-forwarded-for'] || 'Unknown').toString();
       const cleanIp = ip.includes(',') ? ip.split(',')[0].trim() : ip;
       const userAgent = req?.headers?.['user-agent'] || '';
       const device = this.parseDevice(userAgent);
-      let location = 'Unknown location';
-      try {
-        const geo = await axios.get(`https://ipwho.is/${encodeURIComponent(cleanIp)}`, { timeout: 3000 });
-        if (geo.data?.success) {
-          const c = geo.data;
-          location = [c.city, c.region, c.country].filter(Boolean).join(', ') || 'Unknown location';
-        }
-      } catch { /* geolocation is best-effort */ }
+      const location = 'Location unavailable';
 
       const time = new Date().toLocaleString('en-US', {
         month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
       });
 
-      await this.notificationsService.createNotification(user.id, {
+      await this.notificationsService.createNotification(userId, {
         title: 'New Login',
         body: `Signed in from ${device} (${location}). ${time}.`,
         type: 'LOGIN',
@@ -157,7 +168,41 @@ export class AuthService {
     } catch (err: any) {
       this.logger.error(`Failed to record login notification: ${err.message}`);
     }
+  }
 
+  async verifyTwoFactorLogin(challengeToken: string, code: string, req?: any) {
+    if (!challengeToken || !code) {
+      throw new BadRequestException('Challenge token and 2FA code are required');
+    }
+
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(challengeToken);
+    } catch {
+      throw new UnauthorizedException('2FA challenge expired. Please sign in again.');
+    }
+
+    if (payload?.purpose !== '2fa-login' || !payload?.sub) {
+      throw new UnauthorizedException('Invalid 2FA challenge');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user || !user.isActive || !user.twoFactorEnabled || !user.twoFactorSecret) {
+      throw new UnauthorizedException('2FA is not available for this account');
+    }
+
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: String(code).trim(),
+      window: 1,
+    });
+
+    if (!verified) {
+      throw new UnauthorizedException('Invalid 2FA code');
+    }
+
+    await this.recordLoginNotification(user.id, req);
     user.role = await this.ensureAdminIfListed(user);
     return this.generateTokens(user);
   }
@@ -178,17 +223,10 @@ export class AuthService {
   // sign in, so there's no boot-order dependency. Idempotent and safe to call
   // on every login.
   private async ensureAdminIfListed(user: { id: string; email: string; role?: string }): Promise<string> {
-    // Bootstrap admin: always promoted so the console can never be locked out,
-    // even if ADMIN_EMAILS is unset in the environment. Additional admins are
-    // configured via ADMIN_EMAILS (comma-separated) on Railway.
-    const bootstrapAdmins = ['surexendofficial@gmail.com'];
-    const adminEmails = [
-      ...(process.env.ADMIN_EMAILS || '')
-        .split(',')
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean),
-      ...bootstrapAdmins,
-    ];
+    const adminEmails = (process.env.ADMIN_EMAILS || '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
     if (adminEmails.includes((user.email || '').toLowerCase())) {
       try {
         const updated = await this.prisma.user.update({
@@ -206,18 +244,21 @@ export class AuthService {
 
   async generateTokens(user: any) {
     const payload = { sub: user.id, email: user.email };
-    
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: '15m'
     });
-    
-    const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get('app.jwt.refreshSecret'),
-      expiresIn: '7d'
-    });
 
-    // In a full implementation, you'd store the refresh token hash in Redis here.
-    
+    const refreshJti = crypto.randomBytes(16).toString('hex');
+    const refreshToken = this.jwtService.sign(
+      { ...payload, type: 'refresh', jti: refreshJti },
+      {
+        secret: this.configService.get('app.jwt.refreshSecret'),
+        expiresIn: '7d'
+      }
+    );
+
+    await this.refreshSessionService.create(user.id, refreshJti, refreshToken, this.refreshSessionService.ttlSeconds());
+
     return {
       accessToken,
       refreshToken,
@@ -233,25 +274,47 @@ export class AuthService {
   }
 
   async generateAndSendOtp(identifier: string, type: string): Promise<boolean> {
-    // Basic rate limit check could go here
+    const normalizedIdentifier = this.normalizeIdentifier(identifier);
+    const recentAttempts = await this.prisma.otpCode.count({
+      where: {
+        identifier: normalizedIdentifier,
+        type,
+        createdAt: { gt: new Date(Date.now() - 10 * 60_000) },
+      },
+    });
+
+    if (recentAttempts >= 3) {
+      throw new BadRequestException('Too many codes requested. Please wait a few minutes before trying again.');
+    }
+
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60000); // 10 mins
+    const expiresAt = new Date(Date.now() + 10 * 60000);
+
+    await this.prisma.otpCode.updateMany({
+      where: {
+        identifier: normalizedIdentifier,
+        type,
+        used: false,
+      },
+      data: { used: true },
+    });
 
     await this.prisma.otpCode.create({
       data: {
-        identifier,
+        identifier: normalizedIdentifier,
         code,
         type,
         expiresAt
       }
     });
 
-    return this.notificationsService.sendOTPEmail(identifier, code);
+    return this.notificationsService.sendOTPEmail(normalizedIdentifier, code);
   }
 
   // ── Passwordless OTP login (email) ──────────────────────────────────────
   async requestLoginOtp(email: string) {
-    const user = await this.prisma.user.findUnique({ where: { email: email?.toLowerCase().trim() } });
+    const normalizedEmail = this.normalizeIdentifier(email);
+    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (!user || !user.isActive) {
       throw new BadRequestException('No active account found with this email');
     }
@@ -259,8 +322,8 @@ export class AuthService {
     return { message: 'One-time code sent to your email' };
   }
 
-  async verifyLoginOtp(dto: { email: string; code: string }) {
-    const identifier = dto.email?.toLowerCase().trim();
+  async verifyLoginOtp(dto: { email: string; code: string }, req?: any) {
+    const identifier = this.normalizeIdentifier(dto.email);
     const otpRecord = await this.prisma.otpCode.findFirst({
       where: {
         identifier,
@@ -283,6 +346,7 @@ export class AuthService {
       throw new UnauthorizedException('No active account found with this email');
     }
 
+    await this.recordLoginNotification(user.id, req);
     user.role = await this.ensureAdminIfListed(user);
     return this.generateTokens(user);
   }
@@ -395,24 +459,53 @@ export class AuthService {
     try {
       const payload = this.jwtService.verify(refreshToken, {
         secret: this.configService.get('app.jwt.refreshSecret'),
-      });
+      }) as { sub?: string; type?: string; jti?: string };
+
+      if (payload?.type !== 'refresh' || !payload?.sub || !payload?.jti) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const validSession = await this.refreshSessionService.validate(payload.sub, payload.jti, refreshToken);
+      if (!validSession) {
+        throw new UnauthorizedException('Refresh token has been revoked');
+      }
 
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
       });
 
       if (!user || !user.isActive) {
+        await this.refreshSessionService.revoke(payload.jti, payload.sub);
         throw new UnauthorizedException('Invalid refresh token');
       }
 
+      user.role = await this.ensureAdminIfListed(user);
+      await this.refreshSessionService.revoke(payload.jti, payload.sub);
       return this.generateTokens(user);
     } catch (err) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
   }
 
+  async logout(refreshToken?: string) {
+    if (refreshToken) {
+      try {
+        const payload = this.jwtService.verify(refreshToken, {
+          secret: this.configService.get('app.jwt.refreshSecret'),
+        }) as { sub?: string; jti?: string; type?: string };
+        if (payload?.type === 'refresh' && payload?.jti) {
+          await this.refreshSessionService.revoke(payload.jti, payload.sub);
+        }
+      } catch {
+        // Already expired or invalid — treat as logged out.
+      }
+    }
+    return { message: 'Logged out successfully' };
+  }
+
   async forgotPassword(email: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = this.normalizeIdentifier(email);
+    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (!user) {
       // Do not leak whether the email exists
       return { message: 'If the email exists, a reset OTP has been sent' };
@@ -442,8 +535,9 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired reset token');
     }
 
+    const identifier = this.normalizeIdentifier(otpRecord.identifier);
     const user = await this.prisma.user.findFirst({
-      where: { OR: [{ email: otpRecord.identifier }, { phone: otpRecord.identifier }] }
+      where: { OR: [{ email: identifier }, { phone: identifier }] }
     });
 
     if (!user) {
@@ -455,6 +549,7 @@ export class AuthService {
       where: { id: user.id },
       data: { passwordHash }
     });
+    await this.refreshSessionService.revokeAllForUser(user.id);
 
     await this.prisma.otpCode.update({
       where: { id: otpRecord.id },
@@ -465,9 +560,10 @@ export class AuthService {
   }
 
   async verifyOtp(dto: VerifyOtpDto) {
+    const identifier = this.normalizeIdentifier(dto.identifier);
     const otpRecord = await this.prisma.otpCode.findFirst({
       where: {
-        identifier: dto.identifier,
+        identifier,
         code: dto.code,
         used: false,
         expiresAt: { gt: new Date() }
@@ -488,8 +584,8 @@ export class AuthService {
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [
-          { email: dto.identifier },
-          { phone: dto.identifier },
+          { email: identifier },
+          { phone: identifier },
         ]
       }
     });
@@ -498,6 +594,7 @@ export class AuthService {
       return { message: 'OTP verified successfully' };
     }
 
+    user.role = await this.ensureAdminIfListed(user);
     const tokens = await this.generateTokens(user);
     return {
       message: 'OTP verified successfully',

@@ -1,15 +1,14 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { supportAPI } from '@/lib/api'
+import { useQuery } from '@tanstack/react-query'
 import {
-  MessageCircle, Send, X, Minimize2, Maximize2,
-  Bot, User, Clock, ChevronRight, Headphones,
-  RefreshCw, AlertCircle, CheckCircle
+  Send, Bot, Headphones,
+  Mail, ShieldCheck, MessageSquareText
 } from 'lucide-react'
-import toast from 'react-hot-toast'
 
 // ── Message types ──────────────────────────────────────────────────────────
 interface Message {
@@ -31,8 +30,8 @@ const QUICK_REPLIES = [
 ]
 
 // ── Message bubble ─────────────────────────────────────────────────────────
-function MessageBubble({ msg, accentHex, accentRgb }: {
-  msg: Message; accentHex: string; accentRgb: string
+function MessageBubble({ msg, accentHex, accentRgb, reduceMotion }: {
+  msg: Message; accentHex: string; accentRgb: string; reduceMotion: boolean
 }) {
   const isUser = msg.role === 'USER'
   const isHuman = msg.role === 'HUMAN'
@@ -80,8 +79,8 @@ function MessageBubble({ msg, accentHex, accentRgb }: {
             <div className="flex gap-1.5 items-center py-0.5">
               {[0, 1, 2].map(i => (
                 <motion.div key={i} className="w-1.5 h-1.5 rounded-full bg-[#64748B]"
-                  animate={{ y: [0, -5, 0] }}
-                  transition={{ duration: 0.6, delay: i * 0.1, repeat: Infinity }} />
+                  animate={reduceMotion ? undefined : { y: [0, -5, 0] }}
+                  transition={reduceMotion ? undefined : { duration: 0.6, delay: i * 0.1, repeat: Infinity }} />
               ))}
             </div>
           ) : (
@@ -98,10 +97,11 @@ function MessageBubble({ msg, accentHex, accentRgb }: {
 
 // ── Support page ───────────────────────────────────────────────────────────
 export default function SupportPage() {
-  const { variant, colors } = useTheme()
+  const { variant } = useTheme()
   const isGold = variant === 'gold'
   const accentRgb = isGold ? '212, 160, 23' : '181, 226, 61'
   const accentHex = isGold ? '#D4A017' : '#B5E23D'
+  const reduceMotion = useReducedMotion()
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -119,9 +119,20 @@ export default function SupportPage() {
   const [activeView, setActiveView] = useState<'chat' | 'tickets'>('chat')
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  const { data: ticketsData, isLoading: ticketsLoading } = useQuery({
+    queryKey: ['supportTickets'],
+    queryFn: supportAPI.getTickets,
+    staleTime: 30000,
+  })
+  const tickets = Array.isArray(ticketsData)
+    ? ticketsData
+    : Array.isArray((ticketsData as any)?.tickets)
+      ? (ticketsData as any).tickets
+      : []
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    bottomRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' })
+  }, [messages, reduceMotion])
 
   const sendMessage = async (text?: string) => {
     const messageText = text || input.trim()
@@ -184,7 +195,7 @@ export default function SupportPage() {
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
@@ -194,13 +205,34 @@ export default function SupportPage() {
   return (
     <div className="min-h-screen bg-[#000000] pb-32 flex flex-col">
       {/* Header */}
-      <div className="px-4 pt-6 pb-4 max-w-2xl mx-auto w-full">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-white font-inter font-bold text-xl mb-1">Support</h1>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#10B981]" />
-              <p className="text-[#10B981] text-xs font-medium">AI Support Active · 24/7</p>
+      <div className="px-4 pt-6 pb-4 max-w-2xl mx-auto w-full space-y-4">
+        <div className="liquid-glass rounded-3xl border border-white/10 p-5 overflow-hidden relative">
+          <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, rgba(${accentRgb}, 0.8), transparent)` }} />
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-white font-bold text-2xl tracking-tight">Support</h1>
+              <p className="text-sm text-[#94A3B8] mt-1">Get help fast, escalate serious issues clearly, and keep a written record of what happened.</p>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+              AI live 24/7
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <Mail className="w-4 h-4 text-white mb-2" />
+              <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Human support</p>
+              <p className="text-sm font-semibold text-white mt-1">support@surexend.com</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <ShieldCheck className="w-4 h-4 text-emerald-400 mb-2" />
+              <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Escalation</p>
+              <p className="text-sm font-semibold text-white mt-1">Risk issues can be flagged</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <MessageSquareText className="w-4 h-4" style={{ color: accentHex }} />
+              <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Records</p>
+              <p className="text-sm font-semibold text-white mt-1">Chat + ticket trail</p>
             </div>
           </div>
         </div>
@@ -230,6 +262,24 @@ export default function SupportPage() {
 
       {activeView === 'chat' ? (
         <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full px-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            {[
+              { title: 'Pending transfer', desc: 'Ask about a stuck transaction or missing update.' },
+              { title: 'KYC & profile', desc: 'Get help with verification, tags, and profile settings.' },
+              { title: 'Rates & bills', desc: 'Understand conversions, fees, and supported bill flows.' },
+            ].map((item) => (
+              <button
+                key={item.title}
+                type="button"
+                onClick={() => sendMessage(item.title)}
+                className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left hover:bg-white/[0.05] transition-colors"
+              >
+                <p className="text-sm font-bold text-white">{item.title}</p>
+                <p className="text-xs text-[#94A3B8] mt-1.5 leading-relaxed">{item.desc}</p>
+              </button>
+            ))}
+          </div>
+
           {/* AI status banner */}
           {escalated && (
             <motion.div
@@ -243,9 +293,9 @@ export default function SupportPage() {
           )}
 
           {/* Messages area */}
-          <div className="flex-1 overflow-y-auto space-y-0 mb-4" style={{ maxHeight: 'calc(100vh - 380px)', minHeight: 300 }}>
+          <div className="flex-1 overflow-y-auto space-y-0 mb-4 rounded-3xl border border-white/8 bg-white/[0.02] px-3 py-3" style={{ maxHeight: 'calc(100vh - 430px)', minHeight: 300 }}>
             {messages.map(msg => (
-              <MessageBubble key={msg.id} msg={msg} accentHex={accentHex} accentRgb={accentRgb} />
+              <MessageBubble key={msg.id} msg={msg} accentHex={accentHex} accentRgb={accentRgb} reduceMotion={!!reduceMotion} />
             ))}
 
             {/* Quick replies */}
@@ -307,7 +357,7 @@ export default function SupportPage() {
               >
                 {loading
                   ? <motion.div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full"
-                      animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} />
+                      animate={reduceMotion ? undefined : { rotate: 360 }} transition={reduceMotion ? undefined : { duration: 0.8, repeat: Infinity, ease: 'linear' }} />
                   : <Send size={16} />
                 }
               </motion.button>
@@ -319,19 +369,55 @@ export default function SupportPage() {
         </div>
       ) : (
         <div className="max-w-2xl mx-auto w-full px-4">
-          <div className="bg-[#121419] rounded-2xl p-5 border border-white/5 text-center py-16">
-            <div className="text-5xl mb-4">🎫</div>
-            <h3 className="text-white font-semibold mb-2">No open tickets</h3>
-            <p className="text-[#64748B] text-sm mb-6 max-w-xs mx-auto">
-              Use the chat to get instant help. A ticket is automatically created if escalated to a human agent.
-            </p>
-            <button
-              className="px-6 py-3 rounded-xl text-sm font-semibold"
-              style={{ background: `rgba(${accentRgb}, 0.12)`, color: accentHex }}
-              onClick={() => setActiveView('chat')}
-            >
-              Start a Chat
-            </button>
+          <div className="bg-[#121419] rounded-3xl p-5 border border-white/5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-white font-semibold text-lg">Tickets</h3>
+                <p className="text-[#64748B] text-sm">Escalated conversations and support follow-ups.</p>
+              </div>
+              <button
+                className="px-4 py-2 rounded-xl text-sm font-semibold"
+                style={{ background: `rgba(${accentRgb}, 0.12)`, color: accentHex }}
+                onClick={() => setActiveView('chat')}
+              >
+                Open chat
+              </button>
+            </div>
+
+            {ticketsLoading ? (
+              <div className="space-y-3 py-2">
+                {Array.from({ length: 3 }, (_, i) => <div key={i} className="h-20 rounded-2xl skeleton" />)}
+              </div>
+            ) : tickets.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="text-5xl mb-4">🎫</div>
+                <h3 className="text-white font-semibold mb-2">No open tickets</h3>
+                <p className="text-[#64748B] text-sm mb-6 max-w-xs mx-auto">
+                  Use the chat to get instant help. A ticket is automatically created if escalated to a human agent.
+                </p>
+                <button
+                  className="px-6 py-3 rounded-xl text-sm font-semibold"
+                  style={{ background: `rgba(${accentRgb}, 0.12)`, color: accentHex }}
+                  onClick={() => setActiveView('chat')}
+                >
+                  Start a Chat
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {tickets.map((ticket: any) => (
+                  <div key={ticket.id} className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-white">{ticket.subject}</p>
+                        <p className="text-xs text-[#94A3B8] mt-1">{ticket.category} · {ticket.status}</p>
+                      </div>
+                      <span className="text-[11px] text-[#64748B] whitespace-nowrap">{ticket.date || '—'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

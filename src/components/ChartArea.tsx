@@ -65,7 +65,7 @@ export default function ChartArea({
   if (section === 'market') {
     const gradientId = `cryptoMarketGradient_${section}`
     return (
-      <div className="h-64 sm:h-72 w-full pt-2 relative">
+      <div className="h-64 sm:h-72 w-full pt-2 relative" aria-label="Market chart area">
         {chartLoading && chartSeries.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
             <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-white/40 animate-spin" />
@@ -73,8 +73,11 @@ export default function ChartArea({
         )}
         <ResponsiveContainer width="100%" height="100%">
           {chartSeries.length === 0 ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <p className="text-xs text-[#64748B]">Loading live market data…</p>
+            <div className="w-full h-full flex items-center justify-center px-4 text-center">
+              <div>
+                <p className="text-sm font-semibold text-white">Market view warming up</p>
+                <p className="text-xs text-[#64748B] mt-1">Live pricing appears here once a market pair is selected and data is available.</p>
+              </div>
             </div>
           ) : (
             <AreaChart data={chartSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -128,8 +131,26 @@ export default function ChartArea({
   const inflowGradId = `inflowGradient_${section}`
   const outflowGradId = `outflowGradient_${section}`
 
+  if (cashFlowData.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-[10px] text-[#64748B] uppercase tracking-wider">Money In</p>
+            <p className="text-sm font-bold text-[#10B981]">+${totalIn.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-[#64748B] uppercase tracking-wider">Money Out</p>
+            <p className="text-sm font-bold text-[#EF4444]">-${totalOut.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          </div>
+        </div>
+        <p className="text-xs text-[#64748B] mt-3">Cash-flow chart data will appear here once enough activity has been recorded.</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="h-52 w-full pt-1">
+    <div className="h-52 w-full pt-1" aria-label="Cash flow chart area">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={cashFlowData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <defs>

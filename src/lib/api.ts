@@ -1,6 +1,12 @@
 import axios, { AxiosError } from 'axios'
 import { withRetry } from './utils'
 import toast from 'react-hot-toast'
+import {
+  getStoredAccessToken,
+  getStoredRefreshToken,
+  storeAuthTokens,
+  clearStoredAuthSession,
+} from './auth-session'
 
 // African local currencies (mirrors backend SUPPORTED_LOCAL_CURRENCIES).
 // `countryCode` renders a cross-platform flag badge (Windows doesn't render
@@ -50,19 +56,15 @@ export const AFRICAN_CURRENCIES = [
   { code: 'XOF', name: 'West African CFA Franc', symbol: 'CFA', country: 'Senegal', countryCode: 'SN', flag: '🇸🇳', rate: 605, countries: ['Benin', 'Burkina Faso', 'Côte d’Ivoire', 'Guinea-Bissau', 'Mali', 'Niger', 'Senegal', 'Togo'] },
 ]
 
-// Store access + refresh tokens in localStorage and the access token as a cookie
+// Access tokens stay in sessionStorage + a short browser cookie for route gating.
+// Refresh tokens remain client-readable for now until the app migrates fully to
+// server-owned httpOnly sessions.
 function storeTokens(accessToken: string, refreshToken?: string) {
-  localStorage.setItem('surexend_access_token', accessToken)
-  document.cookie = `surexend_access_token=${accessToken}; path=/; max-age=86400;`
-  if (refreshToken) {
-    localStorage.setItem('surexend_refresh_token', refreshToken)
-  }
+  storeAuthTokens(accessToken, refreshToken)
 }
 
 function clearTokens() {
-  localStorage.removeItem('surexend_access_token')
-  localStorage.removeItem('surexend_refresh_token')
-  document.cookie = 'surexend_access_token=; path=/; max-age=0;'
+  clearStoredAuthSession()
 }
 
 // Send the user to the login page after clearing tokens (deduped)
@@ -71,7 +73,7 @@ function redirectToLogin() {
   if (redirectingToLogin) return
   redirectingToLogin = true
   if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth/login')) {
-    window.location.href = '/auth/login'
+    window.location.replace('/auth/login')
   }
 }
 
@@ -80,7 +82,7 @@ let refreshPromise: Promise<string | null> | null = null
 
 async function refreshAccessToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null
-  const refreshToken = localStorage.getItem('surexend_refresh_token')
+  const refreshToken = getStoredRefreshToken()
   if (!refreshToken) return null
 
   try {
@@ -108,7 +110,7 @@ export const apiClient = axios.create({
 // Attach JWT from storage on every request
 apiClient.interceptors.request.use((config) => {
   const token = typeof window !== 'undefined'
-    ? localStorage.getItem('surexend_access_token')
+    ? getStoredAccessToken()
     : null
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
@@ -204,7 +206,8 @@ export const authAPI = {
     apiClient.post('/auth/refresh', { refreshToken }),
 
   logout: async () => {
-    const response = await apiClient.post('/auth/logout')
+    const refreshToken = getStoredRefreshToken()
+    const response = await apiClient.post('/auth/logout', refreshToken ? { refreshToken } : {})
     if (typeof window !== 'undefined') {
       clearTokens()
     }
@@ -230,6 +233,14 @@ export const authAPI = {
 
   verifyLoginOtp: async (payload: { email: string; code: string }) => {
     const response = await apiClient.post('/auth/otp/verify-login', payload)
+    if (typeof window !== 'undefined' && response.data?.accessToken) {
+      storeTokens(response.data.accessToken, response.data.refreshToken)
+    }
+    return response
+  },
+
+  verify2FALogin: async (payload: { challengeToken: string; code: string }) => {
+    const response = await apiClient.post('/auth/2fa/verify-login', payload)
     if (typeof window !== 'undefined' && response.data?.accessToken) {
       storeTokens(response.data.accessToken, response.data.refreshToken)
     }
@@ -682,7 +693,7 @@ export const supportAPI = {
   chat: (payload: { message: string; sessionId?: string; history?: any[] }) =>
     tryWithMock(
       () => apiClient.post('/support/chat', { message: payload.message, history: payload.history || [] }).then(r => r.data),
-      () => ({ response: "Hello! I am your SureXend AI Assistant. I can help you guide through instant USDC transfers, bank withdrawals, or bill payments!", escalate: false })
+      () => ({ response: "Hello! I am your SureXend AI Assistant. I can help with USDC transfers, payout rollout questions, conversions, and bill payments.", escalate: false })
     ),
 
   createTicket: (payload: { subject: string; message: string; category: string }) =>
@@ -716,38 +727,43 @@ export const notificationsAPI = {
 
 }
 
+export type AdminApprovalPayload = {
+  adminPin?: string
+  adminPasskeyToken?: string
+}
+
 // ── Admin API (requires the ADMIN role on the JWT) ──────────────────────
 export const adminAPI = {
   getOverview: () => apiClient.get('/admin/overview').then(r => r.data),
   getUsers: (params?: { search?: string; kycStatus?: string; page?: number; limit?: number }) =>
     apiClient.get('/admin/users', { params }).then(r => r.data),
   getUser: (id: string) => apiClient.get(`/admin/users/${id}`).then(r => r.data),
-  updateUser: (id: string, body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string; email?: string; phone?: string }) =>
-    apiClient.patch(`/admin/users/${id}`, body).then(r => r.data),
-  creditUser: (id: string, body: { amount: number; currency?: string; note?: string }) =>
-    apiClient.post(`/admin/users/${id}/credit`, body).then(r => r.data),
-  deleteUser: (id: string) =>
-    apiClient.delete(`/admin/users/${id}`).then(r => r.data),
+  updateUser: (id: string, body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string; email?: string; phone?: string }, approval?: AdminApprovalPayload) =>
+    apiClient.patch(`/admin/users/${id}`, { ...body, ...(approval || {}) }).then(r => r.data),
+  creditUser: (id: string, body: { amount: number; currency?: string; note?: string }, approval?: AdminApprovalPayload) =>
+    apiClient.post(`/admin/users/${id}/credit`, { ...body, ...(approval || {}) }).then(r => r.data),
+  deleteUser: (id: string, approval?: AdminApprovalPayload) =>
+    apiClient.delete(`/admin/users/${id}`, { data: approval || {} }).then(r => r.data),
   getTransactions: (params?: { type?: string; status?: string; search?: string; page?: number; limit?: number }) =>
     apiClient.get('/admin/transactions', { params }).then(r => r.data),
   getTransaction: (id: string) =>
     apiClient.get(`/admin/transactions/${id}`).then(r => r.data),
   getPricing: () =>
     apiClient.get('/admin/pricing').then(r => r.data),
-  setAirtimePricing: (provider: string, marginPct: number) =>
-    apiClient.put('/admin/pricing/airtime', { provider, marginPct }).then(r => r.data),
-  setDataMargin: (provider: string, marginPct: number) =>
-    apiClient.put('/admin/pricing/data-margin', { provider, marginPct }).then(r => r.data),
-  setDataPlanPrice: (provider: string, planCode: string, sellPrice: number | null) =>
-    apiClient.put('/admin/pricing/data', { provider, planCode, sellPrice }).then(r => r.data),
-  setDataPlanEnabled: (provider: string, planCode: string, enabled: boolean) =>
-    apiClient.put('/admin/pricing/data-disable', { provider, planCode, enabled }).then(r => r.data),
+  setAirtimePricing: (provider: string, marginPct: number, approval?: AdminApprovalPayload) =>
+    apiClient.put('/admin/pricing/airtime', { provider, marginPct, ...(approval || {}) }).then(r => r.data),
+  setDataMargin: (provider: string, marginPct: number, approval?: AdminApprovalPayload) =>
+    apiClient.put('/admin/pricing/data-margin', { provider, marginPct, ...(approval || {}) }).then(r => r.data),
+  setDataPlanPrice: (provider: string, planCode: string, sellPrice: number | null, approval?: AdminApprovalPayload) =>
+    apiClient.put('/admin/pricing/data', { provider, planCode, sellPrice, ...(approval || {}) }).then(r => r.data),
+  setDataPlanEnabled: (provider: string, planCode: string, enabled: boolean, approval?: AdminApprovalPayload) =>
+    apiClient.put('/admin/pricing/data-disable', { provider, planCode, enabled, ...(approval || {}) }).then(r => r.data),
   getKyc: (params?: { status?: string; page?: number; limit?: number }) =>
     apiClient.get('/admin/kyc', { params }).then(r => r.data),
-  decideKyc: (id: string, body: { approve: boolean; reason?: string }) =>
-    apiClient.post(`/admin/kyc/${id}/decision`, body).then(r => r.data),
-  broadcastMessage: (body: { title: string; body: string; type?: string; data?: any }) =>
-    apiClient.post('/admin/broadcast-message', body).then(r => r.data),
+  decideKyc: (id: string, body: { approve: boolean; reason?: string }, approval?: AdminApprovalPayload) =>
+    apiClient.post(`/admin/kyc/${id}/decision`, { ...body, ...(approval || {}) }).then(r => r.data),
+  broadcastMessage: (body: { title: string; body: string; type?: string; data?: any }, approval?: AdminApprovalPayload) =>
+    apiClient.post('/admin/broadcast-message', { ...body, ...(approval || {}) }).then(r => r.data),
   getBroadcastHistory: (params?: { page?: number; limit?: number }) =>
     apiClient.get('/admin/broadcast-message-history', { params }).then(r => r.data),
 

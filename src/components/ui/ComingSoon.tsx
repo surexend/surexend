@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Rocket, X, Check, Bell, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useTheme } from '@/context/ThemeContext'
@@ -24,6 +24,7 @@ interface ComingSoonProps {
 export default function ComingSoon({ open, onClose, title, subtitle, features, eta, notifyEmail }: ComingSoonProps) {
   const { colors, variant } = useTheme()
   const isGold = variant === 'gold'
+  const reduceMotion = useReducedMotion()
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
 
@@ -77,8 +78,8 @@ export default function ComingSoon({ open, onClose, title, subtitle, features, e
                     }}
                   >
                     <motion.div
-                      animate={{ y: [0, -3, 0] }}
-                      transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                      animate={reduceMotion ? undefined : { y: [0, -3, 0] }}
+                      transition={reduceMotion ? undefined : { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
                     >
                       <Rocket className="w-5 h-5" style={{ color: colors.primary }} />
                     </motion.div>

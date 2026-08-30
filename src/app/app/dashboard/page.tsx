@@ -1,11 +1,11 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check, RefreshCcw, Crown } from 'lucide-react'
+import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Tag, Sparkles, Trophy, ChevronDown, Check, RefreshCcw, Crown, ShieldCheck, Fingerprint } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { walletAPI, transactionAPI, userAPI, conversionAPI, campaignsAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
@@ -13,9 +13,9 @@ import { useTheme } from '@/context/ThemeContext'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 import CurrencyFlag from '@/components/CurrencyFlag'
 import ComingSoon from '@/components/ui/ComingSoon'
+import UserAvatar from '@/components/ui/UserAvatar'
 import { useLite } from '@/lib/lite'
 import { useBackLayer } from '@/context/BackNavigationContext'
-import toast from 'react-hot-toast'
 
 // recharts is heavy (~130KB gz) — load it only when charts actually render.
 const ChartArea = dynamic(() => import('@/components/ChartArea'), { ssr: false })
@@ -53,6 +53,7 @@ export default function DashboardPage() {
   const { variant, colors } = useTheme()
   const isGold = variant === 'gold'
   const { lite } = useLite()
+  const reduceMotion = useReducedMotion()
   const [showBalance, setShowBalance] = useState(true)
   // 'USD' = crypto wallet (USDC), 'LOCAL' = local currency wallet (NGN/GHS/etc)
   const [walletView, setWalletView] = useState<'USD' | 'LOCAL'>('USD')
@@ -63,9 +64,7 @@ export default function DashboardPage() {
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
   const [showSendModal, setShowSendModal] = useState(false)
   const [showFundModal, setShowFundModal] = useState(false)
-  const [showVBAModal, setShowVBAModal] = useState(false)
   const [showBankComingSoon, setShowBankComingSoon] = useState(false)
-  const [copiedVBA, setCopiedVBA] = useState(false)
   const [avatar, setAvatar] = useState<string | null>(null)
   const [showMarketPicker, setShowMarketPicker] = useState(false)
   const queryClient = useQueryClient()
@@ -78,17 +77,13 @@ export default function DashboardPage() {
 
 
   // Back handler for modals — closes the top-most open modal on back press
-  const hasOpenDashboardLayer = showBankComingSoon || showVBAModal || showFundModal || showSendModal || showLocalCurrencyPicker || showMarketPicker
+  const hasOpenDashboardLayer = showBankComingSoon || showFundModal || showSendModal || showLocalCurrencyPicker || showMarketPicker
 
   useBackLayer(
     hasOpenDashboardLayer,
     useCallback(() => {
       if (showBankComingSoon) {
         setShowBankComingSoon(false)
-        return
-      }
-      if (showVBAModal) {
-        setShowVBAModal(false)
         return
       }
       if (showFundModal) {
@@ -107,7 +102,7 @@ export default function DashboardPage() {
         setShowMarketPicker(false)
         return
       }
-    }, [showBankComingSoon, showVBAModal, showFundModal, showSendModal, showLocalCurrencyPicker, showMarketPicker]),
+    }, [showBankComingSoon, showFundModal, showSendModal, showLocalCurrencyPicker, showMarketPicker]),
     20
   )
 
@@ -315,12 +310,26 @@ export default function DashboardPage() {
     if (profile?.currencyDisplay) setSelectedLocalCurrency(profile.currencyDisplay)
   }, [profile?.currencyDisplay])
 
-  const copyVBA = () => {
-    navigator.clipboard.writeText('9824018420')
-    setCopiedVBA(true)
-    toast.success('Account number copied!')
-    setTimeout(() => setCopiedVBA(false), 2000)
-  }
+  const securityHealth = [
+    {
+      label: 'PIN',
+      value: profile?.pinSet ? 'Ready' : 'Set up',
+      ok: !!profile?.pinSet,
+      icon: ShieldCheck,
+    },
+    {
+      label: 'Biometrics',
+      value: profile?.passkeysEnabled ? 'Enabled' : 'Optional',
+      ok: !!profile?.passkeysEnabled,
+      icon: Fingerprint,
+    },
+    {
+      label: 'KYC',
+      value: String(profile?.kycStatus || 'Unverified').replace(/_/g, ' '),
+      ok: String(profile?.kycStatus || '').toUpperCase() === 'VERIFIED',
+      icon: Check,
+    },
+  ]
 
   const { data: txData, isLoading: isLoadingTx } = useQuery({
     queryKey: ['recentTransactions'],
@@ -388,13 +397,12 @@ export default function DashboardPage() {
           leaderboard badge never crowds the name out */}
       <div className="flex items-center justify-between gap-3 py-2.5 px-3.5 rounded-xl liquid-glass border border-white/10">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-white/20 flex-shrink-0 shadow-md bg-[#212429]">
-            {avatar ? (
-              <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
-            ) : (
-              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" alt="Avatar" className="w-full h-full object-cover" />
-            )}
-          </div>
+          <UserAvatar
+            src={avatar}
+            name={`${profile?.firstName || ''} ${profile?.lastName || ''}`}
+            className="w-9 h-9 sm:w-11 sm:h-11 flex-shrink-0"
+            initialsClassName="text-xs sm:text-sm"
+          />
           <div className="min-w-0">
             <p className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider mb-0.5">
               Welcome back
@@ -436,11 +444,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Live rates ticker — USDC/USD + USD to every supported local currency */}
-      <div className="w-full overflow-hidden bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-lg py-1.5 flex items-center">
-        <motion.div 
-          className="flex whitespace-nowrap text-xs text-[#94A3B8] gap-8 px-4"
-          animate={{ x: [0, -400] }}
-          transition={{ repeat: Infinity, duration: 15, ease: 'linear' }}
+      <div className={`w-full bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-lg py-1.5 flex items-center ${reduceMotion || lite ? 'overflow-x-auto' : 'overflow-hidden'}`}>
+        <motion.div
+          className="flex whitespace-nowrap text-xs text-[#94A3B8] gap-8 px-4 min-w-max"
+          animate={reduceMotion || lite ? undefined : { x: [0, -420] }}
+          transition={reduceMotion || lite ? undefined : { repeat: Infinity, duration: 18, ease: 'linear' }}
         >
           <span>USDC/USD: <strong className="text-white">${(liveSpotRef.current['USDC'] ?? 1).toFixed(4)}</strong> <span className="text-[#10B981]">pegged</span></span>
           {AFRICAN_CURRENCIES.slice(0, 8).map((c) => (
@@ -552,6 +560,19 @@ export default function DashboardPage() {
                 <RefreshCcw className="w-3 h-3" />
               </button>
             </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-white">
+                Available {walletView === 'USD'
+                  ? `$${Math.max(0, (balanceData?.usdBalance ?? 0) - (balanceData?.lockedBalance ?? 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : `${LOCAL_CURRENCIES.find(c => c.code === selectedLocalCurrency)?.symbol || '₦'}${((balanceData?.localBalances?.[selectedLocalCurrency] ?? 0) || (selectedLocalCurrency === 'NGN' ? (balanceData?.ngnBalance ?? 0) : 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              </span>
+              {walletView === 'USD' && (balanceData?.lockedBalance ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
+                  Locked ${(balanceData?.lockedBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -612,6 +633,34 @@ export default function DashboardPage() {
             </div>
             <span className="text-xs font-semibold text-white group-hover:text-[var(--text)] transition-colors text-center">Bills</span>
           </Link>
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.025] p-3.5">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#64748B]">Account health</p>
+              <p className="text-xs text-[#94A3B8] mt-1">The same trust cues users expect from a premium fintech app.</p>
+            </div>
+            <Link href="/app/profile" className="text-[11px] font-bold" style={{ color: colors.primary }}>
+              Review
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {securityHealth.map((item) => {
+              const Icon = item.icon
+              return (
+                <div key={item.label} className="rounded-2xl border border-white/8 bg-black/20 px-3 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center border border-white/10 bg-white/[0.05] flex-shrink-0">
+                    <Icon className="w-4 h-4" style={{ color: item.ok ? colors.primary : '#94A3B8' }} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-[#64748B] font-bold">{item.label}</p>
+                    <p className="text-sm font-semibold text-white truncate">{item.value}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </motion.div>
 

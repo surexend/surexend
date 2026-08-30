@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { adminAPI } from '@/lib/api'
+import { adminAPI, type AdminApprovalPayload } from '@/lib/api'
 import { ArrowLeft, Ban, CheckCircle2, ShieldCheck, Plus, Trash2, Users, Gift } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { AdminTransactionDetailModal } from '@/components/AdminTransactionDetailModal'
+import AdminStepUpModal from '@/components/admin/AdminStepUpModal'
 
 export default function AdminUserDetailPage() {
   const { id } = useParams()
@@ -25,6 +26,12 @@ export default function AdminUserDetailPage() {
   const [creditCurrency, setCreditCurrency] = useState('USDC')
   const [creditNote, setCreditNote] = useState('')
   const [crediting, setCrediting] = useState(false)
+  const [approvalOpen, setApprovalOpen] = useState(false)
+  const [approvalTitle, setApprovalTitle] = useState('Confirm admin action')
+  const [approvalDescription, setApprovalDescription] = useState('Approve this sensitive admin action with your PIN or biometric.')
+  const [approvalActionLabel, setApprovalActionLabel] = useState('Approve action')
+  const [approvalLoading, setApprovalLoading] = useState(false)
+  const approvalActionRef = useRef<((approval: AdminApprovalPayload) => Promise<void>) | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -42,31 +49,98 @@ export default function AdminUserDetailPage() {
   }
   if (!data) return <p className="text-[#94A3B8] text-sm py-20 text-center">User not found.</p>
 
+  const requestApproval = (
+    config: { title: string; description: string; actionLabel: string },
+    action: (approval: AdminApprovalPayload) => Promise<void>,
+  ) => {
+    setApprovalTitle(config.title)
+    setApprovalDescription(config.description)
+    setApprovalActionLabel(config.actionLabel)
+    approvalActionRef.current = action
+    setApprovalOpen(true)
+  }
+
+  const handleApproval = async (approval: AdminApprovalPayload) => {
+    if (!approvalActionRef.current) return
+    setApprovalLoading(true)
+    try {
+      await approvalActionRef.current(approval)
+      setApprovalOpen(false)
+      approvalActionRef.current = null
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || 'Admin action failed')
+    } finally {
+      setApprovalLoading(false)
+    }
+  }
+
   const save = () => {
-    adminAPI.updateUser(String(id), { role, email, phone }).then(() => toast.success('Saved')).catch(() => toast.error('Save failed (email/phone may be in use)'))
+    requestApproval(
+      {
+        title: 'Approve profile changes',
+        description: 'Confirm this role, email, or phone update for the selected account.',
+        actionLabel: 'Save changes',
+      },
+      async (approval) => {
+        const updated = await adminAPI.updateUser(String(id), { role, email, phone }, approval)
+        setData((d: any) => ({ ...d, ...updated }))
+        toast.success('Saved')
+      },
+    )
   }
   const toggle = (body: any) => {
-    adminAPI.updateUser(String(id), body).then(() => { toast.success('User updated'); setData((d: any) => ({ ...d, ...body })) }).catch(() => toast.error('Update failed'))
+    requestApproval(
+      {
+        title: 'Approve account status change',
+        description: 'This action changes the user’s access or moderation status.',
+        actionLabel: 'Apply change',
+      },
+      async (approval) => {
+        await adminAPI.updateUser(String(id), body, approval)
+        toast.success('User updated')
+        setData((d: any) => ({ ...d, ...body }))
+      },
+    )
   }
   const handleDelete = () => {
     if (!window.confirm(`Delete ${data?.firstName} ${data?.lastName} permanently? This removes their wallet, transactions and documents.`)) return
-    adminAPI.deleteUser(String(id))
-      .then(() => { toast.success('User deleted'); router.push('/admin/users') })
-      .catch((e: any) => toast.error(e?.response?.data?.message || 'Delete failed'))
+    requestApproval(
+      {
+        title: 'Approve permanent deletion',
+        description: 'This deletes the user record and linked data. Use only when the account must be removed permanently.',
+        actionLabel: 'Delete user',
+      },
+      async (approval) => {
+        await adminAPI.deleteUser(String(id), approval)
+        toast.success('User deleted')
+        router.push('/admin/users')
+      },
+    )
   }
   const credit = () => {
     const amount = parseFloat(creditAmount)
     if (!amount || amount <= 0) return toast.error('Enter a valid amount')
-    setCrediting(true)
-    adminAPI.creditUser(String(id), { amount, currency: creditCurrency, note: creditNote || undefined })
-      .then((res: any) => {
-        toast.success(`${amount} ${creditCurrency} credited (${res.reference})`)
-        setCreditOpen(false)
-        setCreditAmount(''); setCreditNote('')
-        adminAPI.getUser(String(id)).then(setData)
-      })
-      .catch((e: any) => toast.error(e?.response?.data?.message || 'Credit failed'))
-      .finally(() => setCrediting(false))
+    requestApproval(
+      {
+        title: 'Approve manual wallet credit',
+        description: 'Confirm this manual balance credit after validating the off-platform funding event.',
+        actionLabel: 'Credit wallet',
+      },
+      async (approval) => {
+        setCrediting(true)
+        try {
+          const res: any = await adminAPI.creditUser(String(id), { amount, currency: creditCurrency, note: creditNote || undefined }, approval)
+          toast.success(`${amount} ${creditCurrency} credited (${res.reference})`)
+          setCreditOpen(false)
+          setCreditAmount('')
+          setCreditNote('')
+          const refreshed = await adminAPI.getUser(String(id))
+          setData(refreshed)
+        } finally {
+          setCrediting(false)
+        }
+      },
+    )
   }
   const w = data.wallet
   const fmt = (n: number) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
@@ -293,6 +367,20 @@ export default function AdminUserDetailPage() {
       {selectedTxId && (
         <AdminTransactionDetailModal id={selectedTxId} onClose={() => setSelectedTxId(null)} />
       )}
+
+      <AdminStepUpModal
+        open={approvalOpen}
+        title={approvalTitle}
+        description={approvalDescription}
+        actionLabel={approvalActionLabel}
+        loading={approvalLoading || crediting}
+        onClose={() => {
+          if (approvalLoading || crediting) return
+          approvalActionRef.current = null
+          setApprovalOpen(false)
+        }}
+        onApprove={handleApproval}
+      />
     </div>
   )
 }

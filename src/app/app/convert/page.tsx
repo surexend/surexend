@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowUpDown, CheckCircle2, ChevronDown, Check, X, Globe, ArrowDown, Wallet } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -12,6 +12,7 @@ import CurrencyFlag from '@/components/CurrencyFlag'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
 import PinKeypad from '@/components/PinKeypad'
 import { useBackLayer } from '@/context/BackNavigationContext'
+import FlowProgress from '@/components/ui/FlowProgress'
 
 const USD_ASSET = { code: 'USD', name: 'US Dollar', symbol: '$', flag: '💵', countryCode: 'US' }
 
@@ -28,7 +29,6 @@ export default function ConvertPage() {
   const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null)
   const [currencySearch, setCurrencySearch] = useState('')
   const [step, setStep] = useState(1)
-  const [pin, setPin] = useState(['', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
 
@@ -43,7 +43,6 @@ export default function ConvertPage() {
       return
     }
     setStep(1)
-    setPin(['', '', '', ''])
   }, [step, router]), 30)
 
   // ── Real balances ────────────────────────────────────────────────────────
@@ -86,17 +85,8 @@ export default function ConvertPage() {
   // Balances per asset
   const localBalances: Record<string, number> = balanceData?.localBalances || {}
   const usdBalance = balanceData?.usdBalance ?? 0
-  const realNgn = balanceData?.realNgn ?? 0
   const testnetNgn = balanceData?.testnetNgn ?? 0
   const getAssetBalance = (code: string) => code === 'USD' ? usdBalance : (localBalances[code] || 0)
-
-  // Live/static rate for the "to" currency
-  const { data: ratesData } = useQuery({
-    queryKey: ['rates', toCode],
-    queryFn: () => conversionAPI.getRates(toCode),
-    enabled: !!toCode && toCode !== 'USD',
-  })
-  const toRate = ratesData?.rate || (toCode === 'USD' ? 1 : 1)
 
   // Client-side preview estimate (server is authoritative on execution)
   const numAmount = parseFloat(amount) || 0
@@ -137,24 +127,6 @@ export default function ConvertPage() {
     setStep(2)
   }
 
-  const handlePinInput = (digit: string) => {
-    const emptyIndex = pin.findIndex(p => p === '')
-    if (emptyIndex === -1) return
-    const newPin = [...pin]
-    newPin[emptyIndex] = digit
-    setPin(newPin)
-    if (emptyIndex === 3) executeConversion(newPin.join(''))
-  }
-
-  const handlePinDelete = () => {
-    const lastFilled = pin.map(p => p !== '').lastIndexOf(true)
-    if (lastFilled !== -1) {
-      const newPin = [...pin]
-      newPin[lastFilled] = ''
-      setPin(newPin)
-    }
-  }
-
   const executeConversion = async (finalPin?: string, passkeyToken?: string) => {
     setIsLoading(true)
     try {
@@ -169,7 +141,6 @@ export default function ConvertPage() {
         setStep(1)
         router.push('/app/settings/change-pin')
       }
-      setPin(['', '', '', ''])
     } finally {
       setIsLoading(false)
     }
@@ -178,12 +149,21 @@ export default function ConvertPage() {
   const resetAll = () => {
     setStep(1)
     setAmount('')
-    setPin(['', '', '', ''])
     setResult(null)
   }
 
+  const flowStep = step >= 3 ? 3 : step
+
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 py-4 max-w-md mx-auto flex flex-col pb-28 sm:pb-36">
+      <div className="mb-4 space-y-3">
+        <div>
+          <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">Convert with full rate visibility</h1>
+          <p className="text-sm text-[#94A3B8] mt-1">Review the exact direction, live estimate, and resulting wallet balance before you approve.</p>
+        </div>
+        <FlowProgress steps={['Quote', 'Approve', 'Complete']} current={flowStep} />
+      </div>
+
       <AnimatePresence mode="wait">
         {/* ─── STEP 1: Swap UI ─── */}
         {step === 1 && (
@@ -195,7 +175,7 @@ export default function ConvertPage() {
             className="space-y-3"
           >
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 gap-3">
               <div>
                 <h2 className="text-lg font-extrabold text-white flex items-center gap-2">
                   <ArrowUpDown className="w-5 h-5 flex-shrink-0" style={{ color: colors.primary }} />
@@ -206,6 +186,21 @@ export default function ConvertPage() {
               <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap flex-shrink-0">
                 Instant
               </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">From</p>
+                <p className="text-sm font-semibold text-white mt-1">{fromCode}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">To</p>
+                <p className="text-sm font-semibold text-white mt-1">{toCode}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
+                <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Fee</p>
+                <p className="text-sm font-semibold text-white mt-1">{preview ? `${preview.feeUsd.toFixed(2)} USD` : '0.00 USD'}</p>
+              </div>
             </div>
 
             {/* FROM Card */}
