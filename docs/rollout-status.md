@@ -226,3 +226,18 @@ clean because post-fix writes round at the minor grid.
 > clobbered the previous fix (GHS was reverted when KES was written).
 > `normalize --apply` now groups local fixes per user and issues a single
 > UPDATE per user.
+
+### 2026-08-30 — LIVE DB RECONCILIATION CLEAN ✅
+After baseline (`apply`, 10 pairs) + dust normalization (`normalize --apply`,
+GHS/KES/USDC/USDT) the final `npm run ledger:db -- report` against the
+Supabase pooler prints:
+
+```
+Ledger entries: 20 | User ledger accounts: 10 | currencies with entries: 7
+RECONCILIATION CLEAN: double-entry holds and ledger matches legacy floats.
+```
+
+The ledger is now the verified source of truth for all existing balances.
+Next: merge ledger code to main → deploy → set `LEDGER_READS_ENABLED=true` →
+verify dashboard/send/convert → re-run report. (E2E runbook chain-legs still
+to be exercised on testnet before enabling on real funds at mainnet.)

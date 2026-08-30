@@ -586,3 +586,22 @@ BASELINE-<uid>-<ccy> pairs in one transaction, `full` chains report→dry-run→
 apply→report. `docs/ledger-db-ops.workflow.yml` runs it on demand with the
 SXDB_URL repo secret. Run `full` on the real DB before setting
 LEDGER_READS_ENABLED=true.
+
+## 2026-08-30 (6) — LIVE DB ledger baseline + normalization: RECONCILIATION CLEAN
+
+Ran the pg runner against the real Supabase pooler (SXDB_URL provided by user;
+sandbox cannot reach it, user executes locally):
+1. `ledger:db -- report`: 0 entries (ledger brand new).
+2. `ledger:db -- apply`: wrote 20 rows = 10 BASELINE-<uid>-<ccy> pairs
+   (USDC/USDT/NGN/CVE/GHS/KES/XOF on 4 wallets, 70 wallets scanned).
+3. `report` found 4 sub-minor dust floats (GHS/KES/USDC/USDT on one user) —
+   pre-existing unrounded conversion dust; ledger values were correct.
+4. `normalize --apply` fixed them (one gotcha: localBalances JSON is per-user,
+   so a per-user grouped UPDATE was required; scalar columns fine).
+5. FINAL `report`: `RECONCILIATION CLEAN: double-entry holds and ledger
+   matches legacy floats.` (20 entries, 10 user accounts, 7 currencies).
+
+Ledger is now the verified baseline for all existing balances. Next steps:
+merge to main, deploy, LEDGER_READS_ENABLED=true, verify, re-report. Note the
+DB has no default for LedgerEntry.id (Prisma generates uuid client-side) and
+JSON localBalances updates must be per-user single-write.
