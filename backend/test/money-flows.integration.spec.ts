@@ -51,7 +51,6 @@ import { ReferralsService } from '../src/referrals/referrals.service';
 import { WebhooksService } from '../src/webhooks/webhooks.service';
 import { BillsService } from '../src/bills/bills.service';
 import { fromMinor, decimalsFor, roundTo } from '../src/common/money';
-import type { TransactionClient } from '@prisma/client';
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
@@ -256,7 +255,7 @@ class FakePrisma {
 
   auditLog = { findFirst: async () => null, create: async (args: any) => ({ id: nextId('audit'), ...args.data }) };
 
-  async $transaction<T>(fn: (tx: TransactionClient) => Promise<T>): Promise<T> {
+  async $transaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
     return fn(this as any);
   }
 
