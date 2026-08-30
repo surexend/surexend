@@ -7,7 +7,7 @@ import { CctpService } from './cctp.service';
 import { DepositMonitorService } from './deposit-monitor.service';
 import { getLocalRate } from '../common/currency.constants';
 import { LedgerService } from '../common/ledger.service';
-import { toMinor, fromMinor } from '../common/money';
+import { toMinor, fromMinor, roundMinor } from '../common/money';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
@@ -124,12 +124,14 @@ export class WalletsService implements OnModuleInit {
     return 'registered';
   }
 
-  // Spendable USDC = gross on-chain USDC minus the CONVERT ledger (conversions
-  // out of USD are bookkeeping with no chain movement, so they reduce what is
-  // actually spendable). Mirrors the netting done in getBalance so sends and
-  // the balance screen always agree.
-  private async computeSpendableUsdc(userId: string, wallet: any, amount: number): Promise<number> {
-    let spendable = wallet.usdcBalance || 0;
+  // Spendable USD = the combined USDC + USDT float (the app is USDC-only, but
+  // legacy USDT balances must still be spendable so funds are never stranded in
+  // an invisible bucket), minus the CONVERT ledger (conversions out of USD are
+  // bookkeeping with no chain movement, so they reduce what is actually
+  // spendable). Mirrors the netting done in getBalance so sends and the
+  // balance screen always agree.
+  private async computeSpendableUsd(userId: string, wallet: any, amount: number): Promise<number> {
+    let spendable = (wallet.usdcBalance || 0) + (wallet.usdtBalance || 0);
     try {
       const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
         `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
@@ -587,12 +589,22 @@ export class WalletsService implements OnModuleInit {
                   return;
                 }
 
+                // A reservation taken from legacy USDT ($) must be refunded to
+                // the same bucket the send was debited from. Rows predating the
+                // split (no reserveSplit metadata) were 100% USDC — refund
+                // those as before.
+                const reserveSplit = (pendingMatch.metadata as any)?.reserveSplit;
+                const refundUsdt = reserveSplit
+                  ? Math.min(Math.max(0, Number(reserveSplit.usdt) || 0), totalLocked)
+                  : 0;
+                const refundUsdc = Math.max(0, totalLocked - refundUsdt);
                 await prisma.wallet.update({
                   where: { userId: pendingMatch.userId },
                   data:
                     status === 'FAILED'
                       ? {
-                          usdcBalance: { increment: totalLocked },
+                          usdcBalance: { increment: refundUsdc },
+                          usdtBalance: { increment: refundUsdt },
                           lockedBalance: { decrement: totalLocked },
                         }
                       : { lockedBalance: { decrement: totalLocked } },
@@ -824,7 +836,7 @@ export class WalletsService implements OnModuleInit {
     // Explicit select so a not-yet-migrated localBalances column can't 500 this endpoint
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId },
-      select: { id: true, lockedBalance: true, usdcBalance: true }
+      select: { id: true, lockedBalance: true, usdcBalance: true, usdtBalance: true }
     });
 
     // All funds sit on Arc (native USDC), regardless of where the recipient's
@@ -860,6 +872,7 @@ export class WalletsService implements OnModuleInit {
         select: {
           id: true,
           usdcBalance: true,
+          usdtBalance: true,
           lockedBalance: true,
           user: { select: { firstName: true, lastName: true, surexTag: true } },
         },
@@ -876,13 +889,18 @@ export class WalletsService implements OnModuleInit {
     // Internal transfers use the wallet ledger directly. Do not run the
     // conversion reconciliation SQL here: a malformed legacy conversion row
     // must never prevent a peer-to-peer balance transfer.
-    let spendable = Math.max(0, Number(senderWallet.usdcBalance || 0) - Number(senderWallet.lockedBalance || 0));
+    // USDC-only product: the sender's legacy USDT is spendable too (drained
+    // first) and the recipient always receives USDC.
+    let spendable = Math.max(0, (Number(senderWallet.usdcBalance || 0) + Number(senderWallet.usdtBalance || 0)) - Number(senderWallet.lockedBalance || 0));
     // LEDGER READS: the pre-transaction sanity check must use the same source
     // of truth as the locked in-transaction check below, or the gate rejects
     // with stale floats before the ledger-aware check is ever reached.
     if (this.ledgerReads()) {
-      const ledgerUsdc = await this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDC'), 'USDC');
-      spendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') - Number(senderWallet.lockedBalance || 0));
+      const [ledgerUsdc, ledgerUsdt] = await Promise.all([
+        this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDC'), 'USDC'),
+        this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDT'), 'USDT'),
+      ]);
+      spendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') + fromMinor(ledgerUsdt, 'USDT') - Number(senderWallet.lockedBalance || 0));
     }
     if (spendable < sendAmount) {
       const reason = `Insufficient balance. You can send up to ${spendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`;
@@ -896,29 +914,41 @@ export class WalletsService implements OnModuleInit {
       // INSIDE the transaction. Checking against the unlocked pre-read allowed
       // concurrent sends to all pass validation and drive the balance negative.
       // Ordered by id to keep a deterministic lock order (deadlock-safe).
-      const locked = await prisma.$queryRaw<Array<{ id: string; usdcBalance: number; lockedBalance: number }>>`
-        SELECT "id", "usdcBalance", "lockedBalance"
+      const locked = await prisma.$queryRaw<Array<{ id: string; usdcBalance: number; usdtBalance: number; lockedBalance: number }>>`
+        SELECT "id", "usdcBalance", "usdtBalance", "lockedBalance"
         FROM "Wallet"
         WHERE "id" IN (${senderWallet.id}, ${recipientWallet.id})
         ORDER BY "id"
         FOR UPDATE`;
       const lockedSender = locked.find((w) => w.id === senderWallet.id);
       if (!lockedSender) throw new BadRequestException('Wallet not found.');
-      let lockedSpendable = Math.max(0, Number(lockedSender.usdcBalance || 0) - Number(lockedSender.lockedBalance || 0));
+      let lockedSpendable = Math.max(0, (Number(lockedSender.usdcBalance || 0) + Number(lockedSender.usdtBalance || 0)) - Number(lockedSender.lockedBalance || 0));
       if (this.ledgerReads()) {
-        const ledgerUsdc = await this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDC'), 'USDC', prisma);
-        lockedSpendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') - Number(lockedSender.lockedBalance || 0));
+        const [ledgerUsdc, ledgerUsdt] = await Promise.all([
+          this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDC'), 'USDC', prisma),
+          this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDT'), 'USDT', prisma),
+        ]);
+        lockedSpendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') + fromMinor(ledgerUsdt, 'USDT') - Number(lockedSender.lockedBalance || 0));
       }
       if (lockedSpendable < sendAmount) {
         throw new BadRequestException(`Insufficient balance. You can send up to ${lockedSpendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`);
       }
+      // Recipient always receives USDC. If the sender holds legacy USDT, drain
+      // it first and swap it through the treasury so the ledger per-currency
+      // books reflect exactly what moved (same pattern conversions use).
+      const sendTotal = roundMinor(sendAmount, 'USDC');
+      const debitUsdt = Math.min(sendTotal, Number(lockedSender.usdtBalance || 0));
+      const debitUsdc = sendTotal - debitUsdt;
       await prisma.wallet.update({
         where: { id: senderWallet.id },
-        data: { usdcBalance: { decrement: sendAmount } },
+        data: {
+          usdcBalance: { decrement: debitUsdc },
+          usdtBalance: { decrement: debitUsdt },
+        },
       });
       await prisma.wallet.update({
         where: { id: recipientWallet.id },
-        data: { usdcBalance: { increment: sendAmount } },
+        data: { usdcBalance: { increment: sendTotal } },
       });
       await this.transactionsService.createTransaction(prisma, {
         userId: senderUserId,
@@ -935,12 +965,35 @@ export class WalletsService implements OnModuleInit {
           recipientName,
           delivery: 'internal',
           method: 'surex-tag',
+          sourceSplit: { usdt: debitUsdt, usdc: debitUsdc },
         },
       });
-      await this.ledger.record([
-        { transferId: reference, account: this.ledger.userAccount(senderUserId, 'USDC'), currency: 'USDC', amountMinor: -toMinor(sendAmount, 'USDC'), reference, kind: 'SEND' },
-        { transferId: reference, account: this.ledger.userAccount(recipient.id, 'USDC'), currency: 'USDC', amountMinor: toMinor(sendAmount, 'USDC'), reference, kind: 'RECEIVE' },
-      ], prisma);
+      // One row per (transferId, account, currency) — the ledger's unique key.
+      // The treasury legs are NETTED to a single USDC row: it receives
+      // debitUsdc and pays sendTotal, so its net is -debitUsdt (the swapped
+      // amount); when the sender pays purely in USDC the treasury nets zero and
+      // drops out, giving the classic 2-row transfer.
+      const ledgerEntries: any[] = [];
+      if (debitUsdt > 0) {
+        ledgerEntries.push(
+          { transferId: reference, account: this.ledger.userAccount(senderUserId, 'USDT'), currency: 'USDT', amountMinor: -toMinor(debitUsdt, 'USDT'), reference, kind: 'SEND_SOURCE' },
+          { transferId: reference, account: this.ledger.treasuryAccount('USDT'), currency: 'USDT', amountMinor: toMinor(debitUsdt, 'USDT'), reference, kind: 'SEND_SWAP' },
+        );
+      }
+      if (debitUsdc > 0) {
+        ledgerEntries.push(
+          { transferId: reference, account: this.ledger.userAccount(senderUserId, 'USDC'), currency: 'USDC', amountMinor: -toMinor(debitUsdc, 'USDC'), reference, kind: 'SEND_SOURCE' },
+        );
+      }
+      if (debitUsdt > 0) {
+        ledgerEntries.push(
+          { transferId: reference, account: this.ledger.treasuryAccount('USDC'), currency: 'USDC', amountMinor: -toMinor(debitUsdt, 'USDC'), reference, kind: 'SEND_SWAP_SETTLEMENT' },
+        );
+      }
+      ledgerEntries.push(
+        { transferId: reference, account: this.ledger.userAccount(recipient.id, 'USDC'), currency: 'USDC', amountMinor: toMinor(sendTotal, 'USDC'), reference, kind: 'RECEIVE' },
+      );
+      await this.ledger.record(ledgerEntries, prisma);
       await this.transactionsService.createTransaction(prisma, {
         userId: recipient.id,
         type: 'RECEIVE',
@@ -1052,10 +1105,11 @@ export class WalletsService implements OnModuleInit {
     const destNet = destinationNetwork.toUpperCase();
     const delivery = destNet === 'ARC' ? 'native' : 'cctp';
 
-    // Same spendable figure the app shows: gross on-chain USDC, net of the
-    // CONVERT ledger (conversions out of USD reduce spendable without any chain
-    // movement). Fail fast with a clear message instead of a Circle rejection.
-    const spendable = await this.computeSpendableUsdc(userId, wallet, amount);
+    // Same spendable figure the app shows: the combined USD pool (USDC + legacy
+    // USDT), net of the CONVERT ledger (conversions out of USD reduce spendable
+    // without any chain movement). Fail fast with a clear message instead of a
+    // Circle rejection.
+    const spendable = await this.computeSpendableUsd(userId, wallet, amount);
     if (spendable < amount) {
       const reason = `Insufficient balance. You can send up to ${spendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`;
       await this.recordRejectedSend({ userId, amount, fee: 0, toAddress, destNet, delivery, errorReason: reason, failedAt: 'send-initiation' });
@@ -1098,14 +1152,14 @@ export class WalletsService implements OnModuleInit {
     // first and the balance re-checked afterwards, which let real USDC leave a
     // wallet while the ledger recorded nothing.
     await this.prisma.$transaction(async (prisma) => {
-      const lockedRows = await prisma.$queryRawUnsafe<Array<{ id: string; usdcBalance: number; lockedBalance: number }>>(
-        `SELECT "id", "usdcBalance", "lockedBalance" FROM "Wallet" WHERE "id" = $1 FOR UPDATE`,
+      const lockedRows = await prisma.$queryRawUnsafe<Array<{ id: string; usdcBalance: number; usdtBalance: number; lockedBalance: number }>>(
+        `SELECT "id", "usdcBalance", "usdtBalance", "lockedBalance" FROM "Wallet" WHERE "id" = $1 FOR UPDATE`,
         wallet.id
       );
       const lw = lockedRows[0];
       if (!lw) throw new BadRequestException('Wallet not found.');
 
-      let lockedSpendable = lw.usdcBalance || 0;
+      let lockedSpendable = (lw.usdcBalance || 0) + (lw.usdtBalance || 0);
       try {
         const netRows = await prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
           `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
@@ -1129,23 +1183,33 @@ export class WalletsService implements OnModuleInit {
       }
       lockedSpendable = Math.max(0, lockedSpendable - (lw.lockedBalance || 0));
 
-      // LEDGER READS: the ledger is authoritative for spendable USDC (it
-      // already nets conversions), read inside the same locked transaction so
-      // a concurrent conversion cannot interleave. Falls back to the float net
+      // LEDGER READS: the ledger is authoritative for spendable USD (it already
+      // nets conversions), read inside the same locked transaction so a
+      // concurrent conversion cannot interleave. Falls back to the float net
       // if the ledger has no rows for this account yet.
       if (this.ledgerReads()) {
-        const ledgerUsdc = await this.ledger.balanceOf(this.ledger.userAccount(userId, 'USDC'), 'USDC', prisma);
-        lockedSpendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') - (lw.lockedBalance || 0));
+        const [ledgerUsdc, ledgerUsdt] = await Promise.all([
+          this.ledger.balanceOf(this.ledger.userAccount(userId, 'USDC'), 'USDC', prisma),
+          this.ledger.balanceOf(this.ledger.userAccount(userId, 'USDT'), 'USDT', prisma),
+        ]);
+        lockedSpendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') + fromMinor(ledgerUsdt, 'USDT') - (lw.lockedBalance || 0));
       }
 
       if (lockedSpendable < totalDebit) {
         throw new BadRequestException(`Insufficient balance for this send. Spendable: ${lockedSpendable.toFixed(2)} USDC.`);
       }
 
+      // USDC-only product: legacy USDT is reserved too, drained first, swapped
+      // through the treasury. The split is stored on the PENDING row so every
+      // refund path (chain rejection, Circle FAILED settlement) restores the
+      // exact currencies that were taken.
+      const reserveUsdt = Math.min(roundMinor(totalDebit, 'USDC'), Number(lw.usdtBalance || 0));
+      const reserveUsdc = roundMinor(totalDebit, 'USDC') - reserveUsdt;
       await prisma.wallet.update({
         where: { id: wallet.id },
         data: {
-          usdcBalance: { decrement: totalDebit },
+          usdcBalance: { decrement: reserveUsdc },
+          usdtBalance: { decrement: reserveUsdt },
           lockedBalance: { increment: totalDebit }
         }
       });
@@ -1164,16 +1228,38 @@ export class WalletsService implements OnModuleInit {
           destinationNetwork: destNet,
           cctp: delivery === 'cctp',
           delivery,
-          txState: 'INITIATED'
+          txState: 'INITIATED',
+          reserveSplit: { usdt: reserveUsdt, usdc: reserveUsdc },
         }
       });
       // The external destination is represented as a control account. The fee
-      // is retained by the platform so every currency remains balanced.
-      await this.ledger.record([
-        { transferId: reference, account: this.ledger.userAccount(userId, 'USDC'), currency: 'USDC', amountMinor: -toMinor(totalDebit, 'USDC'), reference, kind: 'SEND' },
+      // is retained by the platform so every currency remains balanced. USDT
+      // drained from the sender is swapped into the treasury's USDC pool.
+      // One row per (transferId, account, currency): the treasury's USDC legs
+      // are NETTED into a single row ((reserveUsdc in) - (amount + fee out) =
+      // -reserveUsdt); zero when the sender paid purely in USDC.
+      const reserveEntries: any[] = [];
+      if (reserveUsdt > 0) {
+        reserveEntries.push(
+          { transferId: reference, account: this.ledger.userAccount(userId, 'USDT'), currency: 'USDT', amountMinor: -toMinor(reserveUsdt, 'USDT'), reference, kind: 'SEND_SOURCE' },
+          { transferId: reference, account: this.ledger.treasuryAccount('USDT'), currency: 'USDT', amountMinor: toMinor(reserveUsdt, 'USDT'), reference, kind: 'SEND_SWAP' },
+        );
+      }
+      if (reserveUsdc > 0) {
+        reserveEntries.push(
+          { transferId: reference, account: this.ledger.userAccount(userId, 'USDC'), currency: 'USDC', amountMinor: -toMinor(reserveUsdc, 'USDC'), reference, kind: 'SEND_SOURCE' },
+        );
+      }
+      if (reserveUsdt > 0) {
+        reserveEntries.push(
+          { transferId: reference, account: this.ledger.treasuryAccount('USDC'), currency: 'USDC', amountMinor: -toMinor(reserveUsdt, 'USDC'), reference, kind: 'SEND_SWAP_SETTLEMENT' },
+        );
+      }
+      reserveEntries.push(
         { transferId: reference, account: this.ledger.externalAccount(destNet, 'USDC'), currency: 'USDC', amountMinor: toMinor(amount, 'USDC'), reference, kind: 'EXTERNAL_SEND' },
         ...(fee > 0 ? [{ transferId: reference, account: this.ledger.feesAccount('USDC'), currency: 'USDC', amountMinor: toMinor(fee, 'USDC'), reference, kind: 'FEE' }] : []),
-      ], prisma);
+      );
+      await this.ledger.record(reserveEntries, prisma);
     });
 
     // ── 2. Submit to the chain ──────────────────────────────────────────────
@@ -1302,11 +1388,18 @@ export class WalletsService implements OnModuleInit {
         });
         const release = Math.min(totalDebit, Math.max(0, Number(walletRow?.lockedBalance || 0)));
         if (release > 0) {
+          // Restore the exact currencies the reservation took (legacy rows have
+          // no reserveSplit — they were 100% USDC).
+          const reserveSplit = (tx.metadata as any)?.reserveSplit;
+          const refundUsdt = reserveSplit
+            ? Math.min(Math.max(0, Number(reserveSplit.usdt) || 0), release)
+            : 0;
           await prisma.wallet.update({
             where: { id: walletId },
             data: {
               lockedBalance: { decrement: release },
-              usdcBalance: { increment: release },
+              usdcBalance: { increment: release - refundUsdt },
+              usdtBalance: { increment: refundUsdt },
             },
           });
         }

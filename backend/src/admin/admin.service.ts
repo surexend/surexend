@@ -276,8 +276,10 @@ export class AdminService {
   async creditBalance(userId: string, adminId: string, body: { amount: number; currency?: string; note?: string }) {
     const amount = Number(body.amount);
     if (!amount || amount <= 0) throw new Error('Amount must be greater than zero');
-    const currency = (body.currency || 'USDT').toUpperCase();
-    if (!['USDT', 'USDC', 'NGN'].includes(currency)) throw new Error('Currency must be USDT, USDC or NGN');
+    // USDC-only product: manual credits must never recreate the invisible USDT
+    // bucket. NGN credits real naira; USDC credits the stablecoin wallet.
+    const currency = (body.currency || 'USDC').toUpperCase();
+    if (!['USDC', 'NGN'].includes(currency)) throw new Error('Currency must be USDC or NGN');
 
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
     if (!wallet) throw new Error('Wallet not found');
@@ -304,8 +306,7 @@ export class AdminService {
           });
         }
       } else {
-        const field = currency === 'USDT' ? 'usdtBalance' : 'usdcBalance';
-        await prisma.wallet.update({ where: { userId }, data: { [field]: { increment: amount } } });
+        await prisma.wallet.update({ where: { userId }, data: { usdcBalance: { increment: amount } } });
       }
 
       await this.ledger.record([

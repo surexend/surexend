@@ -68,7 +68,7 @@ export class WebhooksService {
         await this.notificationsService.sendTransactionEmail(
           user.email,
           transaction.amount,
-          'USDT',
+          'USDC',
           reference,
           'Conversion & Withdrawal'
         );
@@ -224,20 +224,26 @@ export class WebhooksService {
             return;
           }
 
-          const symbol = (transaction.tokenSymbol || 'USDT').toUpperCase();
+          // USDC-only pipeline: every Circle inbound is booked as USDC. A
+          // missing or legacy-labeled tokenSymbol (old USDT rows, null fields)
+          // must NEVER fall into the invisible USDT bucket again — that split
+          // is exactly what made balances show in the app but not be spendable.
+          const rawSymbol = (transaction.tokenSymbol || 'USDC').toUpperCase();
+          const USDC_FAMILY = new Set(['USDC', 'USDT', 'USD']);
+          if (!USDC_FAMILY.has(rawSymbol)) {
+            this.logger.warn(`Circle inbound ${txId} carries non-stable symbol '${rawSymbol}'; skipping (USDC-only pipeline)`);
+            return;
+          }
+          if (rawSymbol !== 'USDC') {
+            this.logger.warn(`Circle inbound ${txId} symbol '${rawSymbol}' booked as USDC (USDC-only pipeline)`);
+          }
+          const symbol = 'USDC';
 
           await this.prisma.$transaction(async (prisma) => {
-            if (symbol === 'USDC') {
-              await prisma.wallet.update({
-                where: { id: wallet.id },
-                data: { usdcBalance: { increment: amount } }
-              });
-            } else {
-              await prisma.wallet.update({
-                where: { id: wallet.id },
-                data: { usdtBalance: { increment: amount } }
-              });
-            }
+            await prisma.wallet.update({
+              where: { id: wallet.id },
+              data: { usdcBalance: { increment: amount } }
+            });
 
             await this.transactionsService.createTransaction(prisma, {
               userId: wallet.userId,
@@ -247,7 +253,7 @@ export class WebhooksService {
               fee: 0,
               currency: symbol,
               reference,
-              metadata: { txId, blockchain }
+              metadata: { txId, blockchain, ...(rawSymbol !== 'USDC' ? { originalSymbol: rawSymbol } : {}) }
             });
 
             await this.ledger.record([
@@ -334,9 +340,15 @@ export class WebhooksService {
             );
           }
         } else if (txStatus === 'FAILED') {
-          // Refund locked balance back to active balance. Initiation debits
-          // usdcBalance and locks amount + network fee, so restore exactly that.
+          // Refund locked balance back to active balance. Initiation may have
+          // debited USDT + USDC (legacy USDT drain), so restore EACH bucket
+          // exactly as it was taken; rows without a reserveSplit were 100%
+          // USDC and are refunded as before.
           const totalLocked = (matchingTx.amount || 0) + (matchingTx.fee || 0);
+          const reserveSplit = (matchingTx.metadata as any)?.reserveSplit;
+          const refundUsdt = reserveSplit
+            ? Math.min(Math.max(0, Number(reserveSplit.usdt) || 0), totalLocked)
+            : 0;
           const errorReason = transaction.errorMessage
             || transaction.reason
             || transaction.errorCode
@@ -344,8 +356,9 @@ export class WebhooksService {
           await this.prisma.$transaction(async (prisma) => {
             await prisma.wallet.update({
               where: { userId: matchingTx.userId },
-              data: { 
-                usdcBalance: { increment: totalLocked },
+              data: {
+                usdcBalance: { increment: totalLocked - refundUsdt },
+                usdtBalance: { increment: refundUsdt },
                 lockedBalance: { decrement: totalLocked }
               }
             });

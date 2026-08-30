@@ -350,11 +350,11 @@ export class ConversionsService {
         return localBalances;
       })();
 
-      // Deduct from source. USD is a combined pool: consume USDT first, then
-      // USDC. The ledger records BOTH floats exactly as they move so
-      // per-currency reconciliation stays clean (previously the whole debit
-      // was booked as USDC while the float drew from USDT first -> permanent
-      // drift on every conversion).
+      // Deduct from source. USD is a combined pool: consume USDT first (legacy
+      // balances only), then USDC. The ledger records BOTH floats exactly as
+      // they move so per-currency reconciliation stays clean (previously the
+      // whole debit was booked as USDC while the float drew from USDT first ->
+      // permanent drift on every conversion).
       const deductUsdt = fromCode === 'USD' ? Math.min(debitTotal, usdtPool) : 0;
       const deductUsdc = fromCode === 'USD' ? Math.max(0, debitTotal - deductUsdt) : 0;
       if (fromCode === 'USD') {
@@ -367,16 +367,16 @@ export class ConversionsService {
         });
       }
 
-      // Credit destination. USD credits always land in USDT, so the ledger
-      // credits USDT too (matching the float movement exactly). Booking the
-      // credit as the pseudo-currency 'USD' would split the ledger from the
-      // float forever — caught by the money-flow integration spec.
-      const creditedUsdt = toCode === 'USD' ? roundMinor(result.receiveAmount, 'USDT') : 0;
-      const creditCcy = toCode === 'USD' ? 'USDT' : toCode;
+      // Credit destination. The app is USDC-only (Circle owns USDC; USDT was
+      // removed from the product), so every USD credit lands in USDC — never
+      // USDT. That is what makes the whole USD pool spendable by the tag-send
+      // and cross-chain paths, which only move USDC.
+      const creditedUsdc = toCode === 'USD' ? roundMinor(result.receiveAmount, 'USDC') : 0;
+      const creditCcy = toCode === 'USD' ? 'USDC' : toCode;
       if (toCode === 'USD') {
         await prisma.wallet.update({
           where: { id: w.id },
-          data: { usdtBalance: { increment: creditedUsdt } }
+          data: { usdcBalance: { increment: creditedUsdc } }
         });
       }
 
@@ -425,8 +425,8 @@ export class ConversionsService {
         ];
       });
       entries.push(
-        { transferId: ledgerReference, account: this.ledger.treasuryAccount(creditCcy), currency: creditCcy, amountMinor: -toMinor(toCode === 'USD' ? creditedUsdt : localCredit, creditCcy), reference: ledgerReference, kind: 'CONVERSION_SETTLEMENT' },
-        { transferId: ledgerReference, account: this.ledger.userAccount(userId, creditCcy), currency: creditCcy, amountMinor: toMinor(toCode === 'USD' ? creditedUsdt : localCredit, creditCcy), reference: ledgerReference, kind: 'CONVERSION_CREDIT' },
+        { transferId: ledgerReference, account: this.ledger.treasuryAccount(creditCcy), currency: creditCcy, amountMinor: -toMinor(toCode === 'USD' ? creditedUsdc : localCredit, creditCcy), reference: ledgerReference, kind: 'CONVERSION_SETTLEMENT' },
+        { transferId: ledgerReference, account: this.ledger.userAccount(userId, creditCcy), currency: creditCcy, amountMinor: toMinor(toCode === 'USD' ? creditedUsdc : localCredit, creditCcy), reference: ledgerReference, kind: 'CONVERSION_CREDIT' },
       );
       await this.ledger.record(entries, prisma);
 

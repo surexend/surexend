@@ -124,9 +124,11 @@ export class ReferralsService {
         select: { id: true }
       });
       if (!wallet) return;
+      // USDC-only product (Circle owns USDC; USDT was removed from the app), so
+      // commissions never land in the invisible USDT bucket again.
       await prisma.wallet.update({
         where: { id: wallet.id },
-        data: { usdtBalance: { increment: commissionAmount } }
+        data: { usdcBalance: { increment: commissionAmount } }
       });
 
       await this.transactionsService.createTransaction(prisma, {
@@ -135,15 +137,15 @@ export class ReferralsService {
         status: 'COMPLETED',
         amount: commissionAmount,
         fee: 0,
-        currency: 'USDT',
+        currency: 'USDC',
         reference
       });
 
       // The commission is minted by the platform (treasury pays the referral),
       // so record both sides of the credit in the double-entry ledger.
       await this.ledger.record([
-        { transferId: reference, account: this.ledger.treasuryAccount('USDT'), currency: 'USDT', amountMinor: -toMinor(commissionAmount, 'USDT'), reference, kind: 'REFERRAL_EARNING_SOURCE' },
-        { transferId: reference, account: this.ledger.userAccount(referrerId, 'USDT'), currency: 'USDT', amountMinor: toMinor(commissionAmount, 'USDT'), reference, kind: 'REFERRAL_EARNING' },
+        { transferId: reference, account: this.ledger.treasuryAccount('USDC'), currency: 'USDC', amountMinor: -toMinor(commissionAmount, 'USDC'), reference, kind: 'REFERRAL_EARNING_SOURCE' },
+        { transferId: reference, account: this.ledger.userAccount(referrerId, 'USDC'), currency: 'USDC', amountMinor: toMinor(commissionAmount, 'USDC'), reference, kind: 'REFERRAL_EARNING' },
       ], prisma);
     });
   }
