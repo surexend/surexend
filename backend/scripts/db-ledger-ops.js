@@ -7,6 +7,7 @@
  *   node scripts/db-ledger-ops.js dry-run     # preview baseline rows
  *   node scripts/db-ledger-ops.js apply       # write BASELINE-<uid>-<ccy> rows
  *   node scripts/db-ledger-ops.js normalize   # repair sub-minor float dust (--apply)
+ *   node scripts/db-ledger-ops.js diag        # USD pool / USDT split / locked balance check
  *   node scripts/db-ledger-ops.js full        # report -> dry-run -> apply -> report
  *
  * The baseline logic mirrors scripts/backfill-ledger-baseline.js and the report
@@ -298,6 +299,66 @@ async function runNormalize(client, apply) {
   return 0;
 }
 
+/** USD-pool diagnostic: tells you exactly WHY balance shown != amount sendable.
+ *  Combines the wallet float split (USDC vs USDT vs locked), the per-currency
+ *  ledger, and any stuck PENDING send reservations. Read-only. */
+async function runDiag(client) {
+  const pending = await client.query(`SELECT COUNT(*)::int AS n FROM "Transaction" WHERE type='SEND' AND status='PENDING'`);
+  console.log(`PENDING SEND rows globally: ${pending.rows[0].n}`);
+  console.log('If a PENDING send is sitting there, its amount is locked (spendable = balance - locked).\n');
+
+  const wallets = await client.query(`
+    SELECT u.email, w."userId", w."usdcBalance", w."usdtBalance", w."lockedBalance",
+           w."pendingBalance", w."realLocalBalance", w."localBalances"
+    FROM "Wallet" w LEFT JOIN "User" u ON u.id = w."userId"
+    WHERE w."usdcBalance" <> 0 OR w."usdtBalance" <> 0 OR w."lockedBalance" <> 0 OR w."pendingBalance" <> 0
+    ORDER BY (w."usdcBalance" + w."usdtBalance") DESC`);
+
+  let exit = 0;
+  for (const w of wallets.rows) {
+    const usdc = Number(w.usdcBalance || 0);
+    const usdt = Number(w.usdtBalance || 0);
+    const locked = Number(w.lockedBalance || 0);
+    const combined = usdc + usdt;
+    const spendable = Math.max(0, combined - locked);
+    console.log('==============================================================');
+    console.log(`${w.email || '(no email)'}  user=${w.userId}`);
+    console.log(`  floats: USDC=${usdc.toFixed(6)}  USDT=${usdt.toFixed(6)}  locked=${locked.toFixed(6)}`);
+    console.log(`  dashboard (USDC + USDT)     = ${combined.toFixed(6)}`);
+    console.log(`  sendable  (USDC + USDT - locked) = ${spendable.toFixed(6)}`);
+    if (locked > 0) {
+      console.log(`  !!! lockedBalance > 0 — spendable is ${locked.toFixed(6)} less than the dashboard pool.`);
+      exit = 1;
+    }
+    if (usdt > 0) {
+      console.log(`  !!! USDT bucket non-zero — this USD is invisible to old send paths.`);
+      exit = 1;
+    }
+    const ledger = await client.query(
+      `SELECT currency, SUM("amountMinor")::text AS minor FROM "LedgerEntry" WHERE account LIKE $1 GROUP BY currency`,
+      [`user:${w.userId}:%`],
+    );
+    const ledgerStr = ledger.rows.map((r) => `${r.currency}=${Number(BigInt(r.minor)) / 10 ** decimalsFor(r.currency)}`).join('  ') || '(no ledger rows)';
+    console.log(`  ledger user accounts: ${ledgerStr}`);
+    const txs = await client.query(`
+      SELECT type, status, amount, fee, currency, reference, "createdAt", metadata
+      FROM "Transaction"
+      WHERE "userId"=$1 AND type IN ('SEND','CONVERT')
+      ORDER BY "createdAt" DESC LIMIT 8`, [w.userId]);
+    for (const t of txs.rows) {
+      const m = t.metadata || {};
+      const split = m.reserveSplit ? ` split=USDT ${m.reserveSplit.usdt}/USDC ${m.reserveSplit.usdc}` : '';
+      console.log(`  tx ${new Date(t.createdAt).toISOString()} ${t.type} ${t.status} ${t.amount} ${t.currency} ${t.reference}${m.txState ? ' state=' + m.txState : ''}${m.errorReason ? ' err=' + m.errorReason : ''}${m.from ? ' from=' + m.from : ''}${m.to ? ' to=' + m.to : ''}${split}`);
+    }
+  }
+  if (exit) {
+    console.log('\n=> Non-zero USDT bucket or stale locked reservation found — see the flows above.');
+  } else {
+    console.log('\nCombined pool equals spendable; no USDT split and no stuck lock.');
+  }
+  return exit;
+}
+
 async function main() {
   const mode = (process.argv[2] || 'report').toLowerCase();
   const client = await connect();
@@ -314,7 +375,8 @@ async function main() {
     if (mode === 'report') { process.exitCode = await runReport(client); return; }
     if (mode === 'dry-run' || mode === 'apply') { process.exitCode = await runBaseline(client, mode === 'apply'); return; }
     if (mode === 'normalize') { process.exitCode = await runNormalize(client, process.argv.includes('--apply')); return; }
-    console.error(`Unknown mode '${mode}' (report | dry-run | apply | normalize | full).`);
+    if (mode === 'diag') { process.exitCode = await runDiag(client); return; }
+    console.error(`Unknown mode '${mode}' (report | dry-run | apply | normalize | diag | full).`);
     process.exitCode = 2;
   } finally {
     await client.end();

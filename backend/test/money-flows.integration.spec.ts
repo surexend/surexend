@@ -429,6 +429,48 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     await env.expectLedgerMatchesFloat('u1', USD_COINS);
   });
 
+  it('Row 1b — Circle inbound without tokenSymbol books USDC, never the USDT bucket', async () => {
+    env.seedUser('u1', 'alice.sx');
+    const wId = await env.seedWallet('u1', { usdcBalance: 0 });
+    env.prisma.walletAddresses.push({ id: 'wa1', walletId: wId, network: 'ETHEREUM', address: '0xAAA111' });
+
+    await env.webhooks.processCircle({
+      notificationType: 'transactions.inbound',
+      notification: {
+        state: 'COMPLETED', blockchain: 'ETH-SEPOLIA', txHash: '0xdep1b', id: 'circ1b',
+        amount: '2.5', destinationAddress: '0xaaa111', // no tokenSymbol
+      },
+    });
+
+    const w = env.wallet('u1');
+    expect(w.usdcBalance).toBeCloseTo(2.5, 6);
+    expect(w.usdtBalance).toBeCloseTo(0, 8);
+    expect(await env.ledgerOf('user:u1:USDC', 'USDC')).toBe(2500000n);
+    expect(await env.ledgerOf('user:u1:USDT', 'USDT')).toBe(0n);
+    await env.expectDoubleEntry();
+    await env.expectLedgerMatchesFloat('u1', USD_COINS);
+  });
+
+  it('Row 1c — Circle inbound with legacy USDT symbol still lands in USDC (USDC-only pipeline)', async () => {
+    env.seedUser('u1', 'alice.sx');
+    const wId = await env.seedWallet('u1', { usdcBalance: 0 });
+    env.prisma.walletAddresses.push({ id: 'wa1', walletId: wId, network: 'ETHEREUM', address: '0xAAA111' });
+
+    await env.webhooks.processCircle({
+      notificationType: 'transactions.inbound',
+      notification: {
+        state: 'COMPLETED', blockchain: 'ETH-SEPOLIA', txHash: '0xdep1c', id: 'circ1c',
+        amount: '1.25', destinationAddress: '0xaaa111', tokenSymbol: 'USDT',
+      },
+    });
+
+    const w = env.wallet('u1');
+    expect(w.usdcBalance).toBeCloseTo(1.25, 6);
+    expect(w.usdtBalance).toBeCloseTo(0, 8);
+    await env.expectDoubleEntry();
+    await env.expectLedgerMatchesFloat('u1', USD_COINS);
+  });
+
   it('Row 2 — Flutterwave bank credit updates NGN float, real pool AND ledger', async () => {
     env.seedUser('u1', 'alice.sx');
     await env.seedWallet('u1');
@@ -452,18 +494,20 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     await env.expectLedgerMatchesFloat('u1', ['NGN']);
   });
 
-  it('Row 3 — Referral commission credits USDT float AND ledger from treasury', async () => {
+  it('Row 3 — Referral commission credits USDC (not USDT) AND ledger from treasury', async () => {
     env.seedUser('u1', 'alice.sx');
     await env.seedWallet('u1');
 
-    await env.referrals.processReferralEarning('u1', 10); // 0.3% = 0.03 USDT
+    await env.referrals.processReferralEarning('u1', 10); // 0.3% = 0.03 USDC
 
     const w = env.wallet('u1');
-    expect(w.usdtBalance).toBeCloseTo(0.03, 8);
-    expect(await env.ledgerOf('platform:treasury:USDT', 'USDT')).toBe(-30000n);
-    expect(await env.ledgerOf('user:u1:USDT', 'USDT')).toBe(30000n);
+    expect(w.usdcBalance).toBeCloseTo(0.03, 8);
+    expect(w.usdtBalance).toBeCloseTo(0, 8); // USDT bucket stays empty — USDC-only product
+    expect(await env.ledgerOf('platform:treasury:USDC', 'USDC')).toBe(-30000n);
+    expect(await env.ledgerOf('user:u1:USDC', 'USDC')).toBe(30000n);
     const earning = env.prisma.transactionRows.find(t => t.type === 'REFERRAL_EARNING');
     expect(earning?.status).toBe('COMPLETED');
+    expect(earning?.currency).toBe('USDC');
     await env.expectDoubleEntry();
     await env.expectLedgerMatchesFloat('u1', USD_COINS);
   });
@@ -507,20 +551,61 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     await env.expectLedgerMatchesFloat('u1', ['USDT', 'USDC', 'NGN']);
   });
 
-  it('Row 6 — Conversion NGN->USD credits USDT and debits NGN with matching ledger', async () => {
+  it('Row 6 — Conversion NGN->USD credits USDC (not USDT) and debits NGN with matching ledger', async () => {
     env.seedUser('u1', 'alice.sx');
     await env.seedWallet('u1', { usdtBalance: 0, localBalances: { NGN: 100 }, realLocalBalance: 0 });
 
     await env.conversions.execute('u1', 'NGN', 'USD', 25);
 
     const w = env.wallet('u1');
-    const received = w.usdtBalance || 0;
+    const received = w.usdcBalance || 0;
     expect(w.localBalances.NGN).toBe(75);
+    expect(w.usdtBalance).toBeCloseTo(0, 8); // USD credits land in USDC only
     expect(received).toBeGreaterThan(0);
     expect(await env.ledgerOf('user:u1:NGN', 'NGN')).toBe(7500n); // baseline 100 - 25
-    expect(await env.ledgerOf('user:u1:USDT', 'USDT')).toBe(BigInt(Math.round(received * 1e6)));
+    expect(await env.ledgerOf('user:u1:USDC', 'USDC')).toBe(BigInt(Math.round(received * 1e6)));
     await env.expectDoubleEntry();
-    await env.expectLedgerMatchesFloat('u1', ['USDT', 'NGN']);
+    await env.expectLedgerMatchesFloat('u1', ['USDC', 'NGN']);
+  });
+
+  it('Row 6b — USD->local conversion still drains legacy USDT first, then USDC', async () => {
+    env.seedUser('u1', 'alice.sx');
+    await env.seedWallet('u1', { usdtBalance: 28.43, usdcBalance: 0.69, localBalances: {}, realLocalBalance: 0 });
+
+    await env.conversions.execute('u1', 'USD', 'NGN', 3);
+
+    const w = env.wallet('u1');
+    expect(w.usdtBalance).toBeCloseTo(25.43, 6);
+    expect(w.usdcBalance).toBeCloseTo(0.69, 6);
+    await env.expectDoubleEntry();
+    await env.expectLedgerMatchesFloat('u1', ['USDT', 'USDC', 'NGN']);
+  });
+
+  it('Row 6c — tag send spends legacy USDT first; recipient always receives USDC', async () => {
+    // The exact production bug: dashboard showed $29.12 (28.43 USDT + 0.69
+    // USDC) but a $1 send was rejected because the gate only saw 0.69 USDC.
+    env.seedUser('u1', 'alice.sx');
+    env.seedUser('u2', 'bob.sx');
+    await env.seedWallet('u1', { usdtBalance: 28.43, usdcBalance: 0.69 });
+    await env.seedWallet('u2', { usdcBalance: 0 });
+
+    const result = await env.wallets.sendCrypto('u1', '@bob.sx', 1, 'SUREX_TAG') as { success: boolean };
+
+    expect(result.success).toBe(true);
+    const s = env.wallet('u1');
+    const r = env.wallet('u2');
+    expect(s.usdtBalance).toBeCloseTo(27.43, 6); // USDT drained first
+    expect(s.usdcBalance).toBeCloseTo(0.69, 6);  // USDC untouched
+    expect(r.usdcBalance).toBeCloseTo(1, 6);     // recipient gets USDC
+    expect(r.usdtBalance).toBeCloseTo(0, 6);
+    // Ledger mirrors both legs + the treasury swap, per currency.
+    expect(await env.ledgerOf('user:u1:USDT', 'USDT')).toBe(27430000n);
+    expect(await env.ledgerOf('user:u1:USDC', 'USDC')).toBe(690000n);
+    expect(await env.ledgerOf('platform:treasury:USDT', 'USDT')).toBe(1000000n);
+    expect(await env.ledgerOf('user:u2:USDC', 'USDC')).toBe(1000000n);
+    await env.expectDoubleEntry();
+    await env.expectLedgerMatchesFloat('u1', USD_COINS);
+    await env.expectLedgerMatchesFloat('u2', USD_COINS);
   });
 
   it('Row 7 — Circle outbound FAILED refunds float and reverses the ledger exactly', async () => {
@@ -561,6 +646,49 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     expect(refunds).toHaveLength(3);
     expect(refunds.map(r => r.kind).sort()).toEqual(['EXTERNAL_SEND_REFUND', 'FEE_REFUND', 'SEND_REFUND']);
     expect(env.prisma.transactionRows.find(t => t.reference === ref)?.status).toBe('FAILED');
+    await env.expectDoubleEntry();
+    await env.expectLedgerMatchesFloat('u1', USD_COINS);
+  });
+
+  it('Row 7b — Circle outbound FAILED refunds a split reservation to its exact buckets', async () => {
+    env.seedUser('u1', 'alice.sx');
+    await env.seedWallet('u1', { usdtBalance: 28.43, usdcBalance: 5 });
+    const ref = 'SEND-ARC-SPLIT';
+    // Reserve exactly as sendCrossChainFromArc does for a USDT-heavy wallet:
+    // 1 USDT + 0.01 USDC = 1.01 total locked, split recorded on the row.
+    await env.prisma.wallet.update({
+      where: { userId: 'u1' },
+      data: { usdtBalance: { decrement: 1 }, usdcBalance: { decrement: 0.01 }, lockedBalance: { increment: 1.01 } },
+    });
+    // Netted treasury form: one row per (transferId, account, currency).
+    // Treasury USDC net = (in 0.01) - (out 1.00 + 0.01 fee) = -1.00.
+    await env.ledger.record([
+      { transferId: ref, account: 'user:u1:USDT', currency: 'USDT', amountMinor: -1000000n, reference: ref, kind: 'SEND_SOURCE' },
+      { transferId: ref, account: 'platform:treasury:USDT', currency: 'USDT', amountMinor: 1000000n, reference: ref, kind: 'SEND_SWAP' },
+      { transferId: ref, account: 'user:u1:USDC', currency: 'USDC', amountMinor: -10000n, reference: ref, kind: 'SEND_SOURCE' },
+      { transferId: ref, account: 'platform:treasury:USDC', currency: 'USDC', amountMinor: -1000000n, reference: ref, kind: 'SEND_SWAP_SETTLEMENT' },
+      { transferId: ref, account: 'external:ETHEREUM:USDC', currency: 'USDC', amountMinor: 1000000n, reference: ref, kind: 'EXTERNAL_SEND' },
+      { transferId: ref, account: 'platform:fees:USDC', currency: 'USDC', amountMinor: 10000n, reference: ref, kind: 'FEE' },
+    ]);
+    env.prisma.transactionRows.push({
+      id: 'tx-send-split', userId: 'u1', type: 'SEND', status: 'PENDING', amount: 1, fee: 0.01,
+      currency: 'USDC', reference: ref, metadata: { reserveSplit: { usdt: 1, usdc: 0.01 } }, createdAt: new Date(),
+    });
+
+    await env.webhooks.processCircle({
+      notificationType: 'transactions.outbound',
+      notification: {
+        state: 'FAILED', refId: ref, blockchain: 'ARC-TESTNET', txHash: '0xburn2',
+        id: 'circ-o2', amount: '0', errorMessage: 'Reverted on chain',
+      },
+    });
+
+    const w = env.wallet('u1');
+    expect(w.usdtBalance).toBeCloseTo(28.43, 6);   // USDT bucket restored exactly
+    expect(w.usdcBalance).toBeCloseTo(5, 6);       // USDC bucket restored exactly
+    expect(w.lockedBalance).toBe(0);
+    expect(await env.ledgerOf('user:u1:USDT', 'USDT')).toBe(28430000n);
+    expect(await env.ledgerOf('user:u1:USDC', 'USDC')).toBe(5000000n);
     await env.expectDoubleEntry();
     await env.expectLedgerMatchesFloat('u1', USD_COINS);
   });
