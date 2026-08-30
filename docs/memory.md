@@ -572,3 +572,17 @@ found & fixed three real bugs:
 
 Verification: tsc exit 0; jest 7 suites / 72 tests green. Real-chain E2E
 (runbook rows with Circle/Arc/Flutterwave) still requires testnet credentials.
+
+## 2026-08-30 (5) — DB ops runner for live baseline/report
+
+The sandbox cannot reach PostgreSQL directly (egress TLS allowlist resets the
+Supabase pooler handshake) and cannot run the Prisma query engine, so
+`backend/scripts/db-ledger-ops.js` (`npm run ledger:db`) re-implements
+ledger-drift-report + backfill-ledger-baseline on plain `pg` (new deps: pg).
+It refuses to run if Wallet/LedgerEntry/Transaction/User tables are missing;
+`report` is read-only (double-entry invariant + per-user ledger/float drift,
+exit 1 on drift), `dry-run` previews, `apply` writes idempotent
+BASELINE-<uid>-<ccy> pairs in one transaction, `full` chains report→dry-run→
+apply→report. `.github/workflows/ledger-db-ops.yml` runs it on demand with the
+SXDB_URL repo secret. Run `full` on the real DB before setting
+LEDGER_READS_ENABLED=true.

@@ -156,3 +156,23 @@ reversal cannot double-fire.
   engine access, then baseline the existing prod DB with
   `prisma migrate resolve --applied` before switching `prestart:prod` from
   `prisma db push` to `prisma migrate deploy`.
+
+----
+
+### Ops runner for a live database (no Prisma engine needed)
+`backend/scripts/db-ledger-ops.js` (`npm run ledger:db`) is a pure `pg`
+implementation of the report + baseline — it works on any machine with
+PostgreSQL egress (including GitHub Actions runners), so DB-backed verification
+does not depend on the Prisma query engine binary:
+
+```
+SXDB_URL=postgres://... node scripts/db-ledger-ops.js report   # read-only
+SXDB_URL=postgres://... node scripts/db-ledger-ops.js dry-run  # preview baseline
+SXDB_URL=postgres://... node scripts/db-ledger-ops.js apply    # write baselines (idempotent)
+SXDB_URL=postgres://... node scripts/db-ledger-ops.js full     # report -> dry-run -> apply -> report
+```
+
+`.github/workflows/ledger-db-ops.yml` wraps this as a manual
+(`workflow_dispatch`) job using the `SXDB_URL` repo secret — set the secret,
+then run the workflow with mode `report` / `dry-run` / `apply` / `full` from
+the Actions tab (or `gh workflow run ledger-db-ops.yml -f mode=full`).
