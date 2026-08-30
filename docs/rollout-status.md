@@ -181,3 +181,26 @@ the Actions tab (or `gh workflow run ledger-db-ops.yml -f mode=full`).
 > has no DB default — Prisma's `@default(uuid())` is generated client-side, so
 > raw SQL inserts MUST supply `id` themselves. `db-ledger-ops.js` does this
 > via `crypto.randomUUID()`.
+
+### 2026-08-30 — baseline APPLIED to the live DB
+`npm run ledger:db -- apply` on the Supabase pooler (70 wallets; ledger was
+empty): wrote 20 `LedgerEntry` rows = 10 idempotent baseline pairs:
+
+| user (:ccy) | minor units |
+|---|---|
+| 3537d5ca… :NGN | 30000 |
+| 861dd9ff… :USDC | 30000000 |
+| ca95eb49… :USDC | 15441074 |
+| caf36b4a… :USDC | 10788940 |
+| caf36b4a… :USDT | 333333 |
+| caf36b4a… :CVE | 22000 |
+| caf36b4a… :GHS | 3213 |
+| caf36b4a… :KES | 863 |
+| caf36b4a… :NGN | 6344700 |
+| caf36b4a… :XOF | 605 |
+
+Each pair: `external:legacy-baseline:<ccy>` ‑delta / `user:<id>:<ccy>` +delta.
+Pre-apply and post-apply `report` must print RECONCILIATION CLEAN. Remaining
+rollout: deploy the ledger-write/read code to production (merge branch → main),
+then set `LEDGER_READS_ENABLED=true`, verify dashboard/send/convert, re-check
+`report`.
