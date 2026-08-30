@@ -73,7 +73,11 @@ export default function DashboardPage() {
   const handleModalNavigate = (path: string) => {
     setShowSendModal(false)
     setShowFundModal(false)
-    router.push(path)
+    if (typeof window !== 'undefined') {
+      window.location.href = path
+    } else {
+      router.push(path)
+    }
   }
 
   // Back handler for modals — closes the top-most open modal on back press
