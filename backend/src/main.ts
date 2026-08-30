@@ -31,8 +31,52 @@ function assertRequiredEnv() {
   }
 }
 
+/**
+ * Refuse to boot on a network configuration we have never validated. The chain
+ * mappings are split across two places in the code: `NETWORK_TO_CHAIN` in
+ * cctp.service.ts (BridgeKit chains) and `getBlockchainName()` in
+ * wallets.service.ts (Circle blockchain strings, chosen by the CIRCLE_API_KEY
+ * prefix). A mainnet Circle key silently flips the SECOND mapping only —
+ * testnet BridgeChains + mainnet Circle blockchain names — which is exactly
+ * the mixed configuration that would let testnet assets masquerade as
+ * mainnet. Fail closed instead.
+ */
+function assertNetworkConfig() {
+  const circleKey = process.env.CIRCLE_API_KEY || '';
+  const circleIsMainnet = circleKey.startsWith('TEST_') === false && circleKey !== '';
+  const chainEnv = (process.env.CHAIN_ENV || 'testnet').toLowerCase();
+  const mainnetEnabled = process.env.MAINNET_ENABLED === 'true';
+
+  if (chainEnv !== 'testnet' && chainEnv !== 'mainnet') {
+    throw new Error(`Refusing to start: CHAIN_ENV must be 'testnet' or 'mainnet', got '${chainEnv}'.`);
+  }
+
+  if (mainnetEnabled || chainEnv === 'mainnet') {
+    if (!circleKey) {
+      throw new Error('Refusing to start: mainnet is enabled but CIRCLE_API_KEY is missing; a test key with mainnet enabled would mix testnet into the live mapping.');
+    }
+    if (!circleIsMainnet) {
+      throw new Error('Refusing to start: mainnet is enabled but CIRCLE_API_KEY has the TEST_ prefix. Mainnet is NOT yet reviewed/approved for this deployment.');
+    }
+    const rpc = process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network';
+    if (rpc.includes('testnet')) {
+      throw new Error('Refusing to start: mainnet is enabled but ARC_RPC_URL still points at testnet. Set the reviewed mainnet RPC.');
+    }
+    if (!process.env.ARC_USDC_CONTRACT_ADDRESS) {
+      throw new Error('Refusing to start: mainnet is enabled but ARC_USDC_CONTRACT_ADDRESS is not set. The default is the Arc TESTNET precompile address and must never be used for mainnet.');
+    }
+  } else if (circleIsMainnet) {
+    throw new Error(
+      'Refusing to start: CIRCLE_API_KEY does not have the TEST_ prefix but MAINNET_ENABLED is not true. ' +
+        'This mixed config was never validated (testnet BridgeChains + mainnet Circle blockchain names). ' +
+        'Either use a TEST_ key or enable mainnet with the full reviewed config — see docs/mainnet-config.md.',
+    );
+  }
+}
+
 async function bootstrap() {
   assertRequiredEnv();
+  assertNetworkConfig();
 
   // rawBody keeps the exact bytes a provider signed so webhook signatures can
   // be verified; re-serialising parsed JSON invalidates them.

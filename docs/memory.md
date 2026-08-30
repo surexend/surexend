@@ -462,3 +462,146 @@ typecheck + build.
 - Frontend `npm run typecheck` passes locally.
 - Building depends on reaching `fonts.googleapis.com` at build time. Self-host
   the fonts to remove that dependency.
+
+## 2026-08-30 — ledger rollout: closed all write gaps, made reconciliation monitorable
+
+Audit of the rollout checklist (`docs/rollout-status.md`) found the ledger was
+not complete: five money paths updated float balances with NO ledger entry, and
+conversions booked the entire USD debit as USDC while the float drew USDT first
+(permanent per-currency drift). All were fixed, additively:
+
+1. **`LedgerService.record()` is now atomic.** Replaced per-row `Promise.all`
+   with `createMany({ skipDuplicates: true })`. The old code could commit a
+   PARTIAL ledger transfer when one row conflicted (webhook replay), skewing
+   balances forever; `skipDuplicates` also self-heals missing rows.
+2. **`LedgerService.reverse(transferId)`** mirrors a transfer under
+   `<transferId>-REFUND` with negated amounts. Every refund path now calls it
+   (guarded by the PENDING status claim so it can never double-fire):
+   - webhook Circle outbound FAILED + syncCircleHistory FAILED settlement
+   - `releaseReservedSend` (chain rejection)
+   - bill failure refund
+3. **New ledger writes added:** Flutterwave bank credit, Circle inbound
+   deposit, referral commission (treasury → user USDT).
+4. **Conversion ledger now matches the float movement exactly** (USDT/USDC
+   split debit, USDT credit) instead of booking everything as USDC.
+5. **`LedgerReconciliationService` covers all currencies** (USDC, USDT, every
+   local via `localBalances` JSON + NGN fallback), compares at display
+   precision, and persists drift to `AuditLog` (`action='LEDGER_DRIFT'`,
+   deduped per hour / only when the mismatch changes) so monitoring can alert
+   without log scraping.
+6. **`npm run ledger:report`** (`scripts/ledger-drift-report.js`) renders the
+   same comparison plus the per-currency zero-sum double-entry invariant; exit
+   code 1 on drift. Runs locally/CI; use on testnet after each E2E pass.
+
+Verification: backend `npx tsc -p tsconfig.json --noEmit` exit 0 and `npx jest`
+42/42 green. NOTE: in this sandbox `prisma generate` cannot run (binaries.prisma.sh
+is unreachable); a temporary local typing stub
+(`backend/node_modules/.prisma/client/*`) was used for typecheck and jest. It
+is gitignored and never committed. On a machine with engine access, re-run
+`npx prisma generate` (which overwrites it) before trusting tsc.
+
+Still pending (rollout order): E2E testnet verification per path → gradual
+read switch to ledger (tag send → conversions → bills → cross-chain reserve →
+`getBalance()`) → stop float writes per path → checked-in Prisma migrations →
+column removal → mainnet config review (the `CHAIN_ENV`/`MAINNET_ENABLED` flags
+are currently dead code; mainnet needs a real value matrix + boot-time
+assertions).
+
+## 2026-08-30 (2) — testnet E2E runbook + mainnet-prep guard
+
+- `docs/testnet-e2e-runbook.md`: operator checklist for the unexecuted
+  testnet E2E leg (step 1) — 8 rows + failure legs + replay checks, expected
+  float/ledger deltas, receipt table, final `npm run ledger:report` gate.
+- `docs/mainnet-config.md` + `assertNetworkConfig()` in `main.ts`: boot-time
+  refusal on mixed testnet/mainnet config (non-test CIRCLE_API_KEY without
+  MAINNET_ENABLED; mainnet enabled with TEST_ key, testnet ARC RPC, or missing
+  ARC_USDC_CONTRACT_ADDRESS; unknown CHAIN_ENV). Current TEST_-key prod passes.
+  Mainnet remains NOT enabled.
+- Reconciliation service now has unit tests (drift persistence, dedupe,
+  local-currency/JSON-string/localBalance fallback, platform-account skip).
+- Checked-in migrations intentionally NOT attempted in the sandbox: Prisma CLI
+  needs binaries.prisma.sh (unreachable); hand-written baseline SQL is not
+  acceptable for a money product. Generate on an engine-capable machine and
+  baseline the live DB (`prisma migrate resolve --applied`) before flipping
+  `prestart:prod` to `migrate deploy`.
+
+## 2026-08-30 (3) — ledger read cutover: flag-gated implementation + baseline backfill
+
+- `LEDGER_READS_ENABLED` (config `app.ledger.reads`, default **false**) switches
+  balance READS to `LedgerEntry` when true, with a per-currency fallback to the
+  legacy float for currencies the ledger has no rows for — safe to enable
+  before backfill, per currency rather than all-or-nothing.
+- Read sites switched (flag-gated): `getBalance()` (USDC/USDT + all locals),
+  internal tag-send spendable, cross-chain send reserve, conversion checks
+  (USD pool + locals). Spendable reads run inside the same FOR UPDATE
+  transaction as the float lock (`ledger.balanceOf(..., prisma)` /
+  `balancesOfUser(userId, prisma)`).
+- `scripts/backfill-ledger-baseline.js` (`npm run ledger:baseline`, `--dry-run`)
+  seeds `BASELINE-<userId>-<ccy>` opening entries per wallet currency where
+  floatMinor != ledgerMinor — idempotent, double-entry balanced.
+- `LedgerService` gained `balancesOfUser()` (startsWith prefix) and tx-scoped
+  `balanceOf()`/`balancesOf()`.
+- Flow to go live: deploy flag-off → `ledger:baseline` → `ledger:report` clean
+  → set `LEDGER_READS_ENABLED=true` → verify dashboard/send/convert →
+  re-check report. Reversion = flip flag back (floats still written in both
+  modes). Still on floats: bills' `realLocalBalance` partition (by design),
+  pending/locked fields.
+
+## 2026-08-30 (4) — executed ledger verification: integration spec + 3 real fixes
+
+Wrote `backend/test/money-flows.integration.spec.ts` (18 cases, runs in CI):
+drives the actual WalletsService/ConversionsService/ReferralsService/
+WebhooksService/BillsService against an in-memory Prisma store (FakePrisma:
+wallet/ledger/transaction/conversion/billPayment/referral + $queryRaw FOR
+UPDATE emulation), mocks axios/ioredis and the Circle SDK boundary, and
+asserts per-currency double-entry zero-sum + ledger==float on every runbook
+row (deposits, tag send, conversions ×2, FAILED refund reverse, bill refund).
+`seedWallet` writes ledger baselines like the backfill script. Executed here;
+
+found & fixed three real bugs:
+1. NGN→USD conversion: float credited USDT but ledger journal wrote the
+   pseudo-currency 'USD' → permanent per-currency drift (ledger:
+   CONVERSION_SETTLEMENT/CREDIT now use creditCcy='USDT').
+2. Conversions credited/credited UNROUNDED amounts to floats while ledger
+   kept rounded minor units → sub-minor drift each conversion. Added
+   `roundMinor()` to common/money.ts and use it for debitTotal/localCredit/
+   creditedUsdt (float and ledger now agree exactly).
+3. Tag-send PRE-transaction spendable check still read floats, so it rejected
+   before the ledger-aware in-transaction check ran; now ledger-aware when
+   LEDGER_READS_ENABLED.
+
+Verification: tsc exit 0; jest 7 suites / 72 tests green. Real-chain E2E
+(runbook rows with Circle/Arc/Flutterwave) still requires testnet credentials.
+
+## 2026-08-30 (5) — DB ops runner for live baseline/report
+
+The sandbox cannot reach PostgreSQL directly (egress TLS allowlist resets the
+Supabase pooler handshake) and cannot run the Prisma query engine, so
+`backend/scripts/db-ledger-ops.js` (`npm run ledger:db`) re-implements
+ledger-drift-report + backfill-ledger-baseline on plain `pg` (new deps: pg).
+It refuses to run if Wallet/LedgerEntry/Transaction/User tables are missing;
+`report` is read-only (double-entry invariant + per-user ledger/float drift,
+exit 1 on drift), `dry-run` previews, `apply` writes idempotent
+BASELINE-<uid>-<ccy> pairs in one transaction, `full` chains report→dry-run→
+apply→report. `docs/ledger-db-ops.workflow.yml` runs it on demand with the
+SXDB_URL repo secret. Run `full` on the real DB before setting
+LEDGER_READS_ENABLED=true.
+
+## 2026-08-30 (6) — LIVE DB ledger baseline + normalization: RECONCILIATION CLEAN
+
+Ran the pg runner against the real Supabase pooler (SXDB_URL provided by user;
+sandbox cannot reach it, user executes locally):
+1. `ledger:db -- report`: 0 entries (ledger brand new).
+2. `ledger:db -- apply`: wrote 20 rows = 10 BASELINE-<uid>-<ccy> pairs
+   (USDC/USDT/NGN/CVE/GHS/KES/XOF on 4 wallets, 70 wallets scanned).
+3. `report` found 4 sub-minor dust floats (GHS/KES/USDC/USDT on one user) —
+   pre-existing unrounded conversion dust; ledger values were correct.
+4. `normalize --apply` fixed them (one gotcha: localBalances JSON is per-user,
+   so a per-user grouped UPDATE was required; scalar columns fine).
+5. FINAL `report`: `RECONCILIATION CLEAN: double-entry holds and ledger
+   matches legacy floats.` (20 entries, 10 user accounts, 7 currencies).
+
+Ledger is now the verified baseline for all existing balances. Next steps:
+merge to main, deploy, LEDGER_READS_ENABLED=true, verify, re-report. Note the
+DB has no default for LedgerEntry.id (Prisma generates uuid client-side) and
+JSON localBalances updates must be per-user single-write.

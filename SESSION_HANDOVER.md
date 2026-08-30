@@ -78,6 +78,43 @@ You are the senior full-stack developer for **SureXend**, an African fintech app
 - Frontend shows a hint "use default PIN 0000" on the convert PIN step and the change-pin page ONLY when `NEXT_PUBLIC_TESTING_ENABLED === 'true'`.
 - **Deploy pending**: user must set `TESTING_ENABLED=true` (+ optionally `DEFAULT_PIN=0000`) on Railway, and `NEXT_PUBLIC_TESTING_ENABLED=true` on Vercel + redeploy. The backend one actually gates PIN acceptance; the Vercel one only shows hints. When going live: remove/disable both → custom PIN becomes mandatory automatically. **This deploy step has been explained to the user but not yet confirmed done.**
 
+## LEDGER ROLLOUT — current state (2026-08-30, see docs/rollout-status.md)
+
+- Double-entry ledger (`LedgerService` → `LedgerEntry`, minor units via
+  `toMinor`) is now written on EVERY money path (floats and ledger change in
+  the same DB transaction). Missing writes were added to: webhooks (Circle
+  deposit, Flutterwave bank credit, Circle FAILED refund), referrals
+  (commission), bills (failure refund), wallets (sync FAILED settlement +
+  `releaseReservedSend`). Conversions now book the ledger exactly as the float
+  moved (USDT/USDC split) instead of everything as USDC.
+- `LedgerService.record()` is atomic (`createMany` + `skipDuplicates`) —
+  partial ledger writes are impossible. `LedgerService.reverse(transferId)`
+  mirrors a transfer under `<transferId>-REFUND`; all refund paths use it.
+- Reconciliation (`LedgerReconciliationService`, hourly) covers USDC/USDT/local
+  currencies and persists drift to `AuditLog` (`LEDGER_DRIFT`); `npm run
+  ledger:report` runs the same check on demand (CI-friendly, exit 1 on drift).
+- **Read cutover is implemented but OFF**: `LEDGER_READS_ENABLED` (default
+  false) switches `getBalance`, tag send, cross-chain reserve and conversion
+  reads to `LedgerEntry` with per-currency float fallback; floats are still
+  written in both modes. To go live: deploy (flag off) → `npm run
+  ledger:baseline` → `npm run ledger:report` clean → set
+  `LEDGER_READS_ENABLED=true` → verify → re-check report. Floats NOT removed;
+  code stays additive and testnet-safe; **Mainnet NOT enabled.** Next: real
+  testnet E2E (keys needed), then enable the flag, then stop float writes,
+  then checked-in migrations + column removal.
+- **Verification is automated**: `backend/test/money-flows.integration.spec.ts`
+  (18 cases) drives the real money services against an in-memory Prisma store
+  and asserts double-entry + ledger==float on every runbook row; `npm test`
+  = 7 suites / 72 tests. It found 3 real bugs (fixed): NGN→USD ledger credit
+  booked as 'USD' pseudo-currency; unrounded float credits vs rounded ledger
+  (now `roundMinor`); tag-send pre-check not ledger-aware.
+- Mainnet prep: `docs/mainnet-config.md` + `assertNetworkConfig()` boot guard
+  (`main.ts`) — refuses mixed testnet/mainnet configs. On a machine with Prisma
+  engine access: `npx prisma generate` (the sandbox uses a gitignored typing
+  stub in `node_modules/.prisma/client`), and generate the checked-in baseline
+  migration + `migrate resolve --applied` the live DB before switching
+  `prestart:prod` off `prisma db push`.
+
 ## THE PIN CONFIRM BUG (already fixed, do not regress)
 
 Old bug: in `/app/settings/change-pin`, the confirm step compared stale state — `submit(newPin.join(''), confirmPin.join(''))` read the pre-update `confirmPin`. Fix: pass the just-built array: `submit(newPin.join(''), next.join(''))`. The page now flows: (if pinSet) Current → New → Confirm; (else) New → Confirm. Mismatch → toast + reset to New.

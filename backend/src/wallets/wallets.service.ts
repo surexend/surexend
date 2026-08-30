@@ -7,7 +7,7 @@ import { CctpService } from './cctp.service';
 import { DepositMonitorService } from './deposit-monitor.service';
 import { getLocalRate } from '../common/currency.constants';
 import { LedgerService } from '../common/ledger.service';
-import { toMinor } from '../common/money';
+import { toMinor, fromMinor } from '../common/money';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
@@ -21,6 +21,11 @@ export class WalletsService implements OnModuleInit {
   // Per-wallet timestamp of the last full Circle history sync (see
   // syncCircleHistory) so background refreshes don't re-sweep on every page load.
   private lastCircleSyncAt: Map<string, number> = new Map();
+
+  /** True when balance READS should come from the ledger instead of floats. */
+  private ledgerReads(): boolean {
+    return this.configService.get<boolean>('app.ledger.reads') === true;
+  }
 
   constructor(
     private prisma: PrismaService,
@@ -239,7 +244,8 @@ export class WalletsService implements OnModuleInit {
     // DepositMonitor's scheduled scan rather than blocking this endpoint. The DB
     // figures are at most ~60s stale, which only ever lags, never 500s.
     let usdcBalance = wallet.usdcBalance || 0;
-    const usdtBalance = wallet.usdtBalance || 0;
+    let usdtBalance = wallet.usdtBalance || 0;
+    let ledgerBalances: Record<string, bigint> | null = null;
 
     this.depositMonitor.reconcileWallet(userId, wallet.id).catch((err: any) => {
       this.logger.error(`Background balance reconcile failed for ${userId}: ${err.message}`);
@@ -248,11 +254,27 @@ export class WalletsService implements OnModuleInit {
       this.logger.error(`Background Circle history sync failed for ${userId}: ${err.message}`);
     });
 
+    // LEDGER READS (gradual cutover): the double-entry ledger is the source of
+    // truth for USDC/USDT and all local currencies. A currency that has NO
+    // ledger rows yet (pre-rollout history not backfilled) falls back to the
+    // float, so enabling LEDGER_READS_ENABLED is safe before the baseline
+    // script runs — per-currency, not all-or-nothing.
+    if (this.ledgerReads()) {
+      try {
+        ledgerBalances = await this.ledger.balancesOfUser(userId);
+        if (ledgerBalances.USDC !== undefined) usdcBalance = fromMinor(ledgerBalances.USDC, 'USDC');
+        if (ledgerBalances.USDT !== undefined) usdtBalance = fromMinor(ledgerBalances.USDT, 'USDT');
+      } catch (err: any) {
+        this.logger.error(`Ledger read failed for ${userId}; continuing with floats: ${err.message}`);
+      }
+    }
+
     // Wallet balances reflect on-chain deposits/sends; conversions out of USD
-    // (USDC â†' local currency) are bookkeeping with no chain movement, so the
+    // (USDC -> local currency) are bookkeeping with no chain movement, so the
     // reconciled on-chain total must be net of the CONVERT ledger to show only
-    // spendable USD.
-    try {
+    // spendable USD. Only needed for legacy float reads — the ledger already
+    // nets conversions.
+    if (!this.ledgerReads()) try {
       const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
         `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
            SELECT 'out' AS kind, amount::float8 AS total
@@ -304,6 +326,17 @@ export class WalletsService implements OnModuleInit {
     }
     if (!localBalances['NGN'] && localVal > 0) {
       localBalances['NGN'] = localVal;
+    }
+
+    // Overlay ledger-backed local balances (per currency, legacy fallback for
+    // any currency the ledger has no rows for yet).
+    if (ledgerBalances) {
+      for (const [ccy, minor] of Object.entries(ledgerBalances)) {
+        // Skip stablecoin denominations; 'USD' is a legacy ledger pseudo-currency
+        // from pre-cutover conversion rows and is not a local balance.
+        if (ccy === 'USDC' || ccy === 'USDT' || ccy === 'USD') continue;
+        localBalances[ccy] = fromMinor(minor, ccy);
+      }
     }
 
     const ngnBalance = localBalances['NGN'] || 0;
@@ -564,6 +597,13 @@ export class WalletsService implements OnModuleInit {
                         }
                       : { lockedBalance: { decrement: totalLocked } },
                 });
+
+                if (status === 'FAILED') {
+                  // Undo the initiation debit in the double-entry ledger too:
+                  // the ledger must not keep the send debit after the funds
+                  // were refunded, or reconciliation reports permanent drift.
+                  await this.ledger.reverse(pendingMatch.reference, prisma);
+                }
               });
               this.logger.log(`Merged Circle ${type} history into PENDING tx ${pendingMatch.reference}: ${amount || 0} ${symbol} on ${chainLabel} status=${status}`);
               continue;
@@ -836,7 +876,14 @@ export class WalletsService implements OnModuleInit {
     // Internal transfers use the wallet ledger directly. Do not run the
     // conversion reconciliation SQL here: a malformed legacy conversion row
     // must never prevent a peer-to-peer balance transfer.
-    const spendable = Math.max(0, Number(senderWallet.usdcBalance || 0) - Number(senderWallet.lockedBalance || 0));
+    let spendable = Math.max(0, Number(senderWallet.usdcBalance || 0) - Number(senderWallet.lockedBalance || 0));
+    // LEDGER READS: the pre-transaction sanity check must use the same source
+    // of truth as the locked in-transaction check below, or the gate rejects
+    // with stale floats before the ledger-aware check is ever reached.
+    if (this.ledgerReads()) {
+      const ledgerUsdc = await this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDC'), 'USDC');
+      spendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') - Number(senderWallet.lockedBalance || 0));
+    }
     if (spendable < sendAmount) {
       const reason = `Insufficient balance. You can send up to ${spendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`;
       throw new BadRequestException(reason);
@@ -857,7 +904,11 @@ export class WalletsService implements OnModuleInit {
         FOR UPDATE`;
       const lockedSender = locked.find((w) => w.id === senderWallet.id);
       if (!lockedSender) throw new BadRequestException('Wallet not found.');
-      const lockedSpendable = Math.max(0, Number(lockedSender.usdcBalance || 0) - Number(lockedSender.lockedBalance || 0));
+      let lockedSpendable = Math.max(0, Number(lockedSender.usdcBalance || 0) - Number(lockedSender.lockedBalance || 0));
+      if (this.ledgerReads()) {
+        const ledgerUsdc = await this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDC'), 'USDC', prisma);
+        lockedSpendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') - Number(lockedSender.lockedBalance || 0));
+      }
       if (lockedSpendable < sendAmount) {
         throw new BadRequestException(`Insufficient balance. You can send up to ${lockedSpendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`);
       }
@@ -1078,6 +1129,15 @@ export class WalletsService implements OnModuleInit {
       }
       lockedSpendable = Math.max(0, lockedSpendable - (lw.lockedBalance || 0));
 
+      // LEDGER READS: the ledger is authoritative for spendable USDC (it
+      // already nets conversions), read inside the same locked transaction so
+      // a concurrent conversion cannot interleave. Falls back to the float net
+      // if the ledger has no rows for this account yet.
+      if (this.ledgerReads()) {
+        const ledgerUsdc = await this.ledger.balanceOf(this.ledger.userAccount(userId, 'USDC'), 'USDC', prisma);
+        lockedSpendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') - (lw.lockedBalance || 0));
+      }
+
       if (lockedSpendable < totalDebit) {
         throw new BadRequestException(`Insufficient balance for this send. Spendable: ${lockedSpendable.toFixed(2)} USDC.`);
       }
@@ -1249,6 +1309,18 @@ export class WalletsService implements OnModuleInit {
               usdcBalance: { increment: release },
             },
           });
+        }
+
+        // Undo the initiation debit in the double-entry ledger. Guarded by the
+        // status === 'PENDING' check above, so a refund that was already
+        // settled here can never reverse the ledger twice. If the float could
+        // only be partially refunded (anomalous lockedBalance), do NOT reverse
+        // the full ledger — that would fabricate a bigger refund than the
+        // wallet actually received; reconciliation will flag the anomaly.
+        if (release > 0 && release >= totalDebit) {
+          await this.ledger.reverse(reference, prisma);
+        } else if (release < totalDebit) {
+          this.logger.warn(`Partial release for ${reference}: ${release}/${totalDebit} — ledger reversal skipped`);
         }
 
         const current = (tx.metadata as Record<string, unknown>) || {};

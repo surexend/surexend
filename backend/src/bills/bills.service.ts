@@ -608,6 +608,9 @@ export class BillsService {
             data: { localBalance: (newLocalBalances['NGN'] || 0) + chargeAmount, realLocalBalance: { increment: chargeAmount } }
           });
         }
+        // Undo the bill debit in the double-entry ledger so reconciliation is
+        // clean after a refund; the ledger entry is keyed by the same reference.
+        await this.ledger.reverse(reference, prisma);
         await prisma.billPayment.update({
           where: { id: billPayment.id },
           data: { status: 'FAILED', metadata: { ...(billPayment.metadata as object || {}), error: message } }

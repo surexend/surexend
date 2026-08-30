@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { LedgerService } from '../common/ledger.service';
+import { toMinor } from '../common/money';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -14,6 +16,7 @@ export class WebhooksService {
     private transactionsService: TransactionsService,
     private notificationsService: NotificationsService,
     private referralsService: ReferralsService,
+    private ledger: LedgerService,
   ) {}
 
   async processFlutterwave(payload: any) {
@@ -146,6 +149,11 @@ export class WebhooksService {
         reference,
         metadata: { channel: 'bank_transfer', provider: 'FLUTTERWAVE', flwId, bankName: virtualAccount.bankName },
       });
+
+      await this.ledger.record([
+        { transferId: reference, account: this.ledger.externalAccount('FLUTTERWAVE', currency), currency, amountMinor: -toMinor(amount, currency), reference, kind: 'BANK_TRANSFER_SOURCE' },
+        { transferId: reference, account: this.ledger.userAccount(virtualAccount.userId, currency), currency, amountMinor: toMinor(amount, currency), reference, kind: 'BANK_TRANSFER_DEPOSIT' },
+      ], prisma);
     });
 
     await this.notificationsService.createNotification(virtualAccount.userId, {
@@ -241,6 +249,11 @@ export class WebhooksService {
               reference,
               metadata: { txId, blockchain }
             });
+
+            await this.ledger.record([
+              { transferId: reference, account: this.ledger.externalAccount(`circle:${blockchain || walletAddress.network}`, symbol), currency: symbol, amountMinor: -toMinor(amount, symbol), reference, kind: 'DEPOSIT_SOURCE' },
+              { transferId: reference, account: this.ledger.userAccount(wallet.userId, symbol), currency: symbol, amountMinor: toMinor(amount, symbol), reference, kind: 'DEPOSIT' },
+            ], prisma);
           });
 
           await this.notificationsService.sendPushNotification(wallet.userId, {
@@ -336,6 +349,8 @@ export class WebhooksService {
                 lockedBalance: { decrement: totalLocked }
               }
             });
+
+            await this.ledger.reverse(matchingTx.reference, prisma);
 
             await prisma.transaction.update({
               where: { id: matchingTx.id },

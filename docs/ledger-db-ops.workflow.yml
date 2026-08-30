@@ -1,0 +1,43 @@
+name: Ledger DB Ops
+
+# Executes the ledger baseline + reconciliation report against the PostgreSQL
+# database behind the SXDB_URL repository secret. Use cases:
+#   - Verify the double-entry invariant and ledger==float before enabling
+#     LEDGER_READS_ENABLED (mode: report).
+#   - Write the idempotent pre-rollout opening balances (mode: dry-run first,
+#     then apply; or mode: full = report -> dry-run -> apply -> report).
+# The script is pg-based (no Prisma query engine needed): scripts/db-ledger-ops.js.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'report | dry-run | apply | full'
+        required: true
+        default: 'report'
+        type: choice
+        options:
+          - report
+          - dry-run
+          - apply
+          - full
+
+jobs:
+  ledger-ops:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+
+      - name: Run ledger ops
+        working-directory: backend
+        env:
+          SXDB_URL: ${{ secrets.SXDB_URL }}
+        run: node scripts/db-ledger-ops.js ${{ github.event.inputs.mode }}

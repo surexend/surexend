@@ -81,8 +81,15 @@ it for history/explorer links.
 
 ## 5. Balance & History
 
-- `getBalance()` returns DB-ledger figures, triggers background
-  `reconcileWallet` (deposit monitor) + `syncCircleHistory`.
+- `getBalance()` returns the legacy float columns by default
+  (`usdcBalance`, `usdtBalance`, `localBalances`, …) and triggers background
+  `reconcileWallet` (deposit monitor) + `syncCircleHistory`. With
+  `LEDGER_READS_ENABLED=true` it returns `LedgerEntry` figures (per-currency
+  fallback to float for currencies without ledger rows), as do the tag-send,
+  cross-chain-reserve and conversion spendable checks (read inside the same
+  FOR UPDATE transaction). The double-entry ledger (`LedgerEntry`, via
+  `LedgerService`) is written in the SAME transaction as every float change in
+  BOTH modes; the cutover is tracked in `docs/rollout-status.md`.
 - `syncCircleHistory()` is the de-facto CCTP settlement point (outbound
   webhook cannot match sends — Circle sends carry no refId). Dedupes by
   reference = `SEND/RECV-<chain>-<txHash>`.
