@@ -732,16 +732,17 @@ html.lite-mode *::after {
     backdrop-filter: none !important;
   }
 
-  /* Disable CSS property transitions on phones to eliminate Android Webview GPU layer leaks */
+  /* Smooth color/border transitions for touch feedback without 3D layer promotion */
   .transition-all,
   .transition-colors,
-  .transition-opacity,
+  .transition-opacity {
+    transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease !important;
+  }
   .transition-transform {
-    transition: none !important;
+    transition: transform 150ms ease !important;
   }
 
-  /* Momentum scrolling on ALL scrollable containers, not just tagged classes.
-     Android Chrome + iOS Safari both benefit from this for smooth lists. */
+  /* Momentum scrolling on ALL scrollable containers */
   [style*="overflow"],
   .overflow-y-auto,
   .overflow-x-auto,
@@ -751,14 +752,12 @@ html.lite-mode *::after {
     overscroll-behavior-y: contain;
   }
 
-  /* iOS auto-zooms into any input with font-size < 16px on focus — that jump
-     is the #1 "not seamless" tell on iPhones. Pin controls to 16px on phones. */
+  /* iOS auto-zooms into any input with font-size < 16px on focus — pin controls to 16px */
   input, select, textarea {
     font-size: 16px !important;
   }
 
-  /* Ensure interactive elements meet minimum 44px touch target (iOS HIG).
-     Avoids mis-taps on small icon buttons in the header control cluster. */
+  /* Ensure interactive elements meet minimum touch target */
   button:not([data-no-touch-target]),
   [role="button"]:not([data-no-touch-target]) {
     min-height: 36px;
@@ -766,10 +765,7 @@ html.lite-mode *::after {
   }
 }
 
-/* Admin has one deliberate vertical scroll owner. Keep the global mobile
-   overscroll containment from trapping upward swipes after a table reaches
-   its horizontal edge. Tables may pan sideways, but vertical movement belongs
-   to the admin shell. */
+/* Admin scroll behavior */
 @media (max-width: 767px) {
   [data-admin-scroll="true"] {
     overscroll-behavior-y: auto !important;
@@ -783,7 +779,7 @@ html.lite-mode *::after {
   }
 }
 
-/* Kill the double-tap zoom delay on tappable elements (Android + iOS). */
+/* Kill double-tap zoom delay on touch targets */
 button,
 a,
 label,
@@ -792,8 +788,7 @@ label,
   touch-action: manipulation;
 }
 
-/* Stable mobile heights: prefer dynamic viewport units so the app shell never
-   jumps when the browser chrome (address bar) collapses on scroll. */
+/* Dynamic viewport units */
 @supports (height: 100dvh) {
   .h-dvh-force { height: 100dvh; }
   .min-h-dvh-force { min-height: 100dvh; }
@@ -803,7 +798,7 @@ label,
   .min-h-dvh-force { min-height: 100vh; }
 }
 
-/* Hide scrollbars on horizontal pill/picker rows while keeping them scrollable */
+/* Hide scrollbars on horizontal pill/picker rows */
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -812,23 +807,16 @@ label,
   display: none;
 }
 
-/* ── DEEP GLASS THEME ─────────────────────────────────────────────────── */
-/* Bybit-style stage: near-black graphite page with glass-tinted blocks that
-   read as translucent white panels floating on it. Neutral by default —
-   the gold accent is spent only on primary CTAs and active states.
-   Phones remain flat-GPU-safe: solid layered gradients only. */
+/* ── DEEP ULTRA-FINTECH THEME ─────────────────────────────────────────── */
+/* Revolut/Bybit VIP stage: near-black graphite background with layered
+   translucent-look panels, razor-thin 1px top specular highlights, and
+   balanced gold/lemon accents. Completely GPU-safe on mobile screens. */
 
 body {
   background-color: var(--app-bg);
 }
 
-/* No-backdrop-support fallbacks: graphite instead of navy. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .liquid-glass { background: linear-gradient(155deg, #1B1E24, #0A0C10 58%, #12151B); }
-  .liquid-glass-strong { background: linear-gradient(155deg, #1C1F26, #0D0F13); }
-}
-
-/* Desktop frosted glass gets the same float-off-black read. */
+/* Desktop frosted glass */
 .liquid-glass {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
@@ -843,17 +831,42 @@ body {
 @media (max-width: 767px) {
   .liquid-glass,
   .liquid-glass-strong {
-    background: linear-gradient(168deg, #1A1C23, #0D0E12) !important;
-    background-image: none !important;
+    background:
+      radial-gradient(130% 70% at 8% -6%, rgba(255, 255, 255, 0.08), transparent 50%),
+      linear-gradient(168deg, #1A1C24, #0D0E13 65%, #12141B) !important;
     border-color: rgba(255, 255, 255, 0.12) !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.15),
+      0 8px 24px rgba(0, 0, 0, 0.45) !important;
   }
 
-  .glass-card,
-  .glass-card-gold,
-  .glass-card-lemon {
-    background: linear-gradient(165deg, #1C1E26, #0F1015) !important;
+  .glass-card {
+    background:
+      radial-gradient(120% 60% at 5% 0%, rgba(255, 255, 255, 0.07), transparent 45%),
+      linear-gradient(165deg, #1C1E26, #0F1015) !important;
     border-color: rgba(255, 255, 255, 0.11) !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      0 6px 20px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  .glass-card-gold {
+    background:
+      radial-gradient(120% 60% at 5% 0%, rgba(212, 160, 23, 0.12), transparent 50%),
+      linear-gradient(165deg, #1E1A11, #0F0D09) !important;
+    border-color: rgba(212, 160, 23, 0.3) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(212, 160, 23, 0.25),
+      0 6px 20px rgba(0, 0, 0, 0.45) !important;
+  }
+
+  .glass-card-lemon {
+    background:
+      radial-gradient(120% 60% at 5% 0%, rgba(181, 226, 61, 0.12), transparent 50%),
+      linear-gradient(165deg, #171E10, #0B0F08) !important;
+    border-color: rgba(181, 226, 61, 0.3) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(181, 226, 61, 0.25),
+      0 6px 20px rgba(0, 0, 0, 0.45) !important;
   }
 }
