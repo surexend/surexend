@@ -176,3 +176,8 @@ SXDB_URL=postgres://... node scripts/db-ledger-ops.js full     # report -> dry-r
 (`workflow_dispatch`) job using the `SXDB_URL` repo secret — set the secret,
 then run the workflow with mode `report` / `dry-run` / `apply` / `full` from
 the Actions tab (or `gh workflow run ledger-db-ops.yml -f mode=full`).
+
+> **Ops gotcha (live DB, 2026-08-30):** the deployed `LedgerEntry.id` column
+> has no DB default — Prisma's `@default(uuid())` is generated client-side, so
+> raw SQL inserts MUST supply `id` themselves. `db-ledger-ops.js` does this
+> via `crypto.randomUUID()`.

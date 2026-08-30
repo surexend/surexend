@@ -14,6 +14,7 @@
  * unavailable.
  */
 const { Client } = require('pg');
+const { randomUUID } = require('crypto');
 
 const url = process.env.SXDB_URL || process.env.DATABASE_URL;
 if (!url) {
@@ -186,12 +187,17 @@ async function runBaseline(client, apply) {
   await client.query('BEGIN');
   try {
     for (const r of rows) {
-      const res = await client.query(
-        `INSERT INTO "LedgerEntry" ("transferId","account","currency","amountMinor","reference","kind") VALUES ($1,$2,$3,$4,$5,$6),($1,$7,$3,$8,$5,$9) ON CONFLICT DO NOTHING RETURNING id`,
-        [r.transferId, r.source.account, r.currency, r.source.amountMinor.toString(), r.reference, r.source.kind,
-         r.user.account, r.user.amountMinor.toString(), r.user.kind],
-      );
-      inserted += res.rowCount;
+      // IMPORTANT: the live LedgerEntry.id column has NO database default
+      // (Prisma's @default(uuid()) is generated client-side by Prisma Client).
+      // Raw SQL must supply the UUID itself or Postgres rejects the insert
+      // with 'null value in column "id"'.
+      for (const e of [r.source, r.user]) {
+        const res = await client.query(
+          `INSERT INTO "LedgerEntry" ("id","transferId","account","currency","amountMinor","reference","kind") VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING RETURNING id`,
+          [randomUUID(), r.transferId, e.account, r.currency, e.amountMinor.toString(), r.reference, e.kind],
+        );
+        inserted += res.rowCount;
+      }
     }
     await client.query('COMMIT');
   } catch (e) {
