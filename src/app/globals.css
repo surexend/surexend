@@ -742,6 +742,12 @@ html.lite-mode *::after {
     transition: transform 150ms ease !important;
   }
 
+  /* Disable hardware opacity looping on skeleton loaders on phones to prevent GPU buffer locking */
+  .animate-pulse {
+    animation: none !important;
+    opacity: 0.5 !important;
+  }
+
   /* Momentum scrolling on ALL scrollable containers */
   [style*="overflow"],
   .overflow-y-auto,

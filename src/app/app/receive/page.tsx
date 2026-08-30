@@ -100,7 +100,7 @@ function BankFundingCard() {
   }
 
   return (
-    <div className="mobile-flat-surface liquid-glass p-4 rounded-3xl border border-white/10 space-y-3">
+    <div className="glass-card p-4 rounded-3xl border border-white/10 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Landmark className="w-4 h-4" style={{ color: colors.primary }} />
