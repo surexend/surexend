@@ -28,7 +28,6 @@ function currentLayerId() {
 export function BackNavigationProvider({ children }: { children: React.ReactNode }) {
   const layersRef = useRef(new Map<number, BackLayer>())
   const nextIdRef = useRef(0)
-  const suppressNextPopRef = useRef(false)
 
   const register = useCallback((layer: Omit<BackLayer, 'id' | 'url'>) => {
     const id = ++nextIdRef.current
@@ -54,20 +53,25 @@ export function BackNavigationProvider({ children }: { children: React.ReactNode
 
   const deactivate = useCallback((id: number) => {
     const layer = layersRef.current.get(id)
-    if (!layer || currentLayerId() !== id || window.location.href !== layer.url) return
+    if (!layer) return
 
-    // Programmatic dismissal should remove the matching same-URL history entry.
-    suppressNextPopRef.current = true
-    window.history.back()
+    // ── FIX: replaceState instead of history.back() ───────────────────────
+    // history.back() is async: it queues a popstate event on the next tick.
+    // If a router navigation is also in flight (e.g. from a modal option
+    // button), the popstate fires AFTER the navigation starts, cancelling it.
+    //
+    // replaceState removes the __surexendBackLayer marker from the current
+    // history entry instantly and synchronously, with no events fired.
+    // The back-layer guard in the popstate handler then won't match a future
+    // hardware-Back press because the marker is gone from history state.
+    if (currentLayerId() === id) {
+      const { [HISTORY_KEY]: _removed, ...rest } = window.history.state ?? {}
+      window.history.replaceState(rest, '', window.location.href)
+    }
   }, [])
 
   useEffect(() => {
     const handlePopState = async () => {
-      if (suppressNextPopRef.current) {
-        suppressNextPopRef.current = false
-        return
-      }
-
       const candidates = [...layersRef.current.values()]
         .filter((layer) => layer.isActive() && window.location.href === layer.url)
         .sort((a, b) => b.priority - a.priority || b.id - a.id)
