@@ -81,7 +81,9 @@ export class CampaignsService {
           select: { id: true, firstName: true, lastName: true, surexTag: true },
         })
       : [];
-    const userMap = new Map(users.map((u) => [u.id, u]));
+    const userMap = new Map<string, { id: string; firstName: string; lastName: string; surexTag: string | null }>(
+      users.map((u) => [u.id, u]),
+    );
 
     const entries = [...totals.entries()]
       .map(([userId, total]) => {
