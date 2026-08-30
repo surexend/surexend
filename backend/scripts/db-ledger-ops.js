@@ -260,28 +260,41 @@ async function runNormalize(client, apply) {
   for (const u of updates) console.log(`  ${u.account}: ${u.legacy} -> ${u.ledgerFloat}`);
   if (!apply) return 0;
 
+  // Local currencies share ONE localBalances JSON per user. Never write them
+  // one at a time from the original snapshot: each write would clobber the
+  // previous fix (GHS was reverted when KES was written). Group per user and
+  // apply a single UPDATE per user.
+  const localByUser = new Map();
+  for (const u of updates) {
+    if (u.field) continue;
+    const existing = localByUser.get(u.userId) || {};
+    existing[u.ccy] = u.ledgerFloat;
+    localByUser.set(u.userId, existing);
+  }
+
   await client.query('BEGIN');
   try {
     for (const u of updates) {
       if (u.field) {
         await client.query(`UPDATE "Wallet" SET "${u.field}" = $1 WHERE "userId" = $2`, [u.ledgerFloat, u.userId]);
-      } else {
-        const w = walletByUser.get(u.userId);
-        let locals = {};
-        try {
-          const parsed = typeof w.localBalances === 'string' ? JSON.parse(w.localBalances) : w.localBalances;
-          if (parsed && typeof parsed === 'object') locals = { ...parsed };
-        } catch { /* ignore */ }
-        locals[u.ccy] = u.ledgerFloat;
-        await client.query(`UPDATE "Wallet" SET "localBalances" = $1::jsonb WHERE "userId" = $2`, [JSON.stringify(locals), u.userId]);
       }
+    }
+    for (const [userId, patch] of localByUser) {
+      const w = walletByUser.get(userId);
+      let locals = {};
+      try {
+        const parsed = typeof w.localBalances === 'string' ? JSON.parse(w.localBalances) : w.localBalances;
+        if (parsed && typeof parsed === 'object') locals = { ...parsed };
+      } catch { /* ignore */ }
+      for (const [ccy, value] of Object.entries(patch)) locals[ccy] = value;
+      await client.query(`UPDATE "Wallet" SET "localBalances" = $1::jsonb WHERE "userId" = $2`, [JSON.stringify(locals), userId]);
     }
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;
   }
-  console.log(`Normalized ${updates.length} float value(s) to the ledger minor grid.`);
+  console.log(`Normalized ${updates.length} float value(s) to the ledger minor grid (${localByUser.size} localBalances row(s) updated).`);
   return 0;
 }
 

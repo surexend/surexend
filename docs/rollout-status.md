@@ -220,3 +220,9 @@ Fix: `npm run ledger:db -- normalize` (preview) then
 ledger's minor grid ONLY when `round(float) == ledger` (provably dust; real
 drift is left untouched and still reported). Then `report` is clean and stays
 clean because post-fix writes round at the minor grid.
+
+> **Gotcha found while applying:** local currencies share ONE `localBalances`
+> JSON per user, so applying them one-at-a-time from the original snapshot
+> clobbered the previous fix (GHS was reverted when KES was written).
+> `normalize --apply` now groups local fixes per user and issues a single
+> UPDATE per user.
