@@ -31,7 +31,7 @@ Status key: ✅ done · ⏳ in progress · ⛔ blocked/pre-requisite missing.
 - After each path passes, run `npm run ledger:report` (backend) — it must print
   `RECONCILIATION CLEAN`.
 
-## 2. Monitoring ledger reconciliation in production — ✅ wiring in place; needs ops alerting
+## 2. Monitoring ledger reconciliation in production — ✅ alerting hook shipped (2026-08-30); external dashboard optional
 
 - `LedgerReconciliationService` runs hourly (`@Cron('0 * * * *')`), is
   registered in `AppModule` via `LedgerModule`.
@@ -45,8 +45,21 @@ Status key: ✅ done · ⏳ in progress · ⛔ blocked/pre-requisite missing.
 - Manual/CI check: `npm run ledger:report` (backend) renders the same
   comparison plus the double-entry zero-sum invariant and exits non-zero on
   drift.
-- Remaining: an alerting hook (e.g. check `AuditLog` with action
-  `LEDGER_DRIFT` in the last hour) and a Grafana/GCP/Datadog query.
+- **Alerting hook (`LedgerAlertService`, shipped 2026-08-30):** runs every 15
+  min, queries `AuditLog` for `LEDGER_DRIFT` rows newer than its in-process
+  high-water mark, filters already-alerted ids, and (a) emits an error-level
+  log line always, (b) POSTs a JSON envelope (`{event:'LEDGER_DRIFT', count,
+  rows[]}`) to `LEDGER_DRIFT_WEBHOOK_URL` if set, (c) emails
+  `LEDGER_DRIFT_ALERT_EMAIL` via Resend if set. Channel failures are caught
+  (never breaks reconciliation and never throws out of the cron); attempted
+  rows are marked alerted so a broken channel cannot spam. Env:
+  `LEDGER_DRIFT_ALERTS_ENABLED` (default true), `LEDGER_DRIFT_WEBHOOK_URL`,
+  `LEDGER_DRIFT_ALERT_EMAIL`. Unit tests: `backend/test/ledger-alert.service.spec.ts`
+  (7 cases: disabled, clean, webhook delivery, high-water dedupe across runs,
+  webhook failure non-fatal, DB failure non-fatal, query shape).
+- Remaining (ops, optional): point the webhook at the alerting vendor
+  (Slack/PagerDuty/GCP/Datadog incoming endpoint) or add a Grafana query over
+  the `LEDGER_DRIFT` log line.
 
 ## 3. Switching balance reads from legacy floats to ledger balances — ⏳ implemented, flag-gated (not enabled)
 
@@ -241,3 +254,21 @@ The ledger is now the verified source of truth for all existing balances.
 Next: merge ledger code to main → deploy → set `LEDGER_READS_ENABLED=true` →
 verify dashboard/send/convert → re-run report. (E2E runbook chain-legs still
 to be exercised on testnet before enabling on real funds at mainnet.)
+
+### 2026-08-30 — USDC-only backend verified live; drift alert hook shipped
+
+- **Backend is USDC-only and live:** NGN->USD conversions credit USDC,
+  referral commission credits USDC; tag/cross-chain sends spend the combined
+  USDC+USDT pool (USDT drained first) and net to USDC. The stale locked
+  balance was cleared (9.09508 -> 0). Live demo verification:
+  sendable = dashboard = 26.122273 for demo user caf36b4a…, $1 tag send to
+  @emman works, NGN->USD credits USDC. CI 82/82.
+- **Rollout step 4 done in code (this commit):** `LedgerAlertService`
+  (see section 2). No money-path change; tests 8 suites / 89 green.
+- Still NOT done (gated / ops): (1) flip `LEDGER_READS_ENABLED=true` on
+  Railway + restart with pre/post `ledger:db -- report` clean (user action);
+  (2) stop legacy float writes per verified path; (3) checked-in Prisma
+  migrations (generate on a machine with engine access, `migrate resolve
+  --applied`, then switch `prestart:prod` to `migrate deploy`); (5) testnet
+  E2E runbook with real Circle TEST_ key / Arc testnet / Flutterwave sandbox;
+  (6) mainnet review per `docs/mainnet-config.md` — mainnet stays OFF.

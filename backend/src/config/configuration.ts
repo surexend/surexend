@@ -97,6 +97,16 @@ export default registerAs('app', () => ({
     // keep updating floats in BOTH modes until each path is verified and the
     // columns are removed.
     reads: process.env.LEDGER_READS_ENABLED === 'true',
+    alerts: {
+      // LEDGER_DRIFT rows are persisted to AuditLog by the hourly
+      // reconciliation (deduped per account/currency). This watcher alerts on
+      // NEW rows only. OFF unless an alert destination is configured — a
+      // plain error log is always emitted even when no channel is set up, so
+      // drift is never silent on a box that ships logs.
+      enabled: process.env.LEDGER_DRIFT_ALERTS_ENABLED !== 'false',
+      webhookUrl: process.env.LEDGER_DRIFT_WEBHOOK_URL,
+      email: process.env.LEDGER_DRIFT_ALERT_EMAIL,
+    },
   },
   arc: {
     rpcUrl: process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network',
