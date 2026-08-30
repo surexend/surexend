@@ -5,7 +5,7 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TransactionAuthService } from '../common/transaction-auth/transaction-auth.service';
 import { LedgerService } from '../common/ledger.service';
-import { fromMinor, toMinor } from '../common/money';
+import { fromMinor, toMinor, roundMinor } from '../common/money';
 import * as crypto from 'crypto';
 import axios from 'axios';
 import Redis from 'ioredis';
@@ -333,12 +333,19 @@ export class ConversionsService {
 
       const result = this.computeConversion(amount, fromCode, toCode, fromRate, toRate);
 
+      // Round at the currency's display precision BEFORE writing either the
+      // float or the ledger. An unrounded receiveAmount (e.g. 25/1500 =
+      // 0.016666…) would leave the float a fraction off the ledger's rounded
+      // minor units and reconciliation would flag drift on every conversion.
+      const debitTotal = roundMinor(amount, fromCode === 'USD' ? 'USDT' : fromCode);
+      const localCredit = roundMinor(result.receiveAmount, toCode);
+
       const updatedLocalBalances = (() => {
         if (fromCode !== 'USD') {
-          localBalances[fromCode] = Math.max(0, (localBalances[fromCode] || 0) - amount);
+          localBalances[fromCode] = Math.max(0, (localBalances[fromCode] || 0) - debitTotal);
         }
         if (toCode !== 'USD') {
-          localBalances[toCode] = (localBalances[toCode] || 0) + result.receiveAmount;
+          localBalances[toCode] = (localBalances[toCode] || 0) + localCredit;
         }
         return localBalances;
       })();
@@ -348,8 +355,8 @@ export class ConversionsService {
       // per-currency reconciliation stays clean (previously the whole debit
       // was booked as USDC while the float drew from USDT first -> permanent
       // drift on every conversion).
-      const deductUsdt = fromCode === 'USD' ? Math.min(amount, usdtPool) : 0;
-      const deductUsdc = fromCode === 'USD' ? Math.max(0, amount - deductUsdt) : 0;
+      const deductUsdt = fromCode === 'USD' ? Math.min(debitTotal, usdtPool) : 0;
+      const deductUsdc = fromCode === 'USD' ? Math.max(0, debitTotal - deductUsdt) : 0;
       if (fromCode === 'USD') {
         await prisma.wallet.update({
           where: { id: w.id },
@@ -361,12 +368,15 @@ export class ConversionsService {
       }
 
       // Credit destination. USD credits always land in USDT, so the ledger
-      // credits USDT too (matching the float movement exactly).
-      const creditedUsdt = toCode === 'USD' ? result.receiveAmount : 0;
+      // credits USDT too (matching the float movement exactly). Booking the
+      // credit as the pseudo-currency 'USD' would split the ledger from the
+      // float forever — caught by the money-flow integration spec.
+      const creditedUsdt = toCode === 'USD' ? roundMinor(result.receiveAmount, 'USDT') : 0;
+      const creditCcy = toCode === 'USD' ? 'USDT' : toCode;
       if (toCode === 'USD') {
         await prisma.wallet.update({
           where: { id: w.id },
-          data: { usdtBalance: { increment: result.receiveAmount } }
+          data: { usdtBalance: { increment: creditedUsdt } }
         });
       }
 
@@ -406,7 +416,7 @@ export class ConversionsService {
 
       const ledgerReference = `CONV-${conversionId ?? `SKIPPED-${Date.now()}-${Math.floor(Math.random() * 1000)}`}`;
       const sourceCurrencies = fromCode === 'USD' ? ['USDT', 'USDC'] : [fromCode];
-      const sourceAmounts = fromCode === 'USD' ? [deductUsdt, deductUsdc] : [amount];
+      const sourceAmounts = fromCode === 'USD' ? [deductUsdt, deductUsdc] : [debitTotal];
       const entries = sourceCurrencies.flatMap((ccy, i) => {
         if (sourceAmounts[i] <= 0) return [];
         return [
@@ -415,8 +425,8 @@ export class ConversionsService {
         ];
       });
       entries.push(
-        { transferId: ledgerReference, account: this.ledger.treasuryAccount(toCode), currency: toCode, amountMinor: -toMinor(toCode === 'USD' ? creditedUsdt : result.receiveAmount, toCode), reference: ledgerReference, kind: 'CONVERSION_SETTLEMENT' },
-        { transferId: ledgerReference, account: this.ledger.userAccount(userId, toCode), currency: toCode, amountMinor: toMinor(toCode === 'USD' ? creditedUsdt : result.receiveAmount, toCode), reference: ledgerReference, kind: 'CONVERSION_CREDIT' },
+        { transferId: ledgerReference, account: this.ledger.treasuryAccount(creditCcy), currency: creditCcy, amountMinor: -toMinor(toCode === 'USD' ? creditedUsdt : localCredit, creditCcy), reference: ledgerReference, kind: 'CONVERSION_SETTLEMENT' },
+        { transferId: ledgerReference, account: this.ledger.userAccount(userId, creditCcy), currency: creditCcy, amountMinor: toMinor(toCode === 'USD' ? creditedUsdt : localCredit, creditCcy), reference: ledgerReference, kind: 'CONVERSION_CREDIT' },
       );
       await this.ledger.record(entries, prisma);
 

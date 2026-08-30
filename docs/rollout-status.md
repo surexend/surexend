@@ -13,11 +13,21 @@ Status key: ✅ done · ⏳ in progress · ⛔ blocked/pre-requisite missing.
   CCTP send + failure leg, 3 conversion shapes, bill success + failure refund,
   bank credit + replay, admin credit, referral) with the exact expected float
   and ledger deltas, a receipt table, and a final `npm run ledger:report` gate.
-- Execution requires: Circle `TEST_` key, Arc testnet RPC, Flutterwave
-  sandbox, `TESTING_ENABLED=true`. Not executable in the CI sandbox.
-- `backend/test/` additionally covers unit-level behavior (ledger, money,
-  reconciliation, idempotency, webhook signatures, throttler) — the runbook is
-  the missing real-chain leg.
+- **Automated ledger-portion: `backend/test/money-flows.integration.spec.ts`**
+  (18 cases, runs in CI) drives the REAL services (wallets, conversions,
+  referrals, webhooks, bills) against an in-memory Prisma store and asserts the
+  double-entry zero-sum invariant AND ledger==float for every row of the
+  runbook — the boundary (Circle/Flutterwave/Smartspeed/chain) is mocked, the
+  journaling logic is the real code. Executed 2026-08-30; it found and fixed:
+  1. NGN→USD conversions credited the float to USDT but journaled the credit
+     under the pseudo-currency `USD` — ledger and float could never match.
+  2. Conversions wrote an UNROUNDED receiveAmount to the float while the ledger
+     stored rounded minor units — sub-minor drift on every conversion (fixed
+     with `roundMinor` in `common/money.ts`).
+  3. The tag-send PRE-transaction spendable check read floats, so it rejected
+     before the ledger-aware in-transaction check could run.
+- Still needed: the real-chain leg (Circle `TEST_` key, Arc testnet RPC,
+  Flutterwave sandbox) — not executable in the CI sandbox.
 - After each path passes, run `npm run ledger:report` (backend) — it must print
   `RECONCILIATION CLEAN`.
 

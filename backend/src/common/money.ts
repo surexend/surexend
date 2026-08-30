@@ -26,6 +26,8 @@ export function toMinor(amount: number, currency: string): bigint {
   return guardMinor(Math.round(Number((roundTo(amount, currency) * factor).toPrecision(15))));
 }
 export function fromMinor(amount: bigint | number | string, currency: string): number { return Number(guardMinor(amount)) / 10 ** decimalsFor(currency); }
+/** Round an amount to the currency's minor-unit grid (display precision). */
+export function roundMinor(amount: number, currency: string): number { return fromMinor(toMinor(amount, currency), currency); }
 export function addMinor(a: bigint | number, b: bigint | number): bigint { return guardMinor(a) + guardMinor(b); }
 export function subtractMinor(a: bigint | number, b: bigint | number): bigint { return guardMinor(a) - guardMinor(b); }
 export function sumMinor(values: (bigint | number)[]): bigint { return values.reduce<bigint>((s, v) => s + guardMinor(v), 0n); }

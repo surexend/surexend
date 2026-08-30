@@ -546,3 +546,29 @@ assertions).
   re-check report. Reversion = flip flag back (floats still written in both
   modes). Still on floats: bills' `realLocalBalance` partition (by design),
   pending/locked fields.
+
+## 2026-08-30 (4) — executed ledger verification: integration spec + 3 real fixes
+
+Wrote `backend/test/money-flows.integration.spec.ts` (18 cases, runs in CI):
+drives the actual WalletsService/ConversionsService/ReferralsService/
+WebhooksService/BillsService against an in-memory Prisma store (FakePrisma:
+wallet/ledger/transaction/conversion/billPayment/referral + $queryRaw FOR
+UPDATE emulation), mocks axios/ioredis and the Circle SDK boundary, and
+asserts per-currency double-entry zero-sum + ledger==float on every runbook
+row (deposits, tag send, conversions ×2, FAILED refund reverse, bill refund).
+`seedWallet` writes ledger baselines like the backfill script. Executed here;
+
+found & fixed three real bugs:
+1. NGN→USD conversion: float credited USDT but ledger journal wrote the
+   pseudo-currency 'USD' → permanent per-currency drift (ledger:
+   CONVERSION_SETTLEMENT/CREDIT now use creditCcy='USDT').
+2. Conversions credited/credited UNROUNDED amounts to floats while ledger
+   kept rounded minor units → sub-minor drift each conversion. Added
+   `roundMinor()` to common/money.ts and use it for debitTotal/localCredit/
+   creditedUsdt (float and ledger now agree exactly).
+3. Tag-send PRE-transaction spendable check still read floats, so it rejected
+   before the ledger-aware in-transaction check ran; now ledger-aware when
+   LEDGER_READS_ENABLED.
+
+Verification: tsc exit 0; jest 7 suites / 72 tests green. Real-chain E2E
+(runbook rows with Circle/Arc/Flutterwave) still requires testnet credentials.

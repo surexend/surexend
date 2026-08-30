@@ -876,7 +876,14 @@ export class WalletsService implements OnModuleInit {
     // Internal transfers use the wallet ledger directly. Do not run the
     // conversion reconciliation SQL here: a malformed legacy conversion row
     // must never prevent a peer-to-peer balance transfer.
-    const spendable = Math.max(0, Number(senderWallet.usdcBalance || 0) - Number(senderWallet.lockedBalance || 0));
+    let spendable = Math.max(0, Number(senderWallet.usdcBalance || 0) - Number(senderWallet.lockedBalance || 0));
+    // LEDGER READS: the pre-transaction sanity check must use the same source
+    // of truth as the locked in-transaction check below, or the gate rejects
+    // with stale floats before the ledger-aware check is ever reached.
+    if (this.ledgerReads()) {
+      const ledgerUsdc = await this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDC'), 'USDC');
+      spendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') - Number(senderWallet.lockedBalance || 0));
+    }
     if (spendable < sendAmount) {
       const reason = `Insufficient balance. You can send up to ${spendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`;
       throw new BadRequestException(reason);
