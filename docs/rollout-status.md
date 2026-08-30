@@ -204,3 +204,19 @@ Pre-apply and post-apply `report` must print RECONCILIATION CLEAN. Remaining
 rollout: deploy the ledger-write/read code to production (merge branch → main),
 then set `LEDGER_READS_ENABLED=true`, verify dashboard/send/convert, re-check
 `report`.
+
+### 2026-08-30 — post-baseline report found pre-existing sub-minor float dust (normalized)
+
+After the baseline apply, `report` flagged 4 accounts on user
+`caf36b4a-1a17-44c9-a59e-72aeb705126e` (GHS, KES, USDC, USDT). Each differs
+from the ledger by LESS THAN ONE MINOR UNIT (e.g. USDC 10.788939852 vs ledger
+10.78894; USDT …3335 vs 0.333333) — dust written by the OLD unrounded
+conversion math (the bug fixed with `roundMinor`), not real drift. The ledger
+baseline correctly holds the rounded money value; the stale floats are
+sub-minor noise.
+
+Fix: `npm run ledger:db -- normalize` (preview) then
+`npm run ledger:db -- normalize --apply` — writes the float back to the
+ledger's minor grid ONLY when `round(float) == ledger` (provably dust; real
+drift is left untouched and still reported). Then `report` is clean and stays
+clean because post-fix writes round at the minor grid.

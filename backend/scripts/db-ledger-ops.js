@@ -6,6 +6,7 @@
  *   node scripts/db-ledger-ops.js report      # double-entry + ledger/float drift
  *   node scripts/db-ledger-ops.js dry-run     # preview baseline rows
  *   node scripts/db-ledger-ops.js apply       # write BASELINE-<uid>-<ccy> rows
+ *   node scripts/db-ledger-ops.js normalize   # repair sub-minor float dust (--apply)
  *   node scripts/db-ledger-ops.js full        # report -> dry-run -> apply -> report
  *
  * The baseline logic mirrors scripts/backfill-ledger-baseline.js and the report
@@ -208,6 +209,82 @@ async function runBaseline(client, apply) {
   return 0;
 }
 
+/** True if the float is within less than one minor unit of the ledger balance
+ * (i.e. the ledger equals round(float)) — provably dust, safe to normalize. */
+function isMinorDust(floatValue, ledgerFloat, ccy) {
+  const minorDiff = Math.abs(Number(floatValue) - ledgerFloat);
+  return minorDiff < 0.5 / 10 ** decimalsFor(ccy);
+}
+
+async function runNormalize(client, apply) {
+  const balances = await userLedgerBalances(client);
+  const userIds = [...new Set(balances.map((b) => b.account.split(':')[1]))];
+  const wallets = userIds.length
+    ? (await client.query(
+        `SELECT "userId", "usdcBalance", "usdtBalance", "localBalance", "localBalances" FROM "Wallet" WHERE "userId" = ANY($1)`,
+        [userIds],
+      )).rows
+    : [];
+  const walletByUser = new Map(wallets.map((w) => [w.userId, w]));
+
+  const updates = [];
+  for (const b of balances) {
+    const [, userId, ccy] = b.account.split(':');
+    const w = walletByUser.get(userId);
+    if (!w) continue;
+    let legacy;
+    let field = null;
+    if (ccy === 'USDC') { legacy = Number(w.usdcBalance); field = 'usdcBalance'; }
+    else if (ccy === 'USDT') { legacy = Number(w.usdtBalance); field = 'usdtBalance'; }
+    else {
+      let locals = {};
+      try {
+        const parsed = typeof w.localBalances === 'string' ? JSON.parse(w.localBalances) : w.localBalances;
+        if (parsed && typeof parsed === 'object') locals = { ...parsed };
+      } catch { /* ignore */ }
+      legacy = locals[ccy] ?? (ccy === 'NGN' ? Number(w.localBalance) : undefined);
+      field = null; // local currencies live in the localBalances JSON
+    }
+    if (legacy === undefined) continue;
+
+    const ledgerFloat = fromMinor(b.minor, ccy);
+    if (roundTo(ledgerFloat, ccy) === roundTo(legacy, ccy)) continue; // already clean
+    if (!isMinorDust(legacy, ledgerFloat, ccy)) {
+      console.log(`  REAL DRIFT (left untouched): ${b.account} ledger=${ledgerFloat} legacy=${legacy}`);
+      continue;
+    }
+    updates.push({ userId, ccy, field, legacy, ledgerFloat, account: b.account });
+  }
+
+  console.log(`Sub-minor dust to normalize: ${updates.length}${apply ? '' : ' (dry-run, nothing written)'}`);
+  for (const u of updates) console.log(`  ${u.account}: ${u.legacy} -> ${u.ledgerFloat}`);
+  if (!apply) return 0;
+
+  await client.query('BEGIN');
+  try {
+    for (const u of updates) {
+      if (u.field) {
+        await client.query(`UPDATE "Wallet" SET "${u.field}" = $1 WHERE "userId" = $2`, [u.ledgerFloat, u.userId]);
+      } else {
+        const w = walletByUser.get(u.userId);
+        let locals = {};
+        try {
+          const parsed = typeof w.localBalances === 'string' ? JSON.parse(w.localBalances) : w.localBalances;
+          if (parsed && typeof parsed === 'object') locals = { ...parsed };
+        } catch { /* ignore */ }
+        locals[u.ccy] = u.ledgerFloat;
+        await client.query(`UPDATE "Wallet" SET "localBalances" = $1::jsonb WHERE "userId" = $2`, [JSON.stringify(locals), u.userId]);
+      }
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  }
+  console.log(`Normalized ${updates.length} float value(s) to the ledger minor grid.`);
+  return 0;
+}
+
 async function main() {
   const mode = (process.argv[2] || 'report').toLowerCase();
   const client = await connect();
@@ -223,7 +300,8 @@ async function main() {
     }
     if (mode === 'report') { process.exitCode = await runReport(client); return; }
     if (mode === 'dry-run' || mode === 'apply') { process.exitCode = await runBaseline(client, mode === 'apply'); return; }
-    console.error(`Unknown mode '${mode}' (report | dry-run | apply | full).`);
+    if (mode === 'normalize') { process.exitCode = await runNormalize(client, process.argv.includes('--apply')); return; }
+    console.error(`Unknown mode '${mode}' (report | dry-run | apply | normalize | full).`);
     process.exitCode = 2;
   } finally {
     await client.end();
