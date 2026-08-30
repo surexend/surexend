@@ -637,6 +637,7 @@ landed across the web app.
 - `git diff --check` clean.
 - Frontend `npm run build` passes.
 - Frontend `npm run typecheck` passes after build generated `.next/types`.
+- Follow-up fix applied after PR creation: `backend/src/common/interceptors/audit-log.interceptor.ts` now sanitizes to Prisma JSON input types explicitly, resolving a backend TypeScript failure where `{ body, query }` metadata was inferred as `unknown`.
 - Backend build is still not fully validated in this sandbox because:
   - `bcrypt` native install hit TLS/network restrictions unless scripts are
     skipped;

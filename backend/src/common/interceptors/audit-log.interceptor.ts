@@ -22,13 +22,37 @@ const SENSITIVE_KEYS = new Set([
   'otpauthurl',
 ]);
 
-function sanitizeForAudit(value: unknown): unknown {
+type AuditJson = string | number | boolean | null | AuditJson[] | { [key: string]: AuditJson };
+
+function sanitizeForAudit(value: unknown): AuditJson {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === 'string' || typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : String(value);
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
   if (Array.isArray(value)) {
     return value.map((item) => sanitizeForAudit(item));
   }
-  if (!value || typeof value !== 'object') {
-    return value;
+
+  if (typeof value !== 'object') {
+    return String(value);
   }
+
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).map(([key, entry]) => {
       const normalized = key.toLowerCase();
@@ -37,7 +61,7 @@ function sanitizeForAudit(value: unknown): unknown {
       }
       return [key, sanitizeForAudit(entry)];
     }),
-  );
+  ) as { [key: string]: AuditJson };
 }
 
 @Injectable()
@@ -64,7 +88,7 @@ export class AuditLogInterceptor implements NestInterceptor {
               metadata: {
                 body: sanitizeForAudit(request.body),
                 query: sanitizeForAudit(request.query),
-              },
+              } as any,
             },
           }).catch((error) => {
             this.logger.error(`Failed to write audit log: ${error.message}`);
