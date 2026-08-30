@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { adminAPI } from '@/lib/api'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { adminAPI, type AdminApprovalPayload } from '@/lib/api'
 import { CheckCircle2, XCircle, ExternalLink } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
+import AdminStepUpModal from '@/components/admin/AdminStepUpModal'
 
 const STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'UNVERIFIED']
 
@@ -12,6 +13,12 @@ export default function AdminKycPage() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState('PENDING')
+  const [approvalOpen, setApprovalOpen] = useState(false)
+  const [approvalTitle, setApprovalTitle] = useState('Confirm admin action')
+  const [approvalDescription, setApprovalDescription] = useState('Approve this sensitive admin action with your PIN or biometric.')
+  const [approvalActionLabel, setApprovalActionLabel] = useState('Approve action')
+  const [approvalLoading, setApprovalLoading] = useState(false)
+  const approvalActionRef = useRef<((approval: AdminApprovalPayload) => Promise<void>) | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -20,12 +27,53 @@ export default function AdminKycPage() {
 
   useEffect(() => { load() }, [load])
 
+  const requestApproval = (
+    config: { title: string; description: string; actionLabel: string },
+    action: (approval: AdminApprovalPayload) => Promise<void>,
+  ) => {
+    setApprovalTitle(config.title)
+    setApprovalDescription(config.description)
+    setApprovalActionLabel(config.actionLabel)
+    approvalActionRef.current = action
+    setApprovalOpen(true)
+  }
+
+  const handleApproval = async (approval: AdminApprovalPayload) => {
+    if (!approvalActionRef.current) return
+    setApprovalLoading(true)
+    try {
+      await approvalActionRef.current(approval)
+      setApprovalOpen(false)
+      approvalActionRef.current = null
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || 'Action failed')
+    } finally {
+      setApprovalLoading(false)
+    }
+  }
+
   const decide = (id: string, approve: boolean) => {
-    const reason = approve ? undefined : (window.prompt('Rejection reason (shown to the user):', 'Document could not be verified') || undefined)
-    adminAPI.decideKyc(id, { approve, reason }).then(() => {
-      toast.success(approve ? 'Approved' : 'Rejected')
-      load()
-    }).catch(() => toast.error('Action failed'))
+    let reason: string | undefined
+    if (!approve) {
+      const response = window.prompt('Rejection reason (shown to the user):', 'Document could not be verified')
+      if (response === null) return
+      reason = response.trim() || 'Document could not be verified'
+    }
+
+    requestApproval(
+      {
+        title: approve ? 'Approve KYC decision' : 'Reject KYC decision',
+        description: approve
+          ? 'This will mark the document as verified and may unlock a higher KYC state for the user.'
+          : 'This will reject the submitted document and store the rejection reason for the user record.',
+        actionLabel: approve ? 'Approve document' : 'Reject document',
+      },
+      async (approval) => {
+        await adminAPI.decideKyc(id, { approve, reason }, approval)
+        toast.success(approve ? 'Approved' : 'Rejected')
+        load()
+      },
+    )
   }
 
   return (
@@ -108,6 +156,20 @@ export default function AdminKycPage() {
           ))}
         </div>
       )}
+
+      <AdminStepUpModal
+        open={approvalOpen}
+        title={approvalTitle}
+        description={approvalDescription}
+        actionLabel={approvalActionLabel}
+        loading={approvalLoading}
+        onClose={() => {
+          if (approvalLoading) return
+          approvalActionRef.current = null
+          setApprovalOpen(false)
+        }}
+        onApprove={handleApproval}
+      />
     </div>
   )
 }

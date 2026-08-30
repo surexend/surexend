@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -27,6 +27,8 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [googleEnabled, setGoogleEnabled] = useState(false)
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState<string | null>(null)
+  const [twoFactorCode, setTwoFactorCode] = useState('')
 
   // One-time code mode
   const [codeMode, setCodeMode] = useState(false)
@@ -35,6 +37,8 @@ function LoginForm() {
   const [code, setCode] = useState('')
   const [codeLoading, setCodeLoading] = useState(false)
   const [resendIn, setResendIn] = useState(0)
+  const nextPath = searchParams.get('next')
+  const safeNextPath = nextPath && /^\/(app|admin)(?:\/|$)/.test(nextPath) ? nextPath : '/app/dashboard'
 
   useEffect(() => {
     const error = searchParams.get('error')
@@ -62,9 +66,15 @@ function LoginForm() {
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true)
     try {
-      await authAPI.login(data)
+      const response = await authAPI.login(data)
+      if (response.data?.requires2FA && response.data?.challengeToken) {
+        setTwoFactorChallenge(response.data.challengeToken)
+        setTwoFactorCode('')
+        toast.success('Enter your authenticator code to finish signing in')
+        return
+      }
       toast.success('Login successful!')
-      window.location.href = '/app/dashboard'
+      router.replace(safeNextPath)
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Login failed. Please check your credentials.')
     } finally {
@@ -93,11 +103,26 @@ function LoginForm() {
     try {
       await authAPI.verifyLoginOtp({ email: codeEmail, code })
       toast.success('Login successful!')
-      window.location.href = '/app/dashboard'
+      router.replace(safeNextPath)
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Invalid code')
     } finally {
       setCodeLoading(false)
+    }
+  }
+
+  const verifyTwoFactorCode = async () => {
+    if (!twoFactorChallenge) return toast.error('Start sign-in again to request a new 2FA challenge')
+    if (twoFactorCode.length !== 6) return toast.error('Enter the 6-digit authenticator code')
+    setIsLoading(true)
+    try {
+      await authAPI.verify2FALogin({ challengeToken: twoFactorChallenge, code: twoFactorCode })
+      toast.success('2FA verified. Welcome back!')
+      router.replace(safeNextPath)
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Could not verify that code')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -119,7 +144,7 @@ function LoginForm() {
       const response = await startAuthentication({ optionsJSON: options })
       await passkeyAPI.loginComplete(challengeId, response)
       toast.success('Login successful!')
-      window.location.href = '/app/dashboard'
+      router.replace(safeNextPath)
     } catch (error: any) {
       const detail = error?.cause?.message || error?.message || ''
       const cancelled = error?.name === 'NotAllowedError' && /cancel/i.test(detail)
@@ -198,7 +223,46 @@ function LoginForm() {
           {biometricLoading ? 'Checking your biometric…' : 'Sign in with Face ID or fingerprint'}
         </button>
 
-        {!codeMode ? (
+        {twoFactorChallenge ? (
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+              <p className="text-sm font-semibold text-white">Second factor required</p>
+              <p className="text-xs text-[#C7F9D4] mt-1 leading-relaxed">Open your authenticator app and enter the current 6-digit code to complete sign-in.</p>
+            </div>
+            <div>
+              <div className="relative">
+                <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] w-5 h-5 pointer-events-none z-10" />
+                <input
+                  value={twoFactorCode}
+                  onChange={e => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="6-digit authenticator code"
+                  className={`input-field input-field-${variant} input-has-icon-left text-center tracking-[0.4em]`}
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={verifyTwoFactorCode}
+              disabled={isLoading || twoFactorCode.length !== 6}
+              className={`w-full py-4 rounded-xl text-center btn-${variant} flex justify-center items-center disabled:opacity-50`}
+            >
+              {isLoading ? (
+                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} className="w-6 h-6 border-2 border-[#0D0D0D] border-t-transparent rounded-full" />
+              ) : (
+                'Verify and Sign In'
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTwoFactorChallenge(null); setTwoFactorCode('') }}
+              className="w-full text-center text-sm text-[#94A3B8] hover:text-white transition-colors"
+            >
+              ← Back to sign-in options
+            </button>
+          </div>
+        ) : !codeMode ? (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div>
               <div className="relative">

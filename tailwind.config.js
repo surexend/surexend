@@ -46,8 +46,8 @@ module.exports = {
         }
       },
       fontFamily: {
-        inter: ['Inter', 'sans-serif'],
-        dm: ['DM Sans', 'sans-serif'],
+        inter: ['var(--font-inter)'],
+        dm: ['var(--font-dm)'],
       },
       backgroundImage: {
         'gold-gradient': 'radial-gradient(ellipse at center, #E8B820 0%, #C49015 40%, #A07810 100%)',

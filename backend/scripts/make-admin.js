@@ -1,7 +1,12 @@
 const { PrismaClient } = require('@prisma/client');
 const p = new PrismaClient();
 
-const EMAIL = process.argv[2] || 'surexendofficial@gmail.com';
+const EMAIL = process.argv[2] || process.env.ADMIN_EMAIL;
+
+if (!EMAIL) {
+  console.error('Usage: node scripts/make-admin.js user@example.com')
+  process.exit(1)
+}
 
 (async () => {
   const user = await p.user.findUnique({ where: { email: EMAIL }, select: { id: true, role: true } });

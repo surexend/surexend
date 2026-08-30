@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { Copy, Share2, AlertTriangle, CheckCircle2, Landmark } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Copy, Share2, AlertTriangle, CheckCircle2, Landmark, ShieldCheck, Wallet, ArrowRightLeft } from 'lucide-react'
 import QRCode from 'qrcode'
 import toast from 'react-hot-toast'
 import { walletAPI } from '@/lib/api'
@@ -212,26 +212,60 @@ export default function ReceivePage() {
 
   return (
     <div className="w-full max-w-full overflow-x-hidden px-3 py-4 max-w-md mx-auto pb-28 sm:pb-32 space-y-4">
-      {/* Page title */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-extrabold text-white">Receive Crypto</h1>
-          <p className="text-xs text-[#64748B] mt-0.5">Deposit USDC to your wallet</p>
+      <div className="liquid-glass rounded-3xl border border-white/10 p-5 overflow-hidden relative">
+        <div
+          className="absolute inset-x-0 top-0 h-[2px] pointer-events-none"
+          style={{ background: `linear-gradient(90deg, transparent, rgba(${colors.glowRgb}, 0.75), transparent)` }}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-extrabold text-white">Receive USDC</h1>
+            <p className="text-sm text-[#94A3B8] mt-1">Choose a network, copy your deposit address, and fund your wallet with confidence.</p>
+          </div>
+          <span
+            className="px-2.5 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap"
+            style={{
+              color: colors.primary,
+              borderColor: `rgba(${colors.glowRgb},0.4)`,
+              background: `rgba(${colors.glowRgb},0.1)`,
+            }}
+          >
+            USDC only
+          </span>
         </div>
-        <span
-          className="px-2.5 py-1 rounded-full text-[10px] font-bold border"
-          style={{
-            color: colors.primary,
-            borderColor: `rgba(${colors.glowRgb},0.4)`,
-            background: `rgba(${colors.glowRgb},0.1)`,
-          }}
-        >
-          USDC
-        </span>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="w-9 h-9 rounded-2xl flex items-center justify-center mb-2 bg-white/[0.05] border border-white/10">
+              <Wallet className="w-4 h-4" style={{ color: colors.primary }} />
+            </div>
+            <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Asset</p>
+            <p className="text-sm font-semibold text-white mt-1">USD Coin</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="w-9 h-9 rounded-2xl flex items-center justify-center mb-2 bg-white/[0.05] border border-white/10">
+              <ArrowRightLeft className="w-4 h-4" style={{ color: colors.primary }} />
+            </div>
+            <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Selected network</p>
+            <p className="text-sm font-semibold text-white mt-1">{activeNet.label}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="w-9 h-9 rounded-2xl flex items-center justify-center mb-2 bg-white/[0.05] border border-white/10">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            </div>
+            <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Deposit rule</p>
+            <p className="text-sm font-semibold text-white mt-1">Match asset + network</p>
+          </div>
+        </div>
       </div>
 
       {/* Network Selector */}
-      <div className="grid grid-cols-2 gap-2">
+      <div>
+        <div className="flex items-center justify-between mb-3 px-1">
+          <p className="text-[11px] uppercase tracking-[0.18em] font-extrabold text-[#64748B]">Choose network</p>
+          <p className="text-[11px] text-[#94A3B8]">Same asset, different rails</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
         {NETWORKS.map((net) => (
           <button
             key={net.id}
@@ -248,6 +282,7 @@ export default function ReceivePage() {
             <span className="text-[9px] text-[#475569] leading-none text-center">{net.sublabel}</span>
           </button>
         ))}
+        </div>
       </div>
 
       {/* QR Card */}
@@ -325,6 +360,21 @@ export default function ReceivePage() {
             >
               <Share2 className="w-4 h-4" /> Share Address
             </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Send only</p>
+              <p className="text-sm font-semibold text-white mt-1">USDC</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">Selected rail</p>
+              <p className="text-sm font-semibold text-white mt-1">{activeNet.sublabel}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-[10px] uppercase tracking-wider font-extrabold text-[#64748B]">After deposit</p>
+              <p className="text-sm font-semibold text-white mt-1">Track it in History</p>
+            </div>
           </div>
         </>
       )}

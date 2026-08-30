@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, UnauthorizedException, Logger } from '
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { RefreshSessionService } from '../auth/refresh-session.service';
 import {
   generateRegistrationOptions,
   generateAuthenticationOptions,
@@ -29,6 +30,7 @@ export class PasskeysService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private jwtService: JwtService,
+    private refreshSessionService: RefreshSessionService,
   ) {}
 
   private getRedis(): Redis | null {
@@ -216,13 +218,18 @@ const credential = verification.registrationInfo.credential;
     return this.issueTokens(user);
   }
 
-  private issueTokens(user: any) {
+  private async issueTokens(user: any) {
     const payload = { sub: user.id, email: user.email };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
-    const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('app.jwt.refreshSecret'),
-      expiresIn: '7d',
-    });
+    const refreshJti = crypto.randomBytes(16).toString('hex');
+    const refreshToken = this.jwtService.sign(
+      { ...payload, type: 'refresh', jti: refreshJti },
+      {
+        secret: this.configService.get<string>('app.jwt.refreshSecret'),
+        expiresIn: '7d',
+      },
+    );
+    await this.refreshSessionService.create(user.id, refreshJti, refreshToken, this.refreshSessionService.ttlSeconds());
     return {
       accessToken,
       refreshToken,

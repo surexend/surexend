@@ -605,3 +605,56 @@ Ledger is now the verified baseline for all existing balances. Next steps:
 merge to main, deploy, LEDGER_READS_ENABLED=true, verify, re-report. Note the
 DB has no default for LedgerEntry.id (Prisma generates uuid client-side) and
 JSON localBalances updates must be per-user single-write.
+
+## 2026-08-30 (7) — UI/security whole-product pass + next-session context
+
+A broad UI/responsiveness upgrade and security hardening pass has now been
+landed across the web app.
+
+### What shipped in this pass
+- Premium-fintech visual polish across landing, auth, dashboard, bills,
+  support, history, send/receive/withdraw, profile, and admin surfaces.
+- Reduced-motion and mobile-safety cleanups on animated/scroll-heavy views.
+- Login-time 2FA challenge flow completed end to end.
+- Refresh-session rotation/revocation landed for password and passkey auth.
+- Client auth/session helpers and middleware-based app/admin route protection
+  are in place.
+- Login privacy leakage reduced and audit-log secret redaction broadened.
+- Support assistant copy/intent handling aligned more closely to live product
+  capabilities.
+- Sensitive admin mutations now require step-up approval through either a
+  transaction PIN or passkey token:
+  - backend guard: `backend/src/common/guards/admin-step-up.guard.ts`
+  - shared frontend approval UI: `src/components/admin/AdminStepUpModal.tsx`
+  - wired admin actions: user updates/deletes/manual credits, KYC decisions,
+    pricing changes, and broadcasts
+- Frontend security headers were tightened in `next.config.ts` with a
+  compatibility-mode CSP and stronger permissions/cross-origin headers.
+- Frontend build resilience improved by removing build-time Google Fonts
+  dependence from `src/app/layout.tsx` and using CSS/system fallbacks.
+
+### Validation status
+- `git diff --check` clean.
+- Frontend `npm run build` passes.
+- Frontend `npm run typecheck` passes after build generated `.next/types`.
+- Backend build is still not fully validated in this sandbox because:
+  - `bcrypt` native install hit TLS/network restrictions unless scripts are
+    skipped;
+  - `prisma generate` could not fetch engine binaries, so Prisma client types
+    could not be regenerated here;
+  - resulting Nest build errors are broad Prisma typing failures and are not a
+    clean signal on only this session's changes.
+
+### Context for the next session — do these 3 steps
+1. **Final manual polish sweep**
+   - review admin and authenticated flows for edge-case loading/error/empty
+     states;
+   - look for any copy or spacing that still feels below premium-fintech
+     quality.
+2. **Run a live visual inspection**
+   - launch preview(s), verify responsive behavior across the major routes, and
+     confirm the new admin step-up modal feels smooth on mobile and desktop.
+3. **Do the closing whole-product review**
+   - re-audit the app end to end for UI, responsiveness, and security;
+   - if backend dependencies can be installed in a less restricted environment,
+     run `backend/npm run build` and any follow-up validation there.

@@ -13,21 +13,34 @@ function OAuthCallback() {
     if (handled.current) return
     handled.current = true
 
-    const accessToken = searchParams.get('accessToken')
-    const refreshToken = searchParams.get('refreshToken')
-    const error = searchParams.get('error')
+    const hashParams = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.hash.replace(/^#/, ''))
+      : new URLSearchParams()
+
+    const accessToken = hashParams.get('accessToken') || searchParams.get('accessToken')
+    const refreshToken = hashParams.get('refreshToken') || searchParams.get('refreshToken')
+    const error = hashParams.get('error') || searchParams.get('error')
+
+    const stripSensitiveUrl = () => {
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', '/auth/oauth-callback')
+      }
+    }
 
     if (error) {
-      window.location.href = `/auth/login?error=${encodeURIComponent(error)}`
+      stripSensitiveUrl()
+      router.replace(`/auth/login?error=${encodeURIComponent(error)}`)
       return
     }
     if (!accessToken) {
-      window.location.href = '/auth/login?error=Google%20sign-in%20failed'
+      stripSensitiveUrl()
+      router.replace('/auth/login?error=Google%20sign-in%20failed')
       return
     }
 
     authAPI.storeOAuthTokens(accessToken, refreshToken || undefined)
-    window.location.href = '/app/dashboard'
+    stripSensitiveUrl()
+    router.replace('/app/dashboard')
   }, [searchParams, router])
 
   return (

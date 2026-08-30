@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { adminAPI } from '@/lib/api'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { adminAPI, type AdminApprovalPayload } from '@/lib/api'
 import { Search, ChevronLeft, ChevronRight, Ban, CheckCircle2, Eye } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
+import AdminStepUpModal from '@/components/admin/AdminStepUpModal'
 
 export default function AdminUsersPage() {
   const [data, setData] = useState<any>(null)
@@ -13,6 +14,12 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState('')
   const [kycStatus, setKycStatus] = useState('')
   const [page, setPage] = useState(1)
+  const [approvalOpen, setApprovalOpen] = useState(false)
+  const [approvalTitle, setApprovalTitle] = useState('Confirm admin action')
+  const [approvalDescription, setApprovalDescription] = useState('Approve this sensitive admin action with your PIN or biometric.')
+  const [approvalActionLabel, setApprovalActionLabel] = useState('Approve action')
+  const [approvalLoading, setApprovalLoading] = useState(false)
+  const approvalActionRef = useRef<((approval: AdminApprovalPayload) => Promise<void>) | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -24,11 +31,44 @@ export default function AdminUsersPage() {
 
   useEffect(() => { load() }, [load])
 
+  const requestApproval = (
+    config: { title: string; description: string; actionLabel: string },
+    action: (approval: AdminApprovalPayload) => Promise<void>,
+  ) => {
+    setApprovalTitle(config.title)
+    setApprovalDescription(config.description)
+    setApprovalActionLabel(config.actionLabel)
+    approvalActionRef.current = action
+    setApprovalOpen(true)
+  }
+
+  const handleApproval = async (approval: AdminApprovalPayload) => {
+    if (!approvalActionRef.current) return
+    setApprovalLoading(true)
+    try {
+      await approvalActionRef.current(approval)
+      setApprovalOpen(false)
+      approvalActionRef.current = null
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || 'Admin action failed')
+    } finally {
+      setApprovalLoading(false)
+    }
+  }
+
   const toggleUser = (id: string, body: any) => {
-    adminAPI.updateUser(id, body).then(() => {
-      toast.success('User updated')
-      load()
-    }).catch(() => toast.error('Update failed'))
+    requestApproval(
+      {
+        title: 'Approve user update',
+        description: 'This changes the user’s access or moderation status.',
+        actionLabel: 'Apply update',
+      },
+      async (approval) => {
+        await adminAPI.updateUser(id, body, approval)
+        toast.success('User updated')
+        load()
+      },
+    )
   }
 
   const totalPages = Math.max(1, Math.ceil((data?.total || 0) / (data?.limit || 20)))
@@ -160,6 +200,19 @@ export default function AdminUsersPage() {
           </div>
         </>
       )}
+      <AdminStepUpModal
+        open={approvalOpen}
+        title={approvalTitle}
+        description={approvalDescription}
+        actionLabel={approvalActionLabel}
+        loading={approvalLoading}
+        onClose={() => {
+          if (approvalLoading) return
+          approvalActionRef.current = null
+          setApprovalOpen(false)
+        }}
+        onApprove={handleApproval}
+      />
     </div>
   )
 }

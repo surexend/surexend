@@ -1,13 +1,13 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useTheme } from '@/context/ThemeContext'
-import { Send, Bell, Users, Clock, AlertCircle, CheckCircle } from 'lucide-react'
-import { adminAPI } from '@/lib/api'
+import { Send, Bell, Users, Clock, AlertCircle } from 'lucide-react'
+import { adminAPI, type AdminApprovalPayload } from '@/lib/api'
+import AdminStepUpModal from '@/components/admin/AdminStepUpModal'
 
 export default function AdminBroadcastPage() {
   const { variant, colors } = useTheme()
-  const accentRgb = variant === 'gold' ? '212, 160, 23' : '181, 226, 61'
   const accentHex = variant === 'gold' ? '#D4A017' : '#B5E23D'
 
   const [title, setTitle] = useState('')
@@ -17,6 +17,9 @@ export default function AdminBroadcastPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [userCount, setUserCount] = useState<number>(0)
+  const [approvalOpen, setApprovalOpen] = useState(false)
+  const [approvalLoading, setApprovalLoading] = useState(false)
+  const approvalActionRef = useRef<((approval: AdminApprovalPayload) => Promise<void>) | null>(null)
 
   const broadcastTypes = [
     { value: 'BROADCAST', label: 'Broadcast Message', icon: Bell, color: accentHex },
@@ -32,6 +35,20 @@ export default function AdminBroadcastPage() {
       .catch(() => setUserCount(0))
   }, [])
 
+  const handleApproval = async (approval: AdminApprovalPayload) => {
+    if (!approvalActionRef.current) return
+    setApprovalLoading(true)
+    try {
+      await approvalActionRef.current(approval)
+      setApprovalOpen(false)
+      approvalActionRef.current = null
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to send broadcast. Please try again.')
+    } finally {
+      setApprovalLoading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim() || !body.trim()) {
@@ -39,20 +56,22 @@ export default function AdminBroadcastPage() {
       return
     }
 
-    setLoading(true)
     setError('')
     setSuccess('')
 
-    try {
-      const result = await adminAPI.broadcastMessage({ title, body, type })
-      setSuccess(result.message || `Broadcast sent successfully! Sent to ${result.userCount} users.`)
-      setTitle('')
-      setBody('')
-    } catch (err: any) {
-      setError(err.message || 'Failed to send broadcast. Please try again.')
-    } finally {
-      setLoading(false)
+    approvalActionRef.current = async (approval) => {
+      setLoading(true)
+      try {
+        const result = await adminAPI.broadcastMessage({ title, body, type }, approval)
+        setSuccess(result.message || `Broadcast sent successfully! Sent to ${result.userCount} users.`)
+        setTitle('')
+        setBody('')
+      } finally {
+        setLoading(false)
+      }
     }
+
+    setApprovalOpen(true)
   }
 
   return (
@@ -207,6 +226,20 @@ export default function AdminBroadcastPage() {
           </div>
         </div>
       </div>
+
+      <AdminStepUpModal
+        open={approvalOpen}
+        title="Approve broadcast delivery"
+        description="Broadcasts reach your active user base and should be approved with a transaction PIN or biometric confirmation before sending."
+        actionLabel="Send broadcast"
+        loading={loading || approvalLoading}
+        onClose={() => {
+          if (loading || approvalLoading) return
+          approvalActionRef.current = null
+          setApprovalOpen(false)
+        }}
+        onApprove={handleApproval}
+      />
     </div>
   )
 }

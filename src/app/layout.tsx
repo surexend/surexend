@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, DM_Sans } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/context/ThemeContext'
 import PWAInstallPrompt from '@/components/PWAInstallPrompt'
@@ -7,26 +6,14 @@ import MobileResilienceScript from '@/components/MobileResilienceScript'
 import { BackNavigationProvider } from '@/context/BackNavigationContext'
 import AppToaster from '@/components/AppToaster'
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-})
-
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  variable: '--font-dm',
-  display: 'swap',
-})
-
 const BRAND_VARIANT = process.env.NEXT_PUBLIC_BRAND_VARIANT || 'gold'
 
 export const metadata: Metadata = {
   title: {
-    default: 'SureXend — USDC to Naira, Airtime, Bills & Bank Withdrawals in Africa',
+    default: 'SureXend — USDC to Naira, Airtime, Bills & Instant Transfers in Africa',
     absolute: 'SureXend — Your Crypto, Finally Useful in Africa',
   },
-  description: 'The stablecoin spending platform for Africa. Convert USDC to naira at a live rate, buy MTN & Airtel airtime with crypto, pay electricity and DSTV bills, and withdraw to any bank — all from one secure wallet.',
+  description: 'The stablecoin spending platform for Africa. Convert USDC to naira at a live rate, buy MTN & Airtel airtime with crypto, pay electricity and DSTV bills, and move money from one secure wallet.',
   keywords: ['crypto africa', 'USDC nigeria', 'USDC to naira', 'sell USDC for naira', 'buy airtime with crypto', 'pay bills with crypto', 'stablecoin', 'send money africa', 'crypto to bank', 'crypto to naira', 'send money to nigeria', 'surexend'],
   authors: [{ name: 'SureXend' }],
   creator: 'SureXend',
@@ -42,7 +29,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://surexend.com'),
   openGraph: {
     title: 'SureXend — Your Crypto, Finally Useful in Africa',
-    description: 'Convert USDC to naira, buy airtime with crypto, pay bills and withdraw to any African bank account.',
+    description: 'Convert USDC to naira, buy airtime with crypto, pay bills, and move money across Africa.',
     url: 'https://surexend.com',
     siteName: 'SureXend',
     type: 'website',
@@ -74,13 +61,11 @@ export const viewport: Viewport = {
   themeColor: BRAND_VARIANT === 'lemon' ? '#B5E23D' : '#D4A017',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${dmSans.variable}`}>
+    <html lang="en">
       <head>
         {/* Lite mode — applied before paint to avoid a flash and to auto-detect slow connections */}
         <script
@@ -88,8 +73,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: `(function(){try{var v=localStorage.getItem('surexend_lite_mode');var slow=['slow-2g','2g','3g'].indexOf((navigator.connection&&navigator.connection.effectiveType)||'')>-1;if(v==='on'||(v===null&&slow))document.documentElement.classList.add('lite-mode');}catch(e){}})();`,
           }}
         />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* PWA meta tags */}
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -115,7 +98,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   name: 'SureXend',
                   url: 'https://surexend.com',
                   logo: 'https://surexend.com/logo-mark-gold.png',
-                  description: "Africa's stablecoin spending platform. Convert USDC to local currency, buy airtime, pay bills and withdraw to banks across the continent.",
+                  description: "Africa's stablecoin spending platform. Convert USDC to local currency, buy airtime, pay bills and move money across the continent.",
                   email: 'support@surexend.com',
                   sameAs: [
                     'https://x.com/surexend',
@@ -143,13 +126,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   operatingSystem: 'Android, iOS, Web',
                   url: 'https://surexend.com',
                   description:
-                    'Send money, convert USDC to local currency, pay bills and withdraw to banks across Africa.',
+                    'Send money, convert USDC to local currency, and pay bills across Africa.',
                   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
                   featureList: [
                     'USDC wallet',
                     'Live currency conversion',
                     'Airtime & bill payments',
-                    'Bank & mobile-money withdrawal',
+                    'Instant SureX Tag transfers',
                     'Biometric & 2FA security',
                   ],
                 },

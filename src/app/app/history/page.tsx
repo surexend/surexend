@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
@@ -771,10 +771,14 @@ export default function HistoryPage() {
     else setShowFilters(false)
   }, 30)
 
-  // Build query params
+  const normalizedSearch = search.trim()
+
+  // Build query params. When the user is actively searching, pull a larger
+  // slice once and filter client-side so the search box is genuinely useful
+  // instead of only matching the current 20-row page.
   const queryParams = {
-    page,
-    limit: 20,
+    page: normalizedSearch ? 1 : page,
+    limit: normalizedSearch ? 200 : 20,
     ...(filters.year && { year: filters.year }),
     ...(filters.month && { month: filters.month }),
     ...(filters.week && { week: filters.week }),
@@ -791,13 +795,40 @@ export default function HistoryPage() {
   const transactions = data?.transactions || []
   const totalPages = data?.totalPages || 1
 
+  const visibleTransactions = useMemo(() => {
+    const q = normalizedSearch.toLowerCase()
+    if (!q) return transactions
+    return transactions.filter((tx: any) => {
+      const meta = tx?.metadata || {}
+      const haystack = [
+        tx?.reference,
+        tx?.type,
+        tx?.status,
+        tx?.currency,
+        tx?.recipient,
+        tx?.sender,
+        meta?.toTag,
+        meta?.fromTag,
+        meta?.recipientName,
+        meta?.senderName,
+        meta?.provider,
+        meta?.destinationNetwork,
+        meta?.network,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [transactions, normalizedSearch])
+
   // Count active filters
   const activeFilterCount = [filters.year, filters.month, filters.week, filters.day]
     .filter(Boolean).length + (filters.type !== 'ALL' ? 1 : 0)
 
   // Group transactions by date
-  const grouped: Record<string, typeof transactions> = {}
-  transactions.forEach((tx: any) => {
+  const grouped: Record<string, typeof visibleTransactions> = {}
+  visibleTransactions.forEach((tx: any) => {
     const dateVal = tx.createdAt || tx.date
     let key = 'Other'
     if (dateVal) {
@@ -924,7 +955,7 @@ export default function HistoryPage() {
               <div key={i} className="skeleton h-16 rounded-xl" style={{ animationDelay: `${i * 0.05}s` }} />
             ))}
           </div>
-        ) : transactions.length === 0 ? (
+        ) : visibleTransactions.length === 0 ? (
           <motion.div
             className="flex flex-col items-center justify-center py-24 text-center"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -934,7 +965,11 @@ export default function HistoryPage() {
             </div>
             <h3 className="text-white font-semibold mb-2">No transactions found</h3>
             <p className="text-[#64748B] text-sm max-w-xs">
-              {activeFilterCount > 0 ? 'Try adjusting your filters' : 'Your transactions will appear here once you start using SureXend'}
+              {normalizedSearch
+                ? 'No transaction on this screen matches your search yet'
+                : activeFilterCount > 0
+                  ? 'Try adjusting your filters'
+                  : 'Your transactions will appear here once you start using SureXend'}
             </p>
             {activeFilterCount > 0 && (
               <button
@@ -1023,7 +1058,7 @@ export default function HistoryPage() {
             ))}
 
             {/* Pagination */}
-            {totalPages > 1 && (
+            {!normalizedSearch && totalPages > 1 && (
               <div className="flex items-center justify-center gap-3 py-4">
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
                   className="px-4 py-2 rounded-xl text-sm disabled:opacity-30"

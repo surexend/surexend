@@ -1,6 +1,21 @@
 import type { NextConfig } from 'next'
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001'
+const IS_DEV = process.env.NODE_ENV !== 'production'
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${IS_DEV ? " 'unsafe-eval'" : ''}`,
+  "style-src 'self' 'unsafe-inline' https:",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data: https:",
+  `connect-src 'self' https: wss:${IS_DEV ? " ws: http://localhost:*" : ''}`,
+  "media-src 'self' blob: https:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+  "upgrade-insecure-requests",
+].join('; ')
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -16,8 +31,8 @@ const nextConfig: NextConfig = {
     ]
   },
 
-  // Allow preview deployments on the monkeycode preview domain
-  allowedDevOrigins: ['.monkeycode-ai.live'],
+  // Allow preview deployments on common sandbox/dev domains
+  allowedDevOrigins: ['.monkeycode-ai.live', '.e2b.app'],
 
   // Required for Netlify: allow Next.js Image Optimization
   images: {
@@ -37,11 +52,13 @@ const nextConfig: NextConfig = {
     {
       source: '/(.*)',
       headers: [
+        { key: 'Content-Security-Policy', value: contentSecurityPolicy.replace(/\s{2,}/g, ' ').trim() },
         { key: 'X-Content-Type-Options', value: 'nosniff' },
         { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-        { key: 'X-XSS-Protection', value: '1; mode=block' },
         { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-        { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+        { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        { key: 'Cross-Origin-Resource-Policy', value: 'same-site' },
       ],
     },
   ],

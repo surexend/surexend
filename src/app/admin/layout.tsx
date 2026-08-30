@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useTheme } from '@/context/ThemeContext'
 import { LayoutDashboard, Users, FileText, ShieldCheck, ArrowLeft, Tags, Bell, Trophy } from 'lucide-react'
 import { userAPI } from '@/lib/api'
+import { hasClientAuthSession } from '@/lib/auth-session'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -17,8 +18,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     setMounted(true)
-    const token = typeof window !== 'undefined' ? localStorage.getItem('surexend_access_token') : null
-    if (!token) {
+    if (!hasClientAuthSession()) {
       router.replace('/auth/login')
       return
     }

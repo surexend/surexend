@@ -53,9 +53,9 @@ export class AuthController {
     const frontendUrl = this.authService.configFrontendUrl();
     try {
       const tokens = await this.authService.googleCallback(code);
-      return res.redirect(`${frontendUrl}/auth/oauth-callback?accessToken=${encodeURIComponent(tokens.accessToken)}&refreshToken=${encodeURIComponent(tokens.refreshToken)}`);
+      return res.redirect(`${frontendUrl}/auth/oauth-callback#accessToken=${encodeURIComponent(tokens.accessToken)}&refreshToken=${encodeURIComponent(tokens.refreshToken)}`);
     } catch (error: any) {
-      return res.redirect(`${frontendUrl}/auth/oauth-callback?error=${encodeURIComponent(error?.response?.data?.message || error?.message || 'Google sign-in failed')}`);
+      return res.redirect(`${frontendUrl}/auth/oauth-callback#error=${encodeURIComponent(error?.response?.data?.message || error?.message || 'Google sign-in failed')}`);
     }
   }
 
@@ -69,10 +69,18 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('otp/verify-login')
   @HttpCode(HttpStatus.OK)
-  async verifyLoginOtp(@Body() dto: { email: string; code: string }) {
-    return this.authService.verifyLoginOtp(dto);
+  async verifyLoginOtp(@Body() dto: { email: string; code: string }, @Req() req: Request) {
+    return this.authService.verifyLoginOtp(dto, req);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('2fa/verify-login')
+  @HttpCode(HttpStatus.OK)
+  async verifyTwoFactorLogin(@Body() dto: { challengeToken: string; code: string }, @Req() req: Request) {
+    return this.authService.verifyTwoFactorLogin(dto.challengeToken, dto.code, req);
+  }
+
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(@Body('refreshToken') refreshToken: string) {
@@ -81,8 +89,8 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout() {
-    return { message: 'Logged out successfully' };
+  async logout(@Body('refreshToken') refreshToken?: string) {
+    return this.authService.logout(refreshToken);
   }
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })

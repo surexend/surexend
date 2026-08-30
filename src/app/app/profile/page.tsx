@@ -13,10 +13,10 @@ import {
   Globe, Moon, Star, Award, Crown, ExternalLink,
   AlertTriangle, Tag, Check, X
 } from 'lucide-react'
-import { getInitials } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 import CurrencyFlag from '@/components/CurrencyFlag'
+import UserAvatar from '@/components/ui/UserAvatar'
 import { useBackLayer } from '@/context/BackNavigationContext'
 
 function MenuSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -169,13 +169,12 @@ export default function ProfilePage() {
         />
         <div className="flex items-center gap-3 truncate">
           {/* Clean Avatar Display */}
-          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-lg bg-[#212429] flex-shrink-0">
-            {avatar ? (
-              <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
-            ) : (
-              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" alt="Avatar" className="w-full h-full object-cover" />
-            )}
-          </div>
+          <UserAvatar
+            src={avatar}
+            name={fullName || 'SureXend User'}
+            className="w-12 h-12 border-2 border-white/20 flex-shrink-0"
+            initialsClassName="text-sm"
+          />
 
             <div className="truncate">
               <div className="flex items-center gap-1.5">
@@ -214,12 +213,12 @@ export default function ProfilePage() {
               <Tag className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] text-[#94A3B8] uppercase font-bold tracking-wider">Your Xend Tag</p>
+              <p className="text-[11px] text-[#94A3B8] uppercase font-bold tracking-wider">Your SureX Tag</p>
               <p className="font-mono text-sm font-extrabold text-white">@{surexTag}</p>
             </div>
           </div>
           <button 
-            onClick={() => { navigator.clipboard.writeText(`@${surexTag}`); toast.success(`Copied Xend Tag @${surexTag}!`) }}
+            onClick={() => { navigator.clipboard.writeText(`@${surexTag}`); toast.success(`Copied SureX Tag @${surexTag}!`) }}
             className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-semibold border border-white/10 flex items-center gap-1.5 transition-all"
           >
             <Copy className="w-3.5 h-3.5" /> Copy Tag

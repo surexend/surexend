@@ -28,9 +28,9 @@ interface ActionResult { ok: boolean; text: string; ref?: string }
 
 const QUICK_QUESTIONS = [
   'How do I convert USD to Naira?',
-  'How do European Invoices work?',
-  'What are the withdrawal fees?',
-  'How do I deposit local currency?',
+  'How do SureX Tags work?',
+  'How do I deposit USDC?',
+  'When will bank withdrawals go live?',
   'Send 50 USDC to Chidi',
   'Pay my DSTV bill',
   'Download my receipt',
