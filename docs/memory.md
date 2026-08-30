@@ -583,6 +583,6 @@ It refuses to run if Wallet/LedgerEntry/Transaction/User tables are missing;
 `report` is read-only (double-entry invariant + per-user ledger/float drift,
 exit 1 on drift), `dry-run` previews, `apply` writes idempotent
 BASELINE-<uid>-<ccy> pairs in one transaction, `full` chains report→dry-run→
-apply→report. `.github/workflows/ledger-db-ops.yml` runs it on demand with the
+apply→report. `docs/ledger-db-ops.workflow.yml` runs it on demand with the
 SXDB_URL repo secret. Run `full` on the real DB before setting
 LEDGER_READS_ENABLED=true.

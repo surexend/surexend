@@ -172,7 +172,7 @@ SXDB_URL=postgres://... node scripts/db-ledger-ops.js apply    # write baselines
 SXDB_URL=postgres://... node scripts/db-ledger-ops.js full     # report -> dry-run -> apply -> report
 ```
 
-`.github/workflows/ledger-db-ops.yml` wraps this as a manual
+`docs/ledger-db-ops.workflow.yml (move to .github/workflows/ to enable)` wraps this as a manual
 (`workflow_dispatch`) job using the `SXDB_URL` repo secret — set the secret,
 then run the workflow with mode `report` / `dry-run` / `apply` / `full` from
 the Actions tab (or `gh workflow run ledger-db-ops.yml -f mode=full`).
