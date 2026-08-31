@@ -62,15 +62,15 @@ export default function AdminCampaignsPage() {
         </div>
         <div className="liquid-glass p-4 rounded-2xl">
           <p className="text-[10px] uppercase tracking-wider text-[#64748B] font-semibold flex items-center gap-1.5">
-            <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> Crypto Volume (All Time)
+            <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> Crypto volume (USD equivalent)
           </p>
           <p className="text-2xl font-black text-emerald-400 mt-2">${fmt(data.crypto.allTime.grandTotal)}</p>
         </div>
         <div className="liquid-glass p-4 rounded-2xl">
           <p className="text-[10px] uppercase tracking-wider text-[#64748B] font-semibold flex items-center gap-1.5">
-            <DollarSign className="w-3.5 h-3.5 text-amber-400" /> Bills Volume (All Time)
+            <DollarSign className="w-3.5 h-3.5 text-amber-400" /> Bills volume (NGN)
           </p>
-          <p className="text-2xl font-black text-amber-400 mt-2">${fmt(data.bills.allTime.grandTotal)}</p>
+          <p className="text-2xl font-black text-amber-400 mt-2">₦{fmt(data.bills.allTime.grandTotal)}</p>
         </div>
       </div>
 
@@ -99,7 +99,7 @@ export default function AdminCampaignsPage() {
               <Trophy className="w-5 h-5" style={{ color: accentHex }} />
               <p className="font-bold text-white text-sm">Crypto Campaign</p>
             </div>
-            <span className="text-[10px] text-[#64748B]">{crypto.participants} participants · ${fmt(crypto.grandTotal)} total</span>
+            <span className="text-[10px] text-[#64748B]">{crypto.participants} participants · ${fmt(crypto.grandTotal)} USD equivalent</span>
           </div>
           <div className="divide-y divide-white/5">
             {crypto.top10.length === 0 ? (
@@ -125,7 +125,7 @@ export default function AdminCampaignsPage() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-black text-white">${fmt(e.total)}</p>
-                    <p className="text-[10px] text-[#64748B]">USD</p>
+                    <p className="text-[10px] text-[#64748B]">USD equivalent</p>
                   </div>
                 </div>
               ))
@@ -140,7 +140,7 @@ export default function AdminCampaignsPage() {
               <Award className="w-5 h-5 text-amber-400" />
               <p className="font-bold text-white text-sm">Bills Campaign</p>
             </div>
-            <span className="text-[10px] text-[#64748B]">{bills.participants} participants · ${fmt(bills.grandTotal)} total</span>
+            <span className="text-[10px] text-[#64748B]">{bills.participants} participants · ₦{fmt(bills.grandTotal)} total</span>
           </div>
           <div className="divide-y divide-white/5">
             {bills.top10.length === 0 ? (

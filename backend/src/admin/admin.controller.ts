@@ -21,10 +21,11 @@ export class AdminController {
   listUsers(
     @Query('search') search?: string,
     @Query('kycStatus') kycStatus?: string,
+    @Query('sort') sort?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.adminService.listUsers({ search, kycStatus, page, limit });
+    return this.adminService.listUsers({ search, kycStatus, sort, page, limit });
   }
 
   @Get('users/:id')
@@ -59,6 +60,41 @@ export class AdminController {
     @Query('limit') limit?: string,
   ) {
     return this.adminService.listTransactions({ type, status, search, page, limit });
+  }
+
+  @Get('transactions/:id')
+  getTransactionDetail(@Param('id') id: string) {
+    return this.adminService.getTransactionDetail(id);
+  }
+
+  // ── Referral reward campaign / Circle-admin wallet ──────────────────────
+
+  @Get('referral-rewards/wallet')
+  getReferralRewardWallet() {
+    return this.adminService.getReferralRewardWallet();
+  }
+
+  @UseGuards(AdminStepUpGuard)
+  @Post('referral-rewards/wallet')
+  createReferralRewardWallet(@CurrentUser() admin: any) {
+    return this.adminService.createReferralRewardWallet(admin.id);
+  }
+
+  @Get('referral-rewards')
+  listReferralRewards(@Query('status') status?: string, @Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.adminService.listReferralRewards({ status, page, limit });
+  }
+
+  @UseGuards(AdminStepUpGuard)
+  @Post('referral-rewards/:id/pay')
+  payReferralReward(@Param('id') id: string, @CurrentUser() admin: any) {
+    return this.adminService.payReferralReward(id, admin.id);
+  }
+
+  @UseGuards(AdminStepUpGuard)
+  @Post('referral-rewards/:id/refresh')
+  refreshReferralReward(@Param('id') id: string) {
+    return this.adminService.refreshReferralReward(id);
   }
 
   @Get('kyc')

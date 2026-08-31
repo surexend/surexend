@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { adminAPI } from '@/lib/api'
+import { currencySymbol, formatAmount, getSwapInfo } from '@/lib/utils'
 import { X, Copy, Check, FileText, Zap, ExternalLink } from 'lucide-react'
 
 const EXPLORER_BASE: Record<string, string> = {
@@ -42,6 +43,12 @@ export function AdminTransactionDetailModal({ id, onClose }: { id: string; onClo
 
   const meta = tx.metadata || {}
   const bill = tx.bill
+  const swap = getSwapInfo(tx)
+  const displayMoney = (amount: number, currency: string) => {
+    const code = (currency || 'USDC').toUpperCase()
+    const symbol = ['USD', 'USDC', 'USDT'].includes(code) ? '$' : currencySymbol(code)
+    return `${symbol}${formatAmount(Number(amount || 0))} ${code}`
+  }
   const statusColor = (s: string) =>
     s === 'COMPLETED'
       ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
@@ -58,8 +65,13 @@ export function AdminTransactionDetailModal({ id, onClose }: { id: string; onClo
     { label: 'Reference / Invoice', value: tx.reference || '—', mono: true, accent: true },
     { label: 'Type', value: tx.type },
     { label: 'Status', value: tx.status },
-    { label: 'Amount', value: `${tx.amount} ${tx.currency}`, accent: true },
-    { label: 'Fee', value: `${tx.fee} ${tx.currency}` },
+    { label: 'Amount', value: displayMoney(tx.amount, tx.currency), accent: true },
+    ...(swap ? [
+      { label: 'Conversion received', value: displayMoney(swap.toAmount, swap.to), accent: true },
+      { label: 'Exchange pair', value: `${swap.from} → ${swap.to}` },
+      ...(swap.rate > 0 ? [{ label: 'Rate', value: `${formatAmount(swap.rate, 6)} ${swap.to}/${swap.from}` }] : []),
+    ] : []),
+    { label: 'Fee', value: Number(tx.fee || 0) > 0 ? displayMoney(tx.fee, tx.currency) : 'No fee' },
     { label: 'Date', value: new Date(tx.createdAt).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }) },
     ...(tx.user?.email ? [{ label: 'User', value: `${tx.user.firstName || ''} ${tx.user.lastName || ''} (@${tx.user.surexTag || ''}) · ${tx.user.email}` }] : []),
     ...(bill ? [
@@ -115,8 +127,8 @@ export function AdminTransactionDetailModal({ id, onClose }: { id: string; onClo
           <div className="text-center px-6 py-6 rounded-2xl bg-white/[0.03] border border-white/10 relative overflow-hidden">
             <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
             <p className="text-[9px] uppercase tracking-[0.25em] text-[#64748B] font-bold mb-1">Transaction Amount</p>
-            <p className="text-3xl font-black text-white tracking-tight">${Number(tx.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {tx.currency}</p>
-            {tx.fee > 0 && <p className="text-xs text-[#94A3B8] mt-1">+ ${Number(tx.fee).toFixed(2)} fee</p>}
+            <p className="text-3xl font-black text-white tracking-tight">{swap ? `${displayMoney(swap.fromAmount, swap.from)} → ${displayMoney(swap.toAmount, swap.to)}` : displayMoney(tx.amount, tx.currency)}</p>
+            {Number(tx.fee || 0) > 0 && <p className="text-xs text-[#94A3B8] mt-1">+ {displayMoney(tx.fee, tx.currency)} fee</p>}
           </div>
 
           {/* Reference copy box */}

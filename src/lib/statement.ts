@@ -37,7 +37,8 @@ export interface GenerateStatementOpts {
 export function formatPdfAmount(amount: number, currency: string = 'USD'): string {
   const code = (currency || 'USD').toUpperCase()
   const numStr = formatAmount(amount)
-  if (code === 'USD' || code === 'USDC' || code === 'USDT') return `$${numStr}`
+  if (code === 'USD') return `$${numStr}`
+  if (code === 'USDC' || code === 'USDT') return `$${numStr} ${code}`
   if (code === 'EUR') return `€${numStr}`
   if (code === 'GBP') return `£${numStr}`
   return `${numStr} ${code}`
@@ -138,54 +139,54 @@ export async function generateStatementPDF(opts: GenerateStatementOpts) {
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(textMuted[0], textMuted[1], textMuted[2])
   doc.text(`${user.surexTag ? `@${user.surexTag} · ` : ''}${user.email}`, margin + 6, curY + 14)
-  doc.text(`Account Ref: ${user.accountNumber || user.email}`, margin + 6, curY + 20)
+  doc.text(`Account ID: ${user.accountNumber || user.email}`, margin + 6, curY + 20)
 
-  // Calculate Metrics
-  let totalCredits = 0
-  let totalDebits = 0
+  // Build summaries by currency. A statement must never total USDC and local
+  // currencies as if they were all dollars; conversions are exchanges, not an
+  // inflow or outflow, and remain fully detailed in the transaction table.
+  const credits = new Map<string, number>()
+  const debits = new Map<string, number>()
   transactions.forEach((t) => {
-    if ((t.status || '').toUpperCase() === 'COMPLETED') {
-      const typeU = (t.type || '').toUpperCase()
-      if (typeU === 'RECEIVE' || typeU === 'REFERRAL_EARNING' || typeU === 'CONVERT') {
-        totalCredits += Number(t.amount || 0)
-      } else {
-        totalDebits += Number(t.amount || 0)
-      }
-    }
+    if ((t.status || '').toUpperCase() !== 'COMPLETED') return
+    const typeU = (t.type || '').toUpperCase()
+    if (typeU === 'CONVERT') return
+    const target = typeU === 'RECEIVE' || typeU === 'REFERRAL_EARNING' ? credits : debits
+    const currency = (t.currency || 'USDC').toUpperCase()
+    target.set(currency, (target.get(currency) || 0) + Number(t.amount || 0))
   })
+  const formatBreakdown = (totals: Map<string, number>) => {
+    const items = [...totals.entries()].map(([currency, value]) => formatPdfAmount(value, currency))
+    return items.length ? items.slice(0, 2).join(' · ') + (items.length > 2 ? ` +${items.length - 2}` : '') : '—'
+  }
 
-  // Metric Cards (Right side)
-  const statBoxW = 34
+  // Statement metrics remain currency-safe and printable at a glance.
+  const statBoxW = 38
   const rightX = W - margin - 6
-
-  // Total Transactions
   doc.setFontSize(7)
   doc.setTextColor(textDarkMuted[0], textDarkMuted[1], textDarkMuted[2])
-  doc.text('TOTAL TXS', rightX - statBoxW * 2 - 12, curY + 9, { align: 'right' })
+  doc.text('RECORDS', rightX - statBoxW * 2 - 18, curY + 9, { align: 'right' })
   doc.setFontSize(10)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(textWhite[0], textWhite[1], textWhite[2])
-  doc.text(`${transactions.length}`, rightX - statBoxW * 2 - 12, curY + 17, { align: 'right' })
+  doc.text(`${transactions.length}`, rightX - statBoxW * 2 - 18, curY + 17, { align: 'right' })
 
-  // Total Inflow
   doc.setFontSize(7)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(textDarkMuted[0], textDarkMuted[1], textDarkMuted[2])
-  doc.text('TOTAL INFLOW', rightX - statBoxW - 6, curY + 9, { align: 'right' })
-  doc.setFontSize(10)
+  doc.text('INFLOW BY CURRENCY', rightX - statBoxW - 6, curY + 9, { align: 'right' })
+  doc.setFontSize(7.5)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(greenCol[0], greenCol[1], greenCol[2])
-  doc.text(`+$${formatAmount(totalCredits)}`, rightX - statBoxW - 6, curY + 17, { align: 'right' })
+  doc.text(formatBreakdown(credits), rightX - statBoxW - 6, curY + 17, { align: 'right' })
 
-  // Total Outflow
   doc.setFontSize(7)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(textDarkMuted[0], textDarkMuted[1], textDarkMuted[2])
-  doc.text('TOTAL OUTFLOW', rightX, curY + 9, { align: 'right' })
-  doc.setFontSize(10)
+  doc.text('OUTFLOW BY CURRENCY', rightX, curY + 9, { align: 'right' })
+  doc.setFontSize(7.5)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(redCol[0], redCol[1], redCol[2])
-  doc.text(`-$${formatAmount(totalDebits)}`, rightX, curY + 17, { align: 'right' })
+  doc.text(formatBreakdown(debits), rightX, curY + 17, { align: 'right' })
 
   curY += cardH + 8
 
@@ -263,12 +264,22 @@ export async function generateStatementPDF(opts: GenerateStatementOpts) {
       amountFormatted = formatPdfAmount(Number(tx.amount || 0), tx.currency)
     }
 
-    // Description text
-    let descText = tx.type
+    // Human-readable transaction detail gives a statement enough context to
+    // reconcile without exposing sensitive wallet addresses in full.
+    const meta = tx.metadata || {}
+    let descText = String(tx.type || 'TRANSACTION').replace(/_/g, ' ')
     if (swap) {
-      descText = `CONVERT (${swap.from} -> ${swap.to})`
-    } else if (tx.metadata?.planName) {
-      descText = `${tx.type} (${tx.metadata.planName})`
+      descText = `Convert ${formatPdfAmount(swap.fromAmount, swap.from)} to ${formatPdfAmount(swap.toAmount, swap.to)}`
+    } else if (meta.planName) {
+      descText = `${descText} · ${meta.planName}`
+    } else if (meta.toTag) {
+      descText = `Sent to @${meta.toTag}`
+    } else if (meta.fromTag) {
+      descText = `Received from @${meta.fromTag}`
+    } else if (meta.destinationNetwork || meta.network) {
+      descText = `${descText} · ${meta.destinationNetwork || meta.network}`
+    } else if (meta.note) {
+      descText = `${descText} · ${String(meta.note)}`
     }
 
     // Date

@@ -83,6 +83,11 @@ export default registerAs('app', () => ({
     entitySecret: process.env.CIRCLE_ENTITY_SECRET,
     walletSetId: process.env.CIRCLE_WALLET_SET_ID,
     webhookSecret: process.env.CIRCLE_WEBHOOK_SECRET,
+    // Referral rewards are paid as USDT from the Circle-created USDC treasury.
+    // Configure a Circle-supported chain and its verified USDT contract address;
+    // payouts stay disabled until the address is present (fail closed).
+    referralRewardBlockchain: process.env.CIRCLE_REFERRAL_REWARD_BLOCKCHAIN,
+    referralRewardUsdtTokenAddress: process.env.CIRCLE_REFERRAL_REWARD_USDT_TOKEN_ADDRESS,
   },
   network: {
     environment: process.env.CHAIN_ENV || 'testnet',

@@ -3,6 +3,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { LedgerService } from '../common/ledger.service';
 import { toMinor } from '../common/money';
+import * as crypto from 'crypto';
+
+const FIVE_REFERRALS_CAMPAIGN = 'FIVE_REFERRALS_USDT';
+const FIVE_REFERRALS_REQUIRED = 5;
+const FIVE_REFERRALS_REWARD = 5;
 
 @Injectable()
 export class ReferralsService {
@@ -20,6 +25,26 @@ export class ReferralsService {
     
     const totalReferrals = await this.prisma.referral.count({ where: { referrerId: userId } });
     const activeReferrals = await this.prisma.referral.count({ where: { referrerId: userId, isActive: true } });
+    // Create the one-time entitlement as soon as the fifth attributed referral
+    // becomes active. The admin still approves the on-chain Circle payment;
+    // this upsert only guarantees the customer can never be missed or rewarded twice.
+    const campaignReward = activeReferrals >= FIVE_REFERRALS_REQUIRED
+      ? await this.prisma.referralReward.upsert({
+          where: { userId_campaign: { userId, campaign: FIVE_REFERRALS_CAMPAIGN } },
+          update: { referralCount: activeReferrals },
+          create: {
+            userId,
+            campaign: FIVE_REFERRALS_CAMPAIGN,
+            requiredReferrals: FIVE_REFERRALS_REQUIRED,
+            referralCount: activeReferrals,
+            amount: FIVE_REFERRALS_REWARD,
+            currency: 'USDT',
+            reference: `RWD-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`,
+          },
+        })
+      : await this.prisma.referralReward.findUnique({
+          where: { userId_campaign: { userId, campaign: FIVE_REFERRALS_CAMPAIGN } },
+        });
     
     const earningsAggr = await this.prisma.referral.aggregate({
       where: { referrerId: userId },
@@ -53,7 +78,17 @@ export class ReferralsService {
       thisMonthEarned,
       referralCode: user.referralCode,
       referralLink: `https://surexend.com/ref/${user.referralCode}`,
-      commissionRate
+      commissionRate,
+      campaign: {
+        requiredReferrals: FIVE_REFERRALS_REQUIRED,
+        reward: FIVE_REFERRALS_REWARD,
+        currency: 'USDT',
+        completedReferrals: activeReferrals,
+        remainingReferrals: Math.max(0, FIVE_REFERRALS_REQUIRED - activeReferrals),
+        eligible: activeReferrals >= FIVE_REFERRALS_REQUIRED,
+        status: campaignReward?.status || 'IN_PROGRESS',
+        reference: campaignReward?.reference || null,
+      }
     };
   }
 

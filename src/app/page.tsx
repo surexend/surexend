@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, useScroll, useTransform, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import SurexendLoader from '@/components/SurexendLoader'
+import ThemeToggle from '@/components/ThemeToggle'
 import {
   ArrowRight, Send, RefreshCw, Shield, Users, User, Globe,
   ChevronDown, Check, Star, MessageCircle, X, Menu, Download,
@@ -173,7 +174,7 @@ function FAQItem({ q, a, accent }: { q: string; a: string; accent: string }) {
 // ══════════════════════════════════════════════════════════════════════════
 
 export default function LandingPage() {
-  const { variant, colors } = useTheme()
+  const { variant, colors, colorMode } = useTheme()
   const [menuOpen, setMenuOpen] = useState(false)
   const [showLoader, setShowLoader] = useState(true)
   const [scrolled, setScrolled] = useState(false)
@@ -262,7 +263,7 @@ export default function LandingPage() {
         <motion.nav
           className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
           style={{
-            background: scrolled ? 'rgba(8, 9, 12, 0.92)' : 'transparent',
+            background: scrolled ? (colorMode === 'light' ? 'rgba(255, 255, 255, 0.92)' : 'rgba(8, 9, 12, 0.92)') : 'transparent',
             backdropFilter: scrolled && !isMobile ? 'blur(20px)' : 'none',
             WebkitBackdropFilter: scrolled && !isMobile ? 'blur(20px)' : 'none',
             borderBottom: scrolled ? '1px solid rgba(255,255,255,0.06)' : 'none',
@@ -304,6 +305,7 @@ export default function LandingPage() {
 
             {/* CTA buttons */}
             <div className="hidden md:flex items-center gap-3">
+              <ThemeToggle />
               <Link href="/auth/login">
                 <button className={`${btnOutlineClass} px-5 py-2 rounded-xl text-sm font-semibold`}>
                   Log In
@@ -318,6 +320,7 @@ export default function LandingPage() {
 
             {/* Mobile header controls */}
             <div className="flex items-center gap-2 md:hidden">
+              <ThemeToggle compact />
               <button
                 className="p-2 rounded-lg text-white"
                 style={{ background: 'rgba(255,255,255,0.06)' }}

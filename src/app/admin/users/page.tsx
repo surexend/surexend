@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { adminAPI, type AdminApprovalPayload } from '@/lib/api'
 import { Search, ChevronLeft, ChevronRight, Ban, CheckCircle2, Eye } from 'lucide-react'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { currencySymbol, formatAmount, formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import AdminStepUpModal from '@/components/admin/AdminStepUpModal'
 
@@ -13,6 +13,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [kycStatus, setKycStatus] = useState('')
+  const [sort, setSort] = useState<'recent' | 'balance_asc' | 'balance_desc'>('recent')
   const [page, setPage] = useState(1)
   const [approvalOpen, setApprovalOpen] = useState(false)
   const [approvalTitle, setApprovalTitle] = useState('Confirm admin action')
@@ -23,11 +24,11 @@ export default function AdminUsersPage() {
 
   const load = useCallback(() => {
     setLoading(true)
-    adminAPI.getUsers({ search: search || undefined, kycStatus: kycStatus || undefined, page })
+    adminAPI.getUsers({ search: search || undefined, kycStatus: kycStatus || undefined, sort, page })
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false))
-  }, [search, kycStatus, page])
+  }, [search, kycStatus, sort, page])
 
   useEffect(() => { load() }, [load])
 
@@ -101,6 +102,16 @@ export default function AdminUsersPage() {
           <option value="VERIFIED">Verified</option>
           <option value="REJECTED">Rejected</option>
         </select>
+        <select
+          value={sort}
+          onChange={e => { setSort(e.target.value as typeof sort); setPage(1) }}
+          className="bg-[#121419] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none"
+          aria-label="Order users"
+        >
+          <option value="recent">Newest first</option>
+          <option value="balance_desc">USDC balance: high to low</option>
+          <option value="balance_asc">USDC balance: low to high</option>
+        </select>
       </div>
 
       {loading && !data ? (
@@ -111,77 +122,94 @@ export default function AdminUsersPage() {
         <>
           <div className="liquid-glass p-4 sm:p-5 relative overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs min-w-[720px]">
+              <table className="w-full text-left text-xs min-w-[1080px]">
                 <thead>
                   <tr className="text-[#64748B] text-[10px] uppercase tracking-wider">
                     <th className="py-2 pr-3">User</th>
                     <th className="py-2 pr-3">Contact</th>
-                    <th className="py-2 pr-3">Wallets (USDC)</th>
-                    <th className="py-2 pr-3">KYC</th>
+                    <th className="py-2 pr-3">USDC wallet</th>
+                    <th className="py-2 pr-3">Local wallets</th>
                     <th className="py-2 pr-3">Referrals</th>
+                    <th className="py-2 pr-3">KYC</th>
                     <th className="py-2 pr-3">Status</th>
                     <th className="py-2 pr-3">Joined</th>
                     <th className="py-2">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.users.map((u: any) => (
-                    <tr key={u.id} className="border-t border-white/5">
-                      <td className="py-3 pr-3">
-                        <p className="text-white font-semibold">{u.firstName} {u.lastName}</p>
-                        <p className="text-[10px] text-[#64748B]">@{u.surexTag || '—'} · {u.role}</p>
-                      </td>
-                      <td className="py-3 pr-3 text-[#94A3B8]">
-                        <span className="font-semibold text-white">{u._count?.referralsMade || 0}</span> invited
-                      </td>
-                      <td className="py-3 pr-3 text-[#94A3B8]">
-                        <p>{u.email}</p>
-                        <p className="text-[10px] text-[#64748B]">{u.phone || '—'}</p>
-                      </td>
-                      <td className="py-3 pr-3 text-[#94A3B8]">
-                        <p>${Number(u.wallet?.usdtBalance || 0).toLocaleString()}</p>
-                        <p className="text-[10px] text-[#64748B]">${Number(u.wallet?.usdcBalance || 0).toLocaleString()} USDC</p>
-                      </td>
-                      <td className="py-3 pr-3">
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
-                          u.kycStatus === 'VERIFIED' ? 'bg-emerald-500/10 text-emerald-400' :
-                          u.kycStatus === 'PENDING' ? 'bg-amber-500/10 text-amber-400' :
-                          u.kycStatus === 'REJECTED' ? 'bg-red-500/10 text-red-400' : 'bg-white/5 text-[#64748B]'
-                        }`}>{u.kycStatus} {u.kycTier > 0 ? `· T${u.kycTier}` : ''}</span>
-                      </td>
-                      <td className="py-3 pr-3">
-                        {u.isBanned ? (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">BANNED</span>
-                        ) : u.isActive ? (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold">ACTIVE</span>
-                        ) : (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-[#64748B] font-semibold">DISABLED</span>
-                        )}
-                      </td>
-                      <td className="py-3 pr-3 text-[#64748B]">{formatDate(u.createdAt)}</td>
-                      <td className="py-3">
-                        <div className="flex items-center gap-1.5">
-                          <Link href={`/admin/users/${u.id}`} className="p-1.5 rounded-lg hover:bg-white/10 text-[#94A3B8] hover:text-white" title="View">
-                            <Eye className="w-3.5 h-3.5" />
-                          </Link>
-                          <button
-                            onClick={() => toggleUser(u.id, { isActive: !u.isActive })}
-                            className="p-1.5 rounded-lg hover:bg-white/10 text-[#94A3B8] hover:text-white"
-                            title={u.isActive ? 'Disable' : 'Enable'}
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => toggleUser(u.id, { isBanned: !u.isBanned })}
-                            className={`p-1.5 rounded-lg hover:bg-white/10 ${u.isBanned ? 'text-red-400' : 'text-[#94A3B8] hover:text-red-400'}`}
-                            title={u.isBanned ? 'Unban' : 'Ban'}
-                          >
-                            <Ban className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {data.users.map((u: any) => {
+                    const localBalances = u.wallet?.localBalances && typeof u.wallet.localBalances === 'object'
+                      ? Object.entries(u.wallet.localBalances as Record<string, unknown>)
+                          .filter(([, amount]) => Number(amount) !== 0)
+                          .slice(0, 2)
+                      : []
+                    const hasLegacyNgn = !localBalances.some(([currency]) => currency === 'NGN') && Number(u.wallet?.localBalance || 0) !== 0
+                    return (
+                      <tr key={u.id} className="border-t border-white/5">
+                        <td className="py-3 pr-3">
+                          <p className="text-white font-semibold">{u.firstName} {u.lastName}</p>
+                          <p className="text-[10px] text-[#64748B]">@{u.surexTag || '—'} · {u.role}</p>
+                        </td>
+                        <td className="py-3 pr-3 text-[#94A3B8]">
+                          <p className="text-white">{u.email}</p>
+                          <p className="text-[10px] text-[#64748B]">{u.phone || '—'}</p>
+                        </td>
+                        <td className="py-3 pr-3 text-[#94A3B8]">
+                          <p className="font-semibold text-white">${formatAmount(Number(u.wallet?.usdcBalance || 0))} USDC</p>
+                          {Number(u.wallet?.usdtBalance || 0) > 0 && <p className="text-[10px] text-[#64748B]">${formatAmount(Number(u.wallet.usdtBalance))} USDT</p>}
+                          {Number(u.wallet?.lockedBalance || 0) > 0 && <p className="text-[10px] text-amber-400">${formatAmount(Number(u.wallet.lockedBalance))} reserved</p>}
+                        </td>
+                        <td className="py-3 pr-3 text-[#94A3B8]">
+                          {localBalances.length > 0 || hasLegacyNgn ? (
+                            <div className="space-y-0.5">
+                              {localBalances.map(([currency, amount]) => <p key={currency} className="whitespace-nowrap">{currencySymbol(currency)}{formatAmount(Number(amount))} {currency}</p>)}
+                              {hasLegacyNgn && <p>₦{formatAmount(Number(u.wallet.localBalance))} NGN</p>}
+                              {Object.keys(u.wallet?.localBalances || {}).length > 2 && <p className="text-[10px] text-[#64748B]">+ more local balances</p>}
+                            </div>
+                          ) : <span className="text-[#64748B]">—</span>}
+                        </td>
+                        <td className="py-3 pr-3 text-[#94A3B8]"><span className="font-semibold text-white">{u._count?.referralsMade || 0}</span> invited</td>
+                        <td className="py-3 pr-3">
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
+                            u.kycStatus === 'VERIFIED' ? 'bg-emerald-500/10 text-emerald-400' :
+                            u.kycStatus === 'PENDING' ? 'bg-amber-500/10 text-amber-400' :
+                            u.kycStatus === 'REJECTED' ? 'bg-red-500/10 text-red-400' : 'bg-white/5 text-[#64748B]'
+                          }`}>{u.kycStatus} {u.kycTier > 0 ? `· T${u.kycTier}` : ''}</span>
+                        </td>
+                        <td className="py-3 pr-3">
+                          {u.isBanned ? (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">BANNED</span>
+                          ) : u.isActive ? (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold">ACTIVE</span>
+                          ) : (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-[#64748B] font-semibold">DISABLED</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-3 text-[#64748B]">{formatDate(u.createdAt)}</td>
+                        <td className="py-3">
+                          <div className="flex items-center gap-1.5">
+                            <Link href={`/admin/users/${u.id}`} className="p-1.5 rounded-lg hover:bg-white/10 text-[#94A3B8] hover:text-white" title="View wallet and activity">
+                              <Eye className="w-3.5 h-3.5" />
+                            </Link>
+                            <button
+                              onClick={() => toggleUser(u.id, { isActive: !u.isActive })}
+                              className="p-1.5 rounded-lg hover:bg-white/10 text-[#94A3B8] hover:text-white"
+                              title={u.isActive ? 'Disable' : 'Enable'}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => toggleUser(u.id, { isBanned: !u.isBanned })}
+                              className={`p-1.5 rounded-lg hover:bg-white/10 ${u.isBanned ? 'text-red-400' : 'text-[#94A3B8] hover:text-red-400'}`}
+                              title={u.isBanned ? 'Unban' : 'Ban'}
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

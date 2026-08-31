@@ -253,9 +253,10 @@ export const authAPI = {
     }
   },
 
+  // Kept for older callers. Profiles are served by /users/me, not /auth/me.
   getProfile: () =>
     tryWithMock(
-      () => apiClient.get('/auth/me').then(r => r.data),
+      () => apiClient.get('/users/me').then(r => r.data),
       () => ({ firstName: 'User', lastName: '', email: 'user@surexend.com', surexTag: 'surexuser' })
     ),
 }
@@ -334,12 +335,13 @@ export const walletAPI = {
       }
     ),
 
-  send: (payload: { address: string; amount: number; network: string; pin?: string; passkeyToken?: string }, headers?: Record<string, string>) =>
+  send: (payload: { address: string; amount: number; network: string; currency?: string; pin?: string; passkeyToken?: string }, headers?: Record<string, string>) =>
     tryWithMock(
       () => apiClient.post('/wallets/send', {
         toAddress: payload.address,
         amount: payload.amount,
         network: payload.network,
+        currency: payload.currency,
         pin: payload.pin,
         passkeyToken: payload.passkeyToken,
       }, { timeout: 180000, headers: idempotencyHeaders(headers) }).then(r => r.data),
@@ -735,7 +737,7 @@ export type AdminApprovalPayload = {
 // ── Admin API (requires the ADMIN role on the JWT) ──────────────────────
 export const adminAPI = {
   getOverview: () => apiClient.get('/admin/overview').then(r => r.data),
-  getUsers: (params?: { search?: string; kycStatus?: string; page?: number; limit?: number }) =>
+  getUsers: (params?: { search?: string; kycStatus?: string; sort?: 'recent' | 'balance_asc' | 'balance_desc'; page?: number; limit?: number }) =>
     apiClient.get('/admin/users', { params }).then(r => r.data),
   getUser: (id: string) => apiClient.get(`/admin/users/${id}`).then(r => r.data),
   updateUser: (id: string, body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string; email?: string; phone?: string }, approval?: AdminApprovalPayload) =>
@@ -769,6 +771,16 @@ export const adminAPI = {
 
   getCampaignOverview: () =>
     apiClient.get('/admin/campaigns/overview').then(r => r.data),
+  getReferralRewardWallet: () =>
+    apiClient.get('/admin/referral-rewards/wallet').then(r => r.data),
+  createReferralRewardWallet: (approval?: AdminApprovalPayload) =>
+    apiClient.post('/admin/referral-rewards/wallet', approval || {}).then(r => r.data),
+  getReferralRewards: (params?: { status?: string; page?: number; limit?: number }) =>
+    apiClient.get('/admin/referral-rewards', { params }).then(r => r.data),
+  payReferralReward: (id: string, approval?: AdminApprovalPayload) =>
+    apiClient.post(`/admin/referral-rewards/${id}/pay`, approval || {}).then(r => r.data),
+  refreshReferralReward: (id: string, approval?: AdminApprovalPayload) =>
+    apiClient.post(`/admin/referral-rewards/${id}/refresh`, approval || {}).then(r => r.data),
 }
 
 export const campaignsAPI = {

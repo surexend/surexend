@@ -501,7 +501,7 @@ export default function DashboardPage() {
             </div>
 
             <p className="text-xs font-medium text-[#64748B] flex items-center gap-2">
-              {walletView === 'USD' ? 'USD Crypto Balance (USDC)' : 'Local Wallet Balance'}
+              {walletView === 'USD' ? 'USD Crypto Assets' : 'Local Wallet Balance'}
               {walletView === 'LOCAL' && (
                 <button
                   onClick={() => setShowLocalCurrencyPicker(true)}
@@ -530,7 +530,7 @@ export default function DashboardPage() {
             {showBalance && (
               <p className="text-[11px] text-[#475569] mt-1 font-medium">
                 {walletView === 'USD'
-                  ? 'Deposited via crypto (USDC). Convert on Convert tab to get local currency.'
+                  ? `${Number(balanceData?.usdtBalance || 0) > 0 ? `Includes $${Number(balanceData.usdtBalance).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT. ` : ''}Deposit crypto or convert to get local currency.`
                   : `Deposited via local bank transfer or converted from USD. Convert on Convert tab to get ${selectedLocalCurrency} or USD.`}
               </p>
             )}

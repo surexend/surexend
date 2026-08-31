@@ -451,7 +451,7 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     await env.expectLedgerMatchesFloat('u1', USD_COINS);
   });
 
-  it('Row 1c — Circle inbound with legacy USDT symbol still lands in USDC (USDC-only pipeline)', async () => {
+  it('Row 1c — Circle inbound USDT stays USDT in the wallet and ledger', async () => {
     env.seedUser('u1', 'alice.sx');
     const wId = await env.seedWallet('u1', { usdcBalance: 0 });
     env.prisma.walletAddresses.push({ id: 'wa1', walletId: wId, network: 'ETHEREUM', address: '0xAAA111' });
@@ -465,8 +465,11 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     });
 
     const w = env.wallet('u1');
-    expect(w.usdcBalance).toBeCloseTo(1.25, 6);
-    expect(w.usdtBalance).toBeCloseTo(0, 8);
+    expect(w.usdcBalance).toBeCloseTo(0, 8);
+    expect(w.usdtBalance).toBeCloseTo(1.25, 6);
+    expect(await env.ledgerOf('external:circle:ETH-SEPOLIA:USDT', 'USDT')).toBe(-1250000n);
+    expect(await env.ledgerOf('user:u1:USDT', 'USDT')).toBe(1250000n);
+    expect(env.prisma.transactionRows.some(t => t.reference === 'RECV-0xdep1c' && t.currency === 'USDT')).toBe(true);
     await env.expectDoubleEntry();
     await env.expectLedgerMatchesFloat('u1', USD_COINS);
   });

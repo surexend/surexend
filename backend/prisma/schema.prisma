@@ -45,6 +45,7 @@ model User {
   auditLogs       AuditLog[]
   referredUsers   Referral[]      @relation("ReferredUser")
   referralsMade   Referral[]      @relation("Referrer")
+  referralRewards ReferralReward[]
   virtualAccounts VirtualAccount[]
   passkeys        Passkey[]
 
@@ -198,6 +199,52 @@ model Referral {
   createdAt  DateTime @default(now())
   referrer   User     @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
   referred   User     @relation("ReferredUser", fields: [referredId], references: [id], onDelete: Cascade)
+}
+
+// A Circle Programmable Wallet owned by the platform, not by an end user.
+// This lets an operator fund a clearly-labelled campaign wallet in Circle and
+// trace every referral reward from the Circle console.
+model PlatformWallet {
+  id             String   @id @default(uuid())
+  key            String   @unique
+  label          String
+  circleWalletId String?  @unique
+  walletSetId    String?
+  blockchain     String
+  address        String?
+  currency       String   @default("USDC")
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  referralRewards ReferralReward[]
+}
+
+// One immutable reward entitlement per customer and campaign. Funds are never
+// booked to a customer at eligibility time: an approved payout is sent from
+// the Circle campaign wallet, and Circle's inbound webhook books the receipt.
+model ReferralReward {
+  id                  String   @id @default(uuid())
+  userId              String
+  campaign            String
+  requiredReferrals   Int      @default(5)
+  referralCount       Int      @default(0)
+  amount              Float    @default(5.0)
+  currency            String   @default("USDT")
+  status              String   @default("ELIGIBLE")
+  platformWalletId    String?
+  circleTransactionId String?  @unique
+  reference           String   @unique
+  approvedById        String?
+  paidAt              DateTime?
+  failureReason       String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platformWallet      PlatformWallet? @relation(fields: [platformWalletId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, campaign])
+  @@index([status, createdAt])
+  @@index([platformWalletId])
 }
 
 enum KycStatus {

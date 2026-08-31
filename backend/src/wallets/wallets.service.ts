@@ -5,7 +5,7 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CctpService } from './cctp.service';
 import { DepositMonitorService } from './deposit-monitor.service';
-import { getLocalRate } from '../common/currency.constants';
+import { getLocalRate, SUPPORTED_LOCAL_CURRENCIES } from '../common/currency.constants';
 import { LedgerService } from '../common/ledger.service';
 import { toMinor, fromMinor, roundMinor } from '../common/money';
 import axios from 'axios';
@@ -18,6 +18,7 @@ export class WalletsService implements OnModuleInit {
   private entitySecret: string;
   private walletSetId: string;
   private baseUrl: string;
+  private defaultWalletSetInit?: Promise<string>;
   // Per-wallet timestamp of the last full Circle history sync (see
   // syncCircleHistory) so background refreshes don't re-sweep on every page load.
   private lastCircleSyncAt: Map<string, number> = new Map();
@@ -41,6 +42,76 @@ export class WalletsService implements OnModuleInit {
     this.walletSetId = this.configService.get<string>('app.circle.walletSetId');
     this.baseUrl = 'https://api.circle.com';
     this.logger.log(`Circle API initialized: ${this.baseUrl}`);
+  }
+
+  // Resolve the standard Circle wallet set lazily. Existing installations can
+  // keep CIRCLE_WALLET_SET_ID; a new installation creates one exactly once and
+  // stores it in the database, so no operator has to copy a set ID from Circle.
+  private async getOrCreateDefaultWalletSetId(): Promise<string> {
+    if (this.walletSetId) return this.walletSetId;
+    if (this.defaultWalletSetInit) return this.defaultWalletSetInit;
+
+    this.defaultWalletSetInit = (async () => {
+      if (!this.apiKey || !this.entitySecret) {
+        throw new BadRequestException('Circle is not configured. Add CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET before creating a wallet.');
+      }
+
+      const existing = await this.prisma.platformWallet.findUnique({ where: { key: 'APPLICATION_WALLET_SET' } });
+      if (existing?.walletSetId) {
+        this.walletSetId = existing.walletSetId;
+        return existing.walletSetId;
+      }
+
+      const record = existing || await this.prisma.platformWallet.create({
+        data: {
+          key: 'APPLICATION_WALLET_SET',
+          label: 'SureXend application wallet set',
+          blockchain: this.getBlockchainName('ARC'),
+          currency: 'USDC',
+          status: 'WALLET_SET_CREATING',
+        },
+      });
+
+      try {
+        const publicKeyResponse = await axios.get(`${this.baseUrl}/v1/w3s/config/entity/publicKey`, {
+          headers: { Authorization: `Bearer ${this.apiKey}`, accept: 'application/json' },
+          timeout: 15_000,
+        });
+        const publicKey = publicKeyResponse.data?.data?.publicKey;
+        if (!publicKey) throw new Error('Circle did not return the entity public key.');
+        const response = await axios.post(
+          `${this.baseUrl}/v1/w3s/developer/walletSets`,
+          {
+            idempotencyKey: crypto.randomUUID(),
+            entitySecretCiphertext: this.encryptSecret(this.entitySecret, publicKey),
+            name: 'SureXend Application Wallets',
+          },
+          {
+            headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json', accept: 'application/json' },
+            timeout: 30_000,
+          },
+        );
+        const walletSetId = response.data?.data?.walletSet?.id;
+        if (!walletSetId) throw new Error('Circle did not return a wallet set id.');
+        await this.prisma.platformWallet.update({
+          where: { id: record.id },
+          data: { walletSetId, status: 'WALLET_SET_ACTIVE' },
+        });
+        this.walletSetId = walletSetId;
+        this.logger.log(`Created Circle application wallet set ${walletSetId}`);
+        return walletSetId;
+      } catch (error) {
+        await this.prisma.platformWallet.update({ where: { id: record.id }, data: { status: 'WALLET_SET_ERROR' } }).catch(() => undefined);
+        throw error;
+      }
+    })();
+
+    try {
+      return await this.defaultWalletSetInit;
+    } catch (error) {
+      this.defaultWalletSetInit = undefined;
+      throw error;
+    }
   }
 
   // On boot, ensure EVERY EVM address this app displays (any network, any user)
@@ -347,6 +418,8 @@ export class WalletsService implements OnModuleInit {
 
     return {
       usdBalance: usdVal,
+      usdcBalance,
+      usdtBalance,
       ngnBalance,
       realNgn,
       testnetNgn,
@@ -652,11 +725,14 @@ export class WalletsService implements OnModuleInit {
     }
   }
 
-  async getDepositAddress(userId: string, network: string) {
+  async getDepositAddress(userId: string, network: string, walletSetIdOverride?: string) {
     const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'MONAD'];
     if (!validNetworks.includes(network.toUpperCase())) {
       throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20, ARC, MONAD');
     }
+    // Campaign payouts may use their dedicated set. General deposit addresses
+    // reuse a configured set or bootstrap one automatically on first use.
+    const walletSetId = walletSetIdOverride || await this.getOrCreateDefaultWalletSetId();
 
     // Explicit select so a not-yet-migrated localBalances column can't 500 this endpoint
     let wallet = await this.prisma.wallet.findUnique({
@@ -697,7 +773,7 @@ export class WalletsService implements OnModuleInit {
               idempotencyKey: crypto.randomUUID(),
               blockchains: ['ARC-TESTNET'],
               entitySecretCiphertext: ciphertext,
-              walletSetId: this.walletSetId,
+              walletSetId,
               metadata: [
                 {
                   name: `User ${userId.substring(0, 8)} - ARC`,
@@ -737,7 +813,7 @@ export class WalletsService implements OnModuleInit {
           if (evmAddressRecord) {
             address = evmAddressRecord.address;
           } else {
-            const ethWalletRecord = await this.getDepositAddress(userId, 'ETHEREUM');
+            const ethWalletRecord = await this.getDepositAddress(userId, 'ETHEREUM', walletSetId);
             address = ethWalletRecord.address;
           }
 
@@ -768,7 +844,7 @@ export class WalletsService implements OnModuleInit {
               idempotencyKey: crypto.randomUUID(),
               blockchains: [blockchain],
               entitySecretCiphertext: ciphertext,
-              walletSetId: this.walletSetId,
+              walletSetId,
               metadata: [
                 {
                   name: `User ${userId.substring(0, 8)} - ${network}`,
@@ -816,17 +892,17 @@ export class WalletsService implements OnModuleInit {
     return { network: walletAddress.network, address: walletAddress.address };
   }
 
-  async sendCrypto(userId: string, toAddress: string, amount: number, network: string, destinationNetwork?: string) {
+  async sendCrypto(userId: string, toAddress: string, amount: number, network: string, destinationNetwork?: string, currency?: string) {
     if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       throw new BadRequestException('Amount must be greater than 0');
     }
 
     const net = network.toUpperCase();
-    // In-app tag send: zero-fee internal USDC transfer between SureXend users.
-    // Resolves the @tag, moves balance between wallets, records SEND + RECEIVE.
+    // Tag transfers are internal ledger movements. They may carry USDC or a
+    // supported local currency; on-chain sends remain USDC-only by design.
     if (net === 'SUREX_TAG') {
       try {
-        return await this.sendToSurexTag(userId, toAddress, amount);
+        return await this.sendToSurexTag(userId, toAddress, amount, currency || 'USDC');
       } catch (error: any) {
         this.logger.error(`Internal tag transfer failed for ${userId}: ${error?.stack || error?.message || error}`);
         throw error;
@@ -849,7 +925,11 @@ export class WalletsService implements OnModuleInit {
   // Debits the sender's USDC, credits the recipient's USDC, and writes a SEND
   // row for the sender + a RECEIVE row for the recipient so both histories and
   // cash-flow charts reflect real money movement. No chain hops, no fees.
-  private async sendToSurexTag(senderUserId: string, tagInput: string, amount: number) {
+  private async sendToSurexTag(senderUserId: string, tagInput: string, amount: number, currencyInput = 'USDC') {
+    const currency = (currencyInput || 'USDC').toUpperCase();
+    if (currency !== 'USDC') {
+      return this.sendLocalCurrencyToSurexTag(senderUserId, tagInput, amount, currency);
+    }
     const tag = tagInput.trim().replace(/^@/, '').toLowerCase();
     if (!/^[a-z0-9][a-z0-9._-]{2,39}$/.test(tag)) {
       throw new BadRequestException('Enter a valid SureX tag like @first.last.');
@@ -1032,6 +1112,185 @@ export class WalletsService implements OnModuleInit {
       reference,
       amount: sendAmount,
       currency: 'USDC',
+      recipient: `@${tag}`,
+      network: 'SUREX_TAG',
+      method: 'internal',
+      fee: 0,
+    };
+  }
+
+  // Zero-fee internal local-currency transfer. The balance is moved in the
+  // same currency without an FX conversion, so a Naira, Cedi, or CFA transfer
+  // can never be displayed or settled as a dollar amount.
+  private async sendLocalCurrencyToSurexTag(senderUserId: string, tagInput: string, amount: number, currency: string) {
+    const supportedCurrencies = new Set<string>(SUPPORTED_LOCAL_CURRENCIES.map((entry) => entry.code));
+    if (!supportedCurrencies.has(currency)) {
+      throw new BadRequestException(`${currency} is not available for SureX Tag transfers.`);
+    }
+    const tag = tagInput.trim().replace(/^@/, '').toLowerCase();
+    if (!/^[a-z0-9][a-z0-9._-]{2,39}$/.test(tag)) {
+      throw new BadRequestException('Enter a valid SureX tag like @first.last.');
+    }
+    const recipient = await this.prisma.user.findFirst({
+      where: { surexTag: { equals: tag, mode: 'insensitive' } },
+      select: { id: true, firstName: true, lastName: true, surexTag: true },
+    });
+    if (!recipient) throw new BadRequestException(`No SureXend user found with the tag @${tag}.`);
+    if (recipient.id === senderUserId) throw new BadRequestException('You cannot send to your own SureX tag. Choose a different user.');
+
+    const [senderWallet, recipientWallet] = await Promise.all([
+      this.prisma.wallet.findUnique({
+        where: { userId: senderUserId },
+        select: { id: true, localBalance: true, localBalances: true, realLocalBalance: true, user: { select: { firstName: true, lastName: true, surexTag: true } } },
+      }),
+      this.prisma.wallet.findUnique({ where: { userId: recipient.id }, select: { id: true } }),
+    ]);
+    if (!senderWallet || !recipientWallet) throw new BadRequestException('Wallet not found.');
+
+    const parseLocalBalances = (balances: unknown, fallbackNgn: number) => {
+      const parsed = typeof balances === 'string'
+        ? (() => { try { return JSON.parse(balances); } catch { return {}; } })()
+        : balances;
+      const next = parsed && typeof parsed === 'object' ? { ...(parsed as Record<string, number>) } : {} as Record<string, number>;
+      if (currency === 'NGN' && !next.NGN && fallbackNgn > 0) next.NGN = fallbackNgn;
+      return next;
+    };
+
+    const sendAmount = roundMinor(Number(amount), currency);
+    if (sendAmount <= 0) throw new BadRequestException('Amount must be greater than 0.');
+    const previewBalances = parseLocalBalances(senderWallet.localBalances, senderWallet.localBalance || 0);
+    let previewAvailable = Number(previewBalances[currency] || 0);
+    if (this.ledgerReads()) {
+      const ledgerBalances = await this.ledger.balancesOfUser(senderUserId);
+      if (ledgerBalances[currency] !== undefined) previewAvailable = fromMinor(ledgerBalances[currency], currency);
+    }
+    if (previewAvailable < sendAmount) {
+      throw new BadRequestException(`Insufficient ${currency} balance. You can send up to ${previewAvailable.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}.`);
+    }
+
+    const reference = `TAG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const receiveReference = `${reference}-R`;
+    const senderName = `${senderWallet.user?.firstName || ''} ${senderWallet.user?.lastName || ''}`.trim();
+    const recipientName = `${recipient.firstName} ${recipient.lastName}`.trim();
+
+    await this.prisma.$transaction(async (prisma) => {
+      // Lock both records in a stable order and repeat the balance check. This
+      // is the same concurrency guarantee as USDC tag sends.
+      const locked = await prisma.$queryRaw<Array<{
+        id: string; localBalance: number; localBalances: unknown; realLocalBalance: number;
+      }>>`
+        SELECT "id", "localBalance", "localBalances", "realLocalBalance"
+        FROM "Wallet"
+        WHERE "id" IN (${senderWallet.id}, ${recipientWallet.id})
+        ORDER BY "id"
+        FOR UPDATE`;
+      const lockedSender = locked.find((wallet) => wallet.id === senderWallet.id);
+      const lockedRecipient = locked.find((wallet) => wallet.id === recipientWallet.id);
+      if (!lockedSender || !lockedRecipient) throw new BadRequestException('Wallet not found.');
+
+      const sourceBalances = parseLocalBalances(lockedSender.localBalances, lockedSender.localBalance || 0);
+      const destinationBalances = parseLocalBalances(lockedRecipient.localBalances, lockedRecipient.localBalance || 0);
+      let available = Number(sourceBalances[currency] || 0);
+      let recipientAvailable = Number(destinationBalances[currency] || 0);
+      if (this.ledgerReads()) {
+        const [senderLedgerBalances, recipientLedgerBalances] = await Promise.all([
+          this.ledger.balancesOfUser(senderUserId, prisma),
+          this.ledger.balancesOfUser(recipient.id, prisma),
+        ]);
+        if (senderLedgerBalances[currency] !== undefined) available = fromMinor(senderLedgerBalances[currency], currency);
+        if (recipientLedgerBalances[currency] !== undefined) recipientAvailable = fromMinor(recipientLedgerBalances[currency], currency);
+        // Bring the snapshots to the ledger baseline before applying this
+        // movement. Without this, an older snapshot could be decremented from
+        // zero after a ledger-backed check and manufacture a display drift.
+        sourceBalances[currency] = available;
+        destinationBalances[currency] = recipientAvailable;
+      }
+      if (available < sendAmount) {
+        throw new BadRequestException(`Insufficient ${currency} balance. You can send up to ${available.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}.`);
+      }
+
+      sourceBalances[currency] = roundMinor(Math.max(0, available - sendAmount), currency);
+      destinationBalances[currency] = roundMinor(recipientAvailable + sendAmount, currency);
+      const realNgnMoved = currency === 'NGN'
+        ? Math.min(sendAmount, Math.max(0, Number(lockedSender.realLocalBalance || 0)))
+        : 0;
+
+      await prisma.wallet.update({
+        where: { id: senderWallet.id },
+        data: {
+          localBalances: sourceBalances,
+          ...(currency === 'NGN' ? { localBalance: sourceBalances.NGN || 0, realLocalBalance: { decrement: realNgnMoved } } : {}),
+        },
+      });
+      await prisma.wallet.update({
+        where: { id: recipientWallet.id },
+        data: {
+          localBalances: destinationBalances,
+          ...(currency === 'NGN' ? { localBalance: destinationBalances.NGN || 0, realLocalBalance: { increment: realNgnMoved } } : {}),
+        },
+      });
+
+      await this.transactionsService.createTransaction(prisma, {
+        userId: senderUserId,
+        type: 'SEND',
+        status: 'COMPLETED',
+        amount: sendAmount,
+        fee: 0,
+        currency,
+        reference,
+        metadata: {
+          fromTag: senderWallet.user?.surexTag || null,
+          toTag: tag,
+          recipientUserId: recipient.id,
+          recipientName,
+          delivery: 'internal',
+          method: 'surex-tag',
+          source: 'local-wallet',
+        },
+      });
+      await this.transactionsService.createTransaction(prisma, {
+        userId: recipient.id,
+        type: 'RECEIVE',
+        status: 'COMPLETED',
+        amount: sendAmount,
+        fee: 0,
+        currency,
+        reference: receiveReference,
+        metadata: {
+          fromTag: senderWallet.user?.surexTag || null,
+          senderUserId,
+          senderName,
+          delivery: 'internal',
+          method: 'surex-tag',
+          source: 'local-wallet',
+        },
+      });
+      await this.ledger.record([
+        { transferId: reference, account: this.ledger.userAccount(senderUserId, currency), currency, amountMinor: -toMinor(sendAmount, currency), reference, kind: 'TAG_SEND_SOURCE' },
+        { transferId: reference, account: this.ledger.userAccount(recipient.id, currency), currency, amountMinor: toMinor(sendAmount, currency), reference, kind: 'TAG_RECEIVE' },
+      ], prisma);
+    });
+
+    await Promise.all([
+      this.notifications.createNotification(senderUserId, {
+        title: 'Send successful',
+        body: `You sent ${sendAmount.toLocaleString()} ${currency} to @${tag}.`,
+        type: 'SEND',
+        data: { amount: sendAmount, currency, toTag: tag, reference },
+      }),
+      this.notifications.createNotification(recipient.id, {
+        title: 'Payment received',
+        body: `You received ${sendAmount.toLocaleString()} ${currency} from ${senderName || `@${senderWallet.user?.surexTag || 'a SureXend user'}`}.`,
+        type: 'DEPOSIT',
+        data: { amount: sendAmount, currency, fromTag: senderWallet.user?.surexTag || null, reference },
+      }),
+    ]);
+
+    return {
+      success: true,
+      reference,
+      amount: sendAmount,
+      currency,
       recipient: `@${tag}`,
       network: 'SUREX_TAG',
       method: 'internal',

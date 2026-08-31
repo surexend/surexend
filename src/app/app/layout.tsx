@@ -21,6 +21,7 @@ const FirebaseMessaging = dynamic(() => import('@/components/FirebaseMessaging')
 import { notificationsAPI, userAPI } from '@/lib/api'
 import { hasClientAuthSession } from '@/lib/auth-session'
 import { useLite } from '@/lib/lite'
+import ThemeToggle from '@/components/ThemeToggle'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -288,6 +289,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 <Zap className={`w-4 h-4 ${lite ? 'text-emerald-400' : ''}`} />
               </button>
+
+              {/* Appearance follows the phone by default; tap for a manual choice. */}
+              <ThemeToggle compact />
 
               {profile?.role === 'ADMIN' && (
                 <Link
