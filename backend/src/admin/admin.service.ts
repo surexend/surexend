@@ -425,8 +425,8 @@ export class AdminService {
   }
 
   private assertCircleConfigured() {
-    if (!this.circleApiKey || !this.circleEntitySecret || !this.circleWalletSetId) {
-      throw new BadRequestException('Circle wallet credentials are not configured. Add CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, and CIRCLE_WALLET_SET_ID before creating the campaign wallet.');
+    if (!this.circleApiKey || !this.circleEntitySecret) {
+      throw new BadRequestException('Circle wallet credentials are not configured. Add CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET before creating the campaign wallet.');
     }
   }
 
@@ -488,7 +488,9 @@ export class AdminService {
   // clearly isolated from customer funds in the Circle console and our database.
   async getReferralRewardWallet() {
     const wallet = await this.prisma.platformWallet.findUnique({ where: { key: REFERRAL_REWARD_WALLET_KEY } });
-    const circleConfigured = !!(this.circleApiKey && this.circleEntitySecret && this.circleWalletSetId);
+    // A wallet set ID is optional: when absent, SureXend creates a dedicated
+    // campaign wallet set and stores it in the platform-wallet record.
+    const circleConfigured = !!(this.circleApiKey && this.circleEntitySecret);
     const payoutConfigured = circleConfigured && !!this.referralRewardUsdtTokenAddress;
     if (!wallet) {
       return {
@@ -548,7 +550,9 @@ export class AdminService {
       data: {
         key: REFERRAL_REWARD_WALLET_KEY,
         label: 'Referral rewards wallet',
-        walletSetId: this.circleWalletSetId,
+        // Existing Circle wallet sets remain supported, but a new project can
+        // leave this blank and let the secure flow create one automatically.
+        walletSetId: this.circleWalletSetId || null,
         blockchain: this.referralRewardBlockchain(),
         currency: 'USDC',
         status: 'CREATING',
@@ -560,14 +564,40 @@ export class AdminService {
         headers: { Authorization: `Bearer ${this.circleApiKey}`, accept: 'application/json' },
         timeout: 15_000,
       });
-      const entitySecretCiphertext = this.encryptCircleEntitySecret(this.circleEntitySecret, publicKeyResponse.data?.data?.publicKey);
+      const publicKey = publicKeyResponse.data?.data?.publicKey;
+      if (!publicKey) throw new Error('Circle did not return the entity public key.');
+
+      // Circle requires every developer-controlled wallet to belong to a wallet
+      // set. A configured ID is reused, otherwise we create a dedicated one and
+      // persist it—operators never need to create or paste a campaign wallet.
+      let walletSetId = record.walletSetId || this.circleWalletSetId;
+      if (!walletSetId) {
+        const createSetResponse = await axios.post(
+          `${this.circleBaseUrl}/v1/w3s/developer/walletSets`,
+          {
+            idempotencyKey: crypto.randomUUID(),
+            entitySecretCiphertext: this.encryptCircleEntitySecret(this.circleEntitySecret, publicKey),
+            name: 'SureXend Referral Rewards',
+          },
+          {
+            headers: { Authorization: `Bearer ${this.circleApiKey}`, 'Content-Type': 'application/json', accept: 'application/json' },
+            timeout: 30_000,
+          },
+        );
+        walletSetId = createSetResponse.data?.data?.walletSet?.id;
+        if (!walletSetId) throw new Error('Circle did not return a wallet set id.');
+        await this.prisma.platformWallet.update({ where: { id: record.id }, data: { walletSetId } });
+        this.logger.log(`Created Circle referral reward wallet set ${walletSetId}`);
+      }
+
+      const entitySecretCiphertext = this.encryptCircleEntitySecret(this.circleEntitySecret, publicKey);
       const createResponse = await axios.post(
         `${this.circleBaseUrl}/v1/w3s/developer/wallets`,
         {
           idempotencyKey: crypto.randomUUID(),
           blockchains: [this.referralRewardBlockchain()],
           entitySecretCiphertext,
-          walletSetId: this.circleWalletSetId,
+          walletSetId,
           metadata: [{ name: 'SureXend Referral Rewards Treasury', refId: REFERRAL_REWARD_WALLET_KEY }],
         },
         {
@@ -689,7 +719,11 @@ export class AdminService {
         select: { address: true },
       });
       if (!recipientAddress) {
-        const created = await this.walletsService.getDepositAddress(reward.userId, this.referralRewardNetwork());
+        const created = await this.walletsService.getDepositAddress(
+          reward.userId,
+          this.referralRewardNetwork(),
+          source.walletSetId || undefined,
+        );
         recipientAddress = { address: created.address };
       }
 

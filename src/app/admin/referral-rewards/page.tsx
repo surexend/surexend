@@ -135,7 +135,7 @@ export default function AdminReferralRewardsPage() {
         </div>
 
         {!walletData?.configured ? (
-          <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/[0.07] p-4"><p className="text-sm font-bold text-amber-300">Circle needs to be configured first</p><p className="text-xs text-[#FDE68A] mt-1 leading-relaxed">Add <code>CIRCLE_API_KEY</code>, <code>CIRCLE_ENTITY_SECRET</code>, and <code>CIRCLE_WALLET_SET_ID</code> to the backend environment. No wallet or reward payout can be created without all three.</p></div>
+          <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/[0.07] p-4"><p className="text-sm font-bold text-amber-300">Circle needs to be configured first</p><p className="text-xs text-[#FDE68A] mt-1 leading-relaxed">Add <code>CIRCLE_API_KEY</code> and <code>CIRCLE_ENTITY_SECRET</code> to the backend environment. SureXend creates and stores its referral wallet set automatically; <code>CIRCLE_WALLET_SET_ID</code> is optional when you already have one.</p></div>
         ) : !wallet ? (
           <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.025] p-4 text-sm text-[#94A3B8]">Create the wallet once, then fund it with USDC in Circle Console. Before paying the promised USDT, provision at least the required USDT amount on this same wallet and supported blockchain.</div>
         ) : (

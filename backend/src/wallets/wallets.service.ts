@@ -654,8 +654,14 @@ export class WalletsService implements OnModuleInit {
     }
   }
 
-  async getDepositAddress(userId: string, network: string) {
+  async getDepositAddress(userId: string, network: string, walletSetIdOverride?: string) {
     const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'MONAD'];
+    // Campaign payouts may bootstrap their own Circle wallet set. Normal user
+    // deposits keep using the configured application wallet set.
+    const walletSetId = walletSetIdOverride || this.walletSetId;
+    if (!walletSetId) {
+      throw new BadRequestException('Circle wallet set is unavailable. Create the referral rewards wallet first or configure CIRCLE_WALLET_SET_ID for general deposit addresses.');
+    }
     if (!validNetworks.includes(network.toUpperCase())) {
       throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20, ARC, MONAD');
     }
@@ -699,7 +705,7 @@ export class WalletsService implements OnModuleInit {
               idempotencyKey: crypto.randomUUID(),
               blockchains: ['ARC-TESTNET'],
               entitySecretCiphertext: ciphertext,
-              walletSetId: this.walletSetId,
+              walletSetId,
               metadata: [
                 {
                   name: `User ${userId.substring(0, 8)} - ARC`,
@@ -739,7 +745,7 @@ export class WalletsService implements OnModuleInit {
           if (evmAddressRecord) {
             address = evmAddressRecord.address;
           } else {
-            const ethWalletRecord = await this.getDepositAddress(userId, 'ETHEREUM');
+            const ethWalletRecord = await this.getDepositAddress(userId, 'ETHEREUM', walletSetId);
             address = ethWalletRecord.address;
           }
 
@@ -770,7 +776,7 @@ export class WalletsService implements OnModuleInit {
               idempotencyKey: crypto.randomUUID(),
               blockchains: [blockchain],
               entitySecretCiphertext: ciphertext,
-              walletSetId: this.walletSetId,
+              walletSetId,
               metadata: [
                 {
                   name: `User ${userId.substring(0, 8)} - ${network}`,
