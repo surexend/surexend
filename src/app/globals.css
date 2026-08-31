@@ -1,8 +1,8 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Custom Properties ─────────────────────────────────────────────────── */
+/* â”€â”€ Custom Properties â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 :root {
   --font-inter: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-dm: 'DM Sans', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -16,7 +16,7 @@
   --error: #EF4444;
 }
 
-/* ── Base Reset ────────────────────────────────────────────────────────── */
+/* â”€â”€ Base Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -51,7 +51,7 @@ html[data-standalone="ios"], html[data-standalone="ios"] body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* ── Performance polish ─────────────────────────────────────────────────── */
+/* â”€â”€ Performance polish â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /* Crisper text/images on hi-DPI + cheaper image decode on scroll. */
 img {
   -webkit-user-drag: none;
@@ -78,9 +78,9 @@ img {
   }
 }
 
-/* ── Selection ─────────────────────────────────────────────────────────── */
+/* â”€â”€ Selection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+/* â”€â”€ Scrollbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /* Fun liquid-glass scrollbars: a slim brand-tinted glowing rail. The thumb is
    a soft capsule with a bright specular line down its spine so it reads as a
    tube of light instead of a flat bar. Colors follow the active brand variant. */
@@ -121,7 +121,7 @@ img {
   scrollbar-color: var(--sb-thumb-b) var(--sb-track);
 }
 
-/* ── Loader Animations ─────────────────────────────────────────────────── */
+/* â”€â”€ Loader Animations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes pulse-glow {
   0%, 100% { opacity: 0.6; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.1); }
@@ -142,7 +142,7 @@ img {
   background: radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.3) 100%);
 }
 
-/* ── SureXend loader — orbiting plane ──────────────────────────────────── */
+/* â”€â”€ SureXend loader â€” orbiting plane â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes loader-orbit {
   0%   { offset-distance: 0%; }
   100% { offset-distance: 100%; }
@@ -173,14 +173,14 @@ img {
   .loader-trail { display: none; }
 }
 
-/* ── Focus styles ──────────────────────────────────────────────────────── */
+/* â”€â”€ Focus styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 *:focus-visible {
   outline: 2px solid rgba(0, 212, 255, 0.5);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* ── Glass Card & Dynamic Gold / Lemon Glass Morphism ─────────────────── */
+/* â”€â”€ Glass Card & Dynamic Gold / Lemon Glass Morphism â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .glass-card {
   background: linear-gradient(135deg, rgba(30, 33, 40, 0.9), rgba(18, 20, 26, 0.92));
   backdrop-filter: blur(12px);
@@ -191,7 +191,7 @@ img {
   transition: border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
 }
 
-/* Denser brand card for the hero/balance surfaces — the ONE place gold leads. */
+/* Denser brand card for the hero/balance surfaces â€” the ONE place gold leads. */
 .glass-card-gold {
   background: linear-gradient(135deg, rgba(212, 160, 23, 0.08), rgba(18, 20, 26, 0.92));
   backdrop-filter: blur(12px);
@@ -210,7 +210,7 @@ img {
   box-shadow: inset 0 1px 2px rgba(212, 255, 74, 0.2), 0 12px 36px rgba(0, 0, 0, 0.4);
 }
 
-/* ── Liquid Glass Design System ───────────────────────────────────────── */
+/* â”€â”€ Liquid Glass Design System â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /* Apple-style translucent surfaces: higher translucency + colour saturation
    boost + a specular top edge that catches light. GPU layer promotion (translateZ)
    is removed to prevent Android Chrome hardware rasterization noise/ghosting. */
@@ -243,7 +243,7 @@ img {
   }
 }
 
-/* Specular top hairline — the light-catching edge of liquid glass. */
+/* Specular top hairline â€” the light-catching edge of liquid glass. */
 .liquid-glass::before {
   content: '';
   position: absolute;
@@ -292,7 +292,7 @@ img {
   pointer-events: none;
 }
 
-/* ── Liquid glass LIVING EDGE (animated gold ring) ──────────────────── */
+/* â”€â”€ Liquid glass LIVING EDGE (animated gold ring) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /* A thin arc of the brand accent travels endlessly around each glass
    surface's edge. Rendered as a masked conic-gradient ring on a registered
    custom property so it animates by interpolation; browsers without @property
@@ -307,7 +307,7 @@ img {
 
 /* The body custom-property animation is desktop-only.
    @property --glass-angle has inherits:true, so if body animates it on mobile
-   every descendant triggers a repaint every frame — even when ::after is hidden.
+   every descendant triggers a repaint every frame â€” even when ::after is hidden.
    Gating it here means mobile never pays this cost at all. */
 @media (min-width: 768px) {
   body {
@@ -315,7 +315,7 @@ img {
   }
 }
 
-/* Living edge ring — defined globally, displayed on desktop.
+/* Living edge ring â€” defined globally, displayed on desktop.
    The mobile @media block suppresses it with display:none on ::after. */
 .liquid-glass::after,
 .liquid-glass-strong::after {
@@ -349,7 +349,7 @@ img {
   body { animation: none; }
 }
 
-/* Liquid-tinted backdrop for modals — refracts + deepens instead of flat black. */
+/* Liquid-tinted backdrop for modals â€” refracts + deepens instead of flat black. */
 .liquid-backdrop {
   background: rgba(3, 7, 18, 0.45);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
@@ -361,7 +361,7 @@ img {
 
 
 
-/* ── Gradient text utility ─────────────────────────────────────────────── */
+/* â”€â”€ Gradient text utility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .gradient-text-gold {
   background: linear-gradient(135deg, #FFD700, #D4A017, #FFD700);
   background-size: 200% auto;
@@ -380,7 +380,7 @@ img {
   animation: textShine 3s linear infinite;
 }
 
-/* ── Glow button utilities ─────────────────────────────────────────────── */
+/* â”€â”€ Glow button utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .btn-gold {
   background: linear-gradient(135deg, #E8B820, #C49015);
   color: #0D0D0D;
@@ -447,7 +447,7 @@ img {
   background: rgba(181,226,61,0.08);
 }
 
-/* ── Logo Glow Effects ─────────────────────────────────────────────────── */
+/* â”€â”€ Logo Glow Effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .gold-logo-glow {
   filter: drop-shadow(0 0 12px rgba(255, 215, 0, 0.9)) drop-shadow(0 0 28px rgba(212, 160, 23, 0.7));
 }
@@ -456,7 +456,7 @@ img {
   filter: brightness(0) invert(1) drop-shadow(0 0 12px rgba(181, 226, 61, 0.95)) drop-shadow(0 0 28px rgba(202, 255, 58, 0.75));
 }
 
-/* ── Skeleton loader ───────────────────────────────────────────────────── */
+/* â”€â”€ Skeleton loader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .skeleton {
   background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
   background-size: 400% 100%;
@@ -464,7 +464,7 @@ img {
   border-radius: 8px;
 }
 
-/* ── Noise texture overlay ─────────────────────────────────────────────── */
+/* â”€â”€ Noise texture overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .noise-overlay::after {
   content: '';
   position: absolute;
@@ -474,7 +474,7 @@ img {
   border-radius: inherit;
 }
 
-/* ── Input styles ──────────────────────────────────────────────────────── */
+/* â”€â”€ Input styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .input-field {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -514,12 +514,12 @@ img {
   box-shadow: 0 0 0 3px rgba(181, 226, 61, 0.1);
 }
 
-/* ── Status badge ──────────────────────────────────────────────────────── */
+/* â”€â”€ Status badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .badge-success { background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16,185,129,0.3); }
 .badge-pending { background: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid rgba(245,158,11,0.3); }
 .badge-failed  { background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239,68,68,0.3); }
 
-/* ── Mobile bottom nav safe area ───────────────────────────────────────── */
+/* â”€â”€ Mobile bottom nav safe area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
 .safe-top    { padding-top: env(safe-area-inset-top, 0px); }
 
@@ -530,10 +530,10 @@ img {
   padding-bottom: calc(4rem + env(safe-area-inset-bottom, 16px));
 }
 
-/* ── Prevent layout shift on load ─────────────────────────────────────── */
+/* â”€â”€ Prevent layout shift on load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .contain-layout { contain: layout style; }
 
-/* ── Keyframes (referenced in Tailwind config) ─────────────────────────── */
+/* â”€â”€ Keyframes (referenced in Tailwind config) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes textShine {
   0%   { background-position: -200% center; }
   100% { background-position: 200% center; }
@@ -563,7 +563,7 @@ img {
   50%       { transform: scale(1.03); opacity: 1;   }
 }
 
-/* ── Reduced motion ────────────────────────────────────────────────────── */
+/* â”€â”€ Reduced motion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -572,12 +572,12 @@ img {
   }
 }
 
-/* ── Print ─────────────────────────────────────────────────────────────── */
+/* â”€â”€ Print â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media print {
   .no-print { display: none !important; }
 }
 
-/* ── LITE MODE ─────────────────────────────────────────────────────────── */
+/* â”€â”€ LITE MODE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /* Activated via `lite-mode` class on <html>. Cuts animation + blur cost so
    the app runs lighter and uses less data on slow/2G connections. */
 html.lite-mode body {
@@ -614,11 +614,11 @@ html.lite-mode *::after {
   transition-duration: 0.15s !important;
 }
 
-/* ── MOBILE RENDERING SYSTEM ──────────────────────────────────────────── */
+/* â”€â”€ MOBILE RENDERING SYSTEM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /* Phones get a flat, GPU-safe layer. Vertical smearing / buffer corruption
    on mobile browsers comes from too many composited layers and large
    blur() surfaces (orbs, mesh, glass rings). Premium on phones is achieved
-   with solid gradients, borders, shadows and brand accents — not GPU blur. */
+   with solid gradients, borders, shadows and brand accents â€” not GPU blur. */
 @media (max-width: 767px) {
   .mobile-flat-surface {
     background: #121419 !important;
@@ -640,13 +640,13 @@ html.lite-mode *::after {
     will-change: auto !important;
   }
   /* The sticky app header/bottom nav were promoted to their own GPU layers
-     via translateZ(0) — the exact cause of content smearing under a sticky
+     via translateZ(0) â€” the exact cause of content smearing under a sticky
      header on Android. Render them in the normal layer on phones. */
   .transform-gpu,
   .transform-gpu-3d {
     transform: none;
   }
-  /* Also zero out will-change — Tailwind's will-change-transform class sets
+  /* Also zero out will-change â€” Tailwind's will-change-transform class sets
      will-change:transform which alone can trigger layer promotion on Android. */
   .will-change-transform,
   .will-change-auto {
@@ -668,9 +668,9 @@ html.lite-mode *::after {
     animation: none;
   }
 
-  /* The mask-composited conic ring (::after) is GPU-buggy on Android —
+  /* The mask-composited conic ring (::after) is GPU-buggy on Android â€”
      remove it on phones. The specular hairline (::before) is just a 1px
-     linear-gradient — zero compositing cost — keep it for premium look. */
+     linear-gradient â€” zero compositing cost â€” keep it for premium look. */
   .liquid-glass::after,
   .liquid-glass-strong::after,
   .liquid-glass::before,
@@ -701,7 +701,7 @@ html.lite-mode *::after {
     animation: none;
   }
 
-  /* Strip every decorative blur() utility — the giant blurred orbs/mesh are
+  /* Strip every decorative blur() utility â€” the giant blurred orbs/mesh are
      the #1 cause of buffer corruption on mobile GPUs. */
   .blur,
   .blur-sm,
@@ -758,7 +758,7 @@ html.lite-mode *::after {
     overscroll-behavior-y: contain;
   }
 
-  /* iOS auto-zooms into any input with font-size < 16px on focus — pin controls to 16px */
+  /* iOS auto-zooms into any input with font-size < 16px on focus â€” pin controls to 16px */
   input, select, textarea {
     font-size: 16px !important;
   }
@@ -806,7 +806,7 @@ label,
 
 /* Desktop (md+) variants of the dvh helpers.
    Tailwind can only generate `md:` variants for classes it knows about, so
-   `md:h-dvh-force` in JSX silently produced NO css — the desktop app shell
+   `md:h-dvh-force` in JSX silently produced NO css â€” the desktop app shell
    never got its fixed height, its inner `md:overflow-y-auto` pane never
    overflowed, and (combined with overscroll-behavior) wheel scrolling on
    desktop was dead. Defining the variants for real restores the intended
@@ -831,7 +831,7 @@ label,
   display: none;
 }
 
-/* ── DEEP ULTRA-FINTECH THEME ─────────────────────────────────────────── */
+/* â”€â”€ DEEP ULTRA-FINTECH THEME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /* Revolut/Bybit VIP stage: near-black graphite background with layered
    translucent-look panels, razor-thin 1px top specular highlights, and
    balanced gold/lemon accents. Completely GPU-safe on mobile screens. */
@@ -897,7 +897,9 @@ body {
 
 
 
-/* ── Adaptive light appearance ────────────────────────────────────────────
+/* 
+
+/* -- Adaptive light appearance ---------------------------------------------
    The product defaults to the device colour scheme (or a saved manual choice).
    These semantic surface overrides let the established dark fintech interface
    remain dense while giving light-mode users a proper paper/ink experience. */
@@ -911,16 +913,16 @@ body {
 }
 
 html[data-color-mode='light'] {
-  --app-bg: #F5F7FB;
+  --app-bg: #F4F6FC;
   --card-bg: #FFFFFF;
   --border: rgba(15, 23, 42, 0.10);
-  --text: #102033;
+  --text: #0F2038;
   --text-muted: #52657C;
   --text-dim: #708198;
-  --sx-bg: #F5F7FB;
+  --sx-bg: #F4F6FC;
   --sx-surface: #FFFFFF;
-  --sx-surface-soft: #F1F4F8;
-  --sx-text: #102033;
+  --sx-surface-soft: rgba(15, 23, 42, 0.04);
+  --sx-text: #0F2038;
   --sx-muted: #52657C;
   --sx-border: rgba(15, 23, 42, 0.12);
   --sb-track: #E7ECF3;
@@ -946,62 +948,244 @@ html[data-color-mode='light'] {
 .theme-choice:hover { color: var(--sx-text); }
 .theme-choice-active { color: #1E293B; background: #D4A017; box-shadow: 0 1px 3px rgba(15,23,42,.18); }
 
-html[data-color-mode='light'] body { background: var(--sx-bg); color: var(--sx-text); }
+/* PREMIUM LIGHT MODE - Revolut/Stripe-class glass-morphism
+   Stage: pearl-silver coolwhite (#F4F6FC) with ambient brand halos.
+   Cards: frosted white glass floating on the stage, casting soft shadows.
+   Accents: brand gold/lemon at full saturation - high contrast on light. */
+
+/* Stage and ambient background */
+html[data-color-mode='light'] body {
+  background-color: #F4F6FC;
+  color: #0F2038;
+  background-image:
+    radial-gradient(ellipse 90% 50% at 15% -5%, rgba(212, 160, 23, 0.07), transparent 60%),
+    radial-gradient(ellipse 70% 80% at 85% 105%, rgba(100, 140, 220, 0.06), transparent 55%),
+    linear-gradient(175deg, #EBF0FA 0%, #F4F6FC 45%, #EEF2FA 100%);
+}
+
+/* Dark background overrides */
 html[data-color-mode='light'] [class~="bg-[#000000]"],
 html[data-color-mode='light'] [class~="bg-[#0A0B0E]"],
 html[data-color-mode='light'] [class~="bg-[#0F1116]"],
 html[data-color-mode='light'] [class~="bg-[#0F1015]"],
 html[data-color-mode='light'] [class~="bg-[#121419]"],
-html[data-color-mode='light'] [class~="bg-[#15171C]"] { background-color: var(--sx-bg) !important; }
+html[data-color-mode='light'] [class~="bg-[#15171C]"],
+html[data-color-mode='light'] [class~="bg-[#0D0E13]"],
+html[data-color-mode='light'] [class~="bg-[#0C0E12]"],
+html[data-color-mode='light'] [class~="bg-[#1A1C24]"],
+html[data-color-mode='light'] [class~="bg-[#181B21]"] { background-color: #F4F6FC !important; }
+
 html[data-color-mode='light'] [class~="bg-black"] { background-color: #E8EDF4 !important; }
 html[data-color-mode='light'] [class~="bg-black/20"],
-html[data-color-mode='light'] [class~="bg-black/30"] { background-color: rgba(15, 23, 42, .04) !important; }
-html[data-color-mode='light'] [class~="border-white/5"],
-html[data-color-mode='light'] [class~="border-white/10"],
-html[data-color-mode='light'] [class~="border-white/20"] { border-color: var(--sx-border) !important; }
+html[data-color-mode='light'] [class~="bg-black/30"] { background-color: rgba(15, 23, 42, 0.04) !important; }
+
 html[data-color-mode='light'] [class~="bg-white/5"],
 html[data-color-mode='light'] [class~="bg-white/[0.03]"],
 html[data-color-mode='light'] [class~="bg-white/[0.04]"],
 html[data-color-mode='light'] [class~="bg-white/[0.05]"],
-html[data-color-mode='light'] [class~="bg-white/[0.025]"] { background-color: rgba(15, 23, 42, .035) !important; }
-html[data-color-mode='light'] .text-white { color: #102033 !important; }
+html[data-color-mode='light'] [class~="bg-white/[0.025]"] { background-color: rgba(15, 23, 42, 0.04) !important; }
+
+html[data-color-mode='light'] [class~="bg-white/10"],
+html[data-color-mode='light'] [class~="bg-white/[0.08]"],
+html[data-color-mode='light'] [class~="bg-white/[0.06]"] { background-color: rgba(15, 23, 42, 0.06) !important; }
+
+/* Borders */
+html[data-color-mode='light'] [class~="border-white/5"],
+html[data-color-mode='light'] [class~="border-white/10"],
+html[data-color-mode='light'] [class~="border-white/20"],
+html[data-color-mode='light'] [class~="border-white/30"] { border-color: rgba(15, 23, 42, 0.10) !important; }
+
+/* Text */
+html[data-color-mode='light'] .text-white { color: #0F2038 !important; }
 html[data-color-mode='light'] .text-\[\#94A3B8\] { color: #52657C !important; }
-html[data-color-mode='light'] .text-\[\#64748B\] { color: #708198 !important; }
+html[data-color-mode='light'] .text-\[\#64748B\] { color: #688098 !important; }
 html[data-color-mode='light'] .text-\[\#CBD5E1\] { color: #3E5067 !important; }
+html[data-color-mode='light'] .text-\[\#334155\] { color: #8898A8 !important; }
+html[data-color-mode='light'] .text-\[\#475569\] { color: #516070 !important; }
+html[data-color-mode='light'] .text-\[\#1E293B\] { color: #0F2038 !important; }
+html[data-color-mode='light'] .text-\[\#10B981\] { color: #059669 !important; }
+html[data-color-mode='light'] .text-\[\#EF4444\] { color: #DC2626 !important; }
+
+/* Frosted glass panels - centrepiece of the light design */
 html[data-color-mode='light'] .liquid-glass,
 html[data-color-mode='light'] .liquid-glass-strong {
-  background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(246,248,252,.94)) !important;
-  border-color: rgba(15,23,42,.10) !important;
-  box-shadow: inset 0 1px 0 #fff, 0 10px 30px rgba(15,23,42,.07) !important;
+  background-image:
+    linear-gradient(115deg, transparent 28%, rgba(255,255,255,0.65) 46%, transparent 64%),
+    radial-gradient(120% 90% at 50% -15%, rgba(255,255,255,0.85), transparent 55%),
+    linear-gradient(145deg, rgba(255,255,255,0.95), rgba(242,246,255,0.88) 50%, rgba(248,251,255,0.92) 100%) !important;
+  border: 1px solid rgba(255,255,255,0.92) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,1),
+    inset 0 -1px 0 rgba(190,210,235,0.35),
+    0 2px 4px rgba(15,23,42,0.03),
+    0 8px 24px rgba(15,23,42,0.07),
+    0 24px 48px rgba(15,23,42,0.05) !important;
 }
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  html[data-color-mode='light'] .liquid-glass,
+  html[data-color-mode='light'] .liquid-glass-strong {
+    -webkit-backdrop-filter: blur(22px) saturate(165%) brightness(1.02) !important;
+    backdrop-filter: blur(22px) saturate(165%) brightness(1.02) !important;
+  }
+}
+
+html[data-color-mode='light'] .liquid-glass::before,
+html[data-color-mode='light'] .liquid-glass-strong::before {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,1), transparent) !important;
+}
+
+html[data-color-mode='light'] .liquid-glass::after,
+html[data-color-mode='light'] .liquid-glass-strong::after {
+  background: conic-gradient(
+    from var(--glass-angle),
+    transparent 0deg 250deg,
+    rgba(212,160,23,0.05) 300deg,
+    rgba(212,160,23,0.12) 320deg,
+    rgba(212,160,23,0.28) 330deg,
+    rgba(212,160,23,0.12) 340deg,
+    rgba(212,160,23,0.05) 355deg,
+    transparent 360deg
+  ) !important;
+}
+
 html[data-color-mode='light'] .glass-card {
-  background: linear-gradient(145deg, #FFFFFF, #F6F8FC) !important;
-  border-color: rgba(15,23,42,.10) !important;
-  box-shadow: inset 0 1px 0 #fff, 0 10px 30px rgba(15,23,42,.07) !important;
+  background:
+    radial-gradient(110% 65% at 5% 0%, rgba(255,255,255,0.9), transparent 50%),
+    linear-gradient(145deg, rgba(255,255,255,0.96), rgba(240,246,255,0.90)) !important;
+  border-color: rgba(210,225,248,0.80) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.95),
+    0 6px 20px rgba(15,23,42,0.06),
+    0 20px 44px rgba(15,23,42,0.05) !important;
 }
+
 html[data-color-mode='light'] .glass-card-gold {
-  background: linear-gradient(145deg, #FFFDF5, #F9F3DF) !important;
-  border-color: rgba(180,130,10,.28) !important;
-  box-shadow: inset 0 1px 0 #fff, 0 10px 30px rgba(110,80,5,.10) !important;
+  background:
+    radial-gradient(120% 60% at 5% 0%, rgba(255,215,0,0.14), transparent 50%),
+    linear-gradient(145deg, rgba(255,251,235,0.98), rgba(252,243,202,0.90)) !important;
+  border-color: rgba(212,160,23,0.35) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.95),
+    0 6px 20px rgba(160,120,10,0.10),
+    0 0 0 1px rgba(212,160,23,0.10) !important;
 }
+
 html[data-color-mode='light'] .glass-card-lemon {
-  background: linear-gradient(145deg, #FCFFF4, #F1F8D9) !important;
-  border-color: rgba(112,150,20,.28) !important;
+  background:
+    radial-gradient(120% 60% at 5% 0%, rgba(181,226,61,0.14), transparent 50%),
+    linear-gradient(145deg, rgba(247,255,230,0.98), rgba(234,249,193,0.90)) !important;
+  border-color: rgba(135,185,28,0.35) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.90),
+    0 6px 20px rgba(100,150,10,0.09),
+    0 0 0 1px rgba(135,185,28,0.10) !important;
 }
+
+/* Mobile: flat GPU-safe light glass */
+@media (max-width: 767px) {
+  html[data-color-mode='light'] body {
+    background-image: linear-gradient(175deg, #EBF0FA 0%, #F4F6FC 55%, #EEF2FA 100%) !important;
+  }
+
+  html[data-color-mode='light'] .liquid-glass,
+  html[data-color-mode='light'] .liquid-glass-strong {
+    background-image:
+      radial-gradient(110% 55% at 0% 0%, rgba(255,255,255,0.92), transparent 50%),
+      linear-gradient(155deg, rgba(255,255,255,0.97), rgba(241,246,255,0.92) 65%) !important;
+    border-color: rgba(205,220,242,0.80) !important;
+    box-shadow:
+      inset 0 1.5px 0 rgba(255,255,255,0.95),
+      0 4px 16px rgba(15,23,42,0.07) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  html[data-color-mode='light'] .glass-card {
+    background: linear-gradient(145deg, rgba(255,255,255,0.98), rgba(241,246,255,0.93)) !important;
+    border-color: rgba(200,218,240,0.70) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: 0 3px 14px rgba(15,23,42,0.07) !important;
+  }
+
+  html[data-color-mode='light'] .glass-card-gold {
+    background: linear-gradient(145deg, rgba(255,251,235,0.99), rgba(251,241,198,0.93)) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  html[data-color-mode='light'] .glass-card-lemon {
+    background: linear-gradient(145deg, rgba(247,255,230,0.99), rgba(233,248,192,0.93)) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* Modal backdrop */
+html[data-color-mode='light'] .liquid-backdrop {
+  background: rgba(195,210,230,0.48) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(145%) !important;
+  backdrop-filter: blur(18px) saturate(145%) !important;
+}
+
+/* Inputs */
 html[data-color-mode='light'] input,
 html[data-color-mode='light'] select,
-html[data-color-mode='light'] textarea { color: #102033; }
-/* Preserve legibility on intentionally coloured actions and status pills. */
+html[data-color-mode='light'] textarea {
+  color: #0F2038 !important;
+  background-color: rgba(255,255,255,0.82) !important;
+  border-color: rgba(15,23,42,0.14) !important;
+}
+html[data-color-mode='light'] input::placeholder,
+html[data-color-mode='light'] textarea::placeholder { color: #8A9CB0 !important; }
+html[data-color-mode='light'] .input-field {
+  background: rgba(255,255,255,0.86) !important;
+  border-color: rgba(15,23,42,0.14) !important;
+  color: #0F2038 !important;
+}
+
+/* Skeleton loaders */
+html[data-color-mode='light'] .skeleton {
+  background: linear-gradient(90deg,
+    rgba(215,225,242,0.7) 25%,
+    rgba(195,210,232,0.9) 50%,
+    rgba(215,225,242,0.7) 75%) !important;
+  background-size: 400% 100% !important;
+}
+
+/* Gradient text: readable on light */
+html[data-color-mode='light'] .gradient-text-gold {
+  background: linear-gradient(135deg, #AA6E00, #C8900A, #A86400) !important;
+  background-size: 200% auto !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+html[data-color-mode='light'] .gradient-text-lemon {
+  background: linear-gradient(135deg, #5C8A08, #7AAE18, #527E04) !important;
+  background-size: 200% auto !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+/* Preserve colour on CTA/status elements */
 html[data-color-mode='light'] .bg-blue-500.text-white,
 html[data-color-mode='light'] .bg-blue-600.text-white,
 html[data-color-mode='light'] .bg-emerald-500.text-white,
 html[data-color-mode='light'] .bg-red-500.text-white,
 html[data-color-mode='light'] .bg-slate-800.text-white { color: #fff !important; }
 
-@media (max-width: 767px) {
-  html[data-color-mode='light'] .liquid-glass,
-  html[data-color-mode='light'] .liquid-glass-strong,
-  html[data-color-mode='light'] .glass-card,
-  html[data-color-mode='light'] .glass-card-gold,
-  html[data-color-mode='light'] .glass-card-lemon { background: linear-gradient(145deg, #fff, #F6F8FC) !important; }
+/* Scrollbar */
+html[data-color-mode='light'] ::-webkit-scrollbar-track { background: #E4EAF4; }
+html[data-color-mode='light'] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(212,160,23,0.55), rgba(160,120,16,0.90)) !important;
+}
+
+/* Lite mode + light mode */
+html.lite-mode[data-color-mode='light'] .liquid-glass,
+html.lite-mode[data-color-mode='light'] .liquid-glass-strong {
+  -webkit-backdrop-filter: blur(8px) saturate(135%) !important;
+  backdrop-filter: blur(8px) saturate(135%) !important;
 }
