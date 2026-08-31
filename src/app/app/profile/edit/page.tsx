@@ -6,9 +6,8 @@ import { useTheme } from '@/context/ThemeContext'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { userAPI } from '@/lib/api'
 import { useRouter } from 'next/navigation'
-import { Loader2, Save } from 'lucide-react'
+import { UserRound, Loader2, Save } from 'lucide-react'
 import toast from 'react-hot-toast'
-import UserAvatar from '@/components/ui/UserAvatar'
 
 export default function EditProfilePage() {
   const { variant, colors } = useTheme()
@@ -69,13 +68,15 @@ export default function EditProfilePage() {
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="liquid-glass p-5 rounded-2xl space-y-5">
         <div className="text-center">
-          <UserAvatar
-            src={avatar}
-            name={`${firstName} ${lastName}`.trim() || 'SureXend User'}
-            className="w-20 h-20 border-2 mx-auto mb-3"
-            initialsClassName="text-lg"
-            style={{ borderColor: `rgba(${accentRgb}, 0.5)` }}
-          />
+          <div className="w-20 h-20 rounded-full overflow-hidden border-2 mx-auto mb-3" style={{ borderColor: `rgba(${accentRgb}, 0.5)`, background: '#212429' }}>
+            {avatar ? (
+              <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <UserRound className="w-9 h-9 text-[#64748B]" />
+              </div>
+            )}
+          </div>
           <button
             onClick={() => fileRef.current?.click()}
             className="text-xs font-bold px-3 py-1.5 rounded-full border transition-all active:scale-95"

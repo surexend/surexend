@@ -16,7 +16,6 @@ import {
 import toast from 'react-hot-toast'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
 import CurrencyFlag from '@/components/CurrencyFlag'
-import UserAvatar from '@/components/ui/UserAvatar'
 import { useBackLayer } from '@/context/BackNavigationContext'
 
 function MenuSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -169,12 +168,13 @@ export default function ProfilePage() {
         />
         <div className="flex items-center gap-3 truncate">
           {/* Clean Avatar Display */}
-          <UserAvatar
-            src={avatar}
-            name={fullName || 'SureXend User'}
-            className="w-12 h-12 border-2 border-white/20 flex-shrink-0"
-            initialsClassName="text-sm"
-          />
+          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/20 shadow-lg bg-[#212429] flex-shrink-0">
+            {avatar ? (
+              <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" alt="Avatar" className="w-full h-full object-cover" />
+            )}
+          </div>
 
             <div className="truncate">
               <div className="flex items-center gap-1.5">
