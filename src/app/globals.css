@@ -1,4 +1,4 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -1022,11 +1022,16 @@ html[data-color-mode='light'] .liquid-glass-strong {
     0 24px 48px rgba(15,23,42,0.05) !important;
 }
 
-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  html[data-color-mode='light'] .liquid-glass,
-  html[data-color-mode='light'] .liquid-glass-strong {
-    -webkit-backdrop-filter: blur(22px) saturate(165%) brightness(1.02) !important;
-    backdrop-filter: blur(22px) saturate(165%) brightness(1.02) !important;
+/* Desktop-only backdrop blur for light glass — MUST be gated to desktop.
+   On mobile the global safety strip (* { backdrop-filter: none }) would lose
+   the specificity battle against this rule, reintroducing GPU smearing. */
+@media (min-width: 768px) {
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    html[data-color-mode='light'] .liquid-glass,
+    html[data-color-mode='light'] .liquid-glass-strong {
+      -webkit-backdrop-filter: blur(22px) saturate(165%) brightness(1.02) !important;
+      backdrop-filter: blur(22px) saturate(165%) brightness(1.02) !important;
+    }
   }
 }
 
@@ -1122,11 +1127,20 @@ html[data-color-mode='light'] .glass-card-lemon {
   }
 }
 
-/* Modal backdrop */
-html[data-color-mode='light'] .liquid-backdrop {
-  background: rgba(195,210,230,0.48) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(145%) !important;
-  backdrop-filter: blur(18px) saturate(145%) !important;
+/* Modal backdrop — backdrop-filter only on desktop (mobile = GPU risk) */
+@media (min-width: 768px) {
+  html[data-color-mode='light'] .liquid-backdrop {
+    background: rgba(195,210,230,0.48) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(145%) !important;
+    backdrop-filter: blur(18px) saturate(145%) !important;
+  }
+}
+@media (max-width: 767px) {
+  html[data-color-mode='light'] .liquid-backdrop {
+    background: rgba(195,210,230,0.72) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
 }
 
 /* Inputs */
