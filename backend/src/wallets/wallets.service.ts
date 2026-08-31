@@ -18,6 +18,7 @@ export class WalletsService implements OnModuleInit {
   private entitySecret: string;
   private walletSetId: string;
   private baseUrl: string;
+  private defaultWalletSetInit?: Promise<string>;
   // Per-wallet timestamp of the last full Circle history sync (see
   // syncCircleHistory) so background refreshes don't re-sweep on every page load.
   private lastCircleSyncAt: Map<string, number> = new Map();
@@ -41,6 +42,76 @@ export class WalletsService implements OnModuleInit {
     this.walletSetId = this.configService.get<string>('app.circle.walletSetId');
     this.baseUrl = 'https://api.circle.com';
     this.logger.log(`Circle API initialized: ${this.baseUrl}`);
+  }
+
+  // Resolve the standard Circle wallet set lazily. Existing installations can
+  // keep CIRCLE_WALLET_SET_ID; a new installation creates one exactly once and
+  // stores it in the database, so no operator has to copy a set ID from Circle.
+  private async getOrCreateDefaultWalletSetId(): Promise<string> {
+    if (this.walletSetId) return this.walletSetId;
+    if (this.defaultWalletSetInit) return this.defaultWalletSetInit;
+
+    this.defaultWalletSetInit = (async () => {
+      if (!this.apiKey || !this.entitySecret) {
+        throw new BadRequestException('Circle is not configured. Add CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET before creating a wallet.');
+      }
+
+      const existing = await this.prisma.platformWallet.findUnique({ where: { key: 'APPLICATION_WALLET_SET' } });
+      if (existing?.walletSetId) {
+        this.walletSetId = existing.walletSetId;
+        return existing.walletSetId;
+      }
+
+      const record = existing || await this.prisma.platformWallet.create({
+        data: {
+          key: 'APPLICATION_WALLET_SET',
+          label: 'SureXend application wallet set',
+          blockchain: this.getBlockchainName('ARC'),
+          currency: 'USDC',
+          status: 'WALLET_SET_CREATING',
+        },
+      });
+
+      try {
+        const publicKeyResponse = await axios.get(`${this.baseUrl}/v1/w3s/config/entity/publicKey`, {
+          headers: { Authorization: `Bearer ${this.apiKey}`, accept: 'application/json' },
+          timeout: 15_000,
+        });
+        const publicKey = publicKeyResponse.data?.data?.publicKey;
+        if (!publicKey) throw new Error('Circle did not return the entity public key.');
+        const response = await axios.post(
+          `${this.baseUrl}/v1/w3s/developer/walletSets`,
+          {
+            idempotencyKey: crypto.randomUUID(),
+            entitySecretCiphertext: this.encryptSecret(this.entitySecret, publicKey),
+            name: 'SureXend Application Wallets',
+          },
+          {
+            headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json', accept: 'application/json' },
+            timeout: 30_000,
+          },
+        );
+        const walletSetId = response.data?.data?.walletSet?.id;
+        if (!walletSetId) throw new Error('Circle did not return a wallet set id.');
+        await this.prisma.platformWallet.update({
+          where: { id: record.id },
+          data: { walletSetId, status: 'WALLET_SET_ACTIVE' },
+        });
+        this.walletSetId = walletSetId;
+        this.logger.log(`Created Circle application wallet set ${walletSetId}`);
+        return walletSetId;
+      } catch (error) {
+        await this.prisma.platformWallet.update({ where: { id: record.id }, data: { status: 'WALLET_SET_ERROR' } }).catch(() => undefined);
+        throw error;
+      }
+    })();
+
+    try {
+      return await this.defaultWalletSetInit;
+    } catch (error) {
+      this.defaultWalletSetInit = undefined;
+      throw error;
+    }
   }
 
   // On boot, ensure EVERY EVM address this app displays (any network, any user)
@@ -656,15 +727,12 @@ export class WalletsService implements OnModuleInit {
 
   async getDepositAddress(userId: string, network: string, walletSetIdOverride?: string) {
     const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'MONAD'];
-    // Campaign payouts may bootstrap their own Circle wallet set. Normal user
-    // deposits keep using the configured application wallet set.
-    const walletSetId = walletSetIdOverride || this.walletSetId;
-    if (!walletSetId) {
-      throw new BadRequestException('Circle wallet set is unavailable. Create the referral rewards wallet first or configure CIRCLE_WALLET_SET_ID for general deposit addresses.');
-    }
     if (!validNetworks.includes(network.toUpperCase())) {
       throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20, ARC, MONAD');
     }
+    // Campaign payouts may use their dedicated set. General deposit addresses
+    // reuse a configured set or bootstrap one automatically on first use.
+    const walletSetId = walletSetIdOverride || await this.getOrCreateDefaultWalletSetId();
 
     // Explicit select so a not-yet-migrated localBalances column can't 500 this endpoint
     let wallet = await this.prisma.wallet.findUnique({
