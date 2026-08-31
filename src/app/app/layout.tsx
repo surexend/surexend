@@ -11,7 +11,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { useBackLayer } from '@/context/BackNavigationContext'
 import {
   Home, Repeat, User, Bell, ArrowUpRight, ArrowDownLeft,
-  X, ShieldCheck, Zap, Clock, ChevronRight, Fingerprint
+  X, ShieldCheck, Zap, Clock, ChevronRight, Fingerprint, FileSpreadsheet
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 // Lazy-load the AI widget — it's 24 KB and only needed on demand.
@@ -21,7 +21,6 @@ const FirebaseMessaging = dynamic(() => import('@/components/FirebaseMessaging')
 import { notificationsAPI, userAPI } from '@/lib/api'
 import { hasClientAuthSession } from '@/lib/auth-session'
 import { useLite } from '@/lib/lite'
-import UserAvatar from '@/components/ui/UserAvatar'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -121,8 +120,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { label: 'Home', icon: Home, href: '/app/dashboard' },
-    { label: 'Receive', icon: ArrowDownLeft, href: '/app/receive' },
-    { label: 'Convert', icon: Repeat, href: '/app/convert' },
+    { label: 'Invoice', icon: FileSpreadsheet, href: '/app/invoice' },
+    { label: 'Conversion', icon: Repeat, href: '/app/convert' },
     { label: 'History', icon: Clock, href: '/app/history' },
     { label: 'Profile', icon: User, href: '/app/profile' },
   ]
@@ -234,12 +233,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             )}
             <div className="p-3 rounded-xl border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] flex items-center gap-3">
-              <UserAvatar
-                src={avatar}
-                name={fullName}
-                className="w-8 h-8 flex-shrink-0"
-                initialsClassName="text-[10px]"
-              />
+              <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20 flex-shrink-0 bg-[#212429]">
+                {avatar ? (
+                  <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" alt="Avatar" className="w-full h-full object-cover" />
+                )}
+              </div>
               <div className="truncate">
                 <p className="text-xs font-bold text-white truncate">{fullName}</p>
                 <p className="text-[10px] text-[#64748B] truncate">@{surexTag}</p>
@@ -325,7 +325,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 to auto, so any page content a few px too wide gives the whole
                 shell a horizontal scrollbar — the trigger for the Android
                 compositor scanline corruption. Clip it here for EVERY page. */}
-          <div className="w-full max-w-full overflow-x-hidden pb-nav-safe md:flex-1 md:overflow-y-auto md:overscroll-none md:pb-0">
+          {/* md:min-h-0 keeps the pane sizable inside the fixed shell, and the
+              default overscroll behavior lets wheel events chain to the page
+              if this pane ever has nothing to scroll (overscroll-none here
+              swallowed every wheel event and froze desktop scrolling). */}
+          <div className="w-full max-w-full overflow-x-hidden pb-nav-safe md:flex-1 md:min-h-0 md:overflow-y-auto md:pb-0">
             <div className="w-full max-w-full relative">
               {profile && !profile.pinSet && !pathname.includes('/settings/change-pin') && (
                 <button

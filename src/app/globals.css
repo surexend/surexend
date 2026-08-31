@@ -804,6 +804,24 @@ label,
   .min-h-dvh-force { min-height: 100vh; }
 }
 
+/* Desktop (md+) variants of the dvh helpers.
+   Tailwind can only generate `md:` variants for classes it knows about, so
+   `md:h-dvh-force` in JSX silently produced NO css — the desktop app shell
+   never got its fixed height, its inner `md:overflow-y-auto` pane never
+   overflowed, and (combined with overscroll-behavior) wheel scrolling on
+   desktop was dead. Defining the variants for real restores the intended
+   fixed-shell + inner-scroll-pane desktop layout. */
+@media (min-width: 768px) {
+  @supports (height: 100dvh) {
+    .md\:h-dvh-force { height: 100dvh; }
+    .md\:min-h-dvh-force { min-height: 100dvh; }
+  }
+  @supports not (height: 100dvh) {
+    .md\:h-dvh-force { height: 100vh; }
+    .md\:min-h-dvh-force { min-height: 100vh; }
+  }
+}
+
 /* Hide scrollbars on horizontal pill/picker rows */
 .no-scrollbar {
   scrollbar-width: none;
