@@ -3,11 +3,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { adminAPI } from '@/lib/api'
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
+import { currencySymbol, formatAmount, formatDate, getSwapInfo } from '@/lib/utils'
 import { AdminTransactionDetailModal } from '@/components/AdminTransactionDetailModal'
 
 const TYPES = ['SEND', 'RECEIVE', 'CONVERT', 'BILL_PAYMENT', 'REFERRAL_EARNING', 'WITHDRAWAL']
 const STATUSES = ['PENDING', 'COMPLETED', 'FAILED']
+
+function displayMoney(amount: number, currency: string) {
+  const code = (currency || 'USDC').toUpperCase()
+  const symbol = ['USD', 'USDC', 'USDT'].includes(code) ? '$' : currencySymbol(code)
+  return `${symbol}${formatAmount(Number(amount || 0))} ${code}`
+}
 
 export default function AdminTransactionsPage() {
   const [data, setData] = useState<any>(null)
@@ -37,7 +43,6 @@ export default function AdminTransactionsPage() {
   }, [load])
 
   const totalPages = Math.max(1, Math.ceil((data?.total || 0) / (data?.limit || 20)))
-  const fmt = (n: number) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
   return (
     <div className="space-y-5">
@@ -117,7 +122,9 @@ export default function AdminTransactionsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.transactions.map((t: any) => (
+                  {data.transactions.map((t: any) => {
+                    const swap = getSwapInfo(t)
+                    return (
                     <tr
                       key={t.id}
                       onClick={() => setDetailId(t.id)}
@@ -129,10 +136,14 @@ export default function AdminTransactionsPage() {
                         </p>
                         <p className="text-[10px] text-[#64748B]">{t.user?.email}</p>
                       </td>
-                      <td className="py-3 pr-3 text-[#94A3B8]">{t.type}</td>
-                      <td className="py-3 pr-3 text-white">${fmt(t.amount)}</td>
-                      <td className="py-3 pr-3 text-[#94A3B8]">${fmt(t.fee)}</td>
-                      <td className="py-3 pr-3 text-[#94A3B8]">{t.currency}</td>
+                      <td className="py-3 pr-3 text-[#94A3B8]">{swap ? 'CONVERT' : t.type}</td>
+                      <td className="py-3 pr-3 text-white whitespace-nowrap">
+                        {swap ? (
+                          <><p className="font-semibold">{displayMoney(swap.fromAmount, swap.from)}</p><p className="text-[10px] text-emerald-400">→ {displayMoney(swap.toAmount, swap.to)}</p></>
+                        ) : displayMoney(t.amount, t.currency)}
+                      </td>
+                      <td className="py-3 pr-3 text-[#94A3B8] whitespace-nowrap">{Number(t.fee || 0) > 0 ? displayMoney(t.fee, t.currency) : '—'}</td>
+                      <td className="py-3 pr-3 text-[#94A3B8]">{swap ? `${swap.from} → ${swap.to}` : t.currency}</td>
                       <td className="py-3 pr-3">
                         <span
                           className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
@@ -149,7 +160,8 @@ export default function AdminTransactionsPage() {
                       <td className="py-3 pr-3 text-[#64748B] font-mono">{t.reference}</td>
                       <td className="py-3 text-[#64748B]">{formatDate(t.createdAt)}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

@@ -121,6 +121,13 @@ export default function ReferralsPage() {
         </div>
       </section>
 
+      {stats?.campaign && (
+        <section className="relative overflow-hidden rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 sm:p-5">
+          <div className="absolute -right-7 -top-7 w-28 h-28 rounded-full bg-emerald-400/10 blur-2xl" />
+          <div className="relative flex gap-3"><div className="w-10 h-10 rounded-xl grid place-items-center bg-emerald-500/15 border border-emerald-500/25"><Gift className="w-5 h-5 text-emerald-400" /></div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-extrabold text-white">Invite {stats.campaign.requiredReferrals}, receive {stats.campaign.reward} {stats.campaign.currency}</p><p className="text-[11px] text-[#94A3B8] mt-0.5">Only active, attributed referrals count toward this one-time campaign reward.</p></div><span className="text-sm font-black text-emerald-400 whitespace-nowrap">{stats.campaign.completedReferrals}/{stats.campaign.requiredReferrals}</span></div><div className="mt-3 h-2 rounded-full bg-black/25 overflow-hidden"><div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${Math.min(100, (stats.campaign.completedReferrals / stats.campaign.requiredReferrals) * 100)}%` }} /></div><p className={`mt-2 text-[11px] font-semibold ${stats.campaign.status === 'PAID' ? 'text-emerald-300' : stats.campaign.eligible ? 'text-amber-300' : 'text-[#94A3B8]'}`}>{stats.campaign.status === 'PAID' ? `${stats.campaign.reward} ${stats.campaign.currency} has been sent to your wallet.` : stats.campaign.status === 'PENDING' || stats.campaign.status === 'PROCESSING' ? `Your ${stats.campaign.reward} ${stats.campaign.currency} payout is being securely processed.` : stats.campaign.eligible ? `You qualify for ${stats.campaign.reward} ${stats.campaign.currency}. Your reward is queued for secure payout.` : `${stats.campaign.remainingReferrals} more active referral${stats.campaign.remainingReferrals === 1 ? '' : 's'} to qualify.`}</p></div></div>
+        </section>
+      )}
+
       <section className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
           ['Invited', total, Users, '#E2E8F0'],

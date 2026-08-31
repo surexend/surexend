@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useTheme } from '@/context/ThemeContext'
-import { LayoutDashboard, Users, FileText, ShieldCheck, ArrowLeft, Tags, Bell, Trophy } from 'lucide-react'
+import { LayoutDashboard, Users, FileText, ShieldCheck, ArrowLeft, Tags, Bell, Trophy, Gift } from 'lucide-react'
 import { userAPI } from '@/lib/api'
 import { hasClientAuthSession } from '@/lib/auth-session'
 
@@ -51,6 +51,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { label: 'KYC Review', icon: ShieldCheck, href: '/admin/kyc' },
     { label: 'Broadcast', icon: Bell, href: '/admin/broadcast' },
     { label: 'Campaigns', icon: Trophy, href: '/admin/campaigns' },
+    { label: 'Referral rewards', icon: Gift, href: '/admin/referral-rewards' },
   ]
 
   return (
@@ -98,11 +99,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 w-full bg-[#0F1116]/95 backdrop-blur-md border-t border-white/5 flex justify-around py-2 z-50">
+      <nav className="md:hidden fixed bottom-0 w-full bg-[#0F1116]/95 backdrop-blur-md border-t border-white/5 flex gap-1 overflow-x-auto py-2 px-1 z-50">
         {navItems.map((item) => {
           const isActive = pathname === item.href
           return (
-            <Link key={item.href} href={item.href} className={`flex flex-col items-center text-[10px] ${isActive ? 'text-white' : 'text-[#64748B]'}`}>
+            <Link key={item.href} href={item.href} className={`min-w-[66px] flex flex-col items-center text-[10px] ${isActive ? 'text-white' : 'text-[#64748B]'}`}>
               <item.icon className="w-5 h-5 mb-0.5" />
               {item.label}
             </Link>

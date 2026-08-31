@@ -3,12 +3,16 @@ import { Response } from 'express';
 import { TransactionsService } from './transactions.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { UsersService } from '../users/users.service';
 import * as PDFDocument from 'pdfkit';
 
 @Controller('transactions')
 @UseGuards(JwtAuthGuard)
 export class TransactionsController {
-  constructor(private readonly transactionsService: TransactionsService) {}
+  constructor(
+    private readonly transactionsService: TransactionsService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Get()
   async getTransactions(
@@ -50,15 +54,24 @@ export class TransactionsController {
       month: month ? parseInt(month, 10) : undefined,
       week: week ? parseInt(week, 10) : undefined,
     });
+    const profile = await this.usersService.getProfile(user.id);
+    const accountHolder = `${profile?.firstName || user.firstName || ''} ${profile?.lastName || user.lastName || ''}`.trim() || 'Account Holder';
 
     if (format === 'csv') {
       const rows = [
+        ['SureXend Account Statement'],
+        ['Account Holder', accountHolder],
+        ['Email', profile?.email || user.email || '—'],
+        ['SureX Tag', profile?.surexTag ? `@${profile.surexTag}` : '—'],
+        ['Generated At', new Date().toISOString()],
+        [],
         ['Reference', 'Type', 'Status', 'Amount', 'Currency', 'Fee', 'Created At'],
         ...transactions.transactions.map((t: any) => [
-          t.reference, t.type, t.status, t.amount, t.currency, t.fee, t.createdAt.toISOString(),
+          t.reference, t.type, t.status, t.amount, t.currency, t.fee, new Date(t.createdAt).toISOString(),
         ]),
       ];
-      const csv = rows.map(r => r.join(',')).join('\n');
+      const escapeCsv = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+      const csv = rows.map((row) => row.map(escapeCsv).join(',')).join('\n');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename="statement.csv"');
       return res.send(csv);
@@ -87,25 +100,19 @@ export class TransactionsController {
 
     // User Summary Card
     doc.roundedRect(40, 72, 515, 50, 6).fill('#121419');
-    doc.fillColor('#FFFFFF').fontSize(11).font('Helvetica-Bold').text(`${user.firstName || ''} ${user.lastName || ''}`, 52, 84);
-    doc.fillColor('#94A3B8').fontSize(8).font('Helvetica').text(`${user.surexTag ? `@${user.surexTag} · ` : ''}${user.email}`, 52, 100);
+    doc.fillColor('#FFFFFF').fontSize(11).font('Helvetica-Bold').text(accountHolder, 52, 84);
+    doc.fillColor('#94A3B8').fontSize(8).font('Helvetica').text(`${profile?.surexTag ? `@${profile.surexTag} · ` : ''}${profile?.email || user.email || '—'}`, 52, 100);
+    doc.fillColor('#64748B').fontSize(7).font('Helvetica').text(`Account ID: ${profile?.id || user.id || '—'}`, 52, 112);
 
-    let credits = 0;
-    let debits = 0;
     const txList = transactions.transactions || [];
-    txList.forEach((t: any) => {
-      if ((t.status || '').toUpperCase() === 'COMPLETED') {
-        const u = (t.type || '').toUpperCase();
-        if (u === 'RECEIVE' || u === 'REFERRAL_EARNING' || u === 'CONVERT') credits += Number(t.amount || 0);
-        else debits += Number(t.amount || 0);
-      }
-    });
+    const confirmedCount = txList.filter((t: any) => (t.status || '').toUpperCase() === 'COMPLETED').length;
 
-    doc.fillColor('#64748B').fontSize(7).text('INFLOW', 380, 84);
-    doc.fillColor('#34D399').fontSize(10).font('Helvetica-Bold').text(`+$${credits.toFixed(2)}`, 380, 96);
-
-    doc.fillColor('#64748B').fontSize(7).text('OUTFLOW', 470, 84);
-    doc.fillColor('#F87171').fontSize(10).font('Helvetica-Bold').text(`-$${debits.toFixed(2)}`, 470, 96);
+    // Do not sum unlike currencies into a fake dollar total. The detailed rows
+    // below preserve each transaction's native currency and exchange direction.
+    doc.fillColor('#64748B').fontSize(7).text('RECORDS', 400, 84);
+    doc.fillColor('#34D399').fontSize(10).font('Helvetica-Bold').text(`${txList.length}`, 400, 96);
+    doc.fillColor('#64748B').fontSize(7).text('CONFIRMED', 480, 84);
+    doc.fillColor('#34D399').fontSize(10).font('Helvetica-Bold').text(`${confirmedCount}`, 480, 96);
 
     // Table Header
     let y = 136;
@@ -137,7 +144,7 @@ export class TransactionsController {
 
       const code = (t.currency || 'USD').toUpperCase();
       const amtStr = Number(t.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const displayAmount = (code === 'USD' || code === 'USDC' || code === 'USDT') ? `$${amtStr}` : `${amtStr} ${code}`;
+      const displayAmount = code === 'USD' ? `$${amtStr}` : (code === 'USDC' || code === 'USDT') ? `$${amtStr} ${code}` : `${amtStr} ${code}`;
       doc.fillColor('#FFFFFF').text(displayAmount, 480, y + 5, { align: 'right' });
       y += 18;
     });

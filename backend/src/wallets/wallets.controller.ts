@@ -64,13 +64,14 @@ export class WalletsController {
     @Body('amount') amount: number,
     @Body('network') network: string,
     @Body('destinationNetwork') destinationNetwork?: string,
+    @Body('currency') currency?: string,
     @Body('pin') pin?: string, // PIN is validated by PinGuard
   ) {
     // A retry with the same key replays the first response instead of sending
     // a second time.
     const { result } = await this.idempotency.run(
       { userId: user.id, scope: 'wallets.send', key: idempotencyKey },
-      () => this.walletsService.sendCrypto(user.id, toAddress, amount, network, destinationNetwork),
+      () => this.walletsService.sendCrypto(user.id, toAddress, amount, network, destinationNetwork, currency),
     );
     return result;
   }

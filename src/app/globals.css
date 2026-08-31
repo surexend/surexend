@@ -894,3 +894,114 @@ body {
       0 6px 20px rgba(0, 0, 0, 0.45) !important;
   }
 }
+
+
+
+/* ── Adaptive light appearance ────────────────────────────────────────────
+   The product defaults to the device colour scheme (or a saved manual choice).
+   These semantic surface overrides let the established dark fintech interface
+   remain dense while giving light-mode users a proper paper/ink experience. */
+:root {
+  --sx-bg: #000000;
+  --sx-surface: #121419;
+  --sx-surface-soft: rgba(255, 255, 255, 0.04);
+  --sx-text: #ffffff;
+  --sx-muted: #94A3B8;
+  --sx-border: rgba(255, 255, 255, 0.10);
+}
+
+html[data-color-mode='light'] {
+  --app-bg: #F5F7FB;
+  --card-bg: #FFFFFF;
+  --border: rgba(15, 23, 42, 0.10);
+  --text: #102033;
+  --text-muted: #52657C;
+  --text-dim: #708198;
+  --sx-bg: #F5F7FB;
+  --sx-surface: #FFFFFF;
+  --sx-surface-soft: #F1F4F8;
+  --sx-text: #102033;
+  --sx-muted: #52657C;
+  --sx-border: rgba(15, 23, 42, 0.12);
+  --sb-track: #E7ECF3;
+  --sb-thumb-a: rgba(212, 160, 23, 0.55);
+  --sb-thumb-b: rgba(160, 120, 16, 0.9);
+}
+
+.theme-icon-button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--sx-border);
+  border-radius: 12px;
+  color: var(--sx-muted);
+  background: var(--sx-surface-soft);
+  transition: color .18s ease, background .18s ease, transform .18s ease;
+}
+.theme-icon-button:hover { color: var(--sx-text); background: var(--sx-surface); transform: translateY(-1px); }
+.theme-choice { width: 30px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--sx-muted); transition: .18s ease; }
+.theme-choice:hover { color: var(--sx-text); }
+.theme-choice-active { color: #1E293B; background: #D4A017; box-shadow: 0 1px 3px rgba(15,23,42,.18); }
+
+html[data-color-mode='light'] body { background: var(--sx-bg); color: var(--sx-text); }
+html[data-color-mode='light'] [class~="bg-[#000000]"],
+html[data-color-mode='light'] [class~="bg-[#0A0B0E]"],
+html[data-color-mode='light'] [class~="bg-[#0F1116]"],
+html[data-color-mode='light'] [class~="bg-[#0F1015]"],
+html[data-color-mode='light'] [class~="bg-[#121419]"],
+html[data-color-mode='light'] [class~="bg-[#15171C]"] { background-color: var(--sx-bg) !important; }
+html[data-color-mode='light'] [class~="bg-black"] { background-color: #E8EDF4 !important; }
+html[data-color-mode='light'] [class~="bg-black/20"],
+html[data-color-mode='light'] [class~="bg-black/30"] { background-color: rgba(15, 23, 42, .04) !important; }
+html[data-color-mode='light'] [class~="border-white/5"],
+html[data-color-mode='light'] [class~="border-white/10"],
+html[data-color-mode='light'] [class~="border-white/20"] { border-color: var(--sx-border) !important; }
+html[data-color-mode='light'] [class~="bg-white/5"],
+html[data-color-mode='light'] [class~="bg-white/[0.03]"],
+html[data-color-mode='light'] [class~="bg-white/[0.04]"],
+html[data-color-mode='light'] [class~="bg-white/[0.05]"],
+html[data-color-mode='light'] [class~="bg-white/[0.025]"] { background-color: rgba(15, 23, 42, .035) !important; }
+html[data-color-mode='light'] .text-white { color: #102033 !important; }
+html[data-color-mode='light'] .text-\[\#94A3B8\] { color: #52657C !important; }
+html[data-color-mode='light'] .text-\[\#64748B\] { color: #708198 !important; }
+html[data-color-mode='light'] .text-\[\#CBD5E1\] { color: #3E5067 !important; }
+html[data-color-mode='light'] .liquid-glass,
+html[data-color-mode='light'] .liquid-glass-strong {
+  background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(246,248,252,.94)) !important;
+  border-color: rgba(15,23,42,.10) !important;
+  box-shadow: inset 0 1px 0 #fff, 0 10px 30px rgba(15,23,42,.07) !important;
+}
+html[data-color-mode='light'] .glass-card {
+  background: linear-gradient(145deg, #FFFFFF, #F6F8FC) !important;
+  border-color: rgba(15,23,42,.10) !important;
+  box-shadow: inset 0 1px 0 #fff, 0 10px 30px rgba(15,23,42,.07) !important;
+}
+html[data-color-mode='light'] .glass-card-gold {
+  background: linear-gradient(145deg, #FFFDF5, #F9F3DF) !important;
+  border-color: rgba(180,130,10,.28) !important;
+  box-shadow: inset 0 1px 0 #fff, 0 10px 30px rgba(110,80,5,.10) !important;
+}
+html[data-color-mode='light'] .glass-card-lemon {
+  background: linear-gradient(145deg, #FCFFF4, #F1F8D9) !important;
+  border-color: rgba(112,150,20,.28) !important;
+}
+html[data-color-mode='light'] input,
+html[data-color-mode='light'] select,
+html[data-color-mode='light'] textarea { color: #102033; }
+/* Preserve legibility on intentionally coloured actions and status pills. */
+html[data-color-mode='light'] .bg-blue-500.text-white,
+html[data-color-mode='light'] .bg-blue-600.text-white,
+html[data-color-mode='light'] .bg-emerald-500.text-white,
+html[data-color-mode='light'] .bg-red-500.text-white,
+html[data-color-mode='light'] .bg-slate-800.text-white { color: #fff !important; }
+
+@media (max-width: 767px) {
+  html[data-color-mode='light'] .liquid-glass,
+  html[data-color-mode='light'] .liquid-glass-strong,
+  html[data-color-mode='light'] .glass-card,
+  html[data-color-mode='light'] .glass-card-gold,
+  html[data-color-mode='light'] .glass-card-lemon { background: linear-gradient(145deg, #fff, #F6F8FC) !important; }
+}

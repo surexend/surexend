@@ -8,7 +8,8 @@ import * as z from 'zod'
 import { QrCode, ArrowRight, ArrowLeft, CheckCircle2, Tag, Send, Zap, ShieldCheck, UserCheck } from 'lucide-react'
 import Confetti from 'react-confetti'
 import toast from 'react-hot-toast'
-import { walletAPI } from '@/lib/api'
+import { AFRICAN_CURRENCIES, walletAPI } from '@/lib/api'
+import { currencySymbol, formatAmount } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
 import PinKeypad from '@/components/PinKeypad'
@@ -38,6 +39,7 @@ export default function SendPage() {
   const initialType = searchParams.get('type') === 'tag' ? 'TAG' : 'CRYPTO'
 
   const [sendMode, setSendMode] = useState<'CRYPTO' | 'TAG'>(initialType)
+  const [tagCurrency, setTagCurrency] = useState('USDC')
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState<Partial<SendFormValues>>({})
   const [pin, setPin] = useState(['', '', '', ''])
@@ -73,7 +75,22 @@ export default function SendPage() {
     retry: false,
     staleTime: 30000,
   })
-  const sendableBalance = Math.max(0, (balanceData?.usdBalance ?? 0) - (balanceData?.lockedBalance ?? 0))
+  const usdSendableBalance = Math.max(0, (balanceData?.usdBalance ?? 0) - (balanceData?.lockedBalance ?? 0))
+  const localBalances = balanceData?.localBalances || {}
+  const tagTransferAssets = [
+    { code: 'USDC', label: 'USDC', balance: usdSendableBalance },
+    ...AFRICAN_CURRENCIES
+      .map((currency) => ({ ...currency, label: currency.code, balance: Math.max(0, Number(localBalances[currency.code] || 0)) }))
+      .filter((currency) => currency.balance > 0),
+  ]
+  const selectedTagAsset = tagTransferAssets.find((asset) => asset.code === tagCurrency) || tagTransferAssets[0] || { code: 'USDC', label: 'USDC', balance: usdSendableBalance }
+  const transferCurrency = sendMode === 'TAG' ? selectedTagAsset.code : 'USDC'
+  const sendableBalance = sendMode === 'TAG' ? selectedTagAsset.balance : usdSendableBalance
+  const formatTransferAmount = (value: number, currency = transferCurrency) => {
+    const code = currency.toUpperCase()
+    const symbol = ['USD', 'USDC', 'USDT'].includes(code) ? '$' : currencySymbol(code)
+    return `${symbol}${formatAmount(value)} ${code}`
+  }
 
   const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<SendFormValues>({
     resolver: zodResolver(sendSchema),
@@ -108,9 +125,10 @@ export default function SendPage() {
       toast.error('Enter a valid amount')
       return
     }
-    const total = amt + cctpFee
+    const total = sendMode === 'CRYPTO' ? amt + cctpFee : amt
     if (total > sendableBalance) {
-      toast.error(`Insufficient balance. This send needs ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC including a ${cctpFee.toFixed(2)} USDC network fee`)
+      const feeNote = sendMode === 'CRYPTO' && cctpFee > 0 ? ` including a ${cctpFee.toFixed(2)} USDC network fee` : ''
+      toast.error(`Insufficient balance. This send needs ${formatTransferAmount(total)}${feeNote}.`)
       return
     }
     setFormData(prev => ({ ...prev, amount: amt }))
@@ -148,6 +166,7 @@ export default function SendPage() {
         address: formData.address!,
         amount: formData.amount!,
         network: sendMode === 'TAG' ? 'SUREX_TAG' : formData.network!,
+        currency: transferCurrency,
         pin: finalPin,
         passkeyToken,
       })
@@ -174,9 +193,9 @@ export default function SendPage() {
           <motion.div key="step1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }} className="liquid-glass p-6 space-y-6">
             <div className="border-b border-white/10 pb-4">
               <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-                <Send className="w-5 h-5" style={{ color: colors.primary }} /> Send Stablecoins
+                <Send className="w-5 h-5" style={{ color: colors.primary }} /> Send money
               </h2>
-              <p className="text-xs text-[#94A3B8] mt-0.5">Transfer USDC to crypto wallet or SureX Tag</p>
+              <p className="text-xs text-[#94A3B8] mt-0.5">Send USDC on-chain, or USDC and local currency to a SureX Tag</p>
             </div>
 
             {/* Mode Switcher Tabs */}
@@ -223,6 +242,21 @@ export default function SendPage() {
                       placeholder="alex_xend"
                       className="w-full pl-9 pr-4 py-3.5 rounded-2xl bg-white/[0.03] border border-white/10 text-white text-sm font-bold focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-colors"
                     />
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-xs font-semibold text-[#94A3B8] mb-2">Send from</label>
+                    <select
+                      value={tagCurrency}
+                      onChange={(event) => setTagCurrency(event.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-bold text-white outline-none focus:border-white/30"
+                    >
+                      {tagTransferAssets.map((asset) => (
+                        <option key={asset.code} value={asset.code}>
+                          {asset.code} · Available {formatTransferAmount(asset.balance, asset.code)}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-[#64748B] mt-1.5">Local-currency tag transfers stay in the same currency and arrive instantly.</p>
                   </div>
                   {errors.address && <p className="text-red-400 text-xs mt-1">{errors.address.message}</p>}
                   <p className="text-[11px] text-[#64748B] mt-1.5">
@@ -313,13 +347,13 @@ export default function SendPage() {
             <form onSubmit={handleSubmit(onSubmitStep2 as any)} className="space-y-6">
               <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10">
                 <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs text-[#94A3B8]">Send Amount (USDC)</label>
+                  <label className="text-xs text-[#94A3B8]">Send Amount ({transferCurrency})</label>
                   <button
                     type="button"
                     onClick={() => setValue('amount', sendableBalance)}
                     className="text-xs font-bold text-emerald-400"
                   >
-                    Max: {sendableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
+                    Max: {formatTransferAmount(sendableBalance)}
                   </button>
                 </div>
                 <div className="flex justify-between items-center">
@@ -330,18 +364,18 @@ export default function SendPage() {
                     onChange={(e) => setValue('amount', parseFloat(e.target.value) || 0)}
                     className="bg-transparent text-4xl font-extrabold text-white w-[60%] focus:outline-none placeholder:text-[#334155]"
                   />
-                  <span className="font-bold text-sm text-white bg-white/10 px-3 py-1.5 rounded-xl">USDC</span>
+                  <span className="font-bold text-sm text-white bg-white/10 px-3 py-1.5 rounded-xl">{transferCurrency}</span>
                 </div>
               </div>
 
               <div className="text-xs space-y-2 py-3 px-4 rounded-xl bg-white/[0.02] border border-white/5 text-[#94A3B8]">
                 <div className="flex justify-between">
-                  <span>Receiving Network</span>
-                  <span className="text-white font-bold">{formNetwork}</span>
+                  <span>{sendMode === 'TAG' ? 'Delivery' : 'Receiving Network'}</span>
+                  <span className="text-white font-bold">{sendMode === 'TAG' ? 'SureX Tag · instant' : formNetwork}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Recipient Receives</span>
-                  <span className="text-emerald-400 font-bold">${amount.toFixed(2)} USDC</span>
+                  <span className="text-emerald-400 font-bold">{formatTransferAmount(amount)}</span>
                 </div>
                 {formNetwork !== 'ARC' && formNetwork !== 'SUREX_TAG' && (
                   <>
@@ -394,7 +428,7 @@ export default function SendPage() {
             {/* Amount hero */}
             <div className="text-center py-2">
               <p className="text-[9px] uppercase tracking-[0.25em] text-[#64748B] font-bold mb-1">You're sending</p>
-              <p className="text-4xl font-black text-white tracking-tight">${Number(formData.amount || 0).toFixed(2)}</p>
+              <p className="text-4xl font-black text-white tracking-tight">{formatTransferAmount(Number(formData.amount || 0))}</p>
             </div>
 
             <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3 text-xs">
@@ -406,7 +440,7 @@ export default function SendPage() {
               )}
               <div className="flex justify-between py-1">
                 <span className="text-[#94A3B8]">Total Deducted</span>
-                <span className="text-emerald-400 font-extrabold text-sm">${(Number(formData.amount || 0) + cctpFee).toFixed(2)} USD</span>
+                <span className="text-emerald-400 font-extrabold text-sm">{formatTransferAmount(Number(formData.amount || 0) + (sendMode === 'CRYPTO' ? cctpFee : 0))}</span>
               </div>
             </div>
 
@@ -425,7 +459,7 @@ export default function SendPage() {
           <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full py-2 flex justify-center">
             <PinKeypad
               title="Security Verification"
-              subtitle={`Authorize sending $${formData.amount} USD${cctpFee > 0 ? ` + $${cctpFee.toFixed(2)} network fee` : ''} ($${(Number(formData.amount || 0) + cctpFee).toFixed(2)} total)`}
+              subtitle={`Authorize sending ${formatTransferAmount(Number(formData.amount || 0))}${sendMode === 'CRYPTO' && cctpFee > 0 ? ` + ${cctpFee.toFixed(2)} USDC network fee` : ''} (${formatTransferAmount(Number(formData.amount || 0) + (sendMode === 'CRYPTO' ? cctpFee : 0))} total)`}
               onComplete={(p) => executeSend(p)}
               disabled={isLoading}
               accentHex={colors.primary}
@@ -445,7 +479,7 @@ export default function SendPage() {
             <div>
               <h2 className="text-2xl font-black text-white">Transfer Successful!</h2>
               <p className="text-3xl font-extrabold mt-3 tracking-tight" style={{ color: colors.primary }}>
-                ${Number(formData.amount || 0).toFixed(2)}
+                {formatTransferAmount(Number(formData.amount || 0))}
               </p>
               <p className="text-xs text-[#94A3B8] mt-1.5 flex items-center justify-center gap-1.5 min-w-0">
                 <span>sent to</span>

@@ -224,25 +224,21 @@ export class WebhooksService {
             return;
           }
 
-          // USDC-only pipeline: every Circle inbound is booked as USDC. A
-          // missing or legacy-labeled tokenSymbol (old USDT rows, null fields)
-          // must NEVER fall into the invisible USDT bucket again — that split
-          // is exactly what made balances show in the app but not be spendable.
+          // Book each supported stablecoin in its actual denomination. In
+          // particular, campaign rewards are USDT and must never be relabelled
+          // as USDC — doing so breaks the promised asset and the audit trail.
           const rawSymbol = (transaction.tokenSymbol || 'USDC').toUpperCase();
-          const USDC_FAMILY = new Set(['USDC', 'USDT', 'USD']);
-          if (!USDC_FAMILY.has(rawSymbol)) {
-            this.logger.warn(`Circle inbound ${txId} carries non-stable symbol '${rawSymbol}'; skipping (USDC-only pipeline)`);
+          const supportedStablecoins = new Set(['USDC', 'USDT']);
+          if (!supportedStablecoins.has(rawSymbol)) {
+            this.logger.warn(`Circle inbound ${txId} carries unsupported token symbol '${rawSymbol}'; skipping.`);
             return;
           }
-          if (rawSymbol !== 'USDC') {
-            this.logger.warn(`Circle inbound ${txId} symbol '${rawSymbol}' booked as USDC (USDC-only pipeline)`);
-          }
-          const symbol = 'USDC';
+          const symbol = rawSymbol;
 
           await this.prisma.$transaction(async (prisma) => {
             await prisma.wallet.update({
               where: { id: wallet.id },
-              data: { usdcBalance: { increment: amount } }
+              data: symbol === 'USDT' ? { usdtBalance: { increment: amount } } : { usdcBalance: { increment: amount } }
             });
 
             await this.transactionsService.createTransaction(prisma, {

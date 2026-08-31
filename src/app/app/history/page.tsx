@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter } from 'next/navigation'
-import { transactionAPI, authAPI } from '@/lib/api'
+import { transactionAPI, userAPI } from '@/lib/api'
 import { formatDate, formatCurrency, getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -97,7 +97,7 @@ function StatementModal({
 
       const [txRes, profileRes] = await Promise.all([
         transactionAPI.getTransactions(filterParams).catch(() => null),
-        authAPI.getProfile().catch(() => null),
+        userAPI.getProfile().catch(() => null),
       ])
 
       const txList = txRes?.transactions || []
@@ -105,7 +105,7 @@ function StatementModal({
         name: profileRes ? `${profileRes.firstName || ''} ${profileRes.lastName || ''}`.trim() || 'Account Holder' : 'Account Holder',
         email: profileRes?.email || 'user@surexend.com',
         surexTag: profileRes?.surexTag || undefined,
-        accountNumber: profileRes?.accountNumber || profileRes?.email || undefined,
+        accountNumber: profileRes?.id || undefined,
       }
 
       const periodLabel = period === 'year'
@@ -443,7 +443,7 @@ function TransactionDetailModal({
   const isCredit = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING' || typeUpper === 'CONVERT'
   const isDebit = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
   const amtColor = isCredit ? 'text-emerald-400' : isDebit ? 'text-red-400' : 'text-[#64748B]'
-  const symbol = details?.currency === 'NGN' ? '₦' : details?.currency === 'GHS' ? 'GH₵' : details?.currency === 'KES' ? 'KSh' : '$'
+  const symbol = currencySymbol(details?.currency || 'USDC')
 
   const meta = details?.metadata || {}
   // A send's on-chain hash ALWAYS lives on Arc: same-chain sends are native Arc
@@ -496,7 +496,7 @@ function TransactionDetailModal({
   const billMeta = meta
   const internal = meta?.delivery === 'internal'
   const feeVal = Number(details?.fee || 0)
-  const feeTxt = feeVal > 0 ? `$${feeVal.toFixed(2)}` : 'Free'
+  const feeTxt = feeVal > 0 ? `${currencySymbol(details?.currency || 'USDC')}${formatAmount(feeVal)} ${details?.currency || 'USDC'}` : 'Free'
   const dateValue = new Date(details?.createdAt || details?.date || Date.now()).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })
   const fromParty = meta.fromTag
     ? `@${meta.fromTag}${meta.senderName ? ` · ${meta.senderName}` : ''}`
@@ -532,13 +532,13 @@ function TransactionDetailModal({
             ...(typeUpper !== 'RECEIVE' && toParty ? [{ label: 'To', value: toParty, accent: true }] : []),
             { label: 'Delivery', value: 'Instant · SureX Tag' },
             { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
-            { label: 'Amount', value: `${symbol}${formatAmount(Number(details?.amount || 0))}` },
+            { label: 'Amount', value: `${symbol}${formatAmount(Number(details?.amount || 0))} ${details?.currency || 'USDC'}` },
             { label: 'Fee', value: feeTxt },
             { label: 'Date', value: dateValue },
           ]
         : [
           { label: 'Reference', value: details?.reference || '—', copyable: details?.reference, mono: true },
-          { label: 'Amount', value: `${symbol}${formatAmount(Number(details?.amount || 0))}${details?.currency && details?.currency !== 'USDT' ? ` ${details?.currency}` : ' USD'}`, accent: true },
+          { label: 'Amount', value: `${symbol}${formatAmount(Number(details?.amount || 0))} ${details?.currency || 'USDC'}`, accent: true },
           { label: 'Fee', value: feeTxt },
           { label: 'Network', value: displayNetwork },
           { label: 'Date', value: dateValue },
@@ -652,7 +652,7 @@ function TransactionDetailModal({
                   {symbol}{formatAmount(Number(details?.amount || 0))}
                 </p>
                 <p className="text-[#94A3B8] text-xs mt-2.5">
-                  {details?.currency && details?.currency !== 'USDT' ? details?.currency : 'USDC'}
+                  {details?.currency || 'USDC'}
                 </p>
               </>
             )}
@@ -1000,7 +1000,7 @@ export default function HistoryPage() {
                     const isDebit = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
                     const sign = isCredit ? '+' : isDebit ? '-' : ''
                     const isFailed = statusUpper === 'FAILED'
-                    const symbol = tx.currency === 'NGN' ? '₦' : tx.currency === 'GHS' ? 'GH₵' : tx.currency === 'KES' ? 'KSh' : '$'
+                    const symbol = currencySymbol(tx.currency || 'USDC')
                     const swap = getSwapInfo(tx)
                     const dateStr = new Date(tx.createdAt || tx.date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
@@ -1045,7 +1045,7 @@ export default function HistoryPage() {
                             </>
                           ) : (
                             <p className={`font-bold text-sm ${isDebit ? 'text-red-400' : 'text-white'}`}>
-                              {sign}{symbol}{tx.amount} {tx.currency && tx.currency !== 'USDT' ? tx.currency : 'USD'}
+                              {sign}{symbol}{formatAmount(Number(tx.amount || 0))} {tx.currency || 'USDC'}
                             </p>
                           )}
                           <StatusBadge status={tx.status} />

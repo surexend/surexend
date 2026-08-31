@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { adminAPI } from '@/lib/api'
 import { Users, UserCheck, ShieldAlert, FileText, TrendingUp, TrendingDown, Wallet, ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { currencySymbol, formatAmount, formatDate, getSwapInfo } from '@/lib/utils'
 
 export default function AdminOverviewPage() {
   const [data, setData] = useState<any>(null)
@@ -35,6 +35,11 @@ export default function AdminOverviewPage() {
 
   const maxSignups = Math.max(1, ...data.signups.map((s: any) => s.count))
   const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+  const displayMoney = (amount: number, currency: string) => {
+    const code = (currency || 'USDC').toUpperCase()
+    const symbol = ['USD', 'USDC', 'USDT'].includes(code) ? '$' : currencySymbol(code)
+    return `${symbol}${formatAmount(Number(amount || 0))} ${code}`
+  }
 
   return (
     <div className="space-y-6">
@@ -136,11 +141,12 @@ export default function AdminOverviewPage() {
               </tr>
             </thead>
             <tbody>
-              {data.recentTransactions.map((t: any) => (
-                <tr key={t.id} className="border-t border-white/5">
+              {data.recentTransactions.map((t: any) => {
+                const swap = getSwapInfo(t)
+                return <tr key={t.id} className="border-t border-white/5">
                   <td className="py-2.5 pr-3 text-white">{t.user?.firstName} {t.user?.lastName}</td>
-                  <td className="py-2.5 pr-3 text-[#94A3B8]">{t.type}</td>
-                  <td className="py-2.5 pr-3 text-white">${fmt(t.amount)}</td>
+                  <td className="py-2.5 pr-3 text-[#94A3B8]">{swap ? `${swap.from} → ${swap.to}` : t.type}</td>
+                  <td className="py-2.5 pr-3 text-white">{swap ? `${displayMoney(swap.fromAmount, swap.from)} → ${displayMoney(swap.toAmount, swap.to)}` : displayMoney(t.amount, t.currency)}</td>
                   <td className="py-2.5 pr-3">
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
                       t.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400' :
@@ -149,7 +155,7 @@ export default function AdminOverviewPage() {
                   </td>
                   <td className="py-2.5 text-[#64748B]">{formatDate(t.createdAt)}</td>
                 </tr>
-              ))}
+              })}
             </tbody>
           </table>
         </div>

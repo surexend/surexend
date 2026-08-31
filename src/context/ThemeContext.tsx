@@ -1,15 +1,20 @@
 /**
- * SureXend Theme Context
- * Provides the single SureXend Gold brand palette globally.
+ * SureXend theme context: brand accent plus accessible light/dark appearance.
  */
 'use client'
 
-import React, { createContext, useContext, useState } from 'react'
+import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 
 export type ThemeVariant = 'gold' | 'lemon'
+export type ColorMode = 'light' | 'dark'
+export type ColorPreference = ColorMode | 'system'
 
 interface ThemeContextValue {
   variant: ThemeVariant
+  colorMode: ColorMode
+  colorPreference: ColorPreference
+  setColorPreference: (preference: ColorPreference) => void
+  toggleColorMode: () => void
   colors: {
     primary: string
     light: string
@@ -27,6 +32,8 @@ interface ThemeContextValue {
     shimmerColor: string
   }
 }
+
+const COLOR_MODE_STORAGE_KEY = 'surexend_color_mode'
 
 const GOLD_COLORS: ThemeContextValue['colors'] = {
   primary: '#D4A017',
@@ -62,24 +69,70 @@ const LEMON_COLORS: ThemeContextValue['colors'] = {
   shimmerColor: 'rgba(212, 255, 74, 0.3)',
 }
 
-const ThemeContext = createContext<ThemeContextValue>({
+const defaultTheme: ThemeContextValue = {
   variant: 'gold',
+  colorMode: 'dark',
+  colorPreference: 'system',
+  setColorPreference: () => undefined,
+  toggleColorMode: () => undefined,
   colors: GOLD_COLORS,
-})
-
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Brand is locked to Gold — one accent, spent surgically. No runtime switching.
-  const [variant] = useState<ThemeVariant>('gold')
-
-  const colors = GOLD_COLORS
-
-  return (
-    <ThemeContext.Provider value={{ variant, colors }}>
-      <div data-variant={variant}>
-        {children}
-      </div>
-    </ThemeContext.Provider>
-  )
 }
 
-export const useTheme = () => useContext(ThemeContext)
+const ThemeContext = createContext<ThemeContextValue>(defaultTheme)
+
+function resolveColorMode(preference: ColorPreference): ColorMode {
+  if (preference === 'light' || preference === 'dark') return preference
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
+function readPreference(): ColorPreference {
+  if (typeof window === 'undefined') return 'system'
+  try {
+    const value = localStorage.getItem(COLOR_MODE_STORAGE_KEY)
+    if (value === 'light' || value === 'dark' || value === 'system') return value
+  } catch {}
+  return 'system'
+}
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [variant] = useState<ThemeVariant>(() => process.env.NEXT_PUBLIC_BRAND_VARIANT === 'lemon' ? 'lemon' : 'gold')
+  const [colorPreference, setPreference] = useState<ColorPreference>('system')
+  const [colorMode, setColorMode] = useState<ColorMode>('dark')
+
+  const setColorPreference = useCallback((preference: ColorPreference) => {
+    setPreference(preference)
+    setColorMode(resolveColorMode(preference))
+    try { localStorage.setItem(COLOR_MODE_STORAGE_KEY, preference) } catch {}
+  }, [])
+
+  const toggleColorMode = useCallback(() => {
+    setColorPreference(colorMode === 'dark' ? 'light' : 'dark')
+  }, [colorMode, setColorPreference])
+
+  useEffect(() => {
+    const preference = readPreference()
+    setPreference(preference)
+    setColorMode(resolveColorMode(preference))
+  }, [])
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: light)')
+    const onChange = () => {
+      if (colorPreference === 'system') setColorMode(media.matches ? 'light' : 'dark')
+    }
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [colorPreference])
+
+  useEffect(() => {
+    document.documentElement.dataset.colorMode = colorMode
+    document.documentElement.style.colorScheme = colorMode
+  }, [colorMode])
+
+  const colors = variant === 'lemon' ? LEMON_COLORS : GOLD_COLORS
+  const value = useMemo(() => ({ variant, colorMode, colorPreference, setColorPreference, toggleColorMode, colors }), [variant, colorMode, colorPreference, setColorPreference, toggleColorMode, colors])
+
+  return <ThemeContext.Provider value={value}><div data-variant={variant}>{children}</div></ThemeContext.Provider>
+}
+
+export const useTheme = () => React.useContext(ThemeContext)

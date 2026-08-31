@@ -1,11 +1,24 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BillsService } from '../bills/bills.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
+import { WalletsService } from '../wallets/wallets.service';
 import { getLocalRate } from '../common/currency.constants';
 import { LedgerService } from '../common/ledger.service';
 import { toMinor } from '../common/money';
+import axios from 'axios';
+import * as crypto from 'crypto';
+
+// The customer offer is deliberately denominated in USDT. The wallet itself
+// is a Circle wallet funded by operations with USDC; before payouts, ops swaps
+// or provisions the matching USDT balance on the configured supported chain.
+const REFERRAL_REWARD_CAMPAIGN = 'FIVE_REFERRALS_USDT';
+const REFERRAL_REWARD_CURRENCY = 'USDT';
+const REFERRAL_REWARD_AMOUNT = 5;
+const REFERRAL_REWARD_REQUIRED = 5;
+const REFERRAL_REWARD_WALLET_KEY = 'REFERRAL_REWARDS';
 
 // Normalize any recorded transaction amount to its USD value. Transactions
 // store `amount` in `currency` (e.g. CONVERT rows record the LOCAL amount, bill
@@ -53,12 +66,17 @@ async function getLiveRates(): Promise<Record<string, number>> {
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+  private readonly circleBaseUrl = 'https://api.circle.com';
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly billsService: BillsService,
     private readonly campaignsService: CampaignsService,
     private readonly ledger: LedgerService,
+    private readonly configService: ConfigService,
+    private readonly walletsService: WalletsService,
   ) {}
 
   async getOverview() {
@@ -113,7 +131,9 @@ export class AdminService {
     const liveRates = await getLiveRates();
     const totalVolumeIn = [...moneyIn, ...buyConverts].reduce((acc, t) => acc + toUsd(t.amount, t.currency, liveRates), 0);
     const totalVolumeOut = [...moneyOut, ...sellConverts].reduce((acc, t) => acc + toUsd(t.amount, t.currency, liveRates), 0);
-    const revenueFromTxs = moneyOut.reduce((acc, t) => acc + (t.fee || 0), 0);
+    // Fees are denominated in each transaction's own currency. Normalize them
+    // before aggregation so a local-currency fee can never inflate USD revenue.
+    const revenueFromTxs = moneyOut.reduce((acc, t) => acc + toUsd(t.fee || 0, t.currency, liveRates), 0);
 
     const since = new Date();
     since.setDate(since.getDate() - 6);
@@ -148,7 +168,7 @@ export class AdminService {
     };
   }
 
-  async listUsers(query: { search?: string; kycStatus?: string; page?: string; limit?: string }) {
+  async listUsers(query: { search?: string; kycStatus?: string; sort?: string; page?: string; limit?: string }) {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
     const where: Record<string, unknown> = {};
@@ -162,13 +182,25 @@ export class AdminService {
         { surexTag: { contains: q, mode: 'insensitive' } },
       ];
     }
-    if (query.kycStatus) where.kycStatus = query.kycStatus;
+    if (query.kycStatus && ['UNVERIFIED', 'PENDING', 'VERIFIED', 'REJECTED'].includes(query.kycStatus.toUpperCase())) {
+      where.kycStatus = query.kycStatus.toUpperCase();
+    }
+
+    // Stablecoin amounts are all USD-denominated. Ordering them in the database
+    // gives the operations team a truthful ascending/descending balance view
+    // without incorrectly mixing Naira, Cedi, and USDC into one raw number.
+    const sort = ['balance_asc', 'balance_desc', 'recent'].includes(query.sort || '') ? query.sort! : 'recent';
+    const orderBy: any = sort === 'balance_asc'
+      ? [{ wallet: { usdcBalance: 'asc' } }, { createdAt: 'desc' }]
+      : sort === 'balance_desc'
+        ? [{ wallet: { usdcBalance: 'desc' } }, { createdAt: 'desc' }]
+        : { createdAt: 'desc' };
 
     const [total, users] = await Promise.all([
       this.prisma.user.count({ where }),
       this.prisma.user.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (page - 1) * limit,
         take: limit,
         select: {
@@ -185,12 +217,12 @@ export class AdminService {
           role: true,
           createdAt: true,
           _count: { select: { referralsMade: true } },
-          wallet: { select: { usdtBalance: true, usdcBalance: true, localBalance: true, localBalances: true } },
+          wallet: { select: { usdtBalance: true, usdcBalance: true, lockedBalance: true, localBalance: true, localBalances: true, realLocalBalance: true } },
         },
       }),
     ]);
 
-    return { total, page, limit, users };
+    return { total, page, limit, sort, users };
   }
 
   async getUserDetail(id: string) {
@@ -370,6 +402,379 @@ export class AdminService {
     ]);
 
     return { total, page, limit, transactions };
+  }
+
+  private get circleApiKey() {
+    return this.configService.get<string>('app.circle.apiKey') || '';
+  }
+
+  private get circleEntitySecret() {
+    return this.configService.get<string>('app.circle.entitySecret') || '';
+  }
+
+  private get circleWalletSetId() {
+    return this.configService.get<string>('app.circle.walletSetId') || '';
+  }
+
+  private get referralRewardUsdtTokenAddress() {
+    return this.configService.get<string>('app.circle.referralRewardUsdtTokenAddress') || '';
+  }
+
+  private get referralRewardBlockchainOverride() {
+    return this.configService.get<string>('app.circle.referralRewardBlockchain') || '';
+  }
+
+  private assertCircleConfigured() {
+    if (!this.circleApiKey || !this.circleEntitySecret || !this.circleWalletSetId) {
+      throw new BadRequestException('Circle wallet credentials are not configured. Add CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, and CIRCLE_WALLET_SET_ID before creating the campaign wallet.');
+    }
+  }
+
+  private assertReferralRewardPayoutConfigured() {
+    this.assertCircleConfigured();
+    if (!this.referralRewardUsdtTokenAddress) {
+      throw new BadRequestException('Set CIRCLE_REFERRAL_REWARD_USDT_TOKEN_ADDRESS for the selected Circle blockchain before paying USDT rewards.');
+    }
+  }
+
+  private encryptCircleEntitySecret(secretHex: string, publicKeyPem: string): string {
+    return crypto.publicEncrypt(
+      {
+        key: publicKeyPem,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: 'sha256',
+      },
+      Buffer.from(secretHex, 'hex'),
+    ).toString('base64');
+  }
+
+  private referralRewardBlockchain(): string {
+    // Must be a Circle-supported chain where the configured USDT contract is
+    // deployed. ARC remains the existing default for USDC treasury operations.
+    return this.referralRewardBlockchainOverride || (this.circleApiKey.startsWith('TEST_') ? 'ARC-TESTNET' : 'ARC');
+  }
+
+  private referralRewardNetwork(): string {
+    const chain = this.referralRewardBlockchain().toUpperCase();
+    if (chain.includes('MATIC') || chain === 'POLYGON') return 'POLYGON';
+    if (chain.includes('ETH')) return 'ETHEREUM';
+    if (chain.includes('ARB')) return 'ARBITRUM';
+    if (chain.includes('BASE')) return 'BASE';
+    if (chain.includes('OP')) return 'OPTIMISM';
+    return 'ARC';
+  }
+
+  private async getCircleWalletBalances(circleWalletId: string) {
+    const response = await axios.get(`${this.circleBaseUrl}/v1/w3s/wallets/${circleWalletId}/balances`, {
+      headers: { Authorization: `Bearer ${this.circleApiKey}`, accept: 'application/json' },
+      timeout: 15_000,
+    });
+    const tokenBalances = response.data?.data?.tokenBalances || [];
+    const balances = tokenBalances.map((balance: any) => ({
+      tokenId: balance.token?.id || null,
+      symbol: (balance.token?.symbol || '').toUpperCase(),
+      amount: Number(balance.amount || 0),
+      tokenAddress: balance.token?.tokenAddress || balance.token?.address || null,
+    }));
+    return {
+      balances,
+      usdcBalance: balances.find((balance: any) => balance.symbol === 'USDC')?.amount || 0,
+      usdtBalance: balances.find((balance: any) => balance.symbol === 'USDT')?.amount || 0,
+    };
+  }
+
+  // The referral campaign wallet is a real Circle W3S wallet. It deliberately
+  // has no user-owner relationship, so funding and outbound reward activity is
+  // clearly isolated from customer funds in the Circle console and our database.
+  async getReferralRewardWallet() {
+    const wallet = await this.prisma.platformWallet.findUnique({ where: { key: REFERRAL_REWARD_WALLET_KEY } });
+    const circleConfigured = !!(this.circleApiKey && this.circleEntitySecret && this.circleWalletSetId);
+    const payoutConfigured = circleConfigured && !!this.referralRewardUsdtTokenAddress;
+    if (!wallet) {
+      return {
+        configured: circleConfigured,
+        payoutConfigured,
+        created: false,
+        wallet: null,
+        campaign: { requiredReferrals: REFERRAL_REWARD_REQUIRED, reward: REFERRAL_REWARD_AMOUNT, currency: REFERRAL_REWARD_CURRENCY },
+      };
+    }
+
+    let balances: { balances: Array<{ tokenId: string | null; symbol: string; amount: number; tokenAddress: string | null }>; usdcBalance: number; usdtBalance: number } | null = null;
+    let balanceError: string | null = null;
+    if (circleConfigured && wallet.circleWalletId) {
+      try {
+        balances = await this.getCircleWalletBalances(wallet.circleWalletId);
+      } catch (error: any) {
+        balanceError = error.response?.data?.message || error.message || 'Circle balance is temporarily unavailable.';
+        this.logger.warn(`Could not retrieve referral wallet balance: ${balanceError}`);
+      }
+    }
+
+    return {
+      configured: circleConfigured,
+      payoutConfigured,
+      created: !!wallet.circleWalletId,
+      wallet: {
+        id: wallet.id,
+        label: wallet.label,
+        circleWalletId: wallet.circleWalletId,
+        walletSetId: wallet.walletSetId,
+        blockchain: wallet.blockchain,
+        address: wallet.address,
+        currency: wallet.currency,
+        status: wallet.status,
+        // USDC is the treasury funding balance; USDT is the amount that can
+        // actually satisfy the customer campaign promise.
+        usdcBalance: balances?.usdcBalance ?? null,
+        usdtBalance: balances?.usdtBalance ?? null,
+        balance: balances?.usdtBalance ?? null,
+        balances: balances?.balances ?? [],
+        balanceError,
+      },
+      campaign: { requiredReferrals: REFERRAL_REWARD_REQUIRED, reward: REFERRAL_REWARD_AMOUNT, currency: REFERRAL_REWARD_CURRENCY },
+    };
+  }
+
+  async createReferralRewardWallet(adminId: string) {
+    const existing = await this.prisma.platformWallet.findUnique({ where: { key: REFERRAL_REWARD_WALLET_KEY } });
+    if (existing?.circleWalletId) return this.getReferralRewardWallet();
+    this.assertCircleConfigured();
+
+    // Persist a deterministic platform record first. This makes a failed Circle
+    // attempt visible to operations instead of silently creating a second wallet
+    // on the next click.
+    const record = existing || await this.prisma.platformWallet.create({
+      data: {
+        key: REFERRAL_REWARD_WALLET_KEY,
+        label: 'Referral rewards wallet',
+        walletSetId: this.circleWalletSetId,
+        blockchain: this.referralRewardBlockchain(),
+        currency: 'USDC',
+        status: 'CREATING',
+      },
+    });
+
+    try {
+      const publicKeyResponse = await axios.get(`${this.circleBaseUrl}/v1/w3s/config/entity/publicKey`, {
+        headers: { Authorization: `Bearer ${this.circleApiKey}`, accept: 'application/json' },
+        timeout: 15_000,
+      });
+      const entitySecretCiphertext = this.encryptCircleEntitySecret(this.circleEntitySecret, publicKeyResponse.data?.data?.publicKey);
+      const createResponse = await axios.post(
+        `${this.circleBaseUrl}/v1/w3s/developer/wallets`,
+        {
+          idempotencyKey: crypto.randomUUID(),
+          blockchains: [this.referralRewardBlockchain()],
+          entitySecretCiphertext,
+          walletSetId: this.circleWalletSetId,
+          metadata: [{ name: 'SureXend Referral Rewards Treasury', refId: REFERRAL_REWARD_WALLET_KEY }],
+        },
+        {
+          headers: { Authorization: `Bearer ${this.circleApiKey}`, 'Content-Type': 'application/json', accept: 'application/json' },
+          timeout: 30_000,
+        },
+      );
+      const circleWallet = createResponse.data?.data?.wallets?.[0];
+      if (!circleWallet?.id || !circleWallet?.address) throw new Error('Circle did not return a wallet id and address.');
+
+      await this.prisma.platformWallet.update({
+        where: { id: record.id },
+        data: {
+          circleWalletId: circleWallet.id,
+          address: circleWallet.address,
+          blockchain: (circleWallet.blockchains || [this.referralRewardBlockchain()])[0],
+          status: 'ACTIVE',
+        },
+      });
+      await this.prisma.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'REFERRAL_REWARD_WALLET_CREATED',
+          metadata: { platformWalletId: record.id, circleWalletId: circleWallet.id, address: circleWallet.address },
+        },
+      });
+      return this.getReferralRewardWallet();
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || 'Circle wallet creation failed.';
+      await this.prisma.platformWallet.update({ where: { id: record.id }, data: { status: 'ERROR' } });
+      this.logger.error(`Could not create referral reward wallet: ${message}`);
+      throw new BadRequestException(message);
+    }
+  }
+
+  // Materialize eligibility idempotently. Reaching the fifth active, attributed
+  // referral creates a single entitlement; it does not credit any wallet until
+  // an operator authorizes a real Circle payout from the campaign wallet.
+  private async materializeReferralRewardEligibility() {
+    const grouped = await this.prisma.referral.groupBy({
+      by: ['referrerId'],
+      where: { isActive: true },
+      _count: { _all: true },
+    });
+    await Promise.all(grouped
+      .filter((entry) => entry._count._all >= REFERRAL_REWARD_REQUIRED)
+      .map((entry) => this.prisma.referralReward.upsert({
+        where: { userId_campaign: { userId: entry.referrerId, campaign: REFERRAL_REWARD_CAMPAIGN } },
+        update: { referralCount: entry._count._all },
+        create: {
+          userId: entry.referrerId,
+          campaign: REFERRAL_REWARD_CAMPAIGN,
+          requiredReferrals: REFERRAL_REWARD_REQUIRED,
+          referralCount: entry._count._all,
+          amount: REFERRAL_REWARD_AMOUNT,
+          currency: REFERRAL_REWARD_CURRENCY,
+          reference: `RWD-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`,
+        },
+      })));
+  }
+
+  async listReferralRewards(query: { status?: string; page?: string; limit?: string }) {
+    await this.materializeReferralRewardEligibility();
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+    const status = (query.status || '').toUpperCase();
+    const where: any = {};
+    if (['ELIGIBLE', 'PROCESSING', 'PENDING', 'PAID', 'FAILED'].includes(status)) where.status = status;
+    const [total, rewards] = await Promise.all([
+      this.prisma.referralReward.count({ where }),
+      this.prisma.referralReward.findMany({
+        where,
+        orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, email: true, surexTag: true } },
+          platformWallet: { select: { label: true, address: true, circleWalletId: true } },
+        },
+      }),
+    ]);
+    return {
+      total,
+      page,
+      limit,
+      campaign: { requiredReferrals: REFERRAL_REWARD_REQUIRED, reward: REFERRAL_REWARD_AMOUNT, currency: REFERRAL_REWARD_CURRENCY },
+      rewards,
+    };
+  }
+
+  async payReferralReward(rewardId: string, adminId: string) {
+    // Claim first so a double click or two operators can never submit two Circle
+    // transfers for one reward. A failed chain request deliberately becomes
+    // FAILED, which can be explicitly retried by an authorized operator.
+    const claimed = await this.prisma.referralReward.updateMany({
+      where: { id: rewardId, status: { in: ['ELIGIBLE', 'FAILED'] } },
+      data: { status: 'PROCESSING', failureReason: null, approvedById: adminId },
+    });
+    if (!claimed.count) throw new BadRequestException('This reward is already being processed or has already been paid.');
+
+    const reward = await this.prisma.referralReward.findUnique({ where: { id: rewardId } });
+    if (!reward) throw new NotFoundException('Referral reward not found.');
+    try {
+      const source = await this.prisma.platformWallet.findUnique({ where: { key: REFERRAL_REWARD_WALLET_KEY } });
+      if (!source?.circleWalletId || !source.address || source.status !== 'ACTIVE') {
+        throw new BadRequestException('Create and fund the Referral rewards wallet before paying a reward.');
+      }
+      this.assertReferralRewardPayoutConfigured();
+      if (reward.currency !== REFERRAL_REWARD_CURRENCY) {
+        throw new BadRequestException(`This campaign pays ${REFERRAL_REWARD_CURRENCY}; legacy ${reward.currency} entitlements must be migrated or cancelled before payout.`);
+      }
+      const balance = await this.getCircleWalletBalances(source.circleWalletId);
+      if (balance.usdtBalance < reward.amount) {
+        throw new BadRequestException(`Referral rewards wallet has ${balance.usdtBalance.toFixed(2)} USDT available; ${reward.amount.toFixed(2)} USDT is required. Fund the Circle treasury with USDC, then provision USDT on ${source.blockchain} before submitting payouts.`);
+      }
+
+      let recipientAddress = await this.prisma.walletAddress.findFirst({
+        where: { wallet: { userId: reward.userId }, network: this.referralRewardNetwork() },
+        select: { address: true },
+      });
+      if (!recipientAddress) {
+        const created = await this.walletsService.getDepositAddress(reward.userId, this.referralRewardNetwork());
+        recipientAddress = { address: created.address };
+      }
+
+      const publicKeyResponse = await axios.get(`${this.circleBaseUrl}/v1/w3s/config/entity/publicKey`, {
+        headers: { Authorization: `Bearer ${this.circleApiKey}`, accept: 'application/json' },
+        timeout: 15_000,
+      });
+      const entitySecretCiphertext = this.encryptCircleEntitySecret(this.circleEntitySecret, publicKeyResponse.data?.data?.publicKey);
+      const transferResponse = await axios.post(
+        `${this.circleBaseUrl}/v1/w3s/developer/transactions/transfer`,
+        {
+          idempotencyKey: crypto.randomUUID(),
+          entitySecretCiphertext,
+          walletAddress: source.address,
+          blockchain: source.blockchain,
+          tokenAddress: this.referralRewardUsdtTokenAddress,
+          destinationAddress: recipientAddress.address,
+          amounts: [Number(reward.amount).toFixed(6).replace(/\.?0+$/, '')],
+          feeLevel: 'MEDIUM',
+        },
+        {
+          headers: { Authorization: `Bearer ${this.circleApiKey}`, 'Content-Type': 'application/json', accept: 'application/json' },
+          timeout: 45_000,
+        },
+      );
+      const circleTransaction = transferResponse.data?.data;
+      if (!circleTransaction?.id) throw new Error('Circle did not return a transaction id.');
+
+      const updated = await this.prisma.referralReward.update({
+        where: { id: reward.id },
+        data: {
+          status: 'PENDING',
+          platformWalletId: source.id,
+          circleTransactionId: circleTransaction.id,
+        },
+      });
+      await this.prisma.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'REFERRAL_REWARD_PAYOUT_SUBMITTED',
+          metadata: { rewardId: reward.id, reference: reward.reference, circleTransactionId: circleTransaction.id, recipientAddress: recipientAddress.address, amount: reward.amount, currency: reward.currency },
+        },
+      });
+      return { reward: updated, circleTransaction: { id: circleTransaction.id, state: circleTransaction.state || 'INITIATED' } };
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || 'Could not submit the referral reward payout.';
+      await this.prisma.referralReward.update({ where: { id: reward.id }, data: { status: 'FAILED', failureReason: message } });
+      this.logger.error(`Referral reward payout ${reward.id} failed: ${message}`);
+      throw error instanceof BadRequestException ? error : new BadRequestException(message);
+    }
+  }
+
+  async refreshReferralReward(rewardId: string) {
+    const reward = await this.prisma.referralReward.findUnique({ where: { id: rewardId }, include: { platformWallet: true, user: { select: { firstName: true, lastName: true } } } });
+    if (!reward) throw new NotFoundException('Referral reward not found.');
+    if (!reward.circleTransactionId || !reward.platformWallet?.circleWalletId) return reward;
+    this.assertCircleConfigured();
+
+    try {
+      const response = await axios.get(`${this.circleBaseUrl}/v1/w3s/transactions`, {
+        params: { walletId: reward.platformWallet.circleWalletId, pageSize: 50 },
+        headers: { Authorization: `Bearer ${this.circleApiKey}`, accept: 'application/json' },
+        timeout: 15_000,
+      });
+      const circleTransaction = (response.data?.data?.transactions || []).find((transaction: any) => transaction.id === reward.circleTransactionId);
+      if (!circleTransaction) return reward;
+      const state = String(circleTransaction.state || '').toUpperCase();
+      if (['COMPLETE', 'COMPLETED', 'CONFIRMED'].includes(state) && reward.status !== 'PAID') {
+        const paid = await this.prisma.referralReward.update({ where: { id: reward.id }, data: { status: 'PAID', paidAt: new Date(), failureReason: null } });
+        await this.notificationsService.createNotification(reward.userId, {
+          title: 'Referral reward sent',
+          body: `Your ${reward.amount.toFixed(2)} ${reward.currency} reward for inviting ${reward.requiredReferrals} friends has been sent to your wallet.`,
+          type: 'REFERRAL',
+          data: { reference: reward.reference, circleTransactionId: reward.circleTransactionId },
+        });
+        return paid;
+      }
+      if (['FAILED', 'DENIED'].includes(state)) {
+        return this.prisma.referralReward.update({ where: { id: reward.id }, data: { status: 'FAILED', failureReason: circleTransaction.errorMessage || circleTransaction.errorCode || 'Circle payout failed.' } });
+      }
+      return reward;
+    } catch (error: any) {
+      this.logger.warn(`Could not refresh referral reward ${reward.id}: ${error.response?.data?.message || error.message}`);
+      return reward;
+    }
   }
 
   async listKyc(query: { status?: string; page?: string; limit?: string }) {

@@ -73,6 +73,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: `(function(){try{var v=localStorage.getItem('surexend_lite_mode');var slow=['slow-2g','2g','3g'].indexOf((navigator.connection&&navigator.connection.effectiveType)||'')>-1;if(v==='on'||(v===null&&slow))document.documentElement.classList.add('lite-mode');}catch(e){}})();`,
           }}
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=localStorage.getItem('surexend_color_mode')||'system';var m=p==='system'?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):p;document.documentElement.dataset.colorMode=m;document.documentElement.style.colorScheme=m;}catch(e){}})();`,
+          }}
+        />
         {/* PWA meta tags */}
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -141,7 +146,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className="bg-[#000000] text-white font-dm antialiased">
+      <body className="font-dm antialiased">
         {/* Anti-white-screen-of-death mobile resilience */}
         <MobileResilienceScript />
         <ThemeProvider>
