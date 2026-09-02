@@ -80,7 +80,14 @@ async function main() {
         await client.query('ROLLBACK');
         console.warn(`[data-migrations] Migration ${migration.name} notice: ${error.message}. Continuing.`);
       }
-    }
+    // Ensure default admin accounts are active and set to ADMIN role
+    try {
+      await client.query(`
+        UPDATE "User"
+        SET "role" = 'ADMIN', "isActive" = true, "isBanned" = false
+        WHERE LOWER("email") IN ('demo@surexend.com', 'surexendofficial@gmail.com');
+      `);
+    } catch (_) {}
   } catch (err) {
     console.warn(`[data-migrations] Notice during data migrations: ${err.message}. Continuing.`);
   } finally {

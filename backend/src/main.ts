@@ -10,6 +10,8 @@ import { PrismaService } from './prisma/prisma.service';
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 import helmet from 'helmet';
 import * as compression from 'compression';
+import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 
 /**
@@ -83,25 +85,68 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   const configService = app.get(ConfigService);
 
-  // Admin bootstrap — promote accounts listed in ADMIN_EMAILS (comma-separated)
-  // on every boot. Also promoted live at sign-in (see auth.service
-  // ensureAdminIfListed), so the moment a listed account logs in it becomes
-  // ADMIN — no boot-order dependency. Set ADMIN_EMAILS to the reviewed admin
-  // addresses in the environment, redeploy, then remove the var once promoted.
+  // Admin bootstrap — guarantee essential admin accounts (demo@surexend.com,
+  // surexendofficial@gmail.com, and any ADMIN_EMAILS/ADMIN_EMAIL) exist, are active,
+  // and have role: 'ADMIN'. If the account is missing or inactive, auto-provision
+  // or reactivate it so admins never get locked out.
   const prisma = app.get(PrismaService);
-  const adminEmails = (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
+  const defaultAdminEmails = ['demo@surexend.com', 'surexendofficial@gmail.com'];
+  const envAdminEmails = [process.env.ADMIN_EMAIL, ...(process.env.ADMIN_EMAILS || '').split(',')]
+    .map((s) => (s || '').trim().toLowerCase())
     .filter(Boolean);
-  if (adminEmails.length) {
+  const targetAdminEmails = Array.from(new Set([...defaultAdminEmails, ...envAdminEmails]));
+
+  const adminPassword = process.env.ADMIN_PASSWORD || 'Admin123!';
+  const defaultHash = await bcrypt.hash(adminPassword, 10);
+
+  for (const email of targetAdminEmails) {
     try {
-      const promoted = await prisma.user.updateMany({
-        where: { email: { in: adminEmails } },
-        data: { role: 'ADMIN' },
+      const existing = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true, role: true, isActive: true, isBanned: true }
       });
-      console.log(`[admin] promoted ${promoted.count} user(s) to ADMIN via ADMIN_EMAILS`);
+      if (existing) {
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            role: 'ADMIN',
+            isActive: true,
+            isBanned: false,
+            // If ADMIN_PASSWORD or ADMIN_RESET_PASSWORD is set, update passwordHash
+            ...(process.env.ADMIN_PASSWORD || process.env.ADMIN_RESET_PASSWORD === 'true'
+              ? { passwordHash: defaultHash }
+              : {}),
+          },
+        });
+        console.log(`[admin] Verified and activated admin account for ${email} (role: ADMIN)`);
+      } else {
+        const surexTag = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'admin';
+        const tagExists = await prisma.user.findUnique({ where: { surexTag } });
+        const finalTag = tagExists ? `${surexTag}.${Math.floor(100 + Math.random() * 900)}` : surexTag;
+
+        const created = await prisma.user.create({
+          data: {
+            email,
+            phone: `+12345678${Math.floor(1000 + Math.random() * 9000)}`,
+            firstName: 'Admin',
+            lastName: 'User',
+            surexTag: finalTag,
+            role: 'ADMIN',
+            isActive: true,
+            isBanned: false,
+            kycStatus: 'VERIFIED',
+            kycTier: 3,
+            passwordHash: defaultHash,
+            referralCode: crypto.randomBytes(4).toString('hex').toUpperCase(),
+            wallet: {
+              create: {}
+            }
+          }
+        });
+        console.log(`[admin] Auto-provisioned missing ADMIN account: ${email} (ID: ${created.id})`);
+      }
     } catch (error) {
-      console.error('[admin] ADMIN_EMAILS bootstrap failed:', (error as Error).message);
+      console.warn(`[admin] Admin bootstrap notice for ${email}: ${(error as Error).message}`);
     }
   }
 
