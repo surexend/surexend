@@ -1,17 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { userAPI, campaignsAPI, AFRICAN_CURRENCIES } from '@/lib/api'
+import { authAPI, userAPI, campaignsAPI, AFRICAN_CURRENCIES } from '@/lib/api'
+import { clearStoredAuthSession } from '@/lib/auth-session'
 import { useRouter } from 'next/navigation'
 import {
   User, Shield, Bell, CreditCard, HelpCircle, LogOut,
   ChevronRight, Camera, Edit3, Copy, CheckCircle,
   Fingerprint, Eye, EyeOff, Smartphone, Lock, ScanFace,
   Globe, Moon, Star, Award, Crown, ExternalLink,
-  AlertTriangle, Tag, Check, X
+  AlertTriangle, Tag, Check, X, LoaderCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
@@ -37,6 +39,7 @@ function MenuItem({
 }) {
   return (
     <button
+      type="button"
       className="w-full flex items-center gap-4 px-5 py-4 border-b border-white/5 last:border-0 hover:bg-white/5 active:bg-white/10 transition-colors text-left"
       onClick={onClick}
     >
@@ -87,6 +90,7 @@ export default function ProfilePage() {
 
   const [copiedId, setCopiedId] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false)
   const [currencySearch, setCurrencySearch] = useState('')
   const [savingCurrency, setSavingCurrency] = useState(false)
@@ -96,6 +100,15 @@ export default function ProfilePage() {
     if (showLogoutConfirm) setShowLogoutConfirm(false)
     else setShowCurrencyPicker(false)
   }, 30)
+
+  useEffect(() => {
+    if (!showLogoutConfirm) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isLoggingOut) setShowLogoutConfirm(false)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showLogoutConfirm, isLoggingOut])
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -127,8 +140,12 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const saved = localStorage.getItem('surexend_user_avatar')
-    if (saved) setAvatar(saved)
-  }, [])
+    if (profile?.avatar) {
+      setAvatar(profile.avatar)
+    } else if (saved) {
+      setAvatar(saved)
+    }
+  }, [profile?.avatar])
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -149,8 +166,30 @@ export default function ProfilePage() {
   }
 
   const handleLogout = () => {
-    localStorage.clear()
-    router.push('/auth/login')
+    if (isLoggingOut) return
+
+    setIsLoggingOut(true)
+    setShowLogoutConfirm(false)
+
+    // Start server-side refresh-session revocation before removing the local
+    // tokens. authAPI.logout snapshots the refresh token synchronously, so the
+    // user never has to wait for the network before leaving the wallet.
+    const revocation = authAPI.logout()
+
+    // The local session is the UI's immediate source of truth. Remove the
+    // access token from sessionStorage, the legacy localStorage location, and
+    // the route-gating cookie — not every unrelated preference in storage.
+    clearStoredAuthSession()
+    void queryClient.cancelQueries()
+    queryClient.clear()
+    router.replace('/auth/login')
+
+    // An offline user is still safely signed out on this device. Surface a
+    // precise warning only if the server could not revoke the refresh session.
+    void revocation.catch((error: unknown) => {
+      console.warn('[SureXend] Logout session revocation failed:', error)
+      toast.error('Signed out on this device, but the server could not be reached to revoke the session.', { id: 'logout-error' })
+    })
   }
 
   const kycStatus = kycData?.status || 'UNVERIFIED'
@@ -458,46 +497,63 @@ export default function ProfilePage() {
         )}
       </AnimatePresence>
 
-      {/* Logout confirmation */}
-      <AnimatePresence>
-        {showLogoutConfirm && (
+      {/* Logout confirmation is portaled to the document root so the sheet is
+          never clipped or layered beneath the app's scroll pane or mobile nav. */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {showLogoutConfirm && (
           <>
-            <motion.div className="fixed inset-0 liquid-backdrop z-40"
+            <motion.div
+              className="fixed inset-0 liquid-backdrop z-40"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowLogoutConfirm(false)} />
+              onClick={() => setShowLogoutConfirm(false)}
+              aria-hidden="true"
+            />
             <motion.div
               className="fixed inset-x-4 bottom-8 z-50 sm:inset-auto sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[380px]"
               initial={{ opacity: 0, y: 50, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.95 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="logout-dialog-title"
             >
               <div className="bg-[#121419] rounded-3xl p-6 border border-white/[0.08]">
                 <div className="w-14 h-14 rounded-2xl bg-[#EF4444]/10 flex items-center justify-center mx-auto mb-4">
-                  <AlertTriangle size={26} className="text-[#EF4444]" />
+                  <AlertTriangle size={26} className="text-[#EF4444]" aria-hidden="true" />
                 </div>
-                <h3 className="text-white font-bold text-lg text-center mb-2">Sign Out?</h3>
+                <h3 id="logout-dialog-title" className="text-white font-bold text-lg text-center mb-2">Sign Out?</h3>
                 <p className="text-[#94A3B8] text-sm text-center mb-6">
                   You will need to log back in to access your wallet and transactions.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
+                    type="button"
+                    autoFocus
                     className="py-3.5 rounded-xl text-sm font-medium text-[#94A3B8] border border-white/08"
                     onClick={() => setShowLogoutConfirm(false)}
+                    disabled={isLoggingOut}
                   >
                     Cancel
                   </button>
                   <button
-                    className="py-3.5 rounded-xl text-sm font-bold text-white bg-[#EF4444]/80"
+                    type="button"
+                    className="py-3.5 rounded-xl text-sm font-bold text-white bg-[#EF4444]/80 flex items-center justify-center gap-2 disabled:opacity-60"
                     onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    aria-busy={isLoggingOut}
                   >
-                    Sign Out
+                    {isLoggingOut && <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />}
+                    {isLoggingOut ? 'Signing out…' : 'Sign Out'}
                   </button>
                 </div>
               </div>
             </motion.div>
           </>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   )
 }

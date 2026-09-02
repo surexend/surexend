@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useTheme } from '@/context/ThemeContext'
 import { LayoutDashboard, Users, FileText, ShieldCheck, ArrowLeft, Tags, Bell, Trophy, Gift } from 'lucide-react'
 import { userAPI } from '@/lib/api'
-import { hasClientAuthSession } from '@/lib/auth-session'
+import { clearStoredAuthSession, hasClientAuthSession, subscribeToAuthSessionCleared } from '@/lib/auth-session'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -15,6 +15,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [mounted, setMounted] = useState(false)
   const [checking, setChecking] = useState(true)
   const [denied, setDenied] = useState(false)
+
+  // Keep an admin tab in lockstep with a sign-out from another tab. Admin
+  // pages must never remain visible solely because their tab had a cached JWT.
+  useEffect(() => {
+    return subscribeToAuthSessionCleared(() => {
+      clearStoredAuthSession()
+      router.replace('/auth/login')
+    })
+  }, [router])
 
   useEffect(() => {
     setMounted(true)

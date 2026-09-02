@@ -659,3 +659,44 @@ landed across the web app.
    - re-audit the app end to end for UI, responsiveness, and security;
    - if backend dependencies can be installed in a less restricted environment,
      run `backend/npm run build` and any follow-up validation there.
+
+## 2026-09-02 (8) — sign-out reliability and session cleanup
+
+The profile sign-out regression was traced to the actual storage mismatch in the
+button handler: `src/app/app/profile/page.tsx` called `localStorage.clear()` and
+navigated with `router.push('/auth/login')`, while the active access token lived
+in `sessionStorage` and the route-gating cookie, and the server refresh session
+was never revoked. The cookie therefore kept the middleware authenticated and
+could redirect the login route back to the wallet.
+
+### What shipped
+- Profile sign-out now starts `POST /auth/logout` so the backend can revoke the
+  captured refresh session, immediately clears the access token from every
+  client location plus the cookie, clears React Query data, and uses
+  `router.replace` so the protected profile is not left in history.
+- Local cleanup is finally guaranteed even when the API is offline; the UI
+  leaves the wallet immediately and reports only a precise server-revocation
+  warning if needed. The generic Axios interceptor no longer refreshes or
+  displays a network/server toast for the logout request.
+- Removed the destructive `localStorage.clear()` behavior. Theme, lite mode,
+  notification preferences, waitlists, and other device preferences survive;
+  the locally cached user avatar is removed because it is user data and the old
+  unscoped key could leak between accounts on a shared device.
+- Same-origin app and admin tabs receive a logout signal and clear their own
+  access token/cached state before leaving the protected route.
+- Service-worker cache version `v55` no longer caches `/app`, `/admin`, `/auth`,
+  or `/api` navigations, removes private entries from older caches on logout,
+  and continues to provide the offline page only for safe public pages.
+- Profile/dashboard headers now prefer a server-saved avatar after it loads.
+
+### Validation
+- `npm run typecheck` passes.
+- `npm run build` passes (Next.js production build, 72 routes).
+- `npm run check:mobile-safety` passes (77 files scanned).
+- `node --check public/sw.js` passes.
+- `git diff --check` passes.
+- The logout controller is also throttled (20 requests/minute) so the public
+  revocation endpoint cannot be used as an unbounded session-store probe.
+- Backend build remains dependent on its Prisma/native dependency setup and live
+  environment; the controller-only change was not separately build-validated in
+  this sandbox.

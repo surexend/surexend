@@ -132,11 +132,14 @@ apiClient.interceptors.response.use(
 
     // On 401, try to refresh the access token once and retry the request
     const isRefreshCall = config?.url?.includes('/auth/refresh')
+    const isAuthLogoutCall = config?.url?.includes('/auth/logout')
     // Login 401s (wrong password, inactive account) must NOT be swallowed by
     // the refresh flow — let the login page surface the real message instead
-    // of a misleading "Session expired" toast.
+    // of a misleading "Session expired" toast. Logout is deliberately
+    // excluded too: signing out must never refresh a session that is being
+    // revoked.
     const isAuthLoginCall = config?.url?.includes('/auth/login')
-    if (error.response?.status === 401 && config && !config._retried && !isRefreshCall && !isAuthLoginCall) {
+    if (error.response?.status === 401 && config && !config._retried && !isRefreshCall && !isAuthLoginCall && !isAuthLogoutCall) {
       config._retried = true
       if (!refreshPromise) {
         refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null })
@@ -154,11 +157,11 @@ apiClient.interceptors.response.use(
 
     // Show user-friendly error toast (only for critical operations, using unique IDs to prevent duplicate spam)
     const status = error.response?.status
-    if (status === 401 && !isAuthLoginCall) {
+    if (status === 401 && !isAuthLoginCall && !isAuthLogoutCall) {
       toast.error('Session expired. Please login again.', { id: 'auth-error' })
-    } else if (status !== undefined && status >= 500 && !isAuthLoginCall) {
+    } else if (status !== undefined && status >= 500 && !isAuthLoginCall && !isAuthLogoutCall) {
       toast.error('Server error. Please try again later.', { id: 'server-error' })
-    } else if (!error.response) {
+    } else if (!error.response && !isAuthLogoutCall) {
       toast.error('Cannot connect to server. Please check your connection.', { id: 'network-error' })
     }
 
@@ -205,13 +208,18 @@ export const authAPI = {
   refreshToken: (refreshToken: string) =>
     apiClient.post('/auth/refresh', { refreshToken }),
 
+  // Revocation is best-effort, but local cleanup is guaranteed. The refresh
+  // token is captured before cleanup so the server can revoke this device even
+  // when the UI navigates away immediately or the access token has expired.
   logout: async () => {
     const refreshToken = getStoredRefreshToken()
-    const response = await apiClient.post('/auth/logout', refreshToken ? { refreshToken } : {})
-    if (typeof window !== 'undefined') {
-      clearTokens()
+    try {
+      return await apiClient.post('/auth/logout', refreshToken ? { refreshToken } : {})
+    } finally {
+      if (typeof window !== 'undefined') {
+        clearTokens()
+      }
     }
-    return response
   },
 
   forgotPassword: (email: string) =>
