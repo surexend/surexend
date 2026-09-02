@@ -897,9 +897,7 @@ body {
 
 
 
-/* 
-
-/* -- Adaptive light appearance ---------------------------------------------
+/* ── Adaptive light appearance ─────────────────────────────────────────────
    The product defaults to the device colour scheme (or a saved manual choice).
    These semantic surface overrides let the established dark fintech interface
    remain dense while giving light-mode users a proper paper/ink experience. */
@@ -914,7 +912,7 @@ body {
 
 html[data-color-mode='light'] {
   --app-bg: #F4F6FC;
-  --card-bg: #FFFFFF;
+  --card-bg: rgba(255, 255, 255, 0.78);
   --border: rgba(15, 23, 42, 0.10);
   --text: #0F2038;
   --text-muted: #52657C;
@@ -948,22 +946,24 @@ html[data-color-mode='light'] {
 .theme-choice:hover { color: var(--sx-text); }
 .theme-choice-active { color: #1E293B; background: #D4A017; box-shadow: 0 1px 3px rgba(15,23,42,.18); }
 
-/* PREMIUM LIGHT MODE - Revolut/Stripe-class glass-morphism
-   Stage: pearl-silver coolwhite (#F4F6FC) with ambient brand halos.
-   Cards: frosted white glass floating on the stage, casting soft shadows.
-   Accents: brand gold/lemon at full saturation - high contrast on light. */
+/* ═══════════════════════════════════════════════════════════════════════════
+   PREMIUM LIGHT MODE — Frosted White Liquid Glass Design System
+   Stage: pearl-silver cool stage (#F4F6FC) with ambient brand halos.
+   Blocks: authentic translucent frosted white glass (not opaque flat blocks).
+   Contrast: deep charcoal/slate text (#0F2038) on light mode, pure white on dark.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Stage and ambient background */
 html[data-color-mode='light'] body {
   background-color: #F4F6FC;
   color: #0F2038;
   background-image:
-    radial-gradient(ellipse 90% 50% at 15% -5%, rgba(212, 160, 23, 0.07), transparent 60%),
-    radial-gradient(ellipse 70% 80% at 85% 105%, rgba(100, 140, 220, 0.06), transparent 55%),
+    radial-gradient(ellipse 90% 50% at 15% -5%, rgba(212, 160, 23, 0.08), transparent 60%),
+    radial-gradient(ellipse 70% 80% at 85% 105%, rgba(100, 140, 220, 0.07), transparent 55%),
     linear-gradient(175deg, #EBF0FA 0%, #F4F6FC 45%, #EEF2FA 100%);
 }
 
-/* Dark background overrides */
+/* Dark background overrides → translucent pearl stage */
 html[data-color-mode='light'] [class~="bg-[#000000]"],
 html[data-color-mode='light'] [class~="bg-[#0A0B0E]"],
 html[data-color-mode='light'] [class~="bg-[#0F1116]"],
@@ -973,11 +973,14 @@ html[data-color-mode='light'] [class~="bg-[#15171C]"],
 html[data-color-mode='light'] [class~="bg-[#0D0E13]"],
 html[data-color-mode='light'] [class~="bg-[#0C0E12]"],
 html[data-color-mode='light'] [class~="bg-[#1A1C24]"],
-html[data-color-mode='light'] [class~="bg-[#181B21]"] { background-color: #F4F6FC !important; }
+html[data-color-mode='light'] [class~="bg-[#181B21]"],
+html[data-color-mode='light'] [class~="bg-[#020203]"] { background-color: #F4F6FC !important; }
 
 html[data-color-mode='light'] [class~="bg-black"] { background-color: #E8EDF4 !important; }
 html[data-color-mode='light'] [class~="bg-black/20"],
-html[data-color-mode='light'] [class~="bg-black/30"] { background-color: rgba(15, 23, 42, 0.04) !important; }
+html[data-color-mode='light'] [class~="bg-black/30"],
+html[data-color-mode='light'] [class~="bg-black/40"],
+html[data-color-mode='light'] [class~="bg-black/50"] { background-color: rgba(15, 23, 42, 0.04) !important; }
 
 html[data-color-mode='light'] [class~="bg-white/5"],
 html[data-color-mode='light'] [class~="bg-white/[0.03]"],
@@ -989,55 +992,64 @@ html[data-color-mode='light'] [class~="bg-white/10"],
 html[data-color-mode='light'] [class~="bg-white/[0.08]"],
 html[data-color-mode='light'] [class~="bg-white/[0.06]"] { background-color: rgba(15, 23, 42, 0.06) !important; }
 
-/* Borders */
+/* Borders in light mode */
 html[data-color-mode='light'] [class~="border-white/5"],
 html[data-color-mode='light'] [class~="border-white/10"],
 html[data-color-mode='light'] [class~="border-white/20"],
 html[data-color-mode='light'] [class~="border-white/30"] { border-color: rgba(15, 23, 42, 0.10) !important; }
 
-/* Text */
+/* ── Typography Contrast: Dark text on Light mode ── */
 html[data-color-mode='light'] .text-white { color: #0F2038 !important; }
+html[data-color-mode='light'] .text-\[\#E2E8F0\] { color: #1E293B !important; }
+html[data-color-mode='light'] .text-\[\#F8FAFC\] { color: #0F2038 !important; }
 html[data-color-mode='light'] .text-\[\#94A3B8\] { color: #52657C !important; }
-html[data-color-mode='light'] .text-\[\#64748B\] { color: #688098 !important; }
-html[data-color-mode='light'] .text-\[\#CBD5E1\] { color: #3E5067 !important; }
+html[data-color-mode='light'] .text-\[\#64748B\] { color: #64748B !important; }
+html[data-color-mode='light'] .text-\[\#CBD5E1\] { color: #334155 !important; }
 html[data-color-mode='light'] .text-\[\#334155\] { color: #8898A8 !important; }
 html[data-color-mode='light'] .text-\[\#475569\] { color: #516070 !important; }
 html[data-color-mode='light'] .text-\[\#1E293B\] { color: #0F2038 !important; }
+html[data-color-mode='light'] .text-gray-200,
+html[data-color-mode='light'] .text-gray-300 { color: #334155 !important; }
+html[data-color-mode='light'] .text-gray-400 { color: #52657C !important; }
 html[data-color-mode='light'] .text-\[\#10B981\] { color: #059669 !important; }
 html[data-color-mode='light'] .text-\[\#EF4444\] { color: #DC2626 !important; }
 
-/* Frosted glass panels - centrepiece of the light design */
+/* ── Frosted White Liquid Glass Panels ── */
+/* Instead of opaque solid white, cards use translucent multi-layer white gradients
+   with a top specular reflection and ambient shadow so it looks like authentic frosted glass. */
 html[data-color-mode='light'] .liquid-glass,
 html[data-color-mode='light'] .liquid-glass-strong {
   background-image:
-    linear-gradient(115deg, transparent 28%, rgba(255,255,255,0.65) 46%, transparent 64%),
-    radial-gradient(120% 90% at 50% -15%, rgba(255,255,255,0.85), transparent 55%),
-    linear-gradient(145deg, rgba(255,255,255,0.95), rgba(242,246,255,0.88) 50%, rgba(248,251,255,0.92) 100%) !important;
-  border: 1px solid rgba(255,255,255,0.92) !important;
+    linear-gradient(115deg, transparent 25%, rgba(255, 255, 255, 0.45) 48%, transparent 70%),
+    radial-gradient(120% 80% at 50% -10%, rgba(255, 255, 255, 0.90), transparent 60%),
+    linear-gradient(145deg,
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(244, 248, 255, 0.62) 50%,
+      rgba(255, 255, 255, 0.76) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.90) !important;
+  border-bottom: 1px solid rgba(200, 215, 238, 0.50) !important;
   box-shadow:
-    inset 0 1.5px 0 rgba(255,255,255,1),
-    inset 0 -1px 0 rgba(190,210,235,0.35),
-    0 2px 4px rgba(15,23,42,0.03),
-    0 8px 24px rgba(15,23,42,0.07),
-    0 24px 48px rgba(15,23,42,0.05) !important;
+    inset 0 1px 1px rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(185, 205, 235, 0.25),
+    0 2px 4px rgba(15, 23, 42, 0.02),
+    0 8px 24px rgba(15, 23, 42, 0.06),
+    0 20px 48px rgba(15, 23, 42, 0.04) !important;
 }
 
-/* Desktop-only backdrop blur for light glass — MUST be gated to desktop.
-   On mobile the global safety strip (* { backdrop-filter: none }) would lose
-   the specificity battle against this rule, reintroducing GPU smearing. */
+/* Desktop-only backdrop blur for frosted white glass */
 @media (min-width: 768px) {
   @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
     html[data-color-mode='light'] .liquid-glass,
     html[data-color-mode='light'] .liquid-glass-strong {
-      -webkit-backdrop-filter: blur(22px) saturate(165%) brightness(1.02) !important;
-      backdrop-filter: blur(22px) saturate(165%) brightness(1.02) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) brightness(1.02) !important;
+      backdrop-filter: blur(24px) saturate(180%) brightness(1.02) !important;
     }
   }
 }
 
 html[data-color-mode='light'] .liquid-glass::before,
 html[data-color-mode='light'] .liquid-glass-strong::before {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,1), transparent) !important;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 1), transparent) !important;
 }
 
 html[data-color-mode='light'] .liquid-glass::after,
@@ -1045,49 +1057,49 @@ html[data-color-mode='light'] .liquid-glass-strong::after {
   background: conic-gradient(
     from var(--glass-angle),
     transparent 0deg 250deg,
-    rgba(212,160,23,0.05) 300deg,
-    rgba(212,160,23,0.12) 320deg,
-    rgba(212,160,23,0.28) 330deg,
-    rgba(212,160,23,0.12) 340deg,
-    rgba(212,160,23,0.05) 355deg,
+    rgba(212, 160, 23, 0.05) 300deg,
+    rgba(212, 160, 23, 0.12) 320deg,
+    rgba(212, 160, 23, 0.28) 330deg,
+    rgba(212, 160, 23, 0.12) 340deg,
+    rgba(212, 160, 23, 0.05) 355deg,
     transparent 360deg
   ) !important;
 }
 
 html[data-color-mode='light'] .glass-card {
   background:
-    radial-gradient(110% 65% at 5% 0%, rgba(255,255,255,0.9), transparent 50%),
-    linear-gradient(145deg, rgba(255,255,255,0.96), rgba(240,246,255,0.90)) !important;
-  border-color: rgba(210,225,248,0.80) !important;
+    radial-gradient(110% 65% at 5% 0%, rgba(255, 255, 255, 0.85), transparent 50%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(240, 246, 255, 0.68)) !important;
+  border: 1px solid rgba(210, 225, 248, 0.80) !important;
   box-shadow:
-    inset 0 1.5px 0 rgba(255,255,255,0.95),
-    0 6px 20px rgba(15,23,42,0.06),
-    0 20px 44px rgba(15,23,42,0.05) !important;
+    inset 0 1px 1px rgba(255, 255, 255, 0.95),
+    0 6px 20px rgba(15, 23, 42, 0.05),
+    0 20px 44px rgba(15, 23, 42, 0.04) !important;
 }
 
 html[data-color-mode='light'] .glass-card-gold {
   background:
-    radial-gradient(120% 60% at 5% 0%, rgba(255,215,0,0.14), transparent 50%),
-    linear-gradient(145deg, rgba(255,251,235,0.98), rgba(252,243,202,0.90)) !important;
-  border-color: rgba(212,160,23,0.35) !important;
+    radial-gradient(120% 60% at 5% 0%, rgba(255, 215, 0, 0.18), transparent 50%),
+    linear-gradient(145deg, rgba(255, 251, 235, 0.90), rgba(252, 243, 202, 0.72)) !important;
+  border-color: rgba(212, 160, 23, 0.35) !important;
   box-shadow:
-    inset 0 1.5px 0 rgba(255,255,255,0.95),
-    0 6px 20px rgba(160,120,10,0.10),
-    0 0 0 1px rgba(212,160,23,0.10) !important;
+    inset 0 1px 1px rgba(255, 255, 255, 0.95),
+    0 6px 20px rgba(160, 120, 10, 0.08),
+    0 0 0 1px rgba(212, 160, 23, 0.10) !important;
 }
 
 html[data-color-mode='light'] .glass-card-lemon {
   background:
-    radial-gradient(120% 60% at 5% 0%, rgba(181,226,61,0.14), transparent 50%),
-    linear-gradient(145deg, rgba(247,255,230,0.98), rgba(234,249,193,0.90)) !important;
-  border-color: rgba(135,185,28,0.35) !important;
+    radial-gradient(120% 60% at 5% 0%, rgba(181, 226, 61, 0.18), transparent 50%),
+    linear-gradient(145deg, rgba(247, 255, 230, 0.90), rgba(234, 249, 193, 0.72)) !important;
+  border-color: rgba(135, 185, 28, 0.35) !important;
   box-shadow:
-    inset 0 1.5px 0 rgba(255,255,255,0.90),
-    0 6px 20px rgba(100,150,10,0.09),
-    0 0 0 1px rgba(135,185,28,0.10) !important;
+    inset 0 1px 1px rgba(255, 255, 255, 0.90),
+    0 6px 20px rgba(100, 150, 10, 0.08),
+    0 0 0 1px rgba(135, 185, 28, 0.10) !important;
 }
 
-/* Mobile: flat GPU-safe light glass */
+/* Mobile: lightweight translucent glass without GPU blur */
 @media (max-width: 767px) {
   html[data-color-mode='light'] body {
     background-image: linear-gradient(175deg, #EBF0FA 0%, #F4F6FC 55%, #EEF2FA 100%) !important;
@@ -1096,79 +1108,198 @@ html[data-color-mode='light'] .glass-card-lemon {
   html[data-color-mode='light'] .liquid-glass,
   html[data-color-mode='light'] .liquid-glass-strong {
     background-image:
-      radial-gradient(110% 55% at 0% 0%, rgba(255,255,255,0.92), transparent 50%),
-      linear-gradient(155deg, rgba(255,255,255,0.97), rgba(241,246,255,0.92) 65%) !important;
-    border-color: rgba(205,220,242,0.80) !important;
+      radial-gradient(110% 55% at 0% 0%, rgba(255, 255, 255, 0.90), transparent 50%),
+      linear-gradient(155deg, rgba(255, 255, 255, 0.94), rgba(241, 246, 255, 0.85) 65%) !important;
+    border-color: rgba(205, 220, 242, 0.80) !important;
     box-shadow:
-      inset 0 1.5px 0 rgba(255,255,255,0.95),
-      0 4px 16px rgba(15,23,42,0.07) !important;
+      inset 0 1px 1px rgba(255, 255, 255, 0.95),
+      0 4px 16px rgba(15, 23, 42, 0.06) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
 
   html[data-color-mode='light'] .glass-card {
-    background: linear-gradient(145deg, rgba(255,255,255,0.98), rgba(241,246,255,0.93)) !important;
-    border-color: rgba(200,218,240,0.70) !important;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(241, 246, 255, 0.88)) !important;
+    border-color: rgba(200, 218, 240, 0.70) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
-    box-shadow: 0 3px 14px rgba(15,23,42,0.07) !important;
+    box-shadow: 0 3px 14px rgba(15, 23, 42, 0.06) !important;
   }
 
   html[data-color-mode='light'] .glass-card-gold {
-    background: linear-gradient(145deg, rgba(255,251,235,0.99), rgba(251,241,198,0.93)) !important;
+    background: linear-gradient(145deg, rgba(255, 251, 235, 0.96), rgba(251, 241, 198, 0.88)) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
 
   html[data-color-mode='light'] .glass-card-lemon {
-    background: linear-gradient(145deg, rgba(247,255,230,0.99), rgba(233,248,192,0.93)) !important;
+    background: linear-gradient(145deg, rgba(247, 255, 230, 0.96), rgba(233, 248, 192, 0.88)) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
 }
 
-/* Modal backdrop — backdrop-filter only on desktop (mobile = GPU risk) */
+/* Modal backdrop */
 @media (min-width: 768px) {
   html[data-color-mode='light'] .liquid-backdrop {
-    background: rgba(195,210,230,0.48) !important;
+    background: rgba(195, 210, 230, 0.48) !important;
     -webkit-backdrop-filter: blur(18px) saturate(145%) !important;
     backdrop-filter: blur(18px) saturate(145%) !important;
   }
 }
 @media (max-width: 767px) {
   html[data-color-mode='light'] .liquid-backdrop {
-    background: rgba(195,210,230,0.72) !important;
+    background: rgba(195, 210, 230, 0.72) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
 }
 
-/* Inputs */
+/* ── 💬 AI Support Chat Widget in Light Mode ── */
+html[data-color-mode='light'] .ai-chat-modal {
+  background-image:
+    radial-gradient(120% 80% at 50% -10%, rgba(255, 255, 255, 0.95), transparent 60%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(244, 248, 255, 0.84) 100%) !important;
+  border-color: rgba(210, 225, 248, 0.85) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 1),
+    0 20px 60px rgba(15, 23, 42, 0.15) !important;
+}
+
+html[data-color-mode='light'] .ai-chat-header {
+  background-color: rgba(245, 248, 255, 0.85) !important;
+  border-bottom-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-color-mode='light'] .ai-chat-title {
+  color: #0F2038 !important;
+}
+
+html[data-color-mode='light'] .ai-chat-subtitle {
+  color: #52657C !important;
+}
+
+html[data-color-mode='light'] .ai-chat-close {
+  color: #64748B !important;
+}
+
+html[data-color-mode='light'] .ai-chat-close:hover {
+  color: #0F2038 !important;
+  background-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-color-mode='light'] .ai-chat-body {
+  background-color: transparent !important;
+}
+
+html[data-color-mode='light'] .ai-chat-bubble-bot {
+  background-color: rgba(255, 255, 255, 0.94) !important;
+  border-color: rgba(210, 225, 245, 0.90) !important;
+  color: #1E293B !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-color-mode='light'] .ai-chat-bubble-user {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  color: #064E3B !important;
+}
+
+html[data-color-mode='light'] .ai-chat-typing {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(210, 225, 245, 0.90) !important;
+  color: #64748B !important;
+}
+
+html[data-color-mode='light'] .ai-chat-suggestions {
+  background-color: rgba(245, 248, 255, 0.85) !important;
+  border-top-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-color-mode='light'] .ai-chat-chip {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(200, 218, 242, 0.90) !important;
+  color: #1E293B !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-color-mode='light'] .ai-chat-chip:hover {
+  background-color: #FFFFFF !important;
+  border-color: rgba(150, 180, 220, 0.90) !important;
+}
+
+html[data-color-mode='light'] .ai-chat-footer {
+  background-color: rgba(245, 248, 255, 0.92) !important;
+  border-top-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-color-mode='light'] .ai-chat-input {
+  background-color: #FFFFFF !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #0F2038 !important;
+}
+
+html[data-color-mode='light'] .ai-chat-input::placeholder {
+  color: #94A3B8 !important;
+}
+
+html[data-color-mode='light'] .ai-action-card {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(210, 225, 245, 0.90) !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-color-mode='light'] .ai-action-header-text {
+  color: #1E293B !important;
+}
+
+html[data-color-mode='light'] .ai-action-input {
+  background-color: rgba(240, 245, 255, 0.70) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #0F2038 !important;
+}
+
+html[data-color-mode='light'] .ai-pin-box {
+  background-color: rgba(245, 248, 255, 0.90) !important;
+  border-color: rgba(15, 23, 42, 0.10) !important;
+}
+
+html[data-color-mode='light'] .ai-pin-label {
+  color: #334155 !important;
+}
+
+html[data-color-mode='light'] .ai-pin-input {
+  background-color: #FFFFFF !important;
+  border-color: rgba(16, 185, 129, 0.40) !important;
+  color: #0F2038 !important;
+}
+
+/* ── Form Inputs & Selects in Light Mode ── */
 html[data-color-mode='light'] input,
 html[data-color-mode='light'] select,
 html[data-color-mode='light'] textarea {
   color: #0F2038 !important;
-  background-color: rgba(255,255,255,0.82) !important;
-  border-color: rgba(15,23,42,0.14) !important;
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
 }
 html[data-color-mode='light'] input::placeholder,
 html[data-color-mode='light'] textarea::placeholder { color: #8A9CB0 !important; }
 html[data-color-mode='light'] .input-field {
-  background: rgba(255,255,255,0.86) !important;
-  border-color: rgba(15,23,42,0.14) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
   color: #0F2038 !important;
 }
 
 /* Skeleton loaders */
 html[data-color-mode='light'] .skeleton {
   background: linear-gradient(90deg,
-    rgba(215,225,242,0.7) 25%,
-    rgba(195,210,232,0.9) 50%,
-    rgba(215,225,242,0.7) 75%) !important;
+    rgba(215, 225, 242, 0.70) 25%,
+    rgba(195, 210, 232, 0.90) 50%,
+    rgba(215, 225, 242, 0.70) 75%) !important;
   background-size: 400% 100% !important;
 }
 
-/* Gradient text: readable on light */
+/* Gradient text: tuned for light backgrounds */
 html[data-color-mode='light'] .gradient-text-gold {
   background: linear-gradient(135deg, #AA6E00, #C8900A, #A86400) !important;
   background-size: 200% auto !important;
@@ -1184,22 +1315,25 @@ html[data-color-mode='light'] .gradient-text-lemon {
   background-clip: text !important;
 }
 
-/* Preserve colour on CTA/status elements */
+/* Preserve contrast on solid colored CTA/status buttons */
 html[data-color-mode='light'] .bg-blue-500.text-white,
 html[data-color-mode='light'] .bg-blue-600.text-white,
 html[data-color-mode='light'] .bg-emerald-500.text-white,
 html[data-color-mode='light'] .bg-red-500.text-white,
-html[data-color-mode='light'] .bg-slate-800.text-white { color: #fff !important; }
+html[data-color-mode='light'] .bg-slate-800.text-white,
+html[data-color-mode='light'] .bg-slate-900.text-white,
+html[data-color-mode='light'] .bg-black.text-white { color: #ffffff !important; }
 
 /* Scrollbar */
 html[data-color-mode='light'] ::-webkit-scrollbar-track { background: #E4EAF4; }
 html[data-color-mode='light'] ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(212,160,23,0.55), rgba(160,120,16,0.90)) !important;
+  background: linear-gradient(180deg, rgba(212, 160, 23, 0.55), rgba(160, 120, 16, 0.90)) !important;
 }
 
-/* Lite mode + light mode */
+/* Lite mode in light mode */
 html.lite-mode[data-color-mode='light'] .liquid-glass,
 html.lite-mode[data-color-mode='light'] .liquid-glass-strong {
   -webkit-backdrop-filter: blur(8px) saturate(135%) !important;
   backdrop-filter: blur(8px) saturate(135%) !important;
 }
+

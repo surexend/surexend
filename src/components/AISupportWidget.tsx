@@ -82,7 +82,7 @@ function ActionCard({
     (isBill && form.type && form.provider && form.recipient && Number(form.amount) > 0) ||
     (isConvert && form.from && form.to && form.from !== form.to && Number(form.amount) > 0)
 
-  const inputCls = 'w-full px-3 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors'
+  const inputCls = 'ai-action-input w-full px-3 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors'
   const labelCls = 'text-[10px] text-[#64748B] font-semibold uppercase tracking-wide mb-1 block'
 
   const run = async (passkeyToken?: string) => {
@@ -143,10 +143,10 @@ function ActionCard({
   }
 
   return (
-    <div className="mt-2 rounded-2xl border border-white/10 bg-[#020203]/80 overflow-hidden">
+    <div className="ai-action-card mt-2 rounded-2xl border border-white/10 bg-[#020203]/80 overflow-hidden">
       <div className="px-3 py-2 flex items-center gap-2 border-b border-white/5">
         <ShieldCheck className="w-3.5 h-3.5" style={{ color: `rgb(${accentRgb})` }} />
-        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 ai-action-header-text">
           {isSend ? 'Send Crypto' : isBill ? 'Pay Bill' : isConvert ? 'Convert' : 'Receipt'}
         </span>
         <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">PIN required</span>
@@ -159,13 +159,13 @@ function ActionCard({
               <div>
                 <span className={labelCls}>From</span>
                 <select className={inputCls} value={form.from || 'USD'} onChange={e => set('from', e.target.value)}>
-                  {CONVERT_FROM.map(c => <option key={c} value={c} className="bg-[#020203]">{c}</option>)}
+                  {CONVERT_FROM.map(c => <option key={c} value={c} className="bg-[#020203] text-white">{c}</option>)}
                 </select>
               </div>
               <div>
                 <span className={labelCls}>To</span>
                 <select className={inputCls} value={form.to || 'NGN'} onChange={e => set('to', e.target.value)}>
-                  {CONVERT_TO.map(c => <option key={c} value={c} className="bg-[#020203]">{c}</option>)}
+                  {CONVERT_TO.map(c => <option key={c} value={c} className="bg-[#020203] text-white">{c}</option>)}
                 </select>
               </div>
             </div>
@@ -194,7 +194,7 @@ function ActionCard({
               <div>
                 <span className={labelCls}>Network</span>
                 <select className={inputCls} value={form.network || 'POLYGON'} onChange={e => set('network', e.target.value)}>
-                  {SEND_NETWORKS.map(n => <option key={n} value={n} className="bg-[#020203]">{n}</option>)}
+                  {SEND_NETWORKS.map(n => <option key={n} value={n} className="bg-[#020203] text-white">{n}</option>)}
                 </select>
               </div>
             </div>
@@ -207,7 +207,7 @@ function ActionCard({
               <div>
                 <span className={labelCls}>Bill type</span>
                 <select className={inputCls} value={form.type || ''} onChange={e => set('type', e.target.value)}>
-                  {BILL_TYPES.map(t => <option key={t} value={t} className="bg-[#020203]">{t}</option>)}
+                  {BILL_TYPES.map(t => <option key={t} value={t} className="bg-[#020203] text-white">{t}</option>)}
                 </select>
               </div>
               <div>
@@ -257,10 +257,10 @@ function ActionCard({
         )}
 
         {pinOpen && !isReceipt && (
-          <div className="rounded-xl bg-black/40 border border-white/10 p-3 space-y-2">
+          <div className="ai-pin-box rounded-xl bg-black/40 border border-white/10 p-3 space-y-2">
             <div className="flex items-center gap-2">
               <KeyRound className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-[10px] text-gray-300 font-semibold">Enter your 4-digit transaction PIN</span>
+              <span className="text-[10px] text-gray-300 font-semibold ai-pin-label">Enter your 4-digit transaction PIN</span>
             </div>
             <div className="flex gap-2">
               <input
@@ -271,7 +271,7 @@ function ActionCard({
                 value={pin}
                 onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
                 onKeyDown={e => e.key === 'Enter' && run()}
-                className="flex-1 px-3 py-2 rounded-xl bg-white/[0.05] border border-emerald-500/30 text-white text-sm tracking-[0.4em] text-center focus:outline-none focus:border-emerald-500"
+                className="ai-pin-input flex-1 px-3 py-2 rounded-xl bg-white/[0.05] border border-emerald-500/30 text-white text-sm tracking-[0.4em] text-center focus:outline-none focus:border-emerald-500"
                 placeholder="••••"
               />
               <button
@@ -412,46 +412,46 @@ export default function AISupportWidget() {
               initial={{ opacity: 0, y: 100, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 100, scale: 0.95 }}
-              className="w-full sm:w-[420px] h-[85vh] sm:h-[600px] max-h-[90vh] bg-[#0B0D13] border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden relative"
+              className="ai-chat-modal w-full sm:w-[420px] h-[85vh] sm:h-[600px] max-h-[90vh] bg-[#0B0D13] border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden relative"
             >
               {/* Header */}
-              <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/40">
+              <div className="ai-chat-header p-4 border-b border-white/10 flex items-center justify-between bg-black/40">
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-10 h-10 rounded-2xl flex items-center justify-center text-black font-extrabold shadow-md"
+                    className="w-10 h-10 rounded-2xl flex items-center justify-center text-black font-extrabold shadow-md flex-shrink-0"
                     style={{ background: colors.gradientBg }}
                   >
                     <Bot className="w-6 h-6 text-black" />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-white text-sm flex items-center gap-1.5">
+                    <h3 className="ai-chat-title font-extrabold text-white text-sm flex items-center gap-1.5">
                       SureXend AI Assistant
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
                         24/7 Online
                       </span>
                     </h3>
-                    <p className="text-[11px] text-[#94A3B8]">Answers, sends, bills & receipts — PIN-protected</p>
+                    <p className="text-[11px] text-[#94A3B8] ai-chat-subtitle">Answers, sends, bills & receipts — PIN-protected</p>
                   </div>
                 </div>
 
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                  className="ai-chat-close p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Messages Body */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-4">
+              <div className="flex-1 p-4 overflow-y-auto space-y-4 ai-chat-body">
                 {messages.map((m) => (
                   <div key={m.id} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[90%] ${m.kind === 'action' ? 'w-full' : ''}`}>
                       <div
                         className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
                           m.sender === 'user'
-                            ? 'bg-emerald-500/20 text-emerald-100 border border-emerald-500/30 rounded-tr-none'
-                            : 'bg-white/[0.04] text-gray-200 border border-white/10 rounded-tl-none'
+                            ? 'ai-chat-bubble-user bg-emerald-500/20 text-emerald-100 border border-emerald-500/30 rounded-tr-none'
+                            : 'ai-chat-bubble-bot bg-white/[0.04] text-gray-200 border border-white/10 rounded-tl-none'
                         }`}
                       >
                         {m.text && <p className="whitespace-pre-line">{m.text}</p>}
@@ -481,7 +481,7 @@ export default function AISupportWidget() {
 
                 {isTyping && (
                   <div className="flex justify-start">
-                    <div className="bg-white/[0.04] border border-white/10 p-3 rounded-2xl text-xs text-gray-400 flex items-center gap-2">
+                    <div className="ai-chat-typing bg-white/[0.04] border border-white/10 p-3 rounded-2xl text-xs text-gray-400 flex items-center gap-2">
                       <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
                       <span>AI is thinking...</span>
                     </div>
@@ -491,13 +491,13 @@ export default function AISupportWidget() {
               </div>
 
               {/* Quick Prompt Suggestions */}
-              <div className="px-3 py-2 border-t border-white/5 bg-black/40 flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none">
+              <div className="ai-chat-suggestions px-3 py-2 border-t border-white/5 bg-black/40 flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none">
                 {QUICK_QUESTIONS.map((q, idx) => (
                   <button
                     key={idx}
                     onClick={() => handleSend(q)}
                     disabled={executing}
-                    className="flex-shrink-0 shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-[#E2E8F0] font-semibold whitespace-nowrap transition-all disabled:opacity-40 active:scale-95"
+                    className="ai-chat-chip flex-shrink-0 shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-[#E2E8F0] font-semibold whitespace-nowrap transition-all disabled:opacity-40 active:scale-95"
                   >
                     <Sparkles className="w-3 h-3 text-amber-400 flex-shrink-0" /> {q}
                   </button>
@@ -505,19 +505,19 @@ export default function AISupportWidget() {
               </div>
 
               {/* Input Bar */}
-              <div className="p-3 border-t border-white/10 bg-[#020203] flex items-center gap-2">
+              <div className="ai-chat-footer p-3 border-t border-white/10 bg-[#020203] flex items-center gap-2">
                 <input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Ask anything, or try: 'send 50 USDC to Chidi'"
-                  className="flex-1 py-3 px-4 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="ai-chat-input flex-1 py-3 px-4 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors"
                 />
                 <button
                   onClick={() => handleSend()}
                   disabled={!input.trim() || executing}
-                  className="p-3 rounded-xl font-bold text-black shadow-md disabled:opacity-40 transition-transform active:scale-95"
+                  className="p-3 rounded-xl font-bold text-black shadow-md disabled:opacity-40 transition-transform active:scale-95 flex-shrink-0"
                   style={{ background: colors.gradientBg }}
                 >
                   <Send className="w-4 h-4 text-black" />

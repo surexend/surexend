@@ -229,7 +229,7 @@ export default function ConvertPage() {
                     style={{
                       background: `rgba(${colors.glowRgb}, 0.12)`,
                       borderColor: `rgba(${colors.glowRgb}, 0.35)`,
-                      color: '#FFFFFF',
+                      color: 'var(--sx-text, #FFFFFF)',
                     }}
                   >
                     <Wallet className="w-3.5 h-3.5" style={{ color: colors.primary }} />
@@ -297,7 +297,7 @@ export default function ConvertPage() {
                   style={{
                     background: `rgba(${colors.glowRgb}, 0.12)`,
                     borderColor: `rgba(${colors.glowRgb}, 0.35)`,
-                    color: '#FFFFFF',
+                    color: 'var(--sx-text, #FFFFFF)',
                   }}
                 >
                   <Wallet className="w-3.5 h-3.5" style={{ color: colors.primary }} />
