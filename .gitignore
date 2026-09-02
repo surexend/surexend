@@ -40,3 +40,6 @@ backend/*.log
 backend/cleanup/
 backup-*.json
 corrections.json
+
+# design review screenshots (local-only artifacts)
+/design-preview/
