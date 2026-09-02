@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -13,6 +13,7 @@ import { currencySymbol, formatAmount } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
 import PinKeypad from '@/components/PinKeypad'
+import SendFromPicker, { SendFromBadge, SendFromAsset, sendFromAssetName } from '@/components/SendFromPicker'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useBackLayer } from '@/context/BackNavigationContext'
@@ -69,21 +70,45 @@ export default function SendPage() {
     }
   }, [])
 
-  const { data: balanceData, isFetching } = useQuery({
+  const { data: balanceData, isLoading: balanceLoading } = useQuery({
     queryKey: ['sendBalance'],
     queryFn: walletAPI.getBalance,
     retry: false,
     staleTime: 30000,
   })
+  const localBalances = useMemo(() => balanceData?.localBalances || {}, [balanceData])
   const usdSendableBalance = Math.max(0, (balanceData?.usdBalance ?? 0) - (balanceData?.lockedBalance ?? 0))
-  const localBalances = balanceData?.localBalances || {}
-  const tagTransferAssets = [
-    { code: 'USDC', label: 'USDC', balance: usdSendableBalance },
-    ...AFRICAN_CURRENCIES
-      .map((currency) => ({ ...currency, label: currency.code, balance: Math.max(0, Number(localBalances[currency.code] || 0)) }))
-      .filter((currency) => currency.balance > 0),
-  ]
-  const selectedTagAsset = tagTransferAssets.find((asset) => asset.code === tagCurrency) || tagTransferAssets[0] || { code: 'USDC', label: 'USDC', balance: usdSendableBalance }
+  // Balances a SureX Tag transfer can leave from: the spendable USDC amount
+  // plus every locally held African currency. USDC is the only internally
+  // transferable digital asset — never advertise others (e.g. USDT).
+  const tagTransferAssets = useMemo<SendFromAsset[]>(
+    () => [
+      { code: 'USDC', label: 'USDC', name: 'USDC', balance: usdSendableBalance, kind: 'digital' },
+      ...AFRICAN_CURRENCIES
+        .map((currency) => ({
+          ...currency,
+          label: currency.code,
+          balance: Math.max(0, Number(localBalances[currency.code] || 0)),
+          kind: 'local' as const,
+        }))
+        .filter((currency) => currency.balance > 0),
+    ],
+    [usdSendableBalance, localBalances]
+  )
+  // Keep the "Send from" selection spendable: when the chosen balance is empty
+  // and another held balance can fund the transfer, move the selection to it.
+  // Zero-balance sources are not selectable in the picker.
+  useEffect(() => {
+    if (balanceLoading) return
+    const funded = tagTransferAssets.filter((asset) => asset.balance > 0)
+    if (funded.length === 0) return
+    const current = tagTransferAssets.find((asset) => asset.code === tagCurrency)
+    if (!current || current.balance <= 0) setTagCurrency(funded[0].code)
+  }, [tagTransferAssets, tagCurrency, balanceLoading])
+  const selectedTagAsset =
+    tagTransferAssets.find((asset) => asset.code === tagCurrency) ||
+    tagTransferAssets[0] ||
+    { code: 'USDC', label: 'USDC', name: 'USDC', balance: usdSendableBalance, kind: 'digital' as const }
   const transferCurrency = sendMode === 'TAG' ? selectedTagAsset.code : 'USDC'
   const sendableBalance = sendMode === 'TAG' ? selectedTagAsset.balance : usdSendableBalance
   const formatTransferAmount = (value: number, currency = transferCurrency) => {
@@ -244,19 +269,13 @@ export default function SendPage() {
                     />
                   </div>
                   <div className="mt-4">
-                    <label className="block text-xs font-semibold text-[#94A3B8] mb-2">Send from</label>
-                    <select
+                    <SendFromPicker
+                      assets={tagTransferAssets}
                       value={tagCurrency}
-                      onChange={(event) => setTagCurrency(event.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-bold text-white outline-none focus:border-white/30"
-                    >
-                      {tagTransferAssets.map((asset) => (
-                        <option key={asset.code} value={asset.code}>
-                          {asset.code} · Available {formatTransferAmount(asset.balance, asset.code)}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[11px] text-[#64748B] mt-1.5">Local-currency tag transfers stay in the same currency and arrive instantly.</p>
+                      onChange={setTagCurrency}
+                      loading={balanceLoading}
+                    />
+                    <p className="text-[11px] text-[#64748B] mt-1.5">Local-currency sends stay in the same currency — no conversion, no fee.</p>
                   </div>
                   {errors.address && <p className="text-red-400 text-xs mt-1">{errors.address.message}</p>}
                   <p className="text-[11px] text-[#64748B] mt-1.5">
@@ -345,6 +364,21 @@ export default function SendPage() {
             <h2 className="text-xl font-extrabold text-white">Enter Transfer Amount</h2>
             
             <form onSubmit={handleSubmit(onSubmitStep2 as any)} className="space-y-6">
+              {sendMode === 'TAG' && (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-white/10 bg-white/[0.03]">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <SendFromBadge asset={selectedTagAsset} accent={colors.primary} glowRgb={colors.glowRgb} />
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#64748B]">Sending from</p>
+                      <p className="text-xs font-bold text-white truncate">{sendFromAssetName(selectedTagAsset)} balance</p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] font-bold text-white flex-shrink-0">
+                    {formatTransferAmount(sendableBalance)}
+                    <span className="text-[#64748B] font-semibold"> available</span>
+                  </p>
+                </div>
+              )}
               <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10">
                 <div className="flex justify-between items-center mb-1">
                   <label className="text-xs text-[#94A3B8]">Send Amount ({transferCurrency})</label>
@@ -432,6 +466,12 @@ export default function SendPage() {
             </div>
 
             <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3 text-xs">
+              {sendMode === 'TAG' && (
+                <div className="flex justify-between items-center py-1 border-b border-white/5">
+                  <span className="text-[#94A3B8]">Sending from</span>
+                  <span className="text-white font-bold">{sendFromAssetName(selectedTagAsset)} balance ({selectedTagAsset.code})</span>
+                </div>
+              )}
               {formData.network && formData.network !== 'ARC' && formData.network !== 'SUREX_TAG' && (
                 <div className="flex justify-between py-1 border-b border-white/5">
                   <span className="text-[#94A3B8]">Network Fee (CCTP)</span>

@@ -970,7 +970,7 @@ export default function DashboardPage() {
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">Zero Fee</span>
                       </div>
                       <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
-                        Instant zero-fee transfer directly to any SureXend user tag
+                        Instant and zero fee — send from your USDC or local balance to any SureX tag
                       </p>
                     </div>
                   </div>
