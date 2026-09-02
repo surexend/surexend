@@ -435,6 +435,30 @@ https://surexend.com/api/v1/auth/google/callback (no www).
 - Only real-money links today: Smartspeed wallet (bills) + manual deposits +
   bank transfer webhook. Crypto deposits/sends are TESTNET until Circle mainnet.
 
+== ROUND 11: SIGN-OUT RELIABILITY + PRIVATE SESSION CLEANUP (2026-09-02) ==
+- ROOT CAUSE CONFIRMED: profile sign-out used `localStorage.clear()` +
+  `router.push('/auth/login')`, but active access tokens are in sessionStorage
+  and a route-gating cookie. The cookie survived, so middleware still treated
+  the user as authenticated and could redirect the login route back to the app;
+  the backend refresh session was also never revoked.
+- FIXED: profile sign-out now calls `authAPI.logout()` (capturing the refresh
+  token before cleanup), clears all auth token locations/cookie immediately,
+  clears React Query data, and uses `router.replace`. Local sign-out completes
+  offline; a server revocation failure is surfaced precisely instead of
+  blocking the user or showing a misleading generic API toast.
+- HARDENED: the Axios interceptor never refreshes on `/auth/logout`; auth
+  storage cleanup is safe when browser storage/cookies are restricted, removes
+  only auth plus the unscoped user avatar (not device preferences), and issues
+  a same-origin cross-tab sign-out signal. App and admin tabs consume it. The
+  public backend logout endpoint is throttled at 20 requests/minute.
+- PWA PRIVACY: `public/sw.js` is now cache `surexend-v55`; private/auth/API
+  navigations are never cached, and logout asks the worker to remove private
+  entries left by older versions. Server-saved avatars are preferred after
+  profile load.
+- VALIDATION: frontend typecheck/build, mobile-safety check, service-worker
+  syntax check, and `git diff --check` all pass. The logout controller change
+  is a one-line throttle addition; backend build remains environment-dependent
+  on Prisma/native dependencies and was not separately validated here.
 ## 2026-08-31 — SEND-FROM SOURCE PICKER REDESIGN (SureX Tag transfers)
 
 The native `<select>` under "Send from" on `/app/send` (SureX Tag mode) is now a

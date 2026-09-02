@@ -19,7 +19,7 @@ import toast from 'react-hot-toast'
 const AISupportWidget = dynamic(() => import('@/components/AISupportWidget'), { ssr: false })
 const FirebaseMessaging = dynamic(() => import('@/components/FirebaseMessaging'), { ssr: false })
 import { notificationsAPI, userAPI } from '@/lib/api'
-import { hasClientAuthSession } from '@/lib/auth-session'
+import { clearStoredAuthSession, hasClientAuthSession, subscribeToAuthSessionCleared } from '@/lib/auth-session'
 import { useLite } from '@/lib/lite'
 import ThemeToggle from '@/components/ThemeToggle'
 
@@ -49,11 +49,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // Register notification drawer with back handler
   useBackLayer(showNotifications, () => setShowNotifications(false), 10)
 
+  // A refresh token is shared between same-origin tabs while access tokens are
+  // tab-scoped. Listen for the explicit sign-out signal so another open tab
+  // cannot keep showing an authenticated wallet after this account logs out.
+  useEffect(() => {
+    return subscribeToAuthSessionCleared(() => {
+      clearStoredAuthSession()
+      queryClient.clear()
+      setProfile(null)
+      setAvatar(null)
+      setNotifications([])
+      setUnreadCount(0)
+      setShowNotifications(false)
+      if (!window.location.pathname.startsWith('/auth/login')) {
+        router.replace('/auth/login')
+      }
+    })
+  }, [router])
+
   useEffect(() => {
     if (!mounted || !hasClientAuthSession()) return
     let active = true
     userAPI.getProfile().then((p: any) => {
-      if (active) setProfile(p || null)
+      if (!active) return
+      setProfile(p || null)
+      if (p?.avatar) setAvatar(p.avatar)
     }).catch(() => {})
     return () => { active = false }
   }, [mounted])

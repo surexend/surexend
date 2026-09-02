@@ -1,5 +1,25 @@
-const CACHE_NAME = 'surexend-v54'
+const CACHE_NAME = 'surexend-v55'
 const OFFLINE_URL = '/offline.html'
+const NON_CACHEABLE_PREFIXES = ['/app', '/admin', '/auth', '/api']
+
+function isNonCacheablePath(pathname) {
+  return NON_CACHEABLE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
+async function clearPrivateCacheEntries() {
+  const cacheNames = await caches.keys()
+  await Promise.all(cacheNames.map(async (cacheName) => {
+    const cache = await caches.open(cacheName)
+    const requests = await cache.keys()
+    await Promise.all(requests.map((request) => {
+      try {
+        return isNonCacheablePath(new URL(request.url).pathname) ? cache.delete(request) : undefined
+      } catch {
+        return undefined
+      }
+    }))
+  }))
+}
 
 // Assets to cache immediately on install. Each is added individually so a
 // single missing file can never break the whole install.
@@ -35,7 +55,15 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-// ── Fetch (Stale-While-Revalidate for assets, Network-First for API) ─────
+// A logout asks the active worker to remove any private entries left by an
+// older worker version. Cache v55 plus activation handles clients that update
+// after the logout.
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'CLEAR_PRIVATE_CACHE') return
+  event.waitUntil(clearPrivateCacheEntries().catch(() => {}))
+})
+
+// ── Fetch (network-first pages, stale-while-revalidate assets) ───────────
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
@@ -44,13 +72,27 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return
   if (url.pathname.startsWith('/api/')) return
 
-  // Navigation requests — serve shell, fallback to offline
+  // Never cache authenticated or auth pages. Apart from making logout more
+  // predictable, this prevents one account's private app shell from being
+  // served to another account when a PWA is offline or an upstream request
+  // fails. The old cache namespace is removed during activation below.
+  if (request.mode === 'navigate' && isNonCacheablePath(url.pathname)) {
+    event.respondWith(
+      fetch(request).catch(() => caches.match(OFFLINE_URL))
+    )
+    return
+  }
+
+  // Public navigation requests — serve fresh content, with the public offline
+  // page as a fallback. Only successful responses are cached.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then(response => {
-          const responseClone = response.clone()
-          caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone))
+          if (response.ok) {
+            const responseClone = response.clone()
+            caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone))
+          }
           return response
         })
         .catch(() => {

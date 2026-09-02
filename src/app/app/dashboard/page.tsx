@@ -265,6 +265,12 @@ export default function DashboardPage() {
     staleTime: 60000,
   })
 
+  // Prefer the server profile once it arrives; the local copy only exists for
+  // the immediate preview after a photo is selected on this device.
+  useEffect(() => {
+    if (profile?.avatar) setAvatar(profile.avatar)
+  }, [profile?.avatar])
+
   // Campaign standing — decides the golden tick (top 5 per campaign).
   const { data: standing } = useQuery({
     queryKey: ['campaign-standing'],
