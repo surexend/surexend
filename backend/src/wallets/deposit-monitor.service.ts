@@ -133,10 +133,49 @@ export class DepositMonitorService implements OnModuleInit {
           const recorded = await this.recordDeposit(userId, tx);
           if (recorded) discoveredDeposits += tx.amount;
         }
+
+        // If on-chain balance is positive but no transfer was found in recent logs
+        // (e.g. deposit was older than the block window), ensure a RECEIVE transaction
+        // exists so the balance is clearly documented in the user's transaction history.
+        if (r.balance > 0) {
+          const existingForAddr = await this.prisma.transaction.findFirst({
+            where: {
+              userId,
+              type: 'RECEIVE',
+              status: 'COMPLETED',
+              metadata: { path: ['destinationAddress'], equals: r.addr }
+            }
+          });
+          if (!existingForAddr) {
+            const reference = `RECV-ONCHAIN-${r.chainKey}-${r.addr.slice(0, 10)}-${Math.floor(r.balance * 100)}`;
+            const existingRef = await this.prisma.transaction.findUnique({ where: { reference } });
+            if (!existingRef) {
+              await this.prisma.transaction.create({
+                data: {
+                  userId,
+                  type: 'RECEIVE',
+                  status: 'COMPLETED',
+                  amount: r.balance,
+                  fee: 0,
+                  currency: 'USDC',
+                  reference,
+                  metadata: {
+                    network: r.chainKey.toUpperCase(),
+                    chainKey: r.chainKey,
+                    destinationAddress: r.addr,
+                    detectedBy: 'onchain-balance-reconciler',
+                    settledAt: new Date().toISOString(),
+                  }
+                }
+              });
+              this.logger.log(`Created transaction history record for reconciled on-chain balance: ${r.balance} USDC on ${r.chainKey} for user ${userId}`);
+            }
+          }
+        }
       }
 
       // Balance changes are applied by recordDeposit in the same transaction as
-      // the corresponding ledger entries. Raw RPC snapshots never credit funds.
+      // the corresponding ledger entries.
       await this.backfillDepositNotifications(userId);
 
       this.lastReconcileAt.set(walletId, Date.now());
