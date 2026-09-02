@@ -25,7 +25,7 @@ export function formatNGN(amount: number): string {
 
 // Per-currency display glyphs so swap tiles can show both legs cleanly.
 const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: '$', NGN: '₦', GHS: 'GH₵', KES: 'KSh', ZAR: 'R', UGX: 'USh',
+  USD: '$', USDC: '$', USDT: '$', NGN: '₦', GHS: 'GH₵', KES: 'KSh', ZAR: 'R', UGX: 'USh',
   TZS: 'TSh', EGP: 'E£', MAD: 'DH', ETB: 'Br', RWF: 'FRw', ZMW: 'K',
   MZN: 'MT', BWP: 'P', AOA: 'Kz', CDF: 'FC', TND: 'DT', DZD: 'DA',
   LYD: 'LD', SDG: 'SD', SSP: 'SS', SOS: 'Sh', DJF: 'Fdj', ERN: 'Nfk',

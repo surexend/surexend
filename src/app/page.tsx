@@ -368,58 +368,20 @@ export default function LandingPage() {
 
         {/* ── Hero Section ───────────────────────────────────────────── */}
         <section className="relative min-h-screen min-h-dvh-force flex flex-col items-center justify-center px-4 sm:px-6 pt-20 pb-16 overflow-hidden">
-          {/* Background effects */}
-          <div className="absolute inset-0 pointer-events-none">
+          {/* Background effects — seamless full-bleed ambient glow */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
             <div
               className="absolute inset-0"
               style={{
-                background: `radial-gradient(ellipse 80% 60% at 50% 0%, rgba(${accentRgb}, 0.18), transparent 70%)`,
+                background: `radial-gradient(ellipse 80% 60% at 50% 12%, rgba(${accentRgb}, 0.16), transparent 75%)`,
               }}
             />
-            {/* Floating orbs — soft radial glows (no blur filter on phones) */}
-            {isMobile ? (
-              <>
-                <div
-                  className="absolute rounded-full"
-                  style={{
-                    width: 400, height: 400,
-                    top: '10%', left: '-10%',
-                    background: `radial-gradient(circle, rgba(${accentRgb}, 0.12), transparent 70%)`,
-                  }}
-                />
-                <div
-                  className="absolute rounded-full"
-                  style={{
-                    width: 300, height: 300,
-                    bottom: '20%', right: '-5%',
-                    background: `radial-gradient(circle, rgba(${accentRgb}, 0.09), transparent 70%)`,
-                  }}
-                />
-              </>
-            ) : (
-              <>
-                <motion.div
-                  className="absolute rounded-full blur-3xl"
-                  style={{
-                    width: 400, height: 400,
-                    top: '10%', left: '-10%',
-                    background: `rgba(${accentRgb}, 0.08)`,
-                  }}
-                  animate={reduceMotion ? undefined : { x: [0, 30, 0], y: [0, -20, 0] }}
-                  transition={reduceMotion ? undefined : { duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-                />
-                <motion.div
-                  className="absolute rounded-full blur-3xl"
-                  style={{
-                    width: 300, height: 300,
-                    bottom: '20%', right: '-5%',
-                    background: `rgba(${accentRgb}, 0.06)`,
-                  }}
-                  animate={reduceMotion ? undefined : { x: [0, -20, 0], y: [0, 30, 0] }}
-                  transition={reduceMotion ? undefined : { duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-                />
-              </>
-            )}
+            <div
+              className="absolute inset-0"
+              style={{
+                background: `radial-gradient(ellipse 60% 45% at 50% 42%, rgba(${accentRgb}, 0.07), transparent 70%)`,
+              }}
+            />
           </div>
 
           <motion.div

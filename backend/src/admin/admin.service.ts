@@ -255,13 +255,18 @@ export class AdminService {
     });
     if (!user) return null;
 
-    const [transactions, conversions, bills] = await Promise.all([
-      this.prisma.transaction.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 20 }),
-      this.prisma.conversion.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 20 }),
-      this.prisma.billPayment.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 20 }),
+    // Trigger background balance & Circle history reconcile so any on-chain
+    // deposits or state changes are reflected immediately.
+    this.walletsService.getBalance(id).catch(() => {});
+
+    const [transactions, conversions, bills, walletAddresses] = await Promise.all([
+      this.prisma.transaction.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 50 }),
+      this.prisma.conversion.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 50 }),
+      this.prisma.billPayment.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 50 }),
+      this.prisma.walletAddress.findMany({ where: { wallet: { userId: id } } }),
     ]);
 
-    return { ...user, activity: { transactions, conversions, bills } };
+    return { ...user, walletAddresses, activity: { transactions, conversions, bills } };
   }
 
   async updateUser(id: string, body: { isActive?: boolean; isBanned?: boolean; kycStatus?: string; kycTier?: number; role?: string; email?: string; phone?: string }) {
