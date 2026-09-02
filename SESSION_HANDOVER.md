@@ -459,3 +459,43 @@ https://surexend.com/api/v1/auth/google/callback (no www).
   syntax check, and `git diff --check` all pass. The logout controller change
   is a one-line throttle addition; backend build remains environment-dependent
   on Prisma/native dependencies and was not separately validated here.
+## 2026-08-31 — SEND-FROM SOURCE PICKER REDESIGN (SureX Tag transfers)
+
+The native `<select>` under "Send from" on `/app/send` (SureX Tag mode) is now a
+custom, accessible account picker. No backend, API, PIN or spendability changes.
+
+- New `src/components/SendFromPicker.tsx`: compact "Send from" trigger card
+  (icon, name, code, available balance, chevron) + bottom sheet on phones /
+  anchored popover on ≥768px. Rows grouped "Digital balance" (USDC only) and
+  "Local balances" (each held currency, zero-balance rows disabled).
+  Exports `SendFromAsset` type, `SendFromBadge`, `sendFromAssetName`.
+- Styling: `.sfp-*` token block in `globals.css` — solid surfaces, 1px borders,
+  small static shadows, NO backdrop-filter/blur/animated gradients (budget
+  Android GPU contract). Neutral colours come from `--sfp-*` vars overridden by
+  `html[data-color-mode='light']`; brand accents are injected inline from
+  `useTheme()` because portaled content sits outside the `[data-variant]` div.
+  Motion: opacity/transform only, 190ms, no springs, `prefers-reduced-motion`
+  honoured. Dialog DOM mounts only while open; one rect measurement per open
+  (+ resize listener while open); no polling/timers/scroll listeners; selection
+  = one parent state update + close.
+- A11y: trigger is a labelled `type="button"` combobox trigger
+  (aria-haspopup/expanded/controls), panel is a modal `role="dialog"` with
+  `role="listbox"`/`role="group"`/`role="option"`, ArrowUp/Down/Home/End, Enter,
+  Escape, Tab focus trap, focus restore to the trigger, Android hardware-back
+  closes the sheet first (`useBackLayer` priority 40 > the step layer's 30).
+- `src/app/app/send/page.tsx`: `tagTransferAssets` now memoized and tagged
+  `kind: 'digital' | 'local'` (USDC still first, locals still filtered > 0 —
+  derivation unchanged otherwise). New guard effect: if the selected source is
+  empty and another balance can fund the transfer, the selection auto-moves to
+  it. Amount step shows a "Sending from" card; review step shows
+  "Sending from <name> balance (CODE)". `walletAPI.send` still sends
+  `network:'SUREX_TAG'` + `currency: transferCurrency` (verified E2E).
+- `src/app/app/dashboard/page.tsx`: Send modal's SureX Tag subtitle now
+  mentions "from your USDC or local balance" (consistency only).
+- `design-preview/` (untracked, local only): 10 screenshots — gold/lemon,
+  dark/light, mobile/desktop, amount/review steps, empty + zero states.
+- Validated: `npm run typecheck`, `npm run check-mobile-safety`, `git diff
+  --check`, `npx next build` all green; plus a headless-Chrome E2E pass
+  (47/47 checks ×6 viewport/theme combos, 9/9 brand checks gold+lemon, edge
+  states, back-button) asserting the full flow pick→amount→review→PIN→
+  POST /wallets/send payload `{"network":"SUREX_TAG","currency":"KES"}`.
