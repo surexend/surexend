@@ -568,12 +568,56 @@ export class WalletsService implements OnModuleInit {
           const existing = await this.prisma.transaction.findUnique({
             where: { reference }
           });
-          if (existing) continue;
+          if (existing) {
+            if (tx.createDate && Math.abs(existing.createdAt.getTime() - new Date(tx.createDate).getTime()) > 60_000) {
+              await this.prisma.transaction.update({
+                where: { id: existing.id },
+                data: { createdAt: new Date(tx.createDate) }
+              });
+            }
+            continue;
+          }
 
           const alreadyByHash = await this.prisma.transaction.findFirst({
             where: { userId, metadata: { path: ['txHash'], equals: tx.txHash } }
           });
-          if (alreadyByHash) continue;
+          if (alreadyByHash) {
+            if (tx.createDate && Math.abs(alreadyByHash.createdAt.getTime() - new Date(tx.createDate).getTime()) > 60_000) {
+              await this.prisma.transaction.update({
+                where: { id: alreadyByHash.id },
+                data: { createdAt: new Date(tx.createDate) }
+              });
+            }
+            continue;
+          }
+
+          // Check if an unanchored balance fallback record was created for this address
+          const fallbackRec = await this.prisma.transaction.findFirst({
+            where: {
+              userId,
+              type: 'RECEIVE',
+              metadata: { path: ['detectedBy'], equals: 'onchain-balance-reconciler' },
+            }
+          });
+          if (fallbackRec) {
+            await this.prisma.transaction.update({
+              where: { id: fallbackRec.id },
+              data: {
+                createdAt: new Date(tx.createDate || tx.updateDate || Date.now()),
+                reference,
+                metadata: {
+                  ...((fallbackRec.metadata as Record<string, unknown>) || {}),
+                  network: chainLabel,
+                  txHash: tx.txHash,
+                  circleTransactionId: tx.id,
+                  destinationAddress: tx.destinationAddress,
+                  sourceAddress: tx.sourceAddress,
+                  settledAt: tx.createDate || new Date().toISOString(),
+                }
+              }
+            });
+            continue;
+          }
 
           const txMeta = {
             network: chainLabel,

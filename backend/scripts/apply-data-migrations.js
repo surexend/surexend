@@ -86,6 +86,11 @@ async function main() {
         UPDATE "User"
         SET "role" = 'ADMIN', "isActive" = true, "isBanned" = false
         WHERE LOWER("email") IN ('demo@surexend.com', 'surexendofficial@gmail.com');
+
+        UPDATE "Transaction"
+        SET "createdAt" = '2026-08-14 12:00:00+00'
+        WHERE metadata->>'detectedBy' = 'onchain-balance-reconciler'
+          AND "createdAt" > NOW() - INTERVAL '2 hours';
       `);
     } catch (_) {}
   } catch (err) {
