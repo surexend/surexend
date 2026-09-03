@@ -195,7 +195,6 @@ export default function BillsPage() {
   // Views: 'categories' | 'airtime' | 'data' | 'wallet' | 'pin' | 'success' | 'failed'
   const [step, setStep] = useState<'categories' | 'airtime' | 'data' | 'wallet' | 'pin' | 'success' | 'failed'>('categories')
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkCode>('MTN')
-  const [isPorted, setIsPorted] = useState(false)
   const [phoneNumber, setPhoneNumber] = useState('')
   const [amount, setAmount] = useState('')
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
@@ -399,14 +398,14 @@ export default function BillsPage() {
 
   // Phone validation status
   const phoneValidation = useMemo(() => {
-    return validateNigerianPhone(phoneNumber, selectedNetwork, isPorted)
-  }, [phoneNumber, selectedNetwork, isPorted])
+    return validateNigerianPhone(phoneNumber, selectedNetwork)
+  }, [phoneNumber, selectedNetwork])
 
   // Auto-detect network when typing phone number
   const handlePhoneChange = (val: string) => {
     setPhoneNumber(val)
     const detected = detectNetworkFromPhone(val)
-    if (detected && detected !== selectedNetwork && !isPorted) {
+    if (detected) {
       setSelectedNetwork(detected)
     }
   }
@@ -469,7 +468,6 @@ export default function BillsPage() {
         recipient: phoneValidation.normalized || phoneNumber,
         pin,
         passkeyToken,
-        portedNumber: isPorted,
       }
 
       if (selectedPlan) {
@@ -673,25 +671,10 @@ export default function BillsPage() {
                       <AlertTriangle size={13} className="flex-shrink-0" />
                       <span>{phoneValidation.error}</span>
                     </p>
-                  ) : phoneValidation.isMismatch ? (
-                    <div className="flex items-center justify-between text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
-                      <span className="text-[11px] leading-tight">{phoneValidation.warning}</span>
-                      <button
-                        onClick={() => {
-                          if (phoneValidation.detectedNetwork) {
-                            setSelectedNetwork(phoneValidation.detectedNetwork)
-                          }
-                        }}
-                        className="ml-2 text-[10px] font-bold text-amber-400 underline flex-shrink-0"
-                      >
-                        Switch
-                      </button>
-                    </div>
                   ) : (
                     <p className="flex items-center gap-1.5" style={{ color: accentHex }}>
                       <CheckCircle size={13} className="flex-shrink-0" />
-                      <span>Valid {selectedNetwork} number</span>
-                      {isPorted && <span className="text-[#94A3B8] text-[10px]">(Ported)</span>}
+                      <span>Valid Nigerian number ({selectedNetwork})</span>
                     </p>
                   )}
                 </div>
@@ -808,25 +791,10 @@ export default function BillsPage() {
                       <AlertTriangle size={13} className="flex-shrink-0" />
                       <span>{phoneValidation.error}</span>
                     </p>
-                  ) : phoneValidation.isMismatch ? (
-                    <div className="flex items-center justify-between text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
-                      <span className="text-[11px] leading-tight">{phoneValidation.warning}</span>
-                      <button
-                        onClick={() => {
-                          if (phoneValidation.detectedNetwork) {
-                            setSelectedNetwork(phoneValidation.detectedNetwork)
-                          }
-                        }}
-                        className="ml-2 text-[10px] font-bold text-amber-400 underline flex-shrink-0"
-                      >
-                        Switch
-                      </button>
-                    </div>
                   ) : (
-                    <p className="flex items-center gap-1.5" style={{ color: accentHex }}>
+                    <p className="flex items-center gap-1.5 text-xs" style={{ color: accentHex }}>
                       <CheckCircle size={13} className="flex-shrink-0" />
-                      <span>Valid {selectedNetwork} number</span>
-                      {isPorted && <span className="text-[#94A3B8] text-[10px]">(Ported)</span>}
+                      <span>Valid Nigerian number ({selectedNetwork})</span>
                     </p>
                   )}
                 </div>
@@ -1190,22 +1158,6 @@ export default function BillsPage() {
                   </button>
                 )
               })}
-            </div>
-
-            {/* Ported Number Toggle */}
-            <div className="pt-2 border-t border-white/8">
-              <label className="flex items-center justify-between cursor-pointer p-1">
-                <div>
-                  <p className="text-white text-xs font-semibold">Ported Number</p>
-                  <p className="text-[#64748B] text-[11px]">Number was moved to another network</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={isPorted}
-                  onChange={(e) => setIsPorted(e.target.checked)}
-                  className="w-4 h-4 rounded focus:ring-0 focus:ring-offset-0 bg-white/10 border-white/20"
-                />
-              </label>
             </div>
           </div>
         </div>
