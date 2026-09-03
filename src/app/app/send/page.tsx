@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { QrCode, ArrowRight, ArrowLeft, CheckCircle2, Tag, Send, Zap, ShieldCheck, UserCheck } from 'lucide-react'
+import { QrCode, ArrowRight, ArrowLeft, CheckCircle2, Tag, Send, Zap, ShieldCheck, UserCheck, Loader2 } from 'lucide-react'
 import Confetti from 'react-confetti'
 import toast from 'react-hot-toast'
 import { AFRICAN_CURRENCIES, walletAPI } from '@/lib/api'
@@ -13,6 +13,7 @@ import { currencySymbol, formatAmount } from '@/lib/utils'
 import { useTheme } from '@/context/ThemeContext'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
 import PinKeypad from '@/components/PinKeypad'
+import { useBiometricApproval } from '@/hooks/useBiometricApproval'
 import SendFromPicker, { SendFromBadge, SendFromAsset, sendFromAssetName } from '@/components/SendFromPicker'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -43,8 +44,10 @@ export default function SendPage() {
   const [tagCurrency, setTagCurrency] = useState('USDC')
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState<Partial<SendFormValues>>({})
-  const [pin, setPin] = useState(['', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
+  // Shown by the shared PinKeypad (shakes + clears the dots) when a send is
+  // rejected, so the user can immediately re-enter a PIN.
+  const [pinError, setPinError] = useState<string | null>(null)
   const [isSuccess, setIsSuccess] = useState(false)
   const [windowSize, setWindowSize] = useState({ width: 1200, height: 800 })
   const queryClient = useQueryClient()
@@ -69,6 +72,19 @@ export default function SendPage() {
       setWindowSize({ width: window.innerWidth, height: window.innerHeight })
     }
   }, [])
+
+  // Lock page scroll while the secure PIN overlay is up (same as bills): the
+  // overlay is `fixed inset-0 h-[100dvh]`, and locking the body scroll is
+  // belt-and-braces so the page can't slide underneath on small screens. We
+  // only toggle `overflow`, not `position`, to keep the scroll position.
+  useEffect(() => {
+    if (step !== 4) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [step])
 
   const { data: balanceData, isLoading: balanceLoading } = useQuery({
     queryKey: ['sendBalance'],
@@ -160,32 +176,12 @@ export default function SendPage() {
     setStep(3)
   }
 
-  // 4-digit PIN flow only — the backend enforces exactly 4 digits. `emptyIndex`
-  // reaching slot 3 means all four are filled, so fire the send exactly once.
-  const handlePinInput = (num: string) => {
-    if (isLoading) return
-    const emptyIndex = pin.findIndex(p => p === '')
-    if (emptyIndex === -1) return
-    const newPin = [...pin]
-    newPin[emptyIndex] = num
-    setPin(newPin)
-    if (emptyIndex === 3) {
-      executeSend(newPin.join(''))
-    }
-  }
-
-  const handlePinDelete = () => {
-    if (isLoading) return
-    const lastFilledIndex = pin.map(p => p !== '').lastIndexOf(true)
-    if (lastFilledIndex !== -1) {
-      const newPin = [...pin]
-      newPin[lastFilledIndex] = ''
-      setPin(newPin)
-    }
-  }
+  // 4-digit PIN entry lives in the shared <PinKeypad> (step 4); it manages its
+  // own digits and calls `executeSend` once all four are entered.
 
   const executeSend = async (finalPin?: string, passkeyToken?: string) => {
     setIsLoading(true)
+    setPinError(null)
     try {
       await walletAPI.send({
         address: formData.address!,
@@ -201,11 +197,26 @@ export default function SendPage() {
     } catch (error: any) {
       const message = error.response?.data?.message || 'Transaction failed'
       toast.error(message)
-      // Reset to a fresh 4-digit PIN and stay on the same step.
-      setPin(['', '', '', ''])
+      // Stay on (or drop to) the PIN keypad with the dots cleared so the user
+      // can retry with a PIN or the biometric fallback.
+      setPinError(message)
+      setStep(4)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Biometric-first approval (same pattern as bills): Face ID / fingerprint is
+  // triggered from the "Confirm Transfer" button — a user gesture, which
+  // browsers require for navigator.credentials.get(). No enrolled credential,
+  // cancel, or failure falls back to the PIN keypad (step 4).
+  const { approve: approveWithBiometric, biometricBusy } = useBiometricApproval(
+    (passkeyToken) => void executeSend(undefined, passkeyToken),
+    () => setStep(4),
+  )
+
+  const handleConfirmSend = () => {
+    void approveWithBiometric()
   }
 
   return (
@@ -485,29 +496,45 @@ export default function SendPage() {
             </div>
 
             <button
-              onClick={() => setStep(4)}
-              className="w-full py-4 rounded-2xl font-bold text-black shadow-lg transition-transform active:scale-[0.98] hover:scale-[1.02]"
+              onClick={handleConfirmSend}
+              disabled={biometricBusy}
+              className="w-full py-4 rounded-2xl font-bold text-black shadow-lg transition-transform active:scale-[0.98] hover:scale-[1.02] disabled:opacity-60"
               style={{ background: colors.gradientBg }}
             >
-              Confirm & Enter PIN
+              {biometricBusy ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Authenticating…
+                </span>
+              ) : (
+                'Confirm Transfer'
+              )}
             </button>
+            {!biometricBusy && (
+              <p className="text-center text-[#64748B] text-[11px] flex items-center justify-center gap-1.5">
+                <span className="text-base leading-none">👆</span> Verify with Face ID / fingerprint, or use your PIN if you prefer.
+              </p>
+            )}
           </motion.div>
         )}
 
-        {/* Step 4: PIN Security */}
+        {/* Step 4: PIN Security (fixed overlay — never scrolls; only shown when
+            biometrics are unavailable, cancelled, or fail) */}
         {step === 4 && (
-          <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full py-2 flex justify-center">
-            <PinKeypad
-              title="Security Verification"
-              subtitle={`Authorize sending ${formatTransferAmount(Number(formData.amount || 0))}${sendMode === 'CRYPTO' && cctpFee > 0 ? ` + ${cctpFee.toFixed(2)} USDC network fee` : ''} (${formatTransferAmount(Number(formData.amount || 0) + (sendMode === 'CRYPTO' ? cctpFee : 0))} total)`}
-              onComplete={(p) => executeSend(p)}
-              disabled={isLoading}
-              accentHex={colors.primary}
-              accentRgb={isGold ? '212, 160, 23' : '181, 226, 61'}
-              onCancel={() => setStep(3)}
-              extra={<BiometricApproveButton onApproved={(token) => executeSend(undefined, token)} disabled={isLoading} />}
-            />
-          </motion.div>
+          <div className="fixed inset-x-0 top-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm px-5 h-[100dvh]">
+            <div className="w-full max-w-sm mx-auto rounded-3xl border border-white/10 bg-[#0C0E13]/95 p-5 sm:p-6 shadow-2xl text-center overflow-hidden">
+              <PinKeypad
+                title="Security Verification"
+                subtitle={`Authorize sending ${formatTransferAmount(Number(formData.amount || 0))}${sendMode === 'CRYPTO' && cctpFee > 0 ? ` + ${cctpFee.toFixed(2)} USDC network fee` : ''} (${formatTransferAmount(Number(formData.amount || 0) + (sendMode === 'CRYPTO' ? cctpFee : 0))} total)`}
+                onComplete={(p) => executeSend(p)}
+                disabled={isLoading}
+                error={pinError}
+                accentHex={colors.primary}
+                accentRgb={isGold ? '212, 160, 23' : '181, 226, 61'}
+                onCancel={() => { setPinError(null); setStep(3) }}
+                extra={<BiometricApproveButton onApproved={(token) => executeSend(undefined, token)} disabled={isLoading} />}
+              />
+            </div>
+          </div>
         )}
 
         {/* Step 5: Success Screen */}

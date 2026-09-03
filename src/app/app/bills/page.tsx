@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { billsAPI, walletAPI, passkeyAPI } from '@/lib/api'
+import { billsAPI, walletAPI } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
-import { startAuthentication } from '@simplewebauthn/browser'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
+import { useBiometricApproval } from '@/hooks/useBiometricApproval'
 import {
   Smartphone, Wifi, Zap, Tv, ChevronRight, ChevronDown, ArrowLeft,
   Search, CheckCircle, AlertCircle, Loader2, Trophy,
@@ -223,8 +223,6 @@ export default function BillsPage() {
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [errorMessage, setErrorMessage] = useState<string>('')
-  // True while the WebAuthn biometric prompt (Face ID / fingerprint) is open.
-  const [biometricBusy, setBiometricBusy] = useState(false)
 
   // Load recent numbers on mount
   useEffect(() => {
@@ -452,30 +450,11 @@ export default function BillsPage() {
   // prompt fails, we fall back to the 4-digit PIN. This must be called from a
   // user-gesture handler (the "Continue" button) because browsers only allow
   // navigator.credentials.get() inside a transient activation.
-  const approveWithBiometric = async () => {
-    setBiometricBusy(true)
-    try {
-      // Skip straight to PIN if the account has no registered credential, so we
-      // never flash an unusable OS prompt.
-      const devices = await passkeyAPI.listDevices().catch(() => [] as any[])
-      if (!Array.isArray(devices) || devices.length === 0) {
-        setStep('pin')
-        return
-      }
-      const options = await passkeyAPI.approveBegin()
-      const response = await startAuthentication({ optionsJSON: options })
-      const { passkeyToken } = await passkeyAPI.approveComplete(response)
-      setBiometricBusy(false)
-      await executePurchase(undefined, passkeyToken)
-      return
-    } catch {
-      // Cancelled, no credential available, or WebAuthn not supported — fall
-      // back to the PIN keypad.
-    } finally {
-      setBiometricBusy(false)
-    }
-    setStep('pin')
-  }
+  // (Shared hook — the same logic is used by Send and Convert.)
+  const { approve: approveWithBiometric, biometricBusy } = useBiometricApproval(
+    (passkeyToken) => void executePurchase(undefined, passkeyToken),
+    () => setStep('pin'),
+  )
 
   const handleConfirmPayment = () => {
     if (realNgn < effectiveNgn) {

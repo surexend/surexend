@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -11,7 +11,7 @@ import { Eye, EyeOff, Mail, Lock, KeyRound, Fingerprint } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authAPI, passkeyAPI } from '@/lib/api'
 import { useTheme } from '@/context/ThemeContext'
-import { startAuthentication } from '@simplewebauthn/browser'
+import { startAuthentication, browserSupportsWebAuthnAutofill } from '@simplewebauthn/browser'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -136,6 +136,54 @@ function LoginForm() {
   }
 
   const [biometricLoading, setBiometricLoading] = useState(false)
+  // Set when this component instance is done (signed in / unmounted) so an
+  // in-flight conditional-mediation attempt can be ignored.
+  const autofillCancelledRef = useRef(false)
+  const routerRef = useRef(router)
+  routerRef.current = router
+
+  // ── Biometric-first sign-in ──────────────────────────────────────────────
+  // Policy (deliberate — see handover §5): browsers block navigator.credentials.get()
+  // outside a user gesture, and auto-popping the OS sheet on page load is jarring.
+  // Instead the login page AUTO-ACTIVATES the biometric service via WebAuthn
+  // conditional mediation: on mount we fetch a login challenge and start a
+  // conditional (autofill) ceremony bound to the email field
+  // (`autoComplete="email webauthn"`). The OS then shows a "use your saved
+  // passkey" suggestion whenever the user focuses the email field — this is the
+  // device-has-credential gate, because the suggestion only ever appears for
+  // users who actually have a passkey saved. Users without one see the normal
+  // email/password/OTP form, and the manual "Sign in with Face ID or
+  // fingerprint" button always remains as the explicit gesture-driven path.
+  const armAutofillSignin = async () => {
+    if (autofillCancelledRef.current) return
+    try {
+      const supported = await browserSupportsWebAuthnAutofill().catch(() => false)
+      if (!supported || autofillCancelledRef.current) return
+      const { options, challengeId } = await passkeyAPI.loginBegin()
+      if (autofillCancelledRef.current) return
+      // Stays pending until the user picks a passkey suggestion from the
+      // email field's autofill UI — no prompt is shown on load.
+      const response = await startAuthentication({ optionsJSON: options, useBrowserAutofill: true })
+      if (autofillCancelledRef.current) return
+      await passkeyAPI.loginComplete(challengeId, response)
+      // Signed in — we're leaving the page; skip any further ceremonies.
+      autofillCancelledRef.current = true
+      toast.success('Login successful!')
+      routerRef.current.replace(safeNextPath)
+    } catch {
+      // Autofill sign-in not offered / not used — email, password, OTP and the
+      // manual biometric button remain the fallbacks. Silent by design.
+    }
+  }
+
+  useEffect(() => {
+    autofillCancelledRef.current = false
+    void armAutofillSignin()
+    return () => {
+      autofillCancelledRef.current = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const biometricLogin = async () => {
     setBiometricLoading(true)
@@ -143,6 +191,8 @@ function LoginForm() {
       const { options, challengeId } = await passkeyAPI.loginBegin()
       const response = await startAuthentication({ optionsJSON: options })
       await passkeyAPI.loginComplete(challengeId, response)
+      // Signed in — we're leaving the page; skip any further ceremonies.
+      autofillCancelledRef.current = true
       toast.success('Login successful!')
       router.replace(safeNextPath)
     } catch (error: any) {
@@ -154,6 +204,9 @@ function LoginForm() {
       )
     } finally {
       setBiometricLoading(false)
+      // A modal prompt aborts any pending conditional (autofill) ceremony —
+      // re-arm it so the email-field passkey suggestion stays available.
+      void armAutofillSignin()
     }
   }
 
@@ -270,6 +323,7 @@ function LoginForm() {
                 <input
                   {...register('email')}
                   type="email"
+                  autoComplete="email webauthn"
                   placeholder="Email address"
                   className={`input-field input-field-${variant} input-has-icon-left`}
                 />
@@ -334,6 +388,7 @@ function LoginForm() {
                       value={codeEmail}
                       onChange={e => setCodeEmail(e.target.value)}
                       type="email"
+                      autoComplete="email webauthn"
                       placeholder="Email address"
                       className={`input-field input-field-${variant} input-has-icon-left`}
                     />
