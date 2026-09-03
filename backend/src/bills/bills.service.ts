@@ -621,7 +621,9 @@ export class BillsService {
       });
 
       try {
-        const payload: Record<string, unknown> = { Ported_number: !!portedNumber };
+        // Big apps (OPay, PalmPay) handle ported numbers seamlessly behind the scenes by
+        // instructing the VTU gateway to route to the selected operator.
+        const payload: Record<string, unknown> = { Ported_number: true };
         let endpoint: string;
         if (category === 'airtime') {
           endpoint = '/topup/';

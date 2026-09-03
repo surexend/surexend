@@ -159,19 +159,6 @@ export function validateNigerianPhone(
 
   const detected = detectNetworkFromPhone(normalized)
 
-  if (selectedNetwork && detected) {
-    const cleanSelected = selectedNetwork.toUpperCase().replace('-DATA', '').trim()
-    if (cleanSelected !== detected && !isPorted) {
-      return {
-        isValid: true,
-        normalized,
-        detectedNetwork: detected,
-        isMismatch: true,
-        warning: `This number belongs to ${detected}, but ${cleanSelected} is selected. Enable "Ported Number" if you switched networks.`,
-      }
-    }
-  }
-
   return {
     isValid: true,
     normalized,

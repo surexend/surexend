@@ -208,7 +208,6 @@ export default function BillsPage() {
   // Views: 'categories' | 'airtime' | 'data' | 'wallet' | 'pin' | 'success' | 'failed'
   const [step, setStep] = useState<'categories' | 'airtime' | 'data' | 'wallet' | 'pin' | 'success' | 'failed'>('categories')
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkCode>('MTN')
-  const [isPorted, setIsPorted] = useState(false)
   const [phoneNumber, setPhoneNumber] = useState('')
   const [amount, setAmount] = useState('')
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
@@ -326,8 +325,8 @@ export default function BillsPage() {
 
   // Phone validation status
   const phoneValidation = useMemo(() => {
-    return validateNigerianPhone(phoneNumber, selectedNetwork, isPorted)
-  }, [phoneNumber, selectedNetwork, isPorted])
+    return validateNigerianPhone(phoneNumber, selectedNetwork)
+  }, [phoneNumber, selectedNetwork])
 
   // Auto-detect network when typing phone number
   // Switching networks invalidates any previously selected data plan and its
@@ -345,7 +344,7 @@ export default function BillsPage() {
   const handlePhoneChange = (val: string) => {
     setPhoneNumber(val)
     const detected = detectNetworkFromPhone(val)
-    if (detected && detected !== selectedNetwork && !isPorted) {
+    if (detected && detected !== selectedNetwork) {
       changeNetwork(detected)
     }
   }
@@ -422,7 +421,6 @@ export default function BillsPage() {
         recipient: phoneValidation.normalized || phoneNumber,
         pin,
         passkeyToken,
-        portedNumber: isPorted,
       }
 
       if (selectedPlan) {
@@ -663,25 +661,10 @@ export default function BillsPage() {
                       <AlertTriangle size={13} className="flex-shrink-0" />
                       <span>{phoneValidation.error}</span>
                     </p>
-                  ) : phoneValidation.isMismatch ? (
-                    <div className="flex items-center justify-between text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
-                      <span className="text-[11px] leading-tight">{phoneValidation.warning}</span>
-                      <button
-                        onClick={() => {
-                          if (phoneValidation.detectedNetwork) {
-                            changeNetwork(phoneValidation.detectedNetwork)
-                          }
-                        }}
-                        className="ml-2 text-[10px] font-bold text-amber-400 underline flex-shrink-0"
-                      >
-                        Switch
-                      </button>
-                    </div>
                   ) : (
                     <p className="flex items-center gap-1.5" style={{ color: accentHex }}>
                       <CheckCircle size={13} className="flex-shrink-0" />
-                      <span>Valid {selectedNetwork} number</span>
-                      {isPorted && <span className="text-[#94A3B8] text-[10px]">(Ported)</span>}
+                      <span>Valid Nigerian number ({selectedNetwork})</span>
                     </p>
                   )}
                 </div>
@@ -798,25 +781,10 @@ export default function BillsPage() {
                       <AlertTriangle size={13} className="flex-shrink-0" />
                       <span>{phoneValidation.error}</span>
                     </p>
-                  ) : phoneValidation.isMismatch ? (
-                    <div className="flex items-center justify-between text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
-                      <span className="text-[11px] leading-tight">{phoneValidation.warning}</span>
-                      <button
-                        onClick={() => {
-                          if (phoneValidation.detectedNetwork) {
-                            changeNetwork(phoneValidation.detectedNetwork)
-                          }
-                        }}
-                        className="ml-2 text-[10px] font-bold text-amber-400 underline flex-shrink-0"
-                      >
-                        Switch
-                      </button>
-                    </div>
                   ) : (
-                    <p className="flex items-center gap-1.5" style={{ color: accentHex }}>
+                    <p className="flex items-center gap-1.5 text-xs" style={{ color: accentHex }}>
                       <CheckCircle size={13} className="flex-shrink-0" />
-                      <span>Valid {selectedNetwork} number</span>
-                      {isPorted && <span className="text-[#94A3B8] text-[10px]">(Ported)</span>}
+                      <span>Valid Nigerian number ({selectedNetwork})</span>
                     </p>
                   )}
                 </div>
@@ -1176,13 +1144,23 @@ export default function BillsPage() {
 
       {/* ── NETWORK SELECTOR MODAL / SHEET ── */}
       {networkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4">
-          <div className="liquid-glass-strong w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 space-y-4">
+        <div
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4"
+          onClick={() => setNetworkModalOpen(false)}
+        >
+          <div
+            className="liquid-glass-strong w-full max-w-sm rounded-t-[28px] sm:rounded-3xl p-5 pb-10 sm:pb-5 space-y-4 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Mobile Sheet Drag Handle */}
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto sm:hidden -mt-1 mb-1" />
+
             <div className="flex items-center justify-between pb-2 border-b border-white/8">
               <h3 className="text-white font-bold text-base">Select Network</h3>
               <button
+                type="button"
                 onClick={() => setNetworkModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[#94A3B8]"
+                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[#94A3B8] hover:text-white"
               >
                 <X size={16} />
               </button>
@@ -1194,13 +1172,14 @@ export default function BillsPage() {
                 return (
                   <button
                     key={net.code}
+                    type="button"
                     onClick={() => {
                       changeNetwork(net.code)
                       setNetworkModalOpen(false)
                     }}
                     className="w-full p-3.5 rounded-2xl border flex items-center gap-3.5 text-left transition-all active:scale-98"
                     style={{
-                      background: isSelected ? `rgba(${accentRgb}, 0.08)` : 'rgba(255,255,255,0.03)',
+                      background: isSelected ? `rgba(${accentRgb}, 0.12)` : 'rgba(255,255,255,0.03)',
                       borderColor: isSelected ? accentHex : 'rgba(255,255,255,0.06)',
                     }}
                   >
@@ -1216,41 +1195,36 @@ export default function BillsPage() {
                 )
               })}
             </div>
-
-            {/* Ported Number Toggle */}
-            <div className="pt-2 border-t border-white/8">
-              <label className="flex items-center justify-between cursor-pointer p-1">
-                <div>
-                  <p className="text-white text-xs font-semibold">Ported Number</p>
-                  <p className="text-[#64748B] text-[11px]">Number was moved to another network</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={isPorted}
-                  onChange={(e) => setIsPorted(e.target.checked)}
-                  className="w-4 h-4 rounded focus:ring-0 focus:ring-offset-0 bg-white/10 border-white/20"
-                />
-              </label>
-            </div>
           </div>
         </div>
       )}
 
       {/* ── CONTACT / RECENT NUMBERS MODAL ── */}
       {contactModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4">
-          <div className="liquid-glass-strong w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 space-y-4">
+        <div
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4"
+          onClick={() => setContactModalOpen(false)}
+        >
+          <div
+            className="liquid-glass-strong w-full max-w-sm rounded-t-[28px] sm:rounded-3xl p-5 pb-10 sm:pb-5 space-y-4 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Mobile Sheet Drag Handle */}
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto sm:hidden -mt-1 mb-1" />
+
             <div className="flex items-center justify-between pb-2 border-b border-white/8">
               <h3 className="text-white font-bold text-base">Select Recipient</h3>
               <button
+                type="button"
                 onClick={() => setContactModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[#94A3B8]"
+                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[#94A3B8] hover:text-white"
               >
                 <X size={16} />
               </button>
             </div>
 
             <button
+              type="button"
               onClick={async () => {
                 try {
                   const text = await navigator.clipboard.readText()
@@ -1280,6 +1254,7 @@ export default function BillsPage() {
                 recentNumbers.map((num) => (
                   <button
                     key={num}
+                    type="button"
                     onClick={() => {
                       handlePhoneChange(num)
                       setContactModalOpen(false)
