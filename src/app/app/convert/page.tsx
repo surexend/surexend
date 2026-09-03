@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowUpDown, CheckCircle2, ChevronDown, Check, X, Globe, ArrowDown, Wallet } from 'lucide-react'
+import { ArrowUpDown, CheckCircle2, ChevronDown, Check, X, Globe, ArrowDown, Wallet, Loader2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { conversionAPI, walletAPI, AFRICAN_CURRENCIES } from '@/lib/api'
@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation'
 import CurrencyFlag from '@/components/CurrencyFlag'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
 import PinKeypad from '@/components/PinKeypad'
+import { useBiometricApproval } from '@/hooks/useBiometricApproval'
 import { useBackLayer } from '@/context/BackNavigationContext'
 
 const USD_ASSET = { code: 'USD', name: 'US Dollar', symbol: '$', flag: '💵', countryCode: 'US' }
@@ -28,9 +29,11 @@ export default function ConvertPage() {
   const [pickerTarget, setPickerTarget] = useState<'from' | 'to' | null>(null)
   const [currencySearch, setCurrencySearch] = useState('')
   const [step, setStep] = useState(1)
-  const [pin, setPin] = useState(['', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
+  // Shown by the shared PinKeypad (shakes + clears the dots) when a conversion
+  // is rejected, so the user can immediately re-enter a PIN.
+  const [pinError, setPinError] = useState<string | null>(null)
 
   useBackLayer(pickerTarget !== null, () => {
     setPickerTarget(null)
@@ -43,8 +46,20 @@ export default function ConvertPage() {
       return
     }
     setStep(1)
-    setPin(['', '', '', ''])
   }, [step, router]), 30)
+
+  // Lock page scroll while the secure PIN overlay is up (same as bills): the
+  // overlay is `fixed inset-0 h-[100dvh]`, and locking the body scroll is
+  // belt-and-braces so the page can't slide underneath on small screens. We
+  // only toggle `overflow`, not `position`, to keep the scroll position.
+  useEffect(() => {
+    if (step !== 2) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [step])
 
   // ── Real balances ────────────────────────────────────────────────────────
   const { data: balanceData, refetch: refetchBalance } = useQuery({
@@ -126,7 +141,7 @@ export default function ConvertPage() {
     setAmount((fromBalance * pct / 100).toFixed(2))
   }
 
-  const handleNext = () => {
+  const handleConfirmConversion = () => {
     if (fromCode === toCode) { toast.error('Select different currencies to convert'); return }
     if (fromCode === 'NGN' && numAmount > testnetNgn) {
       toast.error('Real naira is reserved for bills. Only testnet naira can be swapped to crypto.')
@@ -134,29 +149,15 @@ export default function ConvertPage() {
     }
     if (!numAmount || numAmount <= 0) { toast.error('Enter an amount'); return }
     if (numAmount > fromBalance) { toast.error(`Insufficient swappable balance in ${fromCode}`); return }
-    setStep(2)
+    void approveWithBiometric()
   }
 
-  const handlePinInput = (digit: string) => {
-    const emptyIndex = pin.findIndex(p => p === '')
-    if (emptyIndex === -1) return
-    const newPin = [...pin]
-    newPin[emptyIndex] = digit
-    setPin(newPin)
-    if (emptyIndex === 3) executeConversion(newPin.join(''))
-  }
-
-  const handlePinDelete = () => {
-    const lastFilled = pin.map(p => p !== '').lastIndexOf(true)
-    if (lastFilled !== -1) {
-      const newPin = [...pin]
-      newPin[lastFilled] = ''
-      setPin(newPin)
-    }
-  }
+  // 4-digit PIN entry lives in the shared <PinKeypad> (step 2); it manages its
+  // own digits and calls `executeConversion` once all four are entered.
 
   const executeConversion = async (finalPin?: string, passkeyToken?: string) => {
     setIsLoading(true)
+    setPinError(null)
     try {
       const res = await conversionAPI.execute({ from: fromCode, to: toCode, amount: numAmount, pin: finalPin, passkeyToken })
       setResult(res)
@@ -168,17 +169,30 @@ export default function ConvertPage() {
       if (msg && msg.toLowerCase().includes('pin not set up')) {
         setStep(1)
         router.push('/app/settings/change-pin')
+        return
       }
-      setPin(['', '', '', ''])
+      // Stay on (or drop to) the PIN keypad with the dots cleared so the user
+      // can retry with a PIN or the biometric fallback.
+      setPinError(msg)
+      setStep(2)
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Biometric-first approval (same pattern as bills): Face ID / fingerprint is
+  // triggered from the "Continue" button — a user gesture, which browsers
+  // require for navigator.credentials.get(). No enrolled credential, cancel, or
+  // failure falls back to the PIN keypad (step 2).
+  const { approve: approveWithBiometric, biometricBusy } = useBiometricApproval(
+    (passkeyToken) => void executeConversion(undefined, passkeyToken),
+    () => setStep(2),
+  )
+
   const resetAll = () => {
     setStep(1)
     setAmount('')
-    setPin(['', '', '', ''])
+    setPinError(null)
     setResult(null)
   }
 
@@ -335,32 +349,47 @@ export default function ConvertPage() {
               )}
             </div>
 
-            {/* CTA */}
+            {/* CTA — biometric-first: Face ID / fingerprint before the PIN keypad */}
             <button
-              onClick={handleNext}
-              disabled={!numAmount || fromCode === toCode}
-              className="w-full py-4 rounded-2xl font-extrabold text-black shadow-xl transition-transform active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+              onClick={handleConfirmConversion}
+              disabled={!numAmount || fromCode === toCode || biometricBusy}
+              className="w-full py-4 rounded-2xl font-extrabold text-black shadow-xl transition-transform active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed mt-2 disabled:active:scale-100"
               style={{ background: colors.gradientBg }}
             >
-              Continue
+              {biometricBusy ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Authenticating…
+                </span>
+              ) : (
+                'Continue'
+              )}
             </button>
+            {!biometricBusy && (
+              <p className="text-center text-[#64748B] text-[11px] flex items-center justify-center gap-1.5">
+                <span className="text-base leading-none">👆</span> Verify with Face ID / fingerprint, or use your PIN if you prefer.
+              </p>
+            )}
           </motion.div>
         )}
 
-        {/* ─── STEP 2: PIN ─── */}
+        {/* ─── STEP 2: PIN (fixed overlay — never scrolls; only shown when
+             biometrics are unavailable, cancelled, or fail) ─── */}
         {step === 2 && (
-          <motion.div key="step2" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="w-full py-2 flex justify-center">
-            <PinKeypad
-              title="Enter 4-Digit PIN"
-              subtitle={`Convert ${fromSymbol}${numAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${fromCode} → ${toSymbol}${(preview?.receiveAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${toCode}`}
-              onComplete={(p) => executeConversion(p)}
-              disabled={isLoading}
-              accentHex={accentHex}
-              accentRgb={accentRgb}
-              onCancel={() => setStep(1)}
-              extra={<BiometricApproveButton onApproved={(token) => executeConversion(undefined, token)} disabled={isLoading} />}
-            />
-          </motion.div>
+          <div className="fixed inset-x-0 top-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm px-5 h-[100dvh]">
+            <div className="w-full max-w-sm mx-auto rounded-3xl border border-white/10 bg-[#0C0E13]/95 p-5 sm:p-6 shadow-2xl text-center overflow-hidden">
+              <PinKeypad
+                title="Enter 4-Digit PIN"
+                subtitle={`Convert ${fromSymbol}${numAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${fromCode} → ${toSymbol}${(preview?.receiveAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${toCode}`}
+                onComplete={(p) => executeConversion(p)}
+                disabled={isLoading}
+                error={pinError}
+                accentHex={accentHex}
+                accentRgb={accentRgb}
+                onCancel={() => { setPinError(null); setStep(1) }}
+                extra={<BiometricApproveButton onApproved={(token) => executeConversion(undefined, token)} disabled={isLoading} />}
+              />
+            </div>
+          </div>
         )}
 
         {/* ─── STEP 3: Success ─── */}
