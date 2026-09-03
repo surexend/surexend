@@ -38,10 +38,11 @@ export class BillsController {
     @Body('pin') pin?: string,
     @Body('planCode') planCode?: string,
     @Body('passkeyToken') passkeyToken?: string,
+    @Body('portedNumber') portedNumber?: boolean,
   ) {
     const { result } = await this.idempotency.run(
       { userId: user.id, scope: 'bills.purchase', key: idempotencyKey },
-      () => this.billsService.purchaseBill(user.id, type, provider, recipient, amount, pin, planCode, passkeyToken),
+      () => this.billsService.purchaseBill(user.id, type, provider, recipient, amount, pin, planCode, passkeyToken, portedNumber),
     );
     return result;
   }

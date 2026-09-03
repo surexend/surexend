@@ -150,8 +150,37 @@ export class BillsService {
     if (body == null) return 'Unknown provider error';
     if (typeof body === 'string') return body.slice(0, 300);
     if (body.detail) return typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
-    if (body.error) return typeof body.error === 'string' ? body.error : JSON.stringify(body.error);
+    if (body.error) {
+      if (typeof body.error === 'string') return body.error;
+      if (Array.isArray(body.error)) return body.error.join(', ');
+      return JSON.stringify(body.error);
+    }
     if (body.message) return String(body.message);
+    if (body.msg) return String(body.msg);
+    if (body.mobile_number) {
+      const mn = Array.isArray(body.mobile_number) ? body.mobile_number.join(', ') : body.mobile_number;
+      return `Phone number error: ${mn}`;
+    }
+    if (body.network) {
+      const net = Array.isArray(body.network) ? body.network.join(', ') : body.network;
+      return `Network error: ${net}`;
+    }
+    if (body.plan) {
+      const pl = Array.isArray(body.plan) ? body.plan.join(', ') : body.plan;
+      return `Plan error: ${pl}`;
+    }
+    if (body.non_field_errors) {
+      const nfe = Array.isArray(body.non_field_errors) ? body.non_field_errors.join(', ') : body.non_field_errors;
+      return String(nfe);
+    }
+    if (typeof body === 'object') {
+      const keys = Object.keys(body);
+      if (keys.length > 0) {
+        const val = body[keys[0]];
+        const str = Array.isArray(val) ? val.join(', ') : typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `${keys[0]}: ${str}`;
+      }
+    }
     if (body.Status || body.status) return `Provider returned status: ${body.Status || body.status}`;
     return 'Unknown provider error';
   }
@@ -386,7 +415,7 @@ export class BillsService {
 
   // ── Purchase ────────────────────────────────────────────────────────────
 
-  async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin?: string, planCode?: string, passkeyToken?: string) {
+  async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin?: string, planCode?: string, passkeyToken?: string, portedNumber?: boolean) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     // Safety guard: bills spend REAL naira at Smartspeed, so only allow
@@ -408,6 +437,24 @@ export class BillsService {
     if (!['airtime', 'data'].includes(category)) {
       throw new BadRequestException(`${category} is not available yet. Airtime and Data are live.`);
     }
+
+    // Validate and sanitize phone number for Airtime and Data
+    let normalizedRecipient = (recipient || '').replace(/[^\d+]/g, '');
+    if (normalizedRecipient.startsWith('+234')) {
+      normalizedRecipient = '0' + normalizedRecipient.slice(4);
+    } else if (normalizedRecipient.startsWith('234') && normalizedRecipient.length >= 13) {
+      normalizedRecipient = '0' + normalizedRecipient.slice(3);
+    } else if (normalizedRecipient.length === 10 && !normalizedRecipient.startsWith('0')) {
+      normalizedRecipient = '0' + normalizedRecipient;
+    }
+
+    if (!/^0[789][01]\d{8}$/.test(normalizedRecipient)) {
+      throw new BadRequestException(
+        `Invalid Nigerian phone number (${recipient}). It must be an 11-digit mobile number starting with 070, 080, 081, 090, or 091.`
+      );
+    }
+    recipient = normalizedRecipient;
+
     if (category === 'data' && !planCode) {
       throw new BadRequestException('Please select a data plan');
     }
@@ -556,7 +603,7 @@ export class BillsService {
       });
 
       try {
-        const payload: Record<string, unknown> = { Ported_number: false };
+        const payload: Record<string, unknown> = { Ported_number: !!portedNumber };
         let endpoint: string;
         if (category === 'airtime') {
           endpoint = '/topup/';
@@ -591,8 +638,13 @@ export class BillsService {
         });
 
         return { ...billPayment, status: 'COMPLETED' };
-      } catch (error) {
-        const message = (error as Error).message;
+      } catch (error: any) {
+        let message = error?.message || 'Transaction failed';
+        if (axios.isAxiosError(error) && error.response?.data) {
+          message = this.errorMessage(error.response.data);
+        } else if (error?.response?.data) {
+          message = this.errorMessage(error.response.data);
+        }
         this.logger.error(`Smartspeed purchase failed (${reference}): ${message}`);
 
         // Refund the real naira and mark both records FAILED — never keep funds

@@ -596,7 +596,8 @@ export const billsAPI = {
 
   purchase: (payload: {
     type: string; provider: string; recipient: string;
-    amount?: number; planCode?: string; pin?: string; passkeyToken?: string
+    amount?: number; planCode?: string; pin?: string; passkeyToken?: string;
+    portedNumber?: boolean
   }, headers?: Record<string, string>) =>
     tryWithMock(
       () => apiClient.post('/bills/purchase', payload, { headers: idempotencyHeaders(headers) }).then(r => r.data),

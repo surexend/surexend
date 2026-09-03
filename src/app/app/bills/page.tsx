@@ -1,27 +1,36 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { billsAPI, walletAPI } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
 import {
-  Smartphone, Wifi, Zap, Tv, ChevronRight, ArrowLeft,
+  Smartphone, Wifi, Zap, Tv, ChevronRight, ChevronDown, ArrowLeft,
   Search, CheckCircle, AlertCircle, Loader2, Trophy,
   Lock, Coins, Gamepad2, Sun, GraduationCap, Globe,
   CreditCard, FileText, Heart, Landmark, ShoppingBag,
-  ShoppingCart, Store, Fuel, Plane, Grid, MoreHorizontal, Wallet
+  ShoppingCart, Store, Fuel, Plane, Grid, MoreHorizontal, Wallet,
+  User, Check, AlertTriangle, RefreshCw, X, Sparkles, Clock
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useBackLayer } from '@/context/BackNavigationContext'
 import ComingSoon from '@/components/ui/ComingSoon'
+import {
+  NIGERIAN_NETWORKS,
+  NetworkCode,
+  normalizeNigerianPhone,
+  formatPhoneDisplay,
+  detectNetworkFromPhone,
+  validateNigerianPhone,
+} from '@/lib/nigerian-phones'
 
-// ── Essential Crypto Fintech Bill Categories ────────────────────────────────
+// ── Service Categories ──────────────────────────────────────────────────────
 const CATEGORIES = [
-  { type: 'airtime', label: 'Airtime', icon: Smartphone, badge: 'Popular' },
-  { type: 'data', label: 'Data', icon: Wifi, badge: null },
+  { type: 'airtime', label: 'Airtime', icon: Smartphone, badge: 'Instant' },
+  { type: 'data', label: 'Data', icon: Wifi, badge: 'Popular' },
   { type: 'electricity', label: 'Electricity', icon: Zap, badge: null },
   { type: 'tv', label: 'Cable TV', icon: Tv, badge: null },
   { type: 'internet', label: 'Internet Services', icon: Globe, badge: null },
@@ -30,12 +39,6 @@ const CATEGORIES = [
   { type: 'giftcards', label: 'Gift Cards', icon: CreditCard, badge: 'New' },
 ]
 
-// ── What the backend can actually fulfil today ─────────────────────────────
-// Verified against backend/src/bills/bills.service.ts: `purchaseBill` rejects
-// every category except airtime and data ("… is not available yet. Airtime
-// and Data are live."). Electricity/TV/internet only have static provider
-// lists that are not wired to the Smartspeed fulfilment API, so they must not
-// pretend to be payable — they get an honest Coming Soon instead.
 const LIVE_CATEGORIES = new Set(['airtime', 'data'])
 
 const COMING_SOON_COPY: Record<string, { title: string; subtitle: string; features: string[]; eta?: string }> = {
@@ -81,7 +84,7 @@ const COMING_SOON_COPY: Record<string, { title: string; subtitle: string; featur
   },
   invoice: {
     title: 'Invoice payments',
-    subtitle: "Pay business invoices straight from your wallet. We're completing the banking partnership that powers it, so nothing here is live yet.",
+    subtitle: "Pay business invoices straight from your wallet. We're completing the banking partnership that powers it.",
     features: [
       'Settle invoices in USDC or naira',
       'Automatic conversion at a transparent rate',
@@ -101,18 +104,35 @@ const COMING_SOON_COPY: Record<string, { title: string; subtitle: string; featur
   },
 }
 
-// ── Amount presets for airtime ─────────────────────────────────────────────
-const AIRTIME_AMOUNTS_NGN = [200, 500, 1000, 2000, 5000]
+// ── Airtime 6 Presets (Matching Image 1) ────────────────────────────────────
+const AIRTIME_PRESETS = [100, 200, 300, 500, 1000, 2000]
 
-// ── PIN pad ────────────────────────────────────────────────────────────────
-function PinPad({ onComplete, accentHex, accentRgb }: {
-  onComplete: (pin: string) => void; accentHex: string; accentRgb: string
+// ── Data Plan Categories (Matching Image 2) ────────────────────────────────
+const DATA_TABS = [
+  { id: 'HOT', label: 'HOT' },
+  { id: 'Daily', label: 'Daily' },
+  { id: 'Weekly', label: 'Weekly' },
+  { id: 'Monthly', label: 'Monthly' },
+  { id: 'Extra Night', label: 'Extra Night' },
+  { id: 'Broadband', label: 'Broadband' },
+  { id: 'ALL', label: 'All' },
+]
+
+// ── PIN Pad Component ──────────────────────────────────────────────────────
+function PinPad({
+  onComplete,
+  accentHex,
+  accentRgb,
+}: {
+  onComplete: (pin: string) => void
+  accentHex: string
+  accentRgb: string
 }) {
   const [pin, setPin] = useState('')
-  const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫']
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫']
 
   const tap = (k: string) => {
-    if (k === '⌫') setPin(p => p.slice(0, -1))
+    if (k === '⌫') setPin((p) => p.slice(0, -1))
     else if (pin.length < 4) {
       const next = pin + k
       setPin(next)
@@ -122,31 +142,34 @@ function PinPad({ onComplete, accentHex, accentRgb }: {
 
   return (
     <div>
-      <div className="flex justify-center gap-3 mb-8">
+      <div className="flex justify-center gap-3 mb-7">
         {Array.from({ length: 4 }, (_, i) => (
-          <motion.div key={i}
-            className="w-4 h-4 rounded-full border-2 transition-all"
-            style={i < pin.length
-              ? { background: accentHex, borderColor: accentHex }
-              : { borderColor: 'rgba(255,255,255,0.2)', background: 'transparent' }}
-            animate={i < pin.length ? { scale: [1, 1.3, 1] } : {}}
-            transition={{ duration: 0.15 }}
+          <div
+            key={i}
+            className="w-4 h-4 rounded-full border-2 transition-all duration-150"
+            style={
+              i < pin.length
+                ? { background: accentHex, borderColor: accentHex, transform: 'scale(1.15)' }
+                : { borderColor: 'rgba(255,255,255,0.2)', background: 'transparent' }
+            }
           />
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
         {keys.map((k, i) => (
-          <motion.button
-            key={i} disabled={!k}
-            className="h-16 rounded-2xl text-xl font-semibold disabled:opacity-0"
-            style={k && k !== '⌫'
-              ? { background: 'rgba(255,255,255,0.06)', color: '#fff' }
-              : { background: 'transparent', color: '#94A3B8' }}
-            whileTap={k ? { scale: 0.9, background: `rgba(${accentRgb}, 0.15)` } : {}}
+          <button
+            key={i}
+            disabled={!k}
+            className="h-14 rounded-2xl text-xl font-semibold disabled:opacity-0 active:scale-95 transition-transform"
+            style={
+              k && k !== '⌫'
+                ? { background: '#181B22', color: '#fff', border: '1px solid rgba(255,255,255,0.06)' }
+                : { background: 'transparent', color: '#94A3B8' }
+            }
             onClick={() => k && tap(k)}
           >
             {k}
-          </motion.button>
+          </button>
         ))}
       </div>
     </div>
@@ -154,47 +177,81 @@ function PinPad({ onComplete, accentHex, accentRgb }: {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// BILLS PAGE
+// MAIN BILLS PAGE COMPONENT
 // ══════════════════════════════════════════════════════════════════════════
 
 export default function BillsPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { variant, colors } = useTheme()
   const isGold = variant === 'gold'
   const accentRgb = isGold ? '212, 160, 23' : '181, 226, 61'
   const accentHex = isGold ? '#D4A017' : '#B5E23D'
 
-  const [step, setStep] = useState<'categories' | 'providers' | 'form' | 'wallet' | 'pin' | 'success' | 'failed'>('categories')
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-  const [selectedProvider, setSelectedProvider] = useState<any>(null)
-  const [selectedPlan, setSelectedPlan] = useState<any>(null)
-  const [selectedWallet, setSelectedWallet] = useState<'NGN' | 'USD' | null>(null)
-  const [recipient, setRecipient] = useState('')
+  // View state: 'categories' | 'airtime' | 'data' | 'wallet' | 'pin' | 'success' | 'failed'
+  const [view, setView] = useState<'categories' | 'airtime' | 'data' | 'wallet' | 'pin' | 'success' | 'failed'>('categories')
+  const [selectedNetwork, setSelectedNetwork] = useState<NetworkCode>('MTN')
+  const [isPorted, setIsPorted] = useState(false)
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [amount, setAmount] = useState('')
-  const [meterName, setMeterName] = useState('')
+  const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
+  const [selectedPlan, setSelectedPlan] = useState<any>(null)
+  const [activeDataTab, setActiveDataTab] = useState('HOT')
+  const [networkModalOpen, setNetworkModalOpen] = useState(false)
+  const [contactModalOpen, setContactModalOpen] = useState(false)
+  const [recentNumbers, setRecentNumbers] = useState<string[]>([])
   const [comingSoonCategory, setComingSoonCategory] = useState<string | null>(null)
-  const [validating, setValidating] = useState(false)
+
+  // Transaction execution states
+  const [selectedWallet, setSelectedWallet] = useState<'NGN' | 'USD' | null>('NGN')
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<any>(null)
+  const [errorMessage, setErrorMessage] = useState<string>('')
 
-  useBackLayer(step !== 'categories' || !!comingSoonCategory, useCallback(() => {
-    if (comingSoonCategory) {
-      setComingSoonCategory(null)
-    } else if (step === 'providers') {
-      setStep('categories')
-      setSelectedCategory(null)
-    } else if (step === 'form') {
-      setStep('providers')
-      setSelectedProvider(null)
-    } else if (step === 'wallet') {
-      setStep('form')
-    } else if (step === 'pin') {
-      setStep('wallet')
-    } else {
-      reset()
-    }
-  }, [step, comingSoonCategory]), 30)
+  // Load recent numbers from storage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('surexend_recent_phone_recipients')
+      if (saved) {
+        setRecentNumbers(JSON.parse(saved).slice(0, 5))
+      }
+    } catch { /* ignore */ }
+  }, [])
 
-  // Real wallet balances — shows what can actually pay bills.
+  // Auto-open specific category from query parameter if provided (e.g. /app/bills?type=airtime)
+  useEffect(() => {
+    const type = searchParams.get('type') || searchParams.get('tab')
+    if (type === 'airtime') setView('airtime')
+    else if (type === 'data') setView('data')
+  }, [searchParams])
+
+  // Save recipient to recent storage on success
+  const saveRecentNumber = (num: string) => {
+    try {
+      const norm = normalizeNigerianPhone(num)
+      if (!norm) return
+      const updated = [norm, ...recentNumbers.filter((n) => n !== norm)].slice(0, 5)
+      setRecentNumbers(updated)
+      localStorage.setItem('surexend_recent_phone_recipients', JSON.stringify(updated))
+    } catch { /* ignore */ }
+  }
+
+  // Back button handling
+  useBackLayer(
+    view !== 'categories' || !!comingSoonCategory || networkModalOpen || contactModalOpen,
+    useCallback(() => {
+      if (networkModalOpen) setNetworkModalOpen(false)
+      else if (contactModalOpen) setContactModalOpen(false)
+      else if (comingSoonCategory) setComingSoonCategory(null)
+      else if (view === 'pin') setView('wallet')
+      else if (view === 'wallet') setView(selectedPlan ? 'data' : 'airtime')
+      else if (view === 'airtime' || view === 'data') setView('categories')
+      else reset()
+    }, [view, comingSoonCategory, networkModalOpen, contactModalOpen, selectedPlan]),
+    30
+  )
+
+  // Real wallet balances
   const { data: walletBal } = useQuery({
     queryKey: ['bill-wallet-balance'],
     queryFn: () => walletAPI.getBalance(),
@@ -202,615 +259,879 @@ export default function BillsPage() {
   })
   const realNgn = walletBal?.realNgn ?? walletBal?.ngnBalance ?? 0
 
-  const { data: providers } = useQuery({
-    queryKey: ['bill-providers', selectedCategory],
-    queryFn: () => billsAPI.getProviders(selectedCategory as any, 'NG'),
-    enabled: !!selectedCategory && step === 'providers',
+  // Airtime providers query
+  const { data: airtimeProviders } = useQuery({
+    queryKey: ['bill-providers-airtime'],
+    queryFn: () => billsAPI.getProviders('airtime', 'NG'),
+    enabled: view === 'airtime',
   })
 
-  const { data: plans } = useQuery({
-    queryKey: ['data-plans', selectedProvider?.code],
-    queryFn: () => billsAPI.getDataPlans(selectedProvider?.code),
-    enabled: selectedCategory === 'data' && !!selectedProvider,
+  // Data plans query
+  const { data: rawPlans, isLoading: plansLoading } = useQuery({
+    queryKey: ['data-plans', selectedNetwork],
+    queryFn: () => billsAPI.getDataPlans(selectedNetwork),
+    enabled: view === 'data',
   })
 
-  // Total NGN the user will be charged (server recomputes this authoritatively).
-  const effectiveNgn = (() => {
-    if (!amount && !selectedPlan) return 0
-    if (selectedCategory === 'airtime' && (selectedProvider?.sellMarkup || 0) > 0) {
-      return (parseFloat(amount) || 0) * (1 + (selectedProvider.sellMarkup || 0) / 100)
+  // Format and group data plans
+  const parsedPlans = useMemo(() => {
+    if (!rawPlans || !Array.isArray(rawPlans)) return []
+
+    return rawPlans.map((plan: any) => {
+      const rawName = String(plan.name || '')
+      const validity = String(plan.validity || '30 Days')
+      const amount = Number(plan.amount || 0)
+
+      // Clean display volume (e.g., '1.0 GB' -> '1 GB', '500MB' -> '500 MB')
+      let volume = rawName
+      const match = rawName.match(/(\d+(?:\.\d+)?)\s*(GB|MB|TB)/i)
+      if (match) {
+        const num = parseFloat(match[1])
+        const unit = match[2].toUpperCase()
+        volume = `${num % 1 === 0 ? num : num.toFixed(1)} ${unit}`
+      }
+
+      // Assign category tags
+      const vLower = validity.toLowerCase()
+      const nLower = rawName.toLowerCase()
+
+      const isNight = nLower.includes('night') || nLower.includes('midnight') || vLower.includes('night')
+      const isBroadband = nLower.includes('broadband') || nLower.includes('router') || (match && match[2].toUpperCase() === 'GB' && parseFloat(match[1]) >= 25)
+      const isDaily = (vLower.includes('day') && !vLower.includes('7') && !vLower.includes('14') && !vLower.includes('30')) || vLower.includes('1 day') || vLower.includes('2 day') || vLower.includes('3 day')
+      const isWeekly = vLower.includes('week') || vLower.includes('7 day') || vLower.includes('14 day')
+      const isMonthly = vLower.includes('month') || vLower.includes('30 day') || vLower.includes('60 day') || vLower.includes('90 day')
+
+      // HOT flag for popular bundles
+      const isHot =
+        (volume === '1 GB' && (isDaily || isWeekly)) ||
+        (volume === '2.5 GB') ||
+        (volume === '500 MB') ||
+        (volume === '3.5 GB') ||
+        (volume === '2 GB' && isMonthly) ||
+        (volume === '7 GB') ||
+        (volume === '10 GB')
+
+      return {
+        ...plan,
+        displayVolume: volume,
+        displayValidity: validity,
+        amount,
+        isHot,
+        isDaily,
+        isWeekly,
+        isMonthly,
+        isNight,
+        isBroadband,
+      }
+    })
+  }, [rawPlans])
+
+  // Filter plans based on active tab
+  const filteredPlans = useMemo(() => {
+    if (!parsedPlans.length) return []
+    if (activeDataTab === 'ALL') return parsedPlans
+    if (activeDataTab === 'HOT') {
+      const hot = parsedPlans.filter((p) => p.isHot)
+      return hot.length >= 3 ? hot : parsedPlans.slice(0, 9)
     }
-    return selectedPlan?.amount || parseFloat(amount) || 0
-  })()
+    if (activeDataTab === 'Daily') return parsedPlans.filter((p) => p.isDaily)
+    if (activeDataTab === 'Weekly') return parsedPlans.filter((p) => p.isWeekly)
+    if (activeDataTab === 'Monthly') return parsedPlans.filter((p) => p.isMonthly)
+    if (activeDataTab === 'Extra Night') return parsedPlans.filter((p) => p.isNight)
+    if (activeDataTab === 'Broadband') return parsedPlans.filter((p) => p.isBroadband)
+    return parsedPlans
+  }, [parsedPlans, activeDataTab])
 
-  const validateMeter = async () => {
-    if (!recipient || recipient.length < 10) return
-    setValidating(true)
-    try {
-      const res = await billsAPI.validateMeter(recipient, selectedProvider?.code)
-      setMeterName(res.name)
-      toast.success(`Meter verified: ${res.name}`)
-    } catch {
-      toast.error('Could not verify meter number')
-    } finally {
-      setValidating(false)
+  // Phone validation status
+  const phoneValidation = useMemo(() => {
+    return validateNigerianPhone(phoneNumber, selectedNetwork, isPorted)
+  }, [phoneNumber, selectedNetwork, isPorted])
+
+  // Auto-detect network when typing phone number
+  const handlePhoneChange = (val: string) => {
+    setPhoneNumber(val)
+    const detected = detectNetworkFromPhone(val)
+    if (detected && detected !== selectedNetwork && !isPorted) {
+      setSelectedNetwork(detected)
     }
   }
 
+  // Contact Picker API or fallback modal
+  const openContactPicker = async () => {
+    if (typeof window !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window) {
+      try {
+        const contacts = await (navigator as any).contacts.select(['tel'], { multiple: false })
+        if (contacts && contacts[0]?.tel?.[0]) {
+          handlePhoneChange(contacts[0].tel[0])
+          return
+        }
+      } catch {
+        // Fallback to in-app contact modal
+      }
+    }
+    setContactModalOpen(true)
+  }
+
+  // Effective NGN price
+  const effectiveNgn = useMemo(() => {
+    if (view === 'data' && selectedPlan) {
+      return selectedPlan.amount || 0
+    }
+    return parseFloat(amount) || 0
+  }, [view, selectedPlan, amount])
+
+  // Proceed to wallet picker
+  const handleProceedToPayment = () => {
+    if (!phoneNumber) {
+      return toast.error('Please enter a phone number')
+    }
+    if (!phoneValidation.isValid) {
+      return toast.error(phoneValidation.error || 'Please enter a valid 11-digit Nigerian phone number')
+    }
+    if (view === 'airtime') {
+      const amt = parseFloat(amount)
+      if (!amt || amt < 50) {
+        return toast.error('Minimum airtime amount is ₦50')
+      }
+      if (amt > 500000) {
+        return toast.error('Maximum airtime amount is ₦500,000')
+      }
+    } else if (view === 'data' && !selectedPlan) {
+      return toast.error('Please select a data bundle')
+    }
+
+    setView('wallet')
+  }
+
+  // Execute purchase with PIN or Biometrics
   const executePurchase = async (pin?: string, passkeyToken?: string) => {
     setProcessing(true)
-    setStep('pin')
+    setErrorMessage('')
+    setView('pin')
+
     try {
       const payload: any = {
-        type: selectedCategory!,
-        provider: selectedProvider?.code,
-        recipient,
+        type: view === 'data' ? 'data' : 'airtime',
+        provider: selectedNetwork,
+        recipient: phoneValidation.normalized || phoneNumber,
         pin,
         passkeyToken,
+        portedNumber: isPorted,
       }
-      if (selectedCategory === 'data' && selectedPlan) {
+
+      if (view === 'data' && selectedPlan) {
         payload.planCode = selectedPlan.code
         payload.amount = selectedPlan.amount
       } else {
         payload.amount = parseFloat(amount)
       }
+
       const res = await billsAPI.purchase(payload)
       setResult(res)
-      setStep('success')
+      saveRecentNumber(payload.recipient)
+      setView('success')
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Purchase failed')
-      setStep('failed')
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Purchase could not be processed. Your wallet was not charged.'
+      setErrorMessage(msg)
+      toast.error(msg)
+      setView('failed')
     } finally {
       setProcessing(false)
     }
   }
 
   const reset = () => {
-    setStep('categories')
-    setSelectedCategory(null)
-    setSelectedProvider(null)
-    setSelectedPlan(null)
-    setSelectedWallet(null)
-    setRecipient('')
+    setView('categories')
     setAmount('')
-    setMeterName('')
+    setSelectedPreset(null)
+    setSelectedPlan(null)
     setResult(null)
+    setErrorMessage('')
   }
 
   return (
-    <div className="min-h-screen bg-[#000000] pb-32">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-[#000000]/90 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          {step !== 'categories' && (
-            <motion.button
-              className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center"
-              whileTap={{ scale: 0.9 }}
-              onClick={() => {
-                if (step === 'providers') { setStep('categories'); setSelectedCategory(null) }
-                else if (step === 'form') { setStep('providers'); setSelectedProvider(null) }
-                else if (step === 'wallet') setStep('form')
-                else if (step === 'pin') setStep('wallet')
-                else reset()
-              }}
-            >
-              <ArrowLeft size={18} className="text-white" />
-            </motion.button>
-          )}
-          <div>
-            <h1 className="text-white font-inter font-bold text-xl">Pay Bills</h1>
-            <p className="text-[#64748B] text-xs">
-              {step === 'categories' && 'Airtime · Data · Electricity · TV · Utilities'}
-              {step === 'providers' && `Select ${selectedCategory} provider`}
-              {step === 'form' && selectedProvider?.name}
-              {step === 'wallet' && 'Choose a wallet'}
-              {step === 'pin' && 'Enter your PIN'}
-            </p>
+    <div className="min-h-screen bg-[#000000] text-white pb-28 select-none">
+      {/* ── TOP HEADER ── */}
+      <div className="sticky top-0 z-30 bg-[#000000]/95 border-b border-white/8">
+        <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            {view !== 'categories' ? (
+              <button
+                onClick={() => {
+                  if (view === 'pin') setView('wallet')
+                  else if (view === 'wallet') setView(selectedPlan ? 'data' : 'airtime')
+                  else if (view === 'success' || view === 'failed') reset()
+                  else setView('categories')
+                }}
+                className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center active:scale-95 transition-transform"
+                aria-label="Back"
+              >
+                <ArrowLeft size={18} className="text-white" />
+              </button>
+            ) : null}
+
+            <h1 className="font-bold text-base tracking-tight text-white">
+              {view === 'categories' && 'Pay Bills'}
+              {view === 'airtime' && 'Airtime'}
+              {view === 'data' && 'Mobile Data'}
+              {view === 'wallet' && 'Confirm Payment'}
+              {view === 'pin' && 'Enter PIN'}
+              {view === 'success' && 'Payment Receipt'}
+              {view === 'failed' && 'Payment Failed'}
+            </h1>
           </div>
+
+          {/* History link matching Image 1 & 2 */}
+          <button
+            onClick={() => router.push('/app/history?filter=BILL_PAYMENT')}
+            className="text-xs font-semibold text-[#10B981] hover:underline px-2 py-1"
+          >
+            History
+          </button>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 pt-4">
-        <AnimatePresence mode="wait">
-          {/* STEP 1: Categories (4-Column Grid matching Images 2 & 3) */}
-          {step === 'categories' && (
-            <motion.div key="cats" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <div className="bg-[#15171C] rounded-3xl p-5 border border-white/5 mb-6">
-                <p className="text-[#64748B] text-xs font-bold uppercase tracking-widest mb-5 px-1">Utilities & Services</p>
-                <div className="grid grid-cols-4 gap-y-6 gap-x-2 sm:gap-x-4">
-                  {CATEGORIES.map((cat, i) => {
-                    const Icon = cat.icon
-                    const isLive = LIVE_CATEGORIES.has(cat.type)
-                    return (
-                      <motion.button key={cat.type}
-                        className="flex flex-col items-center gap-2 group text-center"
-                        initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.02 }}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => {
-                          if (!isLive) {
-                            setComingSoonCategory(cat.type)
-                            return
-                          }
-                          setSelectedCategory(cat.type); setStep('providers')
-                        }}
-                      >
-                        <div className="relative">
-                          <div className="w-12 h-12 rounded-full bg-[#212429] border border-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors shadow-inner">
-                            <Icon size={20} className="text-white" />
-                          </div>
-                          {isLive && cat.badge && (
-                            <span className="absolute -top-1.5 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#FF4D6D] text-white shadow-md">
-                              {cat.badge}
-                            </span>
-                          )}
-                          {!isLive && (
-                            <span className="absolute -top-1.5 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#212429] border border-white/15 text-[#94A3B8] shadow-md">
-                              Soon
-                            </span>
-                          )}
+      <div className="max-w-md mx-auto px-4 pt-3">
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* VIEW 1: CATEGORIES OVERVIEW */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {view === 'categories' && (
+          <div>
+            <div className="bg-[#12141A] rounded-3xl p-5 border border-white/8 mb-5">
+              <p className="text-[#64748B] text-[11px] font-bold uppercase tracking-widest mb-4 px-1">
+                Utilities & Services
+              </p>
+              <div className="grid grid-cols-4 gap-y-6 gap-x-2">
+                {CATEGORIES.map((cat) => {
+                  const Icon = cat.icon
+                  const isLive = LIVE_CATEGORIES.has(cat.type)
+                  return (
+                    <button
+                      key={cat.type}
+                      className="flex flex-col items-center gap-2 group text-center active:scale-95 transition-transform"
+                      onClick={() => {
+                        if (cat.type === 'airtime') setView('airtime')
+                        else if (cat.type === 'data') setView('data')
+                        else setComingSoonCategory(cat.type)
+                      }}
+                    >
+                      <div className="relative">
+                        <div className="w-13 h-13 rounded-2xl bg-[#1A1E26] border border-white/8 flex items-center justify-center group-hover:border-white/20 transition-colors">
+                          <Icon size={22} className="text-white" />
                         </div>
-                        <span className="text-[11px] font-medium text-[#94A3B8] group-hover:text-white transition-colors line-clamp-1 max-w-[72px]">
-                          {cat.label}
-                        </span>
-                      </motion.button>
-                    )
-                  })}
-                </div>
+                        {isLive && cat.badge && (
+                          <span className="absolute -top-1.5 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#10B981] text-black">
+                            {cat.badge}
+                          </span>
+                        )}
+                        {!isLive && (
+                          <span className="absolute -top-1.5 -right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#1A1E26] border border-white/15 text-[#94A3B8]">
+                            Soon
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-medium text-[#94A3B8] group-hover:text-white transition-colors line-clamp-1">
+                        {cat.label}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
+            </div>
 
-              {/* Quick Recharge Empty State */}
-              <div className="bg-[#15171C] rounded-3xl p-6 border border-white/5 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3">
-                  <Zap className="w-6 h-6" />
-                </div>
-                <h4 className="font-semibold text-white text-sm mb-1">Quick Recharge & Pay</h4>
-                <p className="text-[#64748B] text-xs max-w-xs mx-auto leading-relaxed">
-                  Your frequent bill payments and mobile top-ups will automatically appear here for one-tap repeat.
+            {/* Quick Recharge Promo Card */}
+            <div className="bg-[#12141A] rounded-3xl p-5 border border-white/8 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                <Zap className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-white text-sm">Instant Delivery</h4>
+                <p className="text-[#64748B] text-xs leading-relaxed mt-0.5">
+                  Top up Airtime & Data directly with real naira from your bank-funded wallet.
                 </p>
               </div>
-            </motion.div>
-          )}
+            </div>
+          </div>
+        )}
 
-          {/* STEP 2: Providers */}
-          {step === 'providers' && (
-            <motion.div key="providers" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              {!providers ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 4 }, (_, i) => (
-                    <div key={i} className="skeleton h-[76px] rounded-2xl" />
-                  ))}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* VIEW 2: AIRTIME & DATA (Unified Network & Phone Input Bar) */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {(view === 'airtime' || view === 'data') && (
+          <div className="space-y-4">
+            {/* ── Network Switcher + Phone Number Input Bar (Matching Image 1 & 2) ── */}
+            <div className="bg-[#14171E] rounded-2xl p-2 border border-white/10 flex items-center gap-2">
+              {/* Network Dropdown Selector */}
+              <button
+                onClick={() => setNetworkModalOpen(true)}
+                className="flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 transition-all flex-shrink-0"
+              >
+                <div className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center bg-black/40 border border-white/15">
+                  <img
+                    src={NIGERIAN_NETWORKS[selectedNetwork].logo}
+                    alt={selectedNetwork}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {providers.map((provider: any, i: number) => {
-                    const name = (provider.name || '').toLowerCase()
+                <ChevronDown size={14} className="text-[#94A3B8]" />
+              </button>
 
-                    // ── Network brand logos — actual logo image files ──
-                    const NETWORK_LOGOS: Record<string, { src: string; description: string; circular?: boolean; fit?: 'cover' | 'contain'; scale?: number }> = {
-                      mtn: { src: '/logos/mtn.png', description: 'Mobile Telecommunication Network', fit: 'cover' },
-                      airtel: { src: '/logos/airtel.png', description: 'Airtel Networks Limited', fit: 'cover' },
-                      glo: { src: '/logos/glo.png', description: 'Glo Mobile Network', circular: true, fit: 'cover', scale: 1.15 },
-                      '9mobile': { src: '/logos/9mobile.png', description: 'Formerly Etisalat Nigeria', fit: 'contain' },
-                      etisalat: { src: '/logos/9mobile.png', description: 'Formerly Etisalat Nigeria', fit: 'contain' },
-                      dstv: { src: '/logos/dstv.svg', description: 'MultiChoice DStv Subscription' },
-                      gotv: { src: '/logos/gotv.svg', description: 'MultiChoice GOtv Subscription' },
-                      startimes: { src: '/logos/startimes.svg', description: 'StarTimes TV Subscription' },
-                    }
+              {/* Vertical divider */}
+              <div className="w-[1px] h-6 bg-white/15 flex-shrink-0" />
 
-                    const brand = (() => {
-                      const match = Object.keys(NETWORK_LOGOS).find(key => name.includes(key))
-                      if (match) {
-                        const net = NETWORK_LOGOS[match]
-                        return {
-                          description: net.description,
-                          logo: (
-                            <div style={{
-                              width: 52, height: 52, flexShrink: 0, overflow: 'hidden',
-                              borderRadius: net.circular ? '50%' : 12,
-                              background: 'transparent',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}>
-                              <img
-                                src={net.src}
-                                alt={provider.name}
-                                style={{
-                                  width: '100%', height: '100%',
-                                  objectFit: net.fit || 'cover',
-                                  display: 'block',
-                                  transform: net.scale ? `scale(${net.scale})` : undefined,
-                                }}
-                              />
-                            </div>
-                          ),
+              {/* Phone number input */}
+              <div className="flex-1 min-w-0">
+                <input
+                  type="tel"
+                  className="w-full bg-transparent text-white font-medium text-[15px] placeholder:text-[#475569] focus:outline-none tracking-wide"
+                  placeholder="080XXXXXXXX"
+                  value={formatPhoneDisplay(phoneNumber)}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                />
+              </div>
+
+              {/* Contact Picker / History Icon */}
+              <button
+                onClick={openContactPicker}
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 flex items-center justify-center text-[#94A3B8] hover:text-white flex-shrink-0 transition-colors"
+                title="Choose contact or paste"
+              >
+                <User size={16} />
+              </button>
+            </div>
+
+            {/* Inline validation / network mismatch warning */}
+            {phoneNumber && (
+              <div className="px-1 text-xs">
+                {!phoneValidation.isValid ? (
+                  <p className="text-amber-400 flex items-center gap-1.5">
+                    <AlertTriangle size={13} className="flex-shrink-0" />
+                    <span>{phoneValidation.error}</span>
+                  </p>
+                ) : phoneValidation.isMismatch ? (
+                  <div className="flex items-center justify-between text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                    <span className="text-[11px] leading-tight">{phoneValidation.warning}</span>
+                    <button
+                      onClick={() => {
+                        if (phoneValidation.detectedNetwork) {
+                          setSelectedNetwork(phoneValidation.detectedNetwork)
                         }
-                      }
-                      // Generic fallback — first letter
-                      return {
-                        description: provider.code || 'Service Provider',
-                        logo: (
-                          <div style={{ background: 'linear-gradient(135deg,#2C2F36,#1B1E24)', borderRadius: 10, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <span style={{ fontFamily: 'Arial Black, sans-serif', fontWeight: 900, fontSize: 20, color: '#fff' }}>
-                              {(provider.name || '?')[0].toUpperCase()}
-                            </span>
-                          </div>
-                        ),
-                      }
-                    })()
+                      }}
+                      className="ml-2 text-[10px] font-bold text-amber-400 underline flex-shrink-0"
+                    >
+                      Switch
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle size={13} className="flex-shrink-0" />
+                    <span>Valid {selectedNetwork} number</span>
+                    {isPorted && <span className="text-[#94A3B8] text-[10px]">(Ported)</span>}
+                  </p>
+                )}
+              </div>
+            )}
 
+            {/* ── AIRTIME PAGE: 6 Preset Boxes + Custom Amount + Pay Button ── */}
+            {view === 'airtime' && (
+              <div className="bg-[#12141A] rounded-3xl p-4 border border-white/8 space-y-4">
+                <p className="text-white text-sm font-semibold">Top up</p>
+
+                {/* 6 Preset boxes (Image 1) */}
+                <div className="grid grid-cols-3 gap-2.5">
+                  {AIRTIME_PRESETS.map((p) => {
+                    const isSelected = selectedPreset === p
                     return (
-                      <motion.button key={provider.code}
-                        className="w-full rounded-2xl p-4 flex items-center gap-4 border text-left transition-all"
+                      <button
+                        key={p}
+                        onClick={() => {
+                          setSelectedPreset(p)
+                          setAmount(String(p))
+                        }}
+                        className="h-16 rounded-2xl border text-center flex flex-col items-center justify-center transition-all active:scale-95"
                         style={{
-                          background: 'rgba(18,20,26,0.8)',
-                          borderColor: 'rgba(255,255,255,0.07)',
-                          backdropFilter: 'blur(8px)',
+                          background: isSelected ? 'rgba(16,185,129,0.12)' : '#181B22',
+                          borderColor: isSelected ? '#10B981' : 'rgba(255,255,255,0.06)',
                         }}
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.06, type: 'spring', stiffness: 300, damping: 28 }}
-                        whileHover={{
-                          borderColor: `rgba(${accentRgb}, 0.35)`,
-                          background: `rgba(${accentRgb}, 0.04)`,
-                          scale: 1.005,
-                        }}
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => { setSelectedProvider(provider); setStep('form') }}
                       >
-                        {/* Logo tile */}
-                        {provider.image ? (
-                          <div style={{ width: 52, height: 52, borderRadius: 12, overflow: 'hidden', flexShrink: 0, border: `1.5px solid rgba(255,255,255,0.1)`, background: '#fff' }}>
-                            <img src={provider.image} alt={provider.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }} />
-                          </div>
-                        ) : brand.logo}
-
-                        {/* Text */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white font-semibold text-[15px] leading-snug">{provider.name}</p>
-                          <p className="text-[#64748B] text-xs mt-0.5 truncate">
-                            {selectedCategory === 'airtime' && provider.discount
-                              ? `${provider.discount}% cashback discount`
-                              : brand.description}
-                          </p>
-                        </div>
-
-                        {/* Arrow */}
-                        <div
-                          className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                          style={{ background: `rgba(${accentRgb}, 0.08)` }}
-                        >
-                          <ChevronRight size={15} style={{ color: accentHex }} />
-                        </div>
-                      </motion.button>
+                        <span className="text-white font-bold text-base tracking-tight">
+                          ₦ {p.toLocaleString()}
+                        </span>
+                      </button>
                     )
                   })}
                 </div>
-              )}
-            </motion.div>
-          )}
 
-          {/* STEP 3: Form */}
-          {step === 'form' && (
-            <motion.div key="form" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-              className="space-y-4">
+                {/* Custom Amount Row with Pay Button (Image 1) */}
+                <div className="pt-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-[#181B22] border border-white/10 rounded-2xl px-4 py-3 flex items-center gap-2 focus-within:border-white/25 transition-colors">
+                      <span className="text-white/60 font-medium text-sm">₦</span>
+                      <input
+                        type="number"
+                        className="w-full bg-transparent text-white font-semibold text-sm placeholder:text-[#475569] focus:outline-none"
+                        placeholder="50 - 500,000"
+                        value={amount}
+                        onChange={(e) => {
+                          setAmount(e.target.value)
+                          setSelectedPreset(null)
+                        }}
+                      />
+                    </div>
 
-              {/* Recipient */}
-              <div>
-                <label className="text-[#94A3B8] text-xs mb-2 block">
-                  {selectedCategory === 'electricity' ? 'Meter Number' :
-                   selectedCategory === 'tv' ? 'Smart Card / Decoder Number' :
-                   'Phone Number'}
-                </label>
-                <div className="relative">
-                  <input
-                    className="input-field pr-24"
-                    placeholder={selectedCategory === 'electricity' ? '0801234567890' :
-                                 selectedCategory === 'tv' ? '1234567890' : '080XXXXXXXX'}
-                    value={recipient}
-                    onChange={e => setRecipient(e.target.value)}
-                  />
-                  {selectedCategory === 'electricity' && (
+                    {/* Pay Button */}
                     <button
-                      className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg text-xs font-bold transition-opacity"
-                      style={{ background: `rgba(${accentRgb}, 0.12)`, color: accentHex }}
-                      onClick={validateMeter}
-                      disabled={validating}
+                      onClick={handleProceedToPayment}
+                      disabled={!amount || parseFloat(amount) < 50 || !phoneValidation.isValid}
+                      className="px-6 py-3.5 rounded-2xl font-bold text-black text-sm disabled:opacity-40 active:scale-95 transition-all shadow-md flex-shrink-0"
+                      style={{ background: '#10B981' }}
                     >
-                      {validating ? <Loader2 size={12} className="animate-spin" /> : 'Verify'}
+                      Pay
                     </button>
-                  )}
-                </div>
-                {meterName && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <CheckCircle size={13} className="text-[#10B981]" />
-                    <p className="text-[#10B981] text-xs font-medium">{meterName}</p>
                   </div>
-                )}
-              </div>
-
-              {/* Amount / Plan */}
-              {selectedCategory === 'data' ? (
-                <div>
-                  <label className="text-[#94A3B8] text-xs mb-2 block">Select Data Plan</label>
-                  {!plans ? (
-                    <div className="skeleton h-40 rounded-xl" />
-                  ) : (
-                    <div className="space-y-4 max-h-[52vh] overflow-y-auto pr-1">
-                      {(() => {
-                        const groups: Record<string, any[]> = {}
-                        plans.forEach((plan: any) => {
-                          const g = plan.planType || 'OTHER'
-                          ;(groups[g] = groups[g] || []).push(plan)
-                        })
-                        return Object.entries(groups).map(([type, list]) => (
-                          <div key={type}>
-                            <p className="text-[#64748B] text-[10px] font-bold uppercase tracking-widest mb-2 px-1">
-                              {type.replace(/_/g, ' ')}
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {list.map((plan: any) => (
-                                <button key={plan.code}
-                                  className="p-4 rounded-xl text-left border transition-all"
-                                  style={selectedPlan?.code === plan.code ? {
-                                    background: `rgba(${accentRgb}, 0.1)`,
-                                    borderColor: `rgba(${accentRgb}, 0.4)`,
-                                  } : {
-                                    background: '#121419',
-                                    borderColor: 'rgba(255,255,255,0.06)',
-                                  }}
-                                  onClick={() => setSelectedPlan(plan)}
-                                >
-                                  <p className="text-white text-xs font-bold">{plan.name}</p>
-                                  <p className="text-[#64748B] text-[10px] leading-tight mt-0.5">{plan.validity}</p>
-                                  <p className="font-bold mt-1 text-sm" style={{ color: accentHex }}>
-                                    ₦{plan.amount?.toLocaleString()}
-                                  </p>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      })()}
-                    </div>
-                  )}
                 </div>
-              ) : (
-                <div>
-                  <label className="text-[#94A3B8] text-xs mb-2 block">Amount (NGN)</label>
-                  {selectedCategory === 'airtime' && (
-                    <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-                      {AIRTIME_AMOUNTS_NGN.map(a => (
-                        <button key={a}
-                          className="px-4 py-2 rounded-xl text-xs font-semibold flex-shrink-0 transition-all"
-                          style={amount === String(a) ? {
-                            background: `rgba(${accentRgb}, 0.15)`,
-                            color: accentHex, border: `1px solid rgba(${accentRgb}, 0.3)`,
-                          } : {
-                            background: 'rgba(255,255,255,0.05)',
-                            color: '#94A3B8', border: '1px solid transparent',
+              </div>
+            )}
+
+            {/* ── DATA PAGE: Category Tabs + Bundle Grid (Image 2) ── */}
+            {view === 'data' && (
+              <div className="bg-[#12141A] rounded-3xl p-4 border border-white/8 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-white text-sm font-semibold">Data Plans</p>
+                  <span className="text-[11px] text-[#94A3B8] font-medium">{selectedNetwork}</span>
+                </div>
+
+                {/* Horizontal Category Tabs (Image 2) */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  {DATA_TABS.map((tab) => {
+                    const isActive = activeDataTab === tab.id
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveDataTab(tab.id)}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex flex-col items-center gap-1"
+                        style={{
+                          color: isActive ? '#10B981' : '#94A3B8',
+                          background: isActive ? 'rgba(16,185,129,0.08)' : 'transparent',
+                        }}
+                      >
+                        <span>{tab.label}</span>
+                        {isActive && <div className="w-4 h-0.5 bg-[#10B981] rounded-full" />}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Data Bundles Grid (Image 2) */}
+                {plansLoading ? (
+                  <div className="grid grid-cols-3 gap-2.5 py-4">
+                    {Array.from({ length: 6 }, (_, i) => (
+                      <div key={i} className="h-28 rounded-2xl bg-white/5 animate-pulse" />
+                    ))}
+                  </div>
+                ) : filteredPlans.length === 0 ? (
+                  <div className="py-12 text-center text-[#64748B]">
+                    <p className="text-xs">No plans found in this category.</p>
+                    <button
+                      onClick={() => setActiveDataTab('ALL')}
+                      className="text-xs font-semibold text-emerald-400 mt-2 underline"
+                    >
+                      View all plans
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2.5 max-h-[58vh] overflow-y-auto pr-1">
+                    {filteredPlans.map((plan: any) => {
+                      const isSelected = selectedPlan?.code === plan.code
+                      return (
+                        <button
+                          key={plan.code}
+                          onClick={() => {
+                            setSelectedPlan(plan)
+                            handleProceedToPayment()
                           }}
-                          onClick={() => setAmount(String(a))}
+                          className="rounded-2xl p-2.5 flex flex-col items-center justify-between min-h-[108px] text-center border transition-all active:scale-95"
+                          style={{
+                            background: isSelected ? 'rgba(16,185,129,0.12)' : '#181B22',
+                            borderColor: isSelected ? '#10B981' : 'rgba(255,255,255,0.06)',
+                          }}
                         >
-                          ₦{a.toLocaleString()}
+                          {/* Data amount in bold letters (Image 2) */}
+                          <span className="font-extrabold text-white text-base leading-tight mt-1">
+                            {plan.displayVolume}
+                          </span>
+
+                          {/* Validity in smaller text below */}
+                          <span className="text-[#94A3B8] text-[10px] leading-tight my-1">
+                            {plan.displayValidity}
+                          </span>
+
+                          {/* Price badge in box */}
+                          <div className="w-full py-1 rounded-lg bg-black/40 border border-white/5">
+                            <span className="text-white text-xs font-bold">
+                              ₦{plan.amount?.toLocaleString()}
+                            </span>
+                          </div>
                         </button>
-                      ))}
-                    </div>
-                  )}
-                  <input
-                    className="input-field"
-                    placeholder="Enter amount in NGN"
-                    type="number"
-                    value={amount}
-                    onChange={e => setAmount(e.target.value)}
-                  />
-                </div>
-              )}
-
-              {/* Estimated cost */}
-              {effectiveNgn > 0 && (
-                <motion.div
-                  className="rounded-xl p-4 border"
-                  style={{ background: `rgba(${accentRgb}, 0.06)`, borderColor: `rgba(${accentRgb}, 0.15)` }}
-                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                >
-                  <p className="text-[#94A3B8] text-xs mb-1">Estimated cost (real naira)</p>
-                  <p className="text-white font-inter font-bold text-xl">₦{effectiveNgn.toLocaleString()}</p>
-                  {selectedCategory === 'airtime' && (selectedProvider?.sellMarkup || 0) > 0 && (
-                    <p className="text-[#94A3B8] text-[10px] mt-1">
-                      Includes {selectedProvider.sellMarkup}% markup
-                    </p>
-                  )}
-                  {realNgn < effectiveNgn && (
-                    <div className="flex items-start gap-2 mt-2 rounded-lg bg-amber-500/10 border border-amber-500/25 p-2.5">
-                      <AlertCircle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-amber-300 text-[11px] leading-relaxed">
-                        You have ₦{realNgn.toLocaleString()} real naira — fund your NGN wallet via bank transfer on the Receive page.
-                      </p>
-                    </div>
-                  )}
-                </motion.div>
-              )}
-
-              <motion.button
-                className="w-full py-4 rounded-xl font-bold text-black"
-                style={{ background: colors.gradientBg }}
-                whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  if (!recipient) return toast.error('Enter recipient number')
-                  if (!selectedPlan && !amount) return toast.error('Select plan or enter amount')
-                  if (selectedCategory === 'electricity' && !meterName) return toast.error('Please verify meter number first')
-                  setSelectedWallet(null)
-                  setStep('wallet')
-                }}
-              >
-                Continue to Payment
-              </motion.button>
-            </motion.div>
-          )}
-
-          {/* STEP 4: Wallet picker — which wallet pays the bill */}
-          {step === 'wallet' && (
-            <motion.div key="wallet" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-              className="space-y-4 pt-2">
-              <div className="text-center mb-2">
-                <p className="text-white font-semibold text-lg">Pay with which wallet?</p>
-                <p className="text-[#64748B] text-sm mt-1">Cost: <span className="text-white font-bold">₦{effectiveNgn.toLocaleString()}</span></p>
-              </div>
-
-              <motion.button
-                onClick={() => { setSelectedWallet('NGN'); setStep('pin') }}
-                className="w-full rounded-2xl p-5 text-left border transition-all relative overflow-hidden"
-                style={{
-                  background: 'rgba(16,185,129,0.05)',
-                  borderColor: 'rgba(16,185,129,0.25)',
-                }}
-                whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-              >
-                <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
-                  Recommended
-                </span>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
-                    <Landmark size={22} className="text-emerald-400" />
+                      )
+                    })}
                   </div>
-                  <div className="flex-1">
-                    <p className="text-white font-bold text-sm">NGN Wallet <span className="text-emerald-400 text-xs">· Real money</span></p>
-                    <p className="text-[#94A3B8] text-xs mt-0.5">Available: <span className="text-white font-bold">₦{realNgn.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></p>
-                    <p className="text-[#64748B] text-[11px] mt-1 leading-snug">Funded by bank transfers. This is the only wallet that can pay real bills.</p>
-                  </div>
-                  <ChevronRight size={18} className="text-[#64748B]" />
-                </div>
-              </motion.button>
-
-              <button
-                onClick={() => toast('USDC wallet payments go live at mainnet launch. For now, bills are paid with real naira.', { duration: 5000 })}
-                className="w-full rounded-2xl p-5 text-left border transition-all relative overflow-hidden opacity-80"
-                style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.08)' }}
-              >
-                <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-white/10 text-[#94A3B8] border border-white/15 uppercase tracking-wider flex items-center gap-1">
-                  <Lock size={9} /> After Mainnet
-                </span>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                    <Coins size={22} className="text-[#94A3B8]" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-white font-bold text-sm">USDC Wallet <span className="text-[#64748B] text-xs">· Crypto</span></p>
-                    <p className="text-[#94A3B8] text-xs mt-0.5">Locked until mainnet launch</p>
-                    <p className="text-[#64748B] text-[11px] mt-1 leading-snug">Testnet USDC can't pay real bills — you'll use it here once mainnet is live.</p>
-                  </div>
-                  <Lock size={18} className="text-[#475569]" />
-                </div>
-              </button>
-            </motion.div>
-          )}
-
-          {/* STEP 5: PIN */}
-          {step === 'pin' && !processing && (
-            <motion.div key="pin" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="pt-4">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-                  style={{ background: `rgba(${accentRgb}, 0.12)` }}>
-                  <span className="text-3xl">🔐</span>
-                </div>
-                <p className="text-white font-semibold text-lg">Confirm with PIN</p>
-                <p className="text-[#64748B] text-sm mt-1">Enter your 4-digit transaction PIN</p>
-                {selectedWallet === 'NGN' && (
-                  <p className="text-emerald-400 text-xs mt-2">Paying ₦{effectiveNgn.toLocaleString()} from your NGN wallet</p>
                 )}
               </div>
-              <PinPad onComplete={executePurchase} accentHex={accentHex} accentRgb={accentRgb} />
-              <div className="flex items-center gap-3 my-3">
-                <div className="flex-1 h-px bg-white/5"></div>
-                <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
-                <div className="flex-1 h-px bg-white/5"></div>
-              </div>
-              <BiometricApproveButton onApproved={(token) => executePurchase(undefined, token)} accentHex={accentHex} accentRgb={accentRgb} disabled={processing} />
-            </motion.div>
-          )}
+            )}
+          </div>
+        )}
 
-          {/* Processing */}
-          {step === 'pin' && processing && (
-            <motion.div key="processing" className="flex flex-col items-center justify-center py-24"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <motion.div
-                className="w-20 h-20 rounded-full border-4 border-t-transparent mb-6"
-                style={{ borderColor: `rgba(${accentRgb}, 0.2)`, borderTopColor: accentHex }}
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-              />
-              <p className="text-white font-semibold">Processing payment...</p>
-              <p className="text-[#64748B] text-sm mt-2">Please wait, do not close this screen</p>
-            </motion.div>
-          )}
-
-          {/* SUCCESS */}
-          {step === 'success' && (
-            <motion.div key="success" className="flex flex-col items-center justify-center py-16 text-center"
-              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-              <motion.div
-                className="w-24 h-24 rounded-full flex items-center justify-center mb-6"
-                style={{ background: 'rgba(16,185,129,0.12)' }}
-                animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 0.5 }}
-              >
-                <CheckCircle size={48} className="text-[#10B981]" />
-              </motion.div>
-              <h2 className="text-white font-inter font-bold text-2xl mb-2">Payment Successful!</h2>
-              <p className="text-[#94A3B8] text-sm mb-2">
-                {selectedCategory === 'electricity' ? `₦${amount} electricity credit added to ${meterName}` :
-                 selectedCategory === 'data' ? `${selectedPlan?.name} sent to ${recipient}` :
-                 selectedCategory === 'tv' ? `${selectedProvider?.name} subscription renewed` :
-                 `₦${amount} airtime sent to ${recipient}`}
-              </p>
-              {result?.reference && (
-                <p className="text-[#64748B] text-xs mb-8">Ref: {result.reference}</p>
-              )}
-              <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
-                <button
-                  className="py-3.5 rounded-xl text-sm font-semibold"
-                  style={{ background: `rgba(${accentRgb}, 0.12)`, color: accentHex }}
-                  onClick={reset}
-                >
-                  Pay Another Bill
-                </button>
-                <button
-                  className="py-3.5 rounded-xl text-sm font-bold text-black"
-                  style={{ background: colors.gradientBg }}
-                  onClick={() => window.location.href = '/app/dashboard'}
-                >
-                  Go to Dashboard
-                </button>
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* VIEW 3: WALLET CONFIRMATION */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {view === 'wallet' && (
+          <div className="space-y-4 pt-2">
+            <div className="bg-[#12141A] rounded-3xl p-5 border border-white/8 space-y-3">
+              <p className="text-[#64748B] text-xs font-bold uppercase tracking-wider">Payment Summary</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-[#94A3B8]">Service</span>
+                  <span className="text-white font-semibold capitalize">
+                    {selectedPlan ? `${selectedNetwork} Data (${selectedPlan.displayVolume})` : `${selectedNetwork} Airtime`}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#94A3B8]">Recipient</span>
+                  <span className="text-white font-medium">{formatPhoneDisplay(phoneNumber)}</span>
+                </div>
+                {selectedPlan && (
+                  <div className="flex justify-between">
+                    <span className="text-[#94A3B8]">Validity</span>
+                    <span className="text-white font-medium">{selectedPlan.displayValidity}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-2 border-t border-white/8 text-base">
+                  <span className="text-white font-semibold">Total Amount</span>
+                  <span className="text-emerald-400 font-bold">₦{effectiveNgn.toLocaleString()}</span>
+                </div>
               </div>
-            </motion.div>
-          )}
+            </div>
 
-          {/* FAILED */}
-          {step === 'failed' && (
-            <motion.div key="failed" className="flex flex-col items-center justify-center py-16 text-center"
-              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-              <div className="w-24 h-24 rounded-full bg-[#EF4444]/12 flex items-center justify-center mb-6">
-                <AlertCircle size={48} className="text-[#EF4444]" />
-              </div>
-              <h2 className="text-white font-inter font-bold text-2xl mb-2">Payment Failed</h2>
-              <p className="text-[#94A3B8] text-sm mb-8">Your wallet was not charged. Please try again.</p>
+            {/* Wallet Selection */}
+            <div className="bg-[#12141A] rounded-3xl p-5 border border-white/8 space-y-3">
+              <p className="text-[#64748B] text-xs font-bold uppercase tracking-wider">Pay With</p>
+
               <button
-                className="py-3.5 px-8 rounded-xl text-sm font-bold text-black"
-                style={{ background: colors.gradientBg }}
+                onClick={() => {
+                  setSelectedWallet('NGN')
+                  setView('pin')
+                }}
+                className="w-full rounded-2xl p-4 text-left border transition-all flex items-center gap-3.5 active:scale-98"
+                style={{
+                  background: 'rgba(16,185,129,0.06)',
+                  borderColor: 'rgba(16,185,129,0.3)',
+                }}
+              >
+                <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center flex-shrink-0">
+                  <Landmark size={20} className="text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-bold text-sm">NGN Wallet <span className="text-emerald-400 text-xs">· Real money</span></p>
+                  <p className="text-[#94A3B8] text-xs mt-0.5">
+                    Available: <span className="text-white font-bold">₦{realNgn.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                  </p>
+                </div>
+                <ChevronRight size={18} className="text-emerald-400" />
+              </button>
+
+              {realNgn < effectiveNgn && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
+                  <AlertCircle size={15} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-amber-300 text-xs leading-snug">
+                    Insufficient real naira balance. Please fund your NGN wallet via bank transfer on the Receive page.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                if (realNgn < effectiveNgn) {
+                  return toast.error('Insufficient real naira balance in your NGN wallet.')
+                }
+                setView('pin')
+              }}
+              disabled={realNgn < effectiveNgn}
+              className="w-full py-4 rounded-2xl font-bold text-black text-sm disabled:opacity-40 active:scale-98 transition-transform"
+              style={{ background: '#10B981' }}
+            >
+              Continue to PIN
+            </button>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* VIEW 4: PIN PAD & BIOMETRICS */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {view === 'pin' && !processing && (
+          <div className="pt-2 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 mx-auto mb-3 flex items-center justify-center text-2xl">
+              🔐
+            </div>
+            <h3 className="text-white font-bold text-lg">Transaction PIN</h3>
+            <p className="text-[#64748B] text-xs mt-1 mb-6">
+              Enter your 4-digit PIN to authorize ₦{effectiveNgn.toLocaleString()} payment
+            </p>
+
+            <PinPad onComplete={executePurchase} accentHex={accentHex} accentRgb={accentRgb} />
+
+            <div className="flex items-center gap-3 my-4 max-w-xs mx-auto">
+              <div className="flex-1 h-px bg-white/10" />
+              <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
+
+            <div className="max-w-xs mx-auto">
+              <BiometricApproveButton
+                onApproved={(token) => executePurchase(undefined, token)}
+                accentHex={accentHex}
+                accentRgb={accentRgb}
+                disabled={processing}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Processing state */}
+        {view === 'pin' && processing && (
+          <div className="py-24 flex flex-col items-center justify-center text-center">
+            <Loader2 size={42} className="animate-spin text-[#10B981] mb-4" />
+            <h3 className="text-white font-bold text-base">Processing Order</h3>
+            <p className="text-[#64748B] text-xs mt-1">
+              Delivering {selectedPlan ? selectedPlan.displayVolume : `₦${effectiveNgn}`} to {formatPhoneDisplay(phoneNumber)}...
+            </p>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* VIEW 5: SUCCESS */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {view === 'success' && (
+          <div className="py-8 text-center space-y-4">
+            <div className="w-20 h-20 rounded-3xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
+              <CheckCircle size={44} />
+            </div>
+
+            <div>
+              <h2 className="text-white font-bold text-2xl">Recharge Successful!</h2>
+              <p className="text-[#94A3B8] text-xs mt-1">
+                {selectedPlan
+                  ? `${selectedPlan.displayVolume} ${selectedNetwork} data bundle delivered`
+                  : `₦${amount} ${selectedNetwork} airtime credited`}
+              </p>
+              <p className="text-white font-medium text-sm mt-0.5">{formatPhoneDisplay(phoneNumber)}</p>
+            </div>
+
+            {result?.reference && (
+              <div className="bg-[#12141A] rounded-2xl p-3 border border-white/8 inline-block max-w-xs text-xs text-[#64748B]">
+                Reference: <span className="text-white font-mono">{result.reference}</span>
+              </div>
+            )}
+
+            <div className="pt-4 grid grid-cols-2 gap-3 max-w-xs mx-auto">
+              <button
                 onClick={reset}
+                className="py-3.5 rounded-2xl text-xs font-bold text-white bg-white/10 active:scale-95"
+              >
+                Done
+              </button>
+              <button
+                onClick={() => router.push('/app/dashboard')}
+                className="py-3.5 rounded-2xl text-xs font-bold text-black active:scale-95"
+                style={{ background: '#10B981' }}
+              >
+                Dashboard
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* VIEW 6: FAILED (With Detailed Error Diagnostics) */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {view === 'failed' && (
+          <div className="py-8 text-center space-y-4">
+            <div className="w-20 h-20 rounded-3xl bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto text-red-400">
+              <AlertCircle size={44} />
+            </div>
+
+            <div>
+              <h2 className="text-white font-bold text-2xl">Payment Could Not Complete</h2>
+              <p className="text-[#94A3B8] text-xs mt-1">
+                Your wallet was not charged.
+              </p>
+            </div>
+
+            {/* Exact provider error message */}
+            <div className="bg-red-500/10 border border-red-500/25 rounded-2xl p-4 max-w-sm mx-auto text-left">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-red-300 text-xs font-semibold">Reason:</p>
+                  <p className="text-red-200 text-xs mt-0.5 leading-relaxed font-mono">
+                    {errorMessage || 'Unknown telecom provider error. Please check your phone number and network.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 grid grid-cols-2 gap-3 max-w-xs mx-auto">
+              <button
+                onClick={() => setView(selectedPlan ? 'data' : 'airtime')}
+                className="py-3.5 rounded-2xl text-xs font-bold text-white bg-white/10 active:scale-95"
+              >
+                Edit Number
+              </button>
+              <button
+                onClick={() => executePurchase()}
+                className="py-3.5 rounded-2xl text-xs font-bold text-black active:scale-95"
+                style={{ background: '#10B981' }}
               >
                 Try Again
               </button>
-            </motion.div>
-          )}
-
-        </AnimatePresence>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Fun, honest Coming Soon for categories the backend can't fulfil yet */}
+      {/* ── NETWORK SELECTOR MODAL / SHEET ── */}
+      {networkModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4">
+          <div className="w-full max-w-sm bg-[#151820] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-white/8">
+              <h3 className="text-white font-bold text-base">Select Network</h3>
+              <button
+                onClick={() => setNetworkModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[#94A3B8]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {Object.values(NIGERIAN_NETWORKS).map((net) => {
+                const isSelected = selectedNetwork === net.code
+                return (
+                  <button
+                    key={net.code}
+                    onClick={() => {
+                      setSelectedNetwork(net.code)
+                      setNetworkModalOpen(false)
+                    }}
+                    className="w-full p-3.5 rounded-2xl border flex items-center gap-3.5 text-left transition-all active:scale-98"
+                    style={{
+                      background: isSelected ? 'rgba(16,185,129,0.08)' : '#181B22',
+                      borderColor: isSelected ? '#10B981' : 'rgba(255,255,255,0.06)',
+                    }}
+                  >
+                    <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center bg-black/50 border border-white/10">
+                      <img src={net.logo} alt={net.name} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white font-semibold text-sm">{net.name}</p>
+                      <p className="text-[#64748B] text-[11px]">{net.prefixes.slice(0, 4).join(', ')}...</p>
+                    </div>
+                    {isSelected && <Check size={18} className="text-[#10B981]" />}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Ported Number Toggle */}
+            <div className="pt-2 border-t border-white/8">
+              <label className="flex items-center justify-between cursor-pointer p-1">
+                <div>
+                  <p className="text-white text-xs font-semibold">Ported Number</p>
+                  <p className="text-[#64748B] text-[11px]">Number was moved to another network</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isPorted}
+                  onChange={(e) => setIsPorted(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-500 focus:ring-0 focus:ring-offset-0 bg-white/10 border-white/20"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CONTACT / RECENT NUMBERS MODAL ── */}
+      {contactModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4">
+          <div className="w-full max-w-sm bg-[#151820] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-white/8">
+              <h3 className="text-white font-bold text-base">Select Recipient</h3>
+              <button
+                onClick={() => setContactModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-[#94A3B8]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Paste from clipboard */}
+            <button
+              onClick={async () => {
+                try {
+                  const text = await navigator.clipboard.readText()
+                  if (text) {
+                    handlePhoneChange(text)
+                    setContactModalOpen(false)
+                    toast.success('Pasted from clipboard')
+                  }
+                } catch {
+                  toast.error('Clipboard permission denied')
+                }
+              }}
+              className="w-full p-3 rounded-2xl bg-white/5 border border-white/8 text-left text-xs font-semibold text-emerald-400 flex items-center justify-between"
+            >
+              <span>Paste from clipboard</span>
+              <Sparkles size={15} />
+            </button>
+
+            {/* Recent Numbers */}
+            <div className="space-y-1.5">
+              <p className="text-[#64748B] text-[11px] font-bold uppercase tracking-wider px-1">
+                Recent Numbers
+              </p>
+              {recentNumbers.length === 0 ? (
+                <p className="text-[#64748B] text-xs px-1 py-3">No recent recipients yet</p>
+              ) : (
+                recentNumbers.map((num) => (
+                  <button
+                    key={num}
+                    onClick={() => {
+                      handlePhoneChange(num)
+                      setContactModalOpen(false)
+                    }}
+                    className="w-full p-3 rounded-xl bg-[#181B22] border border-white/6 text-left flex items-center justify-between active:scale-98 transition-transform"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Clock size={14} className="text-[#64748B]" />
+                      <span className="text-white font-mono text-xs">{formatPhoneDisplay(num)}</span>
+                    </div>
+                    <span className="text-[10px] text-[#64748B]">
+                      {detectNetworkFromPhone(num) || ''}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── COMING SOON MODAL FOR UNWIRED CATEGORIES ── */}
       <ComingSoon
         open={!!comingSoonCategory}
         onClose={() => setComingSoonCategory(null)}
