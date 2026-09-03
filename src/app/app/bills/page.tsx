@@ -148,7 +148,10 @@ function PinPad({
 
   return (
     <div>
-      <div className="flex justify-center gap-3 mb-8">
+      <div
+        className="flex justify-center gap-3 mb-[clamp(0.75rem,4dvh,2rem)]"
+        aria-label={`PIN entered ${pin.length} of 4 digits`}
+      >
         {Array.from({ length: 4 }, (_, i) => (
           <motion.div
             key={i}
@@ -163,14 +166,17 @@ function PinPad({
           />
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-4 max-w-xs mx-auto">
+      {/* Keypad buttons scale with viewport height so 4 rows always fit on
+          short phones (iPhone SE / small Android) without internal scrolling.
+          Buttons: 3.25rem–4rem (52–64px); gap: 0.5rem–1rem. */}
+      <div className="grid grid-cols-3 gap-[clamp(0.5rem,2.5dvh,1rem)] max-w-xs mx-auto">
         {keys.map((k, i) => (
           <motion.button
             key={i}
             type="button"
             disabled={!k}
             aria-label={k === '⌫' ? 'Delete digit' : k}
-            className="h-16 rounded-2xl text-xl font-semibold disabled:opacity-0"
+            className="h-[clamp(3.25rem,8.5dvh,4rem)] rounded-2xl text-xl font-semibold disabled:opacity-0"
             style={
               k && k !== '⌫'
                 ? { background: 'rgba(255,255,255,0.06)', color: '#fff' }
@@ -1013,9 +1019,9 @@ export default function BillsPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm px-5"
+              className="fixed inset-x-0 top-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm px-5 h-[100dvh]"
             >
-              <div className="w-full max-w-sm mx-auto rounded-3xl border border-white/10 bg-[#0C0E13]/95 p-6 shadow-2xl text-center overflow-hidden">
+              <div className="w-full max-w-sm mx-auto rounded-3xl border border-white/10 bg-[#0C0E13]/95 p-5 sm:p-6 shadow-2xl text-center overflow-hidden">
                 <div className="flex items-center justify-between mb-2">
                   <button
                     type="button"
@@ -1031,13 +1037,13 @@ export default function BillsPage() {
                 </div>
 
                 <div
-                  className="w-14 h-14 rounded-2xl border mx-auto mb-3 flex items-center justify-center text-2xl"
+                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl border mx-auto mb-2 flex items-center justify-center text-xl sm:text-2xl"
                   style={{ background: `rgba(${accentRgb}, 0.12)`, borderColor: `rgba(${accentRgb}, 0.25)` }}
                 >
                   🔐
                 </div>
                 <h3 className="text-white font-bold text-lg">Transaction PIN</h3>
-                <p className="text-[#64748B] text-xs mt-1 mb-6">
+                <p className="text-[#94A3B8] text-xs mt-1 mb-4 sm:mb-5">
                   Enter your 4-digit PIN to authorize ₦{effectiveNgn.toLocaleString()} payment
                 </p>
 
@@ -1065,11 +1071,11 @@ export default function BillsPage() {
           {step === 'pin' && processing && (
             <motion.div
               key="processing"
-              className="fixed inset-0 z-[60] flex flex-col items-center justify-center text-center bg-black/85 backdrop-blur-sm px-5"
+              className="fixed inset-x-0 top-0 z-[60] flex flex-col items-center justify-center text-center bg-black/85 backdrop-blur-sm px-5 h-[100dvh]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
             >
-              <div className="w-full max-w-sm mx-auto rounded-3xl border border-white/10 bg-[#0C0E13]/95 p-10 shadow-2xl">
+              <div className="w-full max-w-sm mx-auto rounded-3xl border border-white/10 bg-[#0C0E13]/95 p-8 sm:p-10 shadow-2xl">
                 <Loader2 size={42} className="animate-spin mb-4 mx-auto" style={{ color: accentHex }} />
                 <h3 className="text-white font-bold text-base">Processing Order</h3>
                 <p className="text-[#64748B] text-xs mt-1">
