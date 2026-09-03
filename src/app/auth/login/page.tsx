@@ -165,7 +165,16 @@ function LoginForm() {
       // email field's autofill UI — no prompt is shown on load.
       const response = await startAuthentication({ optionsJSON: options, useBrowserAutofill: true })
       if (autofillCancelledRef.current) return
-      await passkeyAPI.loginComplete(challengeId, response)
+      try {
+        await passkeyAPI.loginComplete(challengeId, response)
+      } catch (error: any) {
+        // Most likely the server challenge expired (5-min TTL) while the page
+        // sat idle — the user just verified Face ID, so never fail silently.
+        // Tell them, then re-arm a fresh challenge so an immediate retry works.
+        toast.error(error?.response?.data?.message || 'Biometric sign-in expired — please try again.')
+        void armAutofillSignin()
+        return
+      }
       // Signed in — we're leaving the page; skip any further ceremonies.
       autofillCancelledRef.current = true
       toast.success('Login successful!')
