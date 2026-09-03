@@ -263,6 +263,20 @@ export default function BillsPage() {
     30
   )
 
+  // Lock page scroll while the secure PIN / processing overlay is up, so the
+  // keypad and PIN dots can never move, scroll, or slide off-screen. The overlay
+  // is `fixed inset-0`, but locking the body scroll is belt-and-braces so the
+  // page can't scroll underneath on small screens. We only toggle `overflow`,
+  // not `position`, to avoid resetting the page's scroll position.
+  useEffect(() => {
+    if (step !== 'pin') return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [step])
+
   // Real wallet balances
   const { data: walletBal } = useQuery({
     queryKey: ['bill-wallet-balance'],
@@ -991,48 +1005,77 @@ export default function BillsPage() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════ */}
-          {/* STEP 5: PIN & BIOMETRICS */}
+          {/* STEP 5: PIN & BIOMETRICS (fixed overlay — never scrolls) */}
           {/* ══════════════════════════════════════════════════════════════════ */}
           {step === 'pin' && !processing && (
-            <motion.div key="pin" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="pt-2 text-center">
-              <div
-                className="w-14 h-14 rounded-2xl border mx-auto mb-3 flex items-center justify-center text-2xl"
-                style={{ background: `rgba(${accentRgb}, 0.12)`, borderColor: `rgba(${accentRgb}, 0.25)` }}
-              >
-                🔐
-              </div>
-              <h3 className="text-white font-bold text-lg">Transaction PIN</h3>
-              <p className="text-[#64748B] text-xs mt-1 mb-6">
-                Enter your 4-digit PIN to authorize ₦{effectiveNgn.toLocaleString()} payment
-              </p>
+            <motion.div
+              key="pin"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm px-5"
+            >
+              <div className="w-full max-w-sm mx-auto rounded-3xl border border-white/10 bg-[#0C0E13]/95 p-6 shadow-2xl text-center overflow-hidden">
+                <div className="flex items-center justify-between mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep('wallet')}
+                    className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#94A3B8] active:scale-95 transition-transform"
+                    aria-label="Cancel payment"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                  <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-widest">
+                    Secure · PIN
+                  </span>
+                </div>
 
-              <PinPad onComplete={executePurchase} accentHex={accentHex} accentRgb={accentRgb} />
+                <div
+                  className="w-14 h-14 rounded-2xl border mx-auto mb-3 flex items-center justify-center text-2xl"
+                  style={{ background: `rgba(${accentRgb}, 0.12)`, borderColor: `rgba(${accentRgb}, 0.25)` }}
+                >
+                  🔐
+                </div>
+                <h3 className="text-white font-bold text-lg">Transaction PIN</h3>
+                <p className="text-[#64748B] text-xs mt-1 mb-6">
+                  Enter your 4-digit PIN to authorize ₦{effectiveNgn.toLocaleString()} payment
+                </p>
 
-              <div className="flex items-center gap-3 my-4 max-w-xs mx-auto">
-                <div className="flex-1 h-px bg-white/10" />
-                <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
-                <div className="flex-1 h-px bg-white/10" />
-              </div>
+                <PinPad onComplete={executePurchase} accentHex={accentHex} accentRgb={accentRgb} />
 
-              <div className="max-w-xs mx-auto">
-                <BiometricApproveButton
-                  onApproved={(token) => executePurchase(undefined, token)}
-                  accentHex={accentHex}
-                  accentRgb={accentRgb}
-                  disabled={processing}
-                />
+                <div className="flex items-center gap-3 my-4 max-w-xs mx-auto">
+                  <div className="flex-1 h-px bg-white/10" />
+                  <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
+                  <div className="flex-1 h-px bg-white/10" />
+                </div>
+
+                <div className="max-w-xs mx-auto">
+                  <BiometricApproveButton
+                    onApproved={(token) => executePurchase(undefined, token)}
+                    accentHex={accentHex}
+                    accentRgb={accentRgb}
+                    disabled={processing}
+                  />
+                </div>
               </div>
             </motion.div>
           )}
 
-          {/* Processing */}
+          {/* Processing (fixed overlay — never scrolls) */}
           {step === 'pin' && processing && (
-            <motion.div key="processing" className="py-24 flex flex-col items-center justify-center text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <Loader2 size={42} className="animate-spin mb-4" style={{ color: accentHex }} />
-              <h3 className="text-white font-bold text-base">Processing Order</h3>
-              <p className="text-[#64748B] text-xs mt-1">
-                Delivering to {formatPhoneDisplay(phoneNumber)}...
-              </p>
+            <motion.div
+              key="processing"
+              className="fixed inset-0 z-[60] flex flex-col items-center justify-center text-center bg-black/85 backdrop-blur-sm px-5"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
+              <div className="w-full max-w-sm mx-auto rounded-3xl border border-white/10 bg-[#0C0E13]/95 p-10 shadow-2xl">
+                <Loader2 size={42} className="animate-spin mb-4 mx-auto" style={{ color: accentHex }} />
+                <h3 className="text-white font-bold text-base">Processing Order</h3>
+                <p className="text-[#64748B] text-xs mt-1">
+                  Delivering to {formatPhoneDisplay(phoneNumber)}...
+                </p>
+              </div>
             </motion.div>
           )}
 
