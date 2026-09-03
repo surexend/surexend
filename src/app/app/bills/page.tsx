@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { billsAPI, walletAPI } from '@/lib/api'
+import { billsAPI, walletAPI, passkeyAPI } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
+import { startAuthentication } from '@simplewebauthn/browser'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
 import {
   Smartphone, Wifi, Zap, Tv, ChevronRight, ChevronDown, ArrowLeft,
@@ -26,6 +27,10 @@ import {
   detectNetworkFromPhone,
   validateNigerianPhone,
 } from '@/lib/nigerian-phones'
+import {
+  buildPlanCategories,
+  planMatchesCategory,
+} from '@/lib/data-plan-categories'
 
 // ── Essential Crypto Fintech Bill Categories ────────────────────────────────
 const CATEGORIES = [
@@ -143,7 +148,10 @@ function PinPad({
 
   return (
     <div>
-      <div className="flex justify-center gap-3 mb-8">
+      <div
+        className="flex justify-center gap-3 mb-[clamp(0.75rem,4dvh,2rem)]"
+        aria-label={`PIN entered ${pin.length} of 4 digits`}
+      >
         {Array.from({ length: 4 }, (_, i) => (
           <motion.div
             key={i}
@@ -158,12 +166,17 @@ function PinPad({
           />
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-4 max-w-xs mx-auto">
+      {/* Keypad buttons scale with viewport height so 4 rows always fit on
+          short phones (iPhone SE / small Android) without internal scrolling.
+          Buttons: 3.25rem–4rem (52–64px); gap: 0.5rem–1rem. */}
+      <div className="grid grid-cols-3 gap-[clamp(0.5rem,2.5dvh,1rem)] max-w-xs mx-auto">
         {keys.map((k, i) => (
           <motion.button
             key={i}
+            type="button"
             disabled={!k}
-            className="h-16 rounded-2xl text-xl font-semibold disabled:opacity-0"
+            aria-label={k === '⌫' ? 'Delete digit' : k}
+            className="h-[clamp(3.25rem,8.5dvh,4rem)] rounded-2xl text-xl font-semibold disabled:opacity-0"
             style={
               k && k !== '⌫'
                 ? { background: 'rgba(255,255,255,0.06)', color: '#fff' }
@@ -210,6 +223,8 @@ export default function BillsPage() {
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [errorMessage, setErrorMessage] = useState<string>('')
+  // True while the WebAuthn biometric prompt (Face ID / fingerprint) is open.
+  const [biometricBusy, setBiometricBusy] = useState(false)
 
   // Load recent numbers on mount
   useEffect(() => {
@@ -253,6 +268,20 @@ export default function BillsPage() {
     30
   )
 
+  // Lock page scroll while the secure PIN / processing overlay is up, so the
+  // keypad and PIN dots can never move, scroll, or slide off-screen. The overlay
+  // is `fixed inset-0`, but locking the body scroll is belt-and-braces so the
+  // page can't scroll underneath on small screens. We only toggle `overflow`,
+  // not `position`, to avoid resetting the page's scroll position.
+  useEffect(() => {
+    if (step !== 'pin') return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [step])
+
   // Real wallet balances
   const { data: walletBal } = useQuery({
     queryKey: ['bill-wallet-balance'],
@@ -275,75 +304,13 @@ export default function BillsPage() {
     enabled: step === 'data',
   })
 
-  // Dynamically group categories based on the actual plans in integration
-  const planCategories = useMemo(() => {
-    if (!rawPlans || !Array.isArray(rawPlans)) return []
+  // Group categories by the REAL catalog `planType` (see data-plan-categories),
+  // so the bundle tabs always match the VTU service catalogue and the admin
+  // pricing console (which also reads `planType`). Falls back to a validity
+  // bucket only when a plan carries no usable type.
+  const planCategories = useMemo(() => buildPlanCategories(rawPlans as any[]), [rawPlans])
 
-    const categories: { id: string; label: string; count: number }[] = []
-
-    // HOT / Popular bundles (1GB, 2.5GB, 3GB, 5GB, 10GB)
-    const hotPlans = rawPlans.filter((p: any) => {
-      const n = (p.name || '').toLowerCase()
-      return n.includes('1gb') || n.includes('1 gb') || n.includes('2gb') || n.includes('2.5gb') || n.includes('3gb') || n.includes('5gb') || n.includes('10gb')
-    })
-    if (hotPlans.length > 0) {
-      categories.push({ id: 'HOT', label: 'HOT', count: hotPlans.length })
-    }
-
-    // Daily plans (<= 3 days)
-    const dailyCount = rawPlans.filter((p: any) => {
-      const v = (p.validity || '').toLowerCase()
-      return v.includes('1 day') || v.includes('2 day') || v.includes('3 day') || (v.includes('day') && !v.includes('7') && !v.includes('14') && !v.includes('30'))
-    }).length
-    if (dailyCount > 0) {
-      categories.push({ id: 'Daily', label: 'Daily', count: dailyCount })
-    }
-
-    // Weekly plans (7 - 14 days)
-    const weeklyCount = rawPlans.filter((p: any) => {
-      const v = (p.validity || '').toLowerCase()
-      return v.includes('7 day') || v.includes('14 day') || v.includes('week')
-    }).length
-    if (weeklyCount > 0) {
-      categories.push({ id: 'Weekly', label: 'Weekly', count: weeklyCount })
-    }
-
-    // Monthly plans (30+ days)
-    const monthlyCount = rawPlans.filter((p: any) => {
-      const v = (p.validity || '').toLowerCase()
-      return v.includes('30 day') || v.includes('month') || v.includes('60 day') || v.includes('90 day')
-    }).length
-    if (monthlyCount > 0) {
-      categories.push({ id: 'Monthly', label: 'Monthly', count: monthlyCount })
-    }
-
-    // Night / Weekend plans
-    const nightCount = rawPlans.filter((p: any) => {
-      const v = (p.validity || '').toLowerCase()
-      const n = (p.name || '').toLowerCase()
-      return n.includes('night') || n.includes('weekend') || v.includes('night')
-    }).length
-    if (nightCount > 0) {
-      categories.push({ id: 'Night', label: 'Extra Night', count: nightCount })
-    }
-
-    // Broadband plans (>= 20GB)
-    const broadbandCount = rawPlans.filter((p: any) => {
-      const n = (p.name || '').toLowerCase()
-      const match = n.match(/(\d+(?:\.\d+)?)\s*gb/i)
-      return (match && parseFloat(match[1]) >= 20) || n.includes('broadband') || n.includes('router')
-    }).length
-    if (broadbandCount > 0) {
-      categories.push({ id: 'Broadband', label: 'Broadband', count: broadbandCount })
-    }
-
-    // Always provide All tab
-    categories.push({ id: 'ALL', label: 'All', count: rawPlans.length })
-
-    return categories
-  }, [rawPlans])
-
-  // Automatically set default tab when categories are loaded
+  // Automatically set default tab when category tabs are (re)loaded
   useEffect(() => {
     if (planCategories.length > 0 && !planCategories.some(c => c.id === activeDataTab)) {
       setActiveDataTab(planCategories[0].id)
@@ -353,47 +320,7 @@ export default function BillsPage() {
   // Filter plans based on active tab
   const filteredPlans = useMemo(() => {
     if (!rawPlans || !Array.isArray(rawPlans)) return []
-    if (activeDataTab === 'ALL') return rawPlans
-    if (activeDataTab === 'HOT') {
-      const hot = rawPlans.filter((p: any) => {
-        const n = (p.name || '').toLowerCase()
-        return n.includes('1gb') || n.includes('1 gb') || n.includes('2gb') || n.includes('2.5gb') || n.includes('3gb') || n.includes('5gb') || n.includes('10gb')
-      })
-      return hot.length > 0 ? hot : rawPlans
-    }
-    if (activeDataTab === 'Daily') {
-      return rawPlans.filter((p: any) => {
-        const v = (p.validity || '').toLowerCase()
-        return v.includes('1 day') || v.includes('2 day') || v.includes('3 day') || (v.includes('day') && !v.includes('7') && !v.includes('14') && !v.includes('30'))
-      })
-    }
-    if (activeDataTab === 'Weekly') {
-      return rawPlans.filter((p: any) => {
-        const v = (p.validity || '').toLowerCase()
-        return v.includes('7 day') || v.includes('14 day') || v.includes('week')
-      })
-    }
-    if (activeDataTab === 'Monthly') {
-      return rawPlans.filter((p: any) => {
-        const v = (p.validity || '').toLowerCase()
-        return v.includes('30 day') || v.includes('month') || v.includes('60 day') || v.includes('90 day')
-      })
-    }
-    if (activeDataTab === 'Night') {
-      return rawPlans.filter((p: any) => {
-        const v = (p.validity || '').toLowerCase()
-        const n = (p.name || '').toLowerCase()
-        return n.includes('night') || n.includes('weekend') || v.includes('night')
-      })
-    }
-    if (activeDataTab === 'Broadband') {
-      return rawPlans.filter((p: any) => {
-        const n = (p.name || '').toLowerCase()
-        const match = n.match(/(\d+(?:\.\d+)?)\s*gb/i)
-        return (match && parseFloat(match[1]) >= 20) || n.includes('broadband') || n.includes('router')
-      })
-    }
-    return rawPlans
+    return rawPlans.filter((p: any) => planMatchesCategory(p, activeDataTab))
   }, [rawPlans, activeDataTab])
 
   // Phone validation status
@@ -402,11 +329,23 @@ export default function BillsPage() {
   }, [phoneNumber, selectedNetwork])
 
   // Auto-detect network when typing phone number
+  // Switching networks invalidates any previously selected data plan and its
+  // price — a bundle from the old network must never be charged under the new
+  // one (this caused a stale price in the payment summary and wrong planCode).
+  // We only reset the data plan (and its category tab); the user's airtime
+  // amount/preset is network-independent and should survive the switch.
+  const changeNetwork = (net: NetworkCode) => {
+    if (net === selectedNetwork) return
+    setSelectedNetwork(net)
+    setSelectedPlan(null)
+    setActiveDataTab('ALL')
+  }
+
   const handlePhoneChange = (val: string) => {
     setPhoneNumber(val)
     const detected = detectNetworkFromPhone(val)
-    if (detected) {
-      setSelectedNetwork(detected)
+    if (detected && detected !== selectedNetwork) {
+      changeNetwork(detected)
     }
   }
 
@@ -424,16 +363,28 @@ export default function BillsPage() {
     setContactModalOpen(true)
   }
 
-  // Total NGN user will be charged
+  // Total NGN user will be charged. When a plan is selected (data), ALWAYS use
+  // the plan's sell price regardless of the current step — the payment summary
+  // and PIN screens render at 'wallet'/'pin' steps, so gating on `step === 'data'`
+  // here made a selected bundle show ₦0 (or a leftover airtime amount) in the
+  // summary, which is what drifted from the backend's price.
   const effectiveNgn = useMemo(() => {
-    if (step === 'data' && selectedPlan) {
-      return selectedPlan.amount || 0
+    if (selectedPlan) {
+      return Number(selectedPlan.amount) || 0
     }
     return parseFloat(amount) || 0
-  }, [step, selectedPlan, amount])
+  }, [selectedPlan, amount])
 
-  // Proceed to payment
-  const handleProceedToPayment = () => {
+  // Proceed to payment. `planOverride` lets a tapped bundle be validated
+  // immediately; reading `selectedPlan` here would race the async setState
+  // (still null on the first tap) and spuriously fail with "Please select a
+  // data bundle" even though a bundle was just selected.
+  const handleProceedToPayment = (planOverride?: any) => {
+    // Only treat the argument as a plan when it actually looks like one. A bare
+    // `onClick={handleProceedToPayment}` passes the DOM click event, which is
+    // truthy — without this guard the airtime Pay button would set selectedPlan
+    // to a MouseEvent and turn an airtime purchase into a broken "data" one.
+    const plan = planOverride && typeof planOverride === 'object' && planOverride.code ? planOverride : selectedPlan
     if (!phoneNumber) {
       return toast.error('Please enter a phone number')
     }
@@ -448,10 +399,12 @@ export default function BillsPage() {
       if (amt > 500000) {
         return toast.error('Maximum airtime amount is ₦500,000')
       }
-    } else if (step === 'data' && !selectedPlan) {
+    } else if (step === 'data' && !plan) {
       return toast.error('Please select a data bundle')
     }
 
+    // Make sure the plan we validated is the one the summary/PIN screens read.
+    if (plan) setSelectedPlan(plan)
     setStep('wallet')
   }
 
@@ -492,6 +445,43 @@ export default function BillsPage() {
     } finally {
       setProcessing(false)
     }
+  }
+
+  // Biometric-first approval: trigger Face ID / fingerprint via WebAuthn before
+  // showing the PIN keypad. If the user has no enrolled passkey, cancels, or the
+  // prompt fails, we fall back to the 4-digit PIN. This must be called from a
+  // user-gesture handler (the "Continue" button) because browsers only allow
+  // navigator.credentials.get() inside a transient activation.
+  const approveWithBiometric = async () => {
+    setBiometricBusy(true)
+    try {
+      // Skip straight to PIN if the account has no registered credential, so we
+      // never flash an unusable OS prompt.
+      const devices = await passkeyAPI.listDevices().catch(() => [] as any[])
+      if (!Array.isArray(devices) || devices.length === 0) {
+        setStep('pin')
+        return
+      }
+      const options = await passkeyAPI.approveBegin()
+      const response = await startAuthentication({ optionsJSON: options })
+      const { passkeyToken } = await passkeyAPI.approveComplete(response)
+      setBiometricBusy(false)
+      await executePurchase(undefined, passkeyToken)
+      return
+    } catch {
+      // Cancelled, no credential available, or WebAuthn not supported — fall
+      // back to the PIN keypad.
+    } finally {
+      setBiometricBusy(false)
+    }
+    setStep('pin')
+  }
+
+  const handleConfirmPayment = () => {
+    if (realNgn < effectiveNgn) {
+      return toast.error('Insufficient real naira balance in your NGN wallet.')
+    }
+    void approveWithBiometric()
   }
 
   const reset = () => {
@@ -728,7 +718,7 @@ export default function BillsPage() {
                     </div>
 
                     <button
-                      onClick={handleProceedToPayment}
+                      onClick={() => handleProceedToPayment()}
                       disabled={!amount || parseFloat(amount) < 50 || !phoneValidation.isValid}
                       className="px-7 py-3.5 rounded-2xl font-bold text-black text-sm disabled:opacity-40 active:scale-95 transition-all shadow-md flex-shrink-0"
                       style={{ background: colors.gradientBg }}
@@ -859,7 +849,7 @@ export default function BillsPage() {
                           key={plan.code}
                           onClick={() => {
                             setSelectedPlan(plan)
-                            handleProceedToPayment()
+                            handleProceedToPayment(plan)
                           }}
                           className="rounded-2xl p-3.5 flex flex-col items-center justify-between min-h-[114px] text-center border transition-all active:scale-95"
                           style={{
@@ -930,9 +920,12 @@ export default function BillsPage() {
 
                 <button
                   onClick={() => {
+                    if (realNgn < effectiveNgn) {
+                      return toast.error('Insufficient real naira balance in your NGN wallet.')
+                    }
                     setSelectedWallet('NGN')
-                    setStep('pin')
                   }}
+                  disabled={realNgn < effectiveNgn}
                   className="w-full rounded-2xl p-4 text-left border transition-all flex items-center gap-3.5 active:scale-98"
                   style={{
                     background: `rgba(${accentRgb}, 0.06)`,
@@ -967,64 +960,96 @@ export default function BillsPage() {
               </div>
 
               <button
-                onClick={() => {
-                  if (realNgn < effectiveNgn) {
-                    return toast.error('Insufficient real naira balance in your NGN wallet.')
-                  }
-                  setStep('pin')
-                }}
-                disabled={realNgn < effectiveNgn}
+                onClick={handleConfirmPayment}
+                disabled={realNgn < effectiveNgn || biometricBusy}
                 className="w-full py-4 rounded-2xl font-bold text-black text-sm disabled:opacity-40 active:scale-98 transition-transform"
                 style={{ background: colors.gradientBg }}
               >
-                Continue to PIN
+                {biometricBusy
+                  ? <span className="inline-flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Authenticating…</span>
+                  : 'Continue'
+                }
               </button>
+              {!biometricBusy && (
+                <p className="text-center text-[#64748B] text-[11px] mt-2 flex items-center justify-center gap-1.5">
+                  <span className="text-base leading-none">👆</span> Verify with Face ID / fingerprint, or use your PIN if you prefer.
+                </p>
+              )}
             </motion.div>
           )}
 
           {/* ══════════════════════════════════════════════════════════════════ */}
-          {/* STEP 5: PIN & BIOMETRICS */}
+          {/* STEP 5: PIN & BIOMETRICS (fixed overlay — never scrolls) */}
           {/* ══════════════════════════════════════════════════════════════════ */}
           {step === 'pin' && !processing && (
-            <motion.div key="pin" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="pt-2 text-center">
-              <div
-                className="w-14 h-14 rounded-2xl border mx-auto mb-3 flex items-center justify-center text-2xl"
-                style={{ background: `rgba(${accentRgb}, 0.12)`, borderColor: `rgba(${accentRgb}, 0.25)` }}
-              >
-                🔐
-              </div>
-              <h3 className="text-white font-bold text-lg">Transaction PIN</h3>
-              <p className="text-[#64748B] text-xs mt-1 mb-6">
-                Enter your 4-digit PIN to authorize ₦{effectiveNgn.toLocaleString()} payment
-              </p>
+            <motion.div
+              key="pin"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-x-0 top-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm px-5 h-[100dvh]"
+            >
+              <div className="w-full max-w-sm mx-auto rounded-3xl border border-white/10 bg-[#0C0E13]/95 p-5 sm:p-6 shadow-2xl text-center overflow-hidden">
+                <div className="flex items-center justify-between mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep('wallet')}
+                    className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#94A3B8] active:scale-95 transition-transform"
+                    aria-label="Cancel payment"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                  <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-widest">
+                    Secure · PIN
+                  </span>
+                </div>
 
-              <PinPad onComplete={executePurchase} accentHex={accentHex} accentRgb={accentRgb} />
+                <div
+                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl border mx-auto mb-2 flex items-center justify-center text-xl sm:text-2xl"
+                  style={{ background: `rgba(${accentRgb}, 0.12)`, borderColor: `rgba(${accentRgb}, 0.25)` }}
+                >
+                  🔐
+                </div>
+                <h3 className="text-white font-bold text-lg">Transaction PIN</h3>
+                <p className="text-[#94A3B8] text-xs mt-1 mb-4 sm:mb-5">
+                  Enter your 4-digit PIN to authorize ₦{effectiveNgn.toLocaleString()} payment
+                </p>
 
-              <div className="flex items-center gap-3 my-4 max-w-xs mx-auto">
-                <div className="flex-1 h-px bg-white/10" />
-                <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
-                <div className="flex-1 h-px bg-white/10" />
-              </div>
+                <PinPad onComplete={executePurchase} accentHex={accentHex} accentRgb={accentRgb} />
 
-              <div className="max-w-xs mx-auto">
-                <BiometricApproveButton
-                  onApproved={(token) => executePurchase(undefined, token)}
-                  accentHex={accentHex}
-                  accentRgb={accentRgb}
-                  disabled={processing}
-                />
+                <div className="flex items-center gap-3 my-4 max-w-xs mx-auto">
+                  <div className="flex-1 h-px bg-white/10" />
+                  <span className="text-[10px] text-[#64748B] uppercase tracking-wider">or</span>
+                  <div className="flex-1 h-px bg-white/10" />
+                </div>
+
+                <div className="max-w-xs mx-auto">
+                  <BiometricApproveButton
+                    onApproved={(token) => executePurchase(undefined, token)}
+                    accentHex={accentHex}
+                    accentRgb={accentRgb}
+                    disabled={processing}
+                  />
+                </div>
               </div>
             </motion.div>
           )}
 
-          {/* Processing */}
+          {/* Processing (fixed overlay — never scrolls) */}
           {step === 'pin' && processing && (
-            <motion.div key="processing" className="py-24 flex flex-col items-center justify-center text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <Loader2 size={42} className="animate-spin mb-4" style={{ color: accentHex }} />
-              <h3 className="text-white font-bold text-base">Processing Order</h3>
-              <p className="text-[#64748B] text-xs mt-1">
-                Delivering to {formatPhoneDisplay(phoneNumber)}...
-              </p>
+            <motion.div
+              key="processing"
+              className="fixed inset-x-0 top-0 z-[60] flex flex-col items-center justify-center text-center bg-black/85 backdrop-blur-sm px-5 h-[100dvh]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
+              <div className="w-full max-w-sm mx-auto rounded-3xl border border-white/10 bg-[#0C0E13]/95 p-8 sm:p-10 shadow-2xl">
+                <Loader2 size={42} className="animate-spin mb-4 mx-auto" style={{ color: accentHex }} />
+                <h3 className="text-white font-bold text-base">Processing Order</h3>
+                <p className="text-[#64748B] text-xs mt-1">
+                  Delivering to {formatPhoneDisplay(phoneNumber)}...
+                </p>
+              </div>
             </motion.div>
           )}
 
@@ -1149,7 +1174,7 @@ export default function BillsPage() {
                     key={net.code}
                     type="button"
                     onClick={() => {
-                      setSelectedNetwork(net.code)
+                      changeNetwork(net.code)
                       setNetworkModalOpen(false)
                     }}
                     className="w-full p-3.5 rounded-2xl border flex items-center gap-3.5 text-left transition-all active:scale-98"

@@ -67,7 +67,7 @@ export default function PinKeypad({
   }
 
   return (
-    <div className="w-full max-w-[340px] mx-auto p-5 sm:p-6 rounded-3xl bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.4)] relative overflow-hidden flex flex-col items-center select-none">
+    <div className="w-full max-w-[340px] mx-auto p-[clamp(1rem,4dvh,1.5rem)] sm:p-6 rounded-3xl bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.4)] relative overflow-hidden flex flex-col items-center select-none">
       {/* Top subtle liquid glass highlight */}
       <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white/[0.06] to-transparent pointer-events-none" />
 
@@ -129,7 +129,7 @@ export default function PinKeypad({
       </AnimatePresence>
 
       {/* ── Number grid ── */}
-      <div className="grid grid-cols-3 w-full gap-2.5 relative z-10">
+      <div className="grid grid-cols-3 w-full gap-[clamp(0.5rem,2.5dvh,0.625rem)] relative z-10">
         {KEYS.map((k, i) => {
           const isBlank = k === ''
           const isDelete = k === '⌫'
@@ -161,7 +161,10 @@ export default function PinKeypad({
               }
               transition={{ type: 'spring', stiffness: 700, damping: 22 }}
               className={[
-                'h-[52px] rounded-2xl flex items-center justify-center font-black text-xl transition-all select-none',
+                // Buttons scale with viewport height so 4 rows always fit on
+                // short phones (iPhone SE / small Android) without the page or
+                // the keypad internals scrolling.
+                'h-[clamp(3rem,8.5dvh,3.25rem)] rounded-2xl flex items-center justify-center font-black text-xl transition-all select-none',
                 // numeric keys with liquid glass style
                 !isDelete && !isBlank
                   ? 'bg-white/[0.04] backdrop-blur-md border border-white/[0.08] text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.12)] hover:bg-white/[0.08] hover:border-white/20 active:bg-white/[0.12]'

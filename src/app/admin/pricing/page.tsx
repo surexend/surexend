@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { adminAPI, type AdminApprovalPayload } from '@/lib/api'
-import { Search, RefreshCw, Check, X, TrendingUp, TrendingDown, BadgePercent, Loader2 } from 'lucide-react'
+import { Search, RefreshCw, Check, X, TrendingUp, TrendingDown, BadgePercent, Loader2, AlertTriangle, ArrowUpDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminStepUpModal from '@/components/admin/AdminStepUpModal'
+import { buildPlanCategories, planMatchesCategory, planCategoryLabel, planCategoryId } from '@/lib/data-plan-categories'
 
 const NETWORK_COLORS: Record<string, string> = {
   MTN: '#FBBF24',
@@ -18,6 +19,9 @@ export default function AdminPricingPage() {
   const [loading, setLoading] = useState(true)
   const [activeNet, setActiveNet] = useState<string>('MTN')
   const [search, setSearch] = useState('')
+  const [activeCat, setActiveCat] = useState<string>('ALL')
+  const [sortKey, setSortKey] = useState<'name' | 'cost' | 'sell' | 'profit'>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   // Editable sell-price overrides keyed "provider:planCode"
   const [edits, setEdits] = useState<Record<string, string>>({})
@@ -78,12 +82,58 @@ export default function AdminPricingPage() {
 
   const active = useMemo(() => data?.data?.find((x: any) => x.provider === activeNet), [data, activeNet])
 
+  // Category tabs derived from the REAL catalog planType — identical grouping
+  // to the customer-facing bills page, so what admins edit maps 1:1 to what
+  // customers see (and to the VTU service catalogue).
+  const activeCategories = useMemo(() => buildPlanCategories(active?.plans as any[]), [active])
+
+  // Pricing health for the active network (fintech-grade visibility).
+  const health = useMemo(() => {
+    const plans = (active?.plans || []) as any[]
+    const activeCount = plans.filter((p) => !p.disabled).length
+    const disabledCount = plans.length - activeCount
+    // "At/below cost" means the app would sell a bundle for ≤ what it pays.
+    const belowCost = plans.filter((p) => (Number(p.amount) || 0) <= (Number(p.costPrice) || 0))
+    const margins = plans.filter((p) => !p.disabled).map((p) => {
+      const cost = Number(p.costPrice) || 0
+      const sell = Number(p.amount) || 0
+      return cost > 0 ? ((sell - cost) / cost) * 100 : 0
+    })
+    const minMargin = margins.length ? Math.min(...margins) : 0
+    const maxMargin = margins.length ? Math.max(...margins) : 0
+    return { activeCount, disabledCount, belowCost, totalCount: plans.length, minMargin, maxMargin }
+  }, [active])
+
   const filteredPlans = useMemo(() => {
     if (!active) return []
     const q = search.toLowerCase()
-    return active.plans.filter((p: any) =>
-      !q || (p.name || '').toLowerCase().includes(q) || (p.validity || '').toLowerCase().includes(q))
-  }, [active, search])
+    const out = active.plans.filter((p: any) => {
+      const matchesSearch = !q || (p.name || '').toLowerCase().includes(q) || (p.validity || '').toLowerCase().includes(q)
+      return matchesSearch && planMatchesCategory(p, activeCat)
+    })
+
+    const val = (p: any): number | string => {
+      if (sortKey === 'name') return (p.name || '').toLowerCase()
+      if (sortKey === 'cost') return Number(p.costPrice) || 0
+      if (sortKey === 'sell') return Number(p.amount) || 0
+      return (Number(p.amount) || 0) - (Number(p.costPrice) || 0)
+    }
+
+    out.sort((a: any, b: any) => {
+      const va = val(a)
+      const vb = val(b)
+      if (typeof va === 'string' && typeof vb === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+      const na = Number(va)
+      const nb = Number(vb)
+      return sortDir === 'asc' ? na - nb : nb - na
+    })
+    return out
+  }, [active, search, activeCat, sortKey, sortDir])
+
+  const toggleSort = (key: 'name' | 'cost' | 'sell' | 'profit') => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir('asc') }
+  }
 
   const fmt = (n: number) => Number(n || 0).toLocaleString()
 
@@ -269,7 +319,7 @@ export default function AdminPricingPage() {
           {data.data.map((x: any) => (
             <button
               key={x.provider}
-              onClick={() => { setActiveNet(x.provider); setSearch('') }}
+              onClick={() => { setActiveNet(x.provider); setSearch(''); setActiveCat('ALL'); setSortKey('name'); setSortDir('asc') }}
               className="px-4 py-2 rounded-xl text-xs font-bold flex-shrink-0 transition-all"
               style={activeNet === x.provider
                 ? { background: `${NETWORK_COLORS[x.provider]}22`, color: NETWORK_COLORS[x.provider], border: `1px solid ${NETWORK_COLORS[x.provider]}55` }
@@ -282,6 +332,40 @@ export default function AdminPricingPage() {
 
         {active && (
           <>
+            {/* Pricing health summary (fintech-grade visibility) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <p className="text-[10px] text-[#64748B] uppercase tracking-wider">Active</p>
+                <p className="text-lg font-extrabold text-white leading-tight mt-0.5">{health.activeCount}<span className="text-[11px] text-[#64748B] font-medium">/{health.totalCount}</span></p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <p className="text-[10px] text-[#64748B] uppercase tracking-wider">Disabled</p>
+                <p className="text-lg font-extrabold leading-tight mt-0.5" style={{ color: health.disabledCount ? '#F87171' : '#fff' }}>{health.disabledCount}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <p className="text-[10px] text-[#64748B] uppercase tracking-wider">At/below cost</p>
+                <p className="text-lg font-extrabold leading-tight mt-0.5" style={{ color: health.belowCost.length ? '#F87171' : '#34D399' }}>
+                  {health.belowCost.length}
+                  {health.belowCost.length > 0 && <AlertTriangle className="inline w-3.5 h-3.5 ml-1 -mt-0.5" />}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <p className="text-[10px] text-[#64748B] uppercase tracking-wider">Margin range</p>
+                <p className="text-lg font-extrabold leading-tight mt-0.5 text-white">
+                  {health.minMargin.toFixed(0)}%<span className="text-[11px] text-[#64748B] font-medium"> to </span>{health.maxMargin.toFixed(0)}%
+                </p>
+              </div>
+            </div>
+
+            {health.belowCost.length > 0 && (
+              <div className="mb-4 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <p className="text-amber-200 text-[11px] leading-snug">
+                  <span className="font-bold">{health.belowCost.length} bundle{health.belowCost.length > 1 ? 's' : ''}</span> on {active.provider} sells at or below what the provider charges. You lose money on these — raise the sell price or the auto margin.
+                </p>
+              </div>
+            )}
+
             {/* Auto margin control */}
             <div className="flex items-center gap-2 mb-4 p-3 rounded-2xl bg-white/[0.03] border border-white/10">
               <span className="text-xs text-[#94A3B8] flex-shrink-0">Auto margin % (all plans):</span>
@@ -311,15 +395,46 @@ export default function AdminPricingPage() {
               </div>
             </div>
 
+            {/* Plan-type tabs — mirror the customer-facing bills page */}
+            {activeCategories.length > 1 && (
+              <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-none">
+                {activeCategories.map((cat) => {
+                  const isActive = activeCat === cat.id
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setActiveCat(cat.id)}
+                      className="shrink-0 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5"
+                      style={isActive
+                        ? { background: 'rgba(212,160,23,0.18)', color: '#fff', border: '1px solid rgba(212,160,23,0.45)' }
+                        : { background: 'rgba(255,255,255,0.03)', color: '#94A3B8', border: '1px solid rgba(255,255,255,0.06)' }}
+                    >
+                      {cat.label}
+                      <span className="text-[10px] font-bold opacity-70">{cat.count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
             {/* Plans table */}
             <div className="overflow-x-auto rounded-2xl border border-white/10">
               <table className="w-full text-left text-xs min-w-[720px]">
                 <thead className="bg-white/[0.03]">
                   <tr className="text-[#64748B] text-[10px] uppercase tracking-wider">
-                    <th className="py-3 px-4">Plan</th>
-                    <th className="py-3 px-4">Service cost</th>
-                    <th className="py-3 px-4">Your sell price</th>
-                    <th className="py-3 px-4">Profit</th>
+                    <th className="py-3 px-4 cursor-pointer select-none" onClick={() => toggleSort('name')}>
+                      <span className="inline-flex items-center gap-1">Plan <ArrowUpDown className="w-3 h-3" /></span>
+                    </th>
+                    <th className="py-3 px-4 cursor-pointer select-none" onClick={() => toggleSort('cost')}>
+                      <span className="inline-flex items-center gap-1">Service cost <ArrowUpDown className="w-3 h-3" /></span>
+                    </th>
+                    <th className="py-3 px-4 cursor-pointer select-none" onClick={() => toggleSort('sell')}>
+                      <span className="inline-flex items-center gap-1">Your sell price <ArrowUpDown className="w-3 h-3" /></span>
+                    </th>
+                    <th className="py-3 px-4 cursor-pointer select-none" onClick={() => toggleSort('profit')}>
+                      <span className="inline-flex items-center gap-1">Profit <ArrowUpDown className="w-3 h-3" /></span>
+                    </th>
                     <th className="py-3 px-4 text-right">Action</th>
                   </tr>
                 </thead>
@@ -340,7 +455,7 @@ export default function AdminPricingPage() {
                               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/25 font-bold">disabled</span>
                             )}
                           </p>
-                          <p className="text-[10px] text-[#64748B]">{p.validity} · {p.planType?.replace(/_/g, ' ')}</p>
+                          <p className="text-[10px] text-[#64748B]">{p.validity} · {planCategoryLabel(planCategoryId(p), active.plans)}</p>
                         </td>
                         <td className="py-2.5 px-4 text-[#94A3B8]">
                           <span className="inline-flex items-center gap-1">
