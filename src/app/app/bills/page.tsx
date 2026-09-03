@@ -280,9 +280,16 @@ export default function BillsPage() {
   const planCategories = useMemo(() => {
     if (!rawPlans || !Array.isArray(rawPlans)) return []
 
-    const categories: { id: string; label: string; count: number }[] = [
-      { id: 'ALL', label: 'All', count: rawPlans.length },
-    ]
+    const categories: { id: string; label: string; count: number }[] = []
+
+    // HOT / Popular bundles (1GB, 2.5GB, 3GB, 5GB, 10GB)
+    const hotPlans = rawPlans.filter((p: any) => {
+      const n = (p.name || '').toLowerCase()
+      return n.includes('1gb') || n.includes('1 gb') || n.includes('2gb') || n.includes('2.5gb') || n.includes('3gb') || n.includes('5gb') || n.includes('10gb')
+    })
+    if (hotPlans.length > 0) {
+      categories.push({ id: 'HOT', label: 'HOT', count: hotPlans.length })
+    }
 
     // Daily plans (<= 3 days)
     const dailyCount = rawPlans.filter((p: any) => {
@@ -331,25 +338,30 @@ export default function BillsPage() {
       categories.push({ id: 'Broadband', label: 'Broadband', count: broadbandCount })
     }
 
-    // Specific plan types from provider if distinguished (e.g. SME, Gifting)
-    const planTypes = Array.from(new Set(rawPlans.map((p: any) => p.planType).filter(Boolean)))
-    if (planTypes.length > 1) {
-      for (const pt of planTypes) {
-        const count = rawPlans.filter((p: any) => p.planType === pt).length
-        if (count > 0) {
-          const label = String(pt).replace(/_/g, ' ')
-          categories.push({ id: `type_${pt}`, label, count })
-        }
-      }
-    }
+    // Always provide All tab
+    categories.push({ id: 'ALL', label: 'All', count: rawPlans.length })
 
     return categories
   }, [rawPlans])
+
+  // Automatically set default tab when categories are loaded
+  useEffect(() => {
+    if (planCategories.length > 0 && !planCategories.some(c => c.id === activeDataTab)) {
+      setActiveDataTab(planCategories[0].id)
+    }
+  }, [planCategories, activeDataTab])
 
   // Filter plans based on active tab
   const filteredPlans = useMemo(() => {
     if (!rawPlans || !Array.isArray(rawPlans)) return []
     if (activeDataTab === 'ALL') return rawPlans
+    if (activeDataTab === 'HOT') {
+      const hot = rawPlans.filter((p: any) => {
+        const n = (p.name || '').toLowerCase()
+        return n.includes('1gb') || n.includes('1 gb') || n.includes('2gb') || n.includes('2.5gb') || n.includes('3gb') || n.includes('5gb') || n.includes('10gb')
+      })
+      return hot.length > 0 ? hot : rawPlans
+    }
     if (activeDataTab === 'Daily') {
       return rawPlans.filter((p: any) => {
         const v = (p.validity || '').toLowerCase()
@@ -381,10 +393,6 @@ export default function BillsPage() {
         const match = n.match(/(\d+(?:\.\d+)?)\s*gb/i)
         return (match && parseFloat(match[1]) >= 20) || n.includes('broadband') || n.includes('router')
       })
-    }
-    if (activeDataTab.startsWith('type_')) {
-      const pt = activeDataTab.replace('type_', '')
-      return rawPlans.filter((p: any) => p.planType === pt)
     }
     return rawPlans
   }, [rawPlans, activeDataTab])
@@ -833,21 +841,23 @@ export default function BillsPage() {
 
                 {/* Horizontal Category Tabs (Spacious, dynamically populated from integration) */}
                 {planCategories.length > 1 && (
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
                     {planCategories.map((tab) => {
                       const isActive = activeDataTab === tab.id
                       return (
                         <button
                           key={tab.id}
+                          type="button"
                           onClick={() => setActiveDataTab(tab.id)}
-                          className="px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex flex-col items-center gap-1"
+                          className="shrink-0 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center justify-center cursor-pointer select-none active:scale-95"
                           style={{
                             color: isActive ? '#FFFFFF' : '#94A3B8',
-                            background: isActive ? `rgba(${accentRgb}, 0.15)` : 'rgba(255,255,255,0.03)',
-                            border: `1px solid ${isActive ? `rgba(${accentRgb}, 0.3)` : 'rgba(255,255,255,0.05)'}`,
+                            background: isActive ? `rgba(${accentRgb}, 0.2)` : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${isActive ? `rgba(${accentRgb}, 0.4)` : 'rgba(255,255,255,0.05)'}`,
+                            boxShadow: isActive ? `0 0 12px rgba(${accentRgb}, 0.15)` : 'none',
                           }}
                         >
-                          <span>{tab.label}</span>
+                          {tab.label}
                         </button>
                       )
                     })}

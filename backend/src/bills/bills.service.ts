@@ -640,9 +640,7 @@ export class BillsService {
         return { ...billPayment, status: 'COMPLETED' };
       } catch (error: any) {
         let message = error?.message || 'Transaction failed';
-        if (axios.isAxiosError(error) && error.response?.data) {
-          message = this.errorMessage(error.response.data);
-        } else if (error?.response?.data) {
+        if (error?.response?.data) {
           message = this.errorMessage(error.response.data);
         }
         this.logger.error(`Smartspeed purchase failed (${reference}): ${message}`);
