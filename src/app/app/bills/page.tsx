@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/context/ThemeContext'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { billsAPI, walletAPI } from '@/lib/api'
+import { billsAPI, walletAPI, passkeyAPI } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
+import { startAuthentication } from '@simplewebauthn/browser'
 import BiometricApproveButton from '@/components/BiometricApproveButton'
 import {
   Smartphone, Wifi, Zap, Tv, ChevronRight, ChevronDown, ArrowLeft,
@@ -26,6 +27,10 @@ import {
   detectNetworkFromPhone,
   validateNigerianPhone,
 } from '@/lib/nigerian-phones'
+import {
+  buildPlanCategories,
+  planMatchesCategory,
+} from '@/lib/data-plan-categories'
 
 // ── Essential Crypto Fintech Bill Categories ────────────────────────────────
 const CATEGORIES = [
@@ -162,7 +167,9 @@ function PinPad({
         {keys.map((k, i) => (
           <motion.button
             key={i}
+            type="button"
             disabled={!k}
+            aria-label={k === '⌫' ? 'Delete digit' : k}
             className="h-16 rounded-2xl text-xl font-semibold disabled:opacity-0"
             style={
               k && k !== '⌫'
@@ -211,6 +218,8 @@ export default function BillsPage() {
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [errorMessage, setErrorMessage] = useState<string>('')
+  // True while the WebAuthn biometric prompt (Face ID / fingerprint) is open.
+  const [biometricBusy, setBiometricBusy] = useState(false)
 
   // Load recent numbers on mount
   useEffect(() => {
@@ -276,75 +285,13 @@ export default function BillsPage() {
     enabled: step === 'data',
   })
 
-  // Dynamically group categories based on the actual plans in integration
-  const planCategories = useMemo(() => {
-    if (!rawPlans || !Array.isArray(rawPlans)) return []
+  // Group categories by the REAL catalog `planType` (see data-plan-categories),
+  // so the bundle tabs always match the VTU service catalogue and the admin
+  // pricing console (which also reads `planType`). Falls back to a validity
+  // bucket only when a plan carries no usable type.
+  const planCategories = useMemo(() => buildPlanCategories(rawPlans as any[]), [rawPlans])
 
-    const categories: { id: string; label: string; count: number }[] = []
-
-    // HOT / Popular bundles (1GB, 2.5GB, 3GB, 5GB, 10GB)
-    const hotPlans = rawPlans.filter((p: any) => {
-      const n = (p.name || '').toLowerCase()
-      return n.includes('1gb') || n.includes('1 gb') || n.includes('2gb') || n.includes('2.5gb') || n.includes('3gb') || n.includes('5gb') || n.includes('10gb')
-    })
-    if (hotPlans.length > 0) {
-      categories.push({ id: 'HOT', label: 'HOT', count: hotPlans.length })
-    }
-
-    // Daily plans (<= 3 days)
-    const dailyCount = rawPlans.filter((p: any) => {
-      const v = (p.validity || '').toLowerCase()
-      return v.includes('1 day') || v.includes('2 day') || v.includes('3 day') || (v.includes('day') && !v.includes('7') && !v.includes('14') && !v.includes('30'))
-    }).length
-    if (dailyCount > 0) {
-      categories.push({ id: 'Daily', label: 'Daily', count: dailyCount })
-    }
-
-    // Weekly plans (7 - 14 days)
-    const weeklyCount = rawPlans.filter((p: any) => {
-      const v = (p.validity || '').toLowerCase()
-      return v.includes('7 day') || v.includes('14 day') || v.includes('week')
-    }).length
-    if (weeklyCount > 0) {
-      categories.push({ id: 'Weekly', label: 'Weekly', count: weeklyCount })
-    }
-
-    // Monthly plans (30+ days)
-    const monthlyCount = rawPlans.filter((p: any) => {
-      const v = (p.validity || '').toLowerCase()
-      return v.includes('30 day') || v.includes('month') || v.includes('60 day') || v.includes('90 day')
-    }).length
-    if (monthlyCount > 0) {
-      categories.push({ id: 'Monthly', label: 'Monthly', count: monthlyCount })
-    }
-
-    // Night / Weekend plans
-    const nightCount = rawPlans.filter((p: any) => {
-      const v = (p.validity || '').toLowerCase()
-      const n = (p.name || '').toLowerCase()
-      return n.includes('night') || n.includes('weekend') || v.includes('night')
-    }).length
-    if (nightCount > 0) {
-      categories.push({ id: 'Night', label: 'Extra Night', count: nightCount })
-    }
-
-    // Broadband plans (>= 20GB)
-    const broadbandCount = rawPlans.filter((p: any) => {
-      const n = (p.name || '').toLowerCase()
-      const match = n.match(/(\d+(?:\.\d+)?)\s*gb/i)
-      return (match && parseFloat(match[1]) >= 20) || n.includes('broadband') || n.includes('router')
-    }).length
-    if (broadbandCount > 0) {
-      categories.push({ id: 'Broadband', label: 'Broadband', count: broadbandCount })
-    }
-
-    // Always provide All tab
-    categories.push({ id: 'ALL', label: 'All', count: rawPlans.length })
-
-    return categories
-  }, [rawPlans])
-
-  // Automatically set default tab when categories are loaded
+  // Automatically set default tab when category tabs are (re)loaded
   useEffect(() => {
     if (planCategories.length > 0 && !planCategories.some(c => c.id === activeDataTab)) {
       setActiveDataTab(planCategories[0].id)
@@ -354,47 +301,7 @@ export default function BillsPage() {
   // Filter plans based on active tab
   const filteredPlans = useMemo(() => {
     if (!rawPlans || !Array.isArray(rawPlans)) return []
-    if (activeDataTab === 'ALL') return rawPlans
-    if (activeDataTab === 'HOT') {
-      const hot = rawPlans.filter((p: any) => {
-        const n = (p.name || '').toLowerCase()
-        return n.includes('1gb') || n.includes('1 gb') || n.includes('2gb') || n.includes('2.5gb') || n.includes('3gb') || n.includes('5gb') || n.includes('10gb')
-      })
-      return hot.length > 0 ? hot : rawPlans
-    }
-    if (activeDataTab === 'Daily') {
-      return rawPlans.filter((p: any) => {
-        const v = (p.validity || '').toLowerCase()
-        return v.includes('1 day') || v.includes('2 day') || v.includes('3 day') || (v.includes('day') && !v.includes('7') && !v.includes('14') && !v.includes('30'))
-      })
-    }
-    if (activeDataTab === 'Weekly') {
-      return rawPlans.filter((p: any) => {
-        const v = (p.validity || '').toLowerCase()
-        return v.includes('7 day') || v.includes('14 day') || v.includes('week')
-      })
-    }
-    if (activeDataTab === 'Monthly') {
-      return rawPlans.filter((p: any) => {
-        const v = (p.validity || '').toLowerCase()
-        return v.includes('30 day') || v.includes('month') || v.includes('60 day') || v.includes('90 day')
-      })
-    }
-    if (activeDataTab === 'Night') {
-      return rawPlans.filter((p: any) => {
-        const v = (p.validity || '').toLowerCase()
-        const n = (p.name || '').toLowerCase()
-        return n.includes('night') || n.includes('weekend') || v.includes('night')
-      })
-    }
-    if (activeDataTab === 'Broadband') {
-      return rawPlans.filter((p: any) => {
-        const n = (p.name || '').toLowerCase()
-        const match = n.match(/(\d+(?:\.\d+)?)\s*gb/i)
-        return (match && parseFloat(match[1]) >= 20) || n.includes('broadband') || n.includes('router')
-      })
-    }
-    return rawPlans
+    return rawPlans.filter((p: any) => planMatchesCategory(p, activeDataTab))
   }, [rawPlans, activeDataTab])
 
   // Phone validation status
@@ -403,11 +310,23 @@ export default function BillsPage() {
   }, [phoneNumber, selectedNetwork, isPorted])
 
   // Auto-detect network when typing phone number
+  // Switching networks invalidates any previously selected data plan and its
+  // price — a bundle from the old network must never be charged under the new
+  // one (this caused a stale price in the payment summary and wrong planCode).
+  // We only reset the data plan (and its category tab); the user's airtime
+  // amount/preset is network-independent and should survive the switch.
+  const changeNetwork = (net: NetworkCode) => {
+    if (net === selectedNetwork) return
+    setSelectedNetwork(net)
+    setSelectedPlan(null)
+    setActiveDataTab('ALL')
+  }
+
   const handlePhoneChange = (val: string) => {
     setPhoneNumber(val)
     const detected = detectNetworkFromPhone(val)
     if (detected && detected !== selectedNetwork && !isPorted) {
-      setSelectedNetwork(detected)
+      changeNetwork(detected)
     }
   }
 
@@ -425,16 +344,28 @@ export default function BillsPage() {
     setContactModalOpen(true)
   }
 
-  // Total NGN user will be charged
+  // Total NGN user will be charged. When a plan is selected (data), ALWAYS use
+  // the plan's sell price regardless of the current step — the payment summary
+  // and PIN screens render at 'wallet'/'pin' steps, so gating on `step === 'data'`
+  // here made a selected bundle show ₦0 (or a leftover airtime amount) in the
+  // summary, which is what drifted from the backend's price.
   const effectiveNgn = useMemo(() => {
-    if (step === 'data' && selectedPlan) {
-      return selectedPlan.amount || 0
+    if (selectedPlan) {
+      return Number(selectedPlan.amount) || 0
     }
     return parseFloat(amount) || 0
-  }, [step, selectedPlan, amount])
+  }, [selectedPlan, amount])
 
-  // Proceed to payment
-  const handleProceedToPayment = () => {
+  // Proceed to payment. `planOverride` lets a tapped bundle be validated
+  // immediately; reading `selectedPlan` here would race the async setState
+  // (still null on the first tap) and spuriously fail with "Please select a
+  // data bundle" even though a bundle was just selected.
+  const handleProceedToPayment = (planOverride?: any) => {
+    // Only treat the argument as a plan when it actually looks like one. A bare
+    // `onClick={handleProceedToPayment}` passes the DOM click event, which is
+    // truthy — without this guard the airtime Pay button would set selectedPlan
+    // to a MouseEvent and turn an airtime purchase into a broken "data" one.
+    const plan = planOverride && typeof planOverride === 'object' && planOverride.code ? planOverride : selectedPlan
     if (!phoneNumber) {
       return toast.error('Please enter a phone number')
     }
@@ -449,10 +380,12 @@ export default function BillsPage() {
       if (amt > 500000) {
         return toast.error('Maximum airtime amount is ₦500,000')
       }
-    } else if (step === 'data' && !selectedPlan) {
+    } else if (step === 'data' && !plan) {
       return toast.error('Please select a data bundle')
     }
 
+    // Make sure the plan we validated is the one the summary/PIN screens read.
+    if (plan) setSelectedPlan(plan)
     setStep('wallet')
   }
 
@@ -494,6 +427,43 @@ export default function BillsPage() {
     } finally {
       setProcessing(false)
     }
+  }
+
+  // Biometric-first approval: trigger Face ID / fingerprint via WebAuthn before
+  // showing the PIN keypad. If the user has no enrolled passkey, cancels, or the
+  // prompt fails, we fall back to the 4-digit PIN. This must be called from a
+  // user-gesture handler (the "Continue" button) because browsers only allow
+  // navigator.credentials.get() inside a transient activation.
+  const approveWithBiometric = async () => {
+    setBiometricBusy(true)
+    try {
+      // Skip straight to PIN if the account has no registered credential, so we
+      // never flash an unusable OS prompt.
+      const devices = await passkeyAPI.listDevices().catch(() => [] as any[])
+      if (!Array.isArray(devices) || devices.length === 0) {
+        setStep('pin')
+        return
+      }
+      const options = await passkeyAPI.approveBegin()
+      const response = await startAuthentication({ optionsJSON: options })
+      const { passkeyToken } = await passkeyAPI.approveComplete(response)
+      setBiometricBusy(false)
+      await executePurchase(undefined, passkeyToken)
+      return
+    } catch {
+      // Cancelled, no credential available, or WebAuthn not supported — fall
+      // back to the PIN keypad.
+    } finally {
+      setBiometricBusy(false)
+    }
+    setStep('pin')
+  }
+
+  const handleConfirmPayment = () => {
+    if (realNgn < effectiveNgn) {
+      return toast.error('Insufficient real naira balance in your NGN wallet.')
+    }
+    void approveWithBiometric()
   }
 
   const reset = () => {
@@ -679,7 +649,7 @@ export default function BillsPage() {
                       <button
                         onClick={() => {
                           if (phoneValidation.detectedNetwork) {
-                            setSelectedNetwork(phoneValidation.detectedNetwork)
+                            changeNetwork(phoneValidation.detectedNetwork)
                           }
                         }}
                         className="ml-2 text-[10px] font-bold text-amber-400 underline flex-shrink-0"
@@ -745,7 +715,7 @@ export default function BillsPage() {
                     </div>
 
                     <button
-                      onClick={handleProceedToPayment}
+                      onClick={() => handleProceedToPayment()}
                       disabled={!amount || parseFloat(amount) < 50 || !phoneValidation.isValid}
                       className="px-7 py-3.5 rounded-2xl font-bold text-black text-sm disabled:opacity-40 active:scale-95 transition-all shadow-md flex-shrink-0"
                       style={{ background: colors.gradientBg }}
@@ -814,7 +784,7 @@ export default function BillsPage() {
                       <button
                         onClick={() => {
                           if (phoneValidation.detectedNetwork) {
-                            setSelectedNetwork(phoneValidation.detectedNetwork)
+                            changeNetwork(phoneValidation.detectedNetwork)
                           }
                         }}
                         className="ml-2 text-[10px] font-bold text-amber-400 underline flex-shrink-0"
@@ -891,7 +861,7 @@ export default function BillsPage() {
                           key={plan.code}
                           onClick={() => {
                             setSelectedPlan(plan)
-                            handleProceedToPayment()
+                            handleProceedToPayment(plan)
                           }}
                           className="rounded-2xl p-3.5 flex flex-col items-center justify-between min-h-[114px] text-center border transition-all active:scale-95"
                           style={{
@@ -962,9 +932,12 @@ export default function BillsPage() {
 
                 <button
                   onClick={() => {
+                    if (realNgn < effectiveNgn) {
+                      return toast.error('Insufficient real naira balance in your NGN wallet.')
+                    }
                     setSelectedWallet('NGN')
-                    setStep('pin')
                   }}
+                  disabled={realNgn < effectiveNgn}
                   className="w-full rounded-2xl p-4 text-left border transition-all flex items-center gap-3.5 active:scale-98"
                   style={{
                     background: `rgba(${accentRgb}, 0.06)`,
@@ -999,18 +972,21 @@ export default function BillsPage() {
               </div>
 
               <button
-                onClick={() => {
-                  if (realNgn < effectiveNgn) {
-                    return toast.error('Insufficient real naira balance in your NGN wallet.')
-                  }
-                  setStep('pin')
-                }}
-                disabled={realNgn < effectiveNgn}
+                onClick={handleConfirmPayment}
+                disabled={realNgn < effectiveNgn || biometricBusy}
                 className="w-full py-4 rounded-2xl font-bold text-black text-sm disabled:opacity-40 active:scale-98 transition-transform"
                 style={{ background: colors.gradientBg }}
               >
-                Continue to PIN
+                {biometricBusy
+                  ? <span className="inline-flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Authenticating…</span>
+                  : 'Continue'
+                }
               </button>
+              {!biometricBusy && (
+                <p className="text-center text-[#64748B] text-[11px] mt-2 flex items-center justify-center gap-1.5">
+                  <span className="text-base leading-none">👆</span> Verify with Face ID / fingerprint, or use your PIN if you prefer.
+                </p>
+              )}
             </motion.div>
           )}
 
@@ -1170,7 +1146,7 @@ export default function BillsPage() {
                   <button
                     key={net.code}
                     onClick={() => {
-                      setSelectedNetwork(net.code)
+                      changeNetwork(net.code)
                       setNetworkModalOpen(false)
                     }}
                     className="w-full p-3.5 rounded-2xl border flex items-center gap-3.5 text-left transition-all active:scale-98"

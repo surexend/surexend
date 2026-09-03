@@ -279,24 +279,26 @@ export class BillsService {
     return row?.marginPct || 0;
   }
 
-  private planCost(catalog: any, planCode: string): number {
-    const sections = catalog?.Dataplans || {};
-    for (const section of Object.values<any>(sections)) {
-      const arr = Array.isArray(section) ? section : section?.ALL || [];
-      const p = arr.find((x: any) => String(x.dataplan_id ?? x.id) === String(planCode));
-      if (p) return parseFloat(p.plan_amount);
-    }
-    return 0;
+  // Plans belonging to a SPECIFIC network's catalog section. Resolving a plan
+  // by id across the whole catalog let a plan code from another network be
+  // priced/purchased under the wrong provider (cross-network desync). All plan
+  // lookups below are scoped to the provider’s own section.
+  private providerPlans(catalog: any, provider: string): any[] {
+    const net = this.normaliseNetwork(provider);
+    const section = catalog?.Dataplans?.[this.dataplansKey(net)];
+    const arr = Array.isArray(section) ? section : section?.ALL || [];
+    return Array.isArray(arr) ? arr : [];
   }
 
-  private planMeta(catalog: any, planCode: string): { name: string; validity: string } | null {
-    const sections = catalog?.Dataplans || {};
-    for (const section of Object.values<any>(sections)) {
-      const arr = Array.isArray(section) ? section : section?.ALL || [];
-      const p = arr.find((x: any) => String(x.dataplan_id ?? x.id) === String(planCode));
-      if (p) return { name: p.plan || 'Data Plan', validity: p.month_validate || '' };
-    }
-    return null;
+  private resolvePlan(catalog: any, provider: string, planCode: string): any {
+    return this.providerPlans(catalog, provider).find(
+      (x: any) => String(x.dataplan_id ?? x.id) === String(planCode),
+    ) || null;
+  }
+
+  private planCost(catalog: any, provider: string, planCode: string): number {
+    const p = this.resolvePlan(catalog, provider, planCode);
+    return p ? parseFloat(p.plan_amount) : 0;
   }
 
   // ── Admin pricing ───────────────────────────────────────────────────────
@@ -366,7 +368,7 @@ export class BillsService {
   async setDataPlanPrice(provider: string, planCode: string, sellPrice: number | null) {
     const net = this.normaliseNetwork(provider);
     const catalog = await this.fetchCatalog();
-    const cost = this.planCost(catalog, planCode);
+    const cost = this.planCost(catalog, net, planCode);
     if (!cost || cost <= 0) throw new BadRequestException('Unknown data plan');
     if (sellPrice == null || Number(sellPrice) <= 0) {
       await this.prisma.servicePricing.deleteMany({ where: { category: 'data', provider: net, planCode: String(planCode) } });
@@ -386,7 +388,7 @@ export class BillsService {
   async setDataPlanEnabled(provider: string, planCode: string, enabled: boolean) {
     const net = this.normaliseNetwork(provider);
     const catalog = await this.fetchCatalog();
-    const cost = this.planCost(catalog, planCode);
+    const cost = this.planCost(catalog, net, planCode);
     if (!cost || cost <= 0) throw new BadRequestException('Unknown data plan');
     const code = String(planCode);
     await this.prisma.servicePricing.upsert({
@@ -468,26 +470,42 @@ export class BillsService {
     let providerAmount = amount;    // face value / provider cost sent upstream
     let costPrice: number | null = null;
     let marginPct: number | null = null;
-    let planMeta: { name: string; validity: string } | null = null;
+    let planResolved: { name: string; validity: string } | null = null;
 
     if (category === 'data') {
-      const cost = this.planCost(catalog, planCode as string);
-      if (!cost || cost <= 0) throw new BadRequestException('Invalid data plan');
+      // Validate the plan belongs to THIS provider's network section. Scoping
+      // the lookup prevents a plan code from another network being priced and
+      // purchased under the wrong provider at a different price.
+      const plan = this.resolvePlan(catalog, provider, planCode as string);
+      const cost = plan ? parseFloat(plan.plan_amount) : 0;
+      if (!plan || !Number.isFinite(cost) || cost <= 0) {
+        throw new BadRequestException(`Data plan ${planCode} is not available for ${provider}`);
+      }
       const net = this.normaliseNetwork(provider);
+      const planCodeStr = String(planCode);
       const disabledRow = await this.prisma.servicePricing.findFirst({
-        where: { category: 'data', provider: net, planCode: String(planCode), disabled: true },
+        where: { category: 'data', provider: net, planCode: planCodeStr, disabled: true },
       });
       if (disabledRow) throw new BadRequestException('That bundle is taking a nap right now — pick another one!');
-      const pricing = await this.getDataPlanSellPrice(provider, planCode as string, cost);
+      const pricing = await this.getDataPlanSellPrice(provider, planCodeStr, cost);
       chargeAmount = pricing.sellPrice;
       costPrice = cost;
       marginPct = pricing.marginPct;
       providerAmount = cost;
-      planMeta = this.planMeta(catalog, planCode as string);
+      planResolved = { name: plan.plan || 'Data Plan', validity: plan.month_validate || '' };
     } else {
+      // Server-side airtime bounds. The client validates too, but it can be
+      // bypassed, and a zero/negative amount would reach Smartspeed otherwise.
+      const amt = Number(amount);
+      if (!Number.isFinite(amt) || amt <= 0 || amt < 50) {
+        throw new BadRequestException('Minimum airtime amount is ₦50');
+      }
+      if (amt > 500000) {
+        throw new BadRequestException('Maximum airtime amount is ₦500,000');
+      }
       marginPct = await this.getAirtimeMargin(provider);
-      chargeAmount = marginPct > 0 ? Math.round(amount * (1 + marginPct / 100)) : amount;
-      providerAmount = amount;
+      chargeAmount = marginPct > 0 ? Math.round(amt * (1 + marginPct / 100)) : amt;
+      providerAmount = amt;
     }
 
     // Bills are paid with REAL naira only. The funding guard above already
@@ -528,8 +546,8 @@ export class BillsService {
     if (marginPct != null) billMeta.marginPct = marginPct;
     if (planCode) {
       billMeta.planCode = planCode;
-      billMeta.planName = planMeta?.name || null;
-      billMeta.planValidity = planMeta?.validity || null;
+      billMeta.planName = planResolved?.name || null;
+      billMeta.planValidity = planResolved?.validity || null;
     }
 
     return this.prisma.$transaction(async (prisma) => {
@@ -599,7 +617,7 @@ export class BillsService {
         fee: 0,
         currency: 'NGN',
         reference: billPayment.reference,
-        metadata: { provider, recipient, rate, channel: 'real_ngn', ...(planCode ? { planCode, planName: planMeta?.name || null, planValidity: planMeta?.validity || null } : {}) }
+        metadata: { provider, recipient, rate, channel: 'real_ngn', ...(planCode ? { planCode, planName: planResolved?.name || null, planValidity: planResolved?.validity || null } : {}) }
       });
 
       try {
