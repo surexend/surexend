@@ -322,7 +322,7 @@ class TestEnv {
       notifications, this.ledger,
     );
     this.webhooks = new WebhooksService(
-      this.prisma as any, this.transactions, notifications, this.referrals, this.ledger,
+      this.prisma as any, this.transactions, notifications, this.referrals, this.ledger, config,
     );
     this.bills = new BillsService(
       this.prisma as any, config, this.transactions, this.conversions,

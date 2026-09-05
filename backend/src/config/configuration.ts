@@ -28,6 +28,7 @@ export default registerAs('app', () => ({
     secretKey: process.env.PAYMENTPOINT_SECRET_KEY,
     apiKey: process.env.PAYMENTPOINT_API_KEY,
     webhookSecret: process.env.PAYMENTPOINT_WEBHOOK_SECRET,
+    businessId: process.env.PAYMENTPOINT_BUSINESS_ID,
   },
   vtpass: {
     apiKey: process.env.VTPASS_API_KEY,
