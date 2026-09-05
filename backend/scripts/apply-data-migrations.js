@@ -80,6 +80,8 @@ async function main() {
         await client.query('ROLLBACK');
         console.warn(`[data-migrations] Migration ${migration.name} notice: ${error.message}. Continuing.`);
       }
+    }
+
     // Ensure default admin accounts are active and set to ADMIN role
     try {
       await client.query(`
