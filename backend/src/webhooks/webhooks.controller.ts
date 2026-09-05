@@ -95,4 +95,23 @@ export class WebhooksController {
     await this.webhooksService.processCircle(payload);
     return { status: 'success' };
   }
+
+  @Post('paymentpoint')
+  @HttpCode(HttpStatus.OK)
+  async paymentpointWebhook(
+    @Headers('paymentpoint-signature') signature: string,
+    @Body() payload: any,
+  ) {
+    if (this.rawBodyEnabled) {
+      const secret = this.configService.get<string>('app.paymentpoint.webhookSecret');
+      if (!secret) {
+        this.logger.error('PAYMENTPOINT_WEBHOOK_SECRET is not configured; refusing webhook');
+        throw new ServiceUnavailableException('Webhook not configured');
+      }
+      this.assertVerified('paymentpoint', safeCompare(signature, secret), 'signature mismatch');
+    }
+
+    await this.webhooksService.processPaymentPoint(payload, signature);
+    return { status: 'success' };
+  }
 }

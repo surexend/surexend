@@ -29,6 +29,20 @@ export class BankAccountsController {
     return this.bankAccountsService.addBankAccount(user.id, bankCode, accountNumber, country, currency);
   }
 
+  @Post('paymentpoint/create-virtual-account')
+  async createPaymentPointVirtualAccount(
+    @CurrentUser() user: any,
+    @Body() payload: {
+      customerEmail: string;
+      customerName: string;
+      customerPhone: string;
+      bankCode: string;
+      businessId: string;
+    }
+  ) {
+    return this.bankAccountsService.createPaymentPointVirtualAccount(user.id, payload);
+  }
+
   @Delete(':id')
   async deleteBank(@CurrentUser() user: any, @Param('id') id: string) {
     return this.bankAccountsService.deleteBank(user.id, id);
