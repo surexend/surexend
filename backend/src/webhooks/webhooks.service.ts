@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -17,6 +18,7 @@ export class WebhooksService {
     private notificationsService: NotificationsService,
     private referralsService: ReferralsService,
     private ledger: LedgerService,
+    private configService: ConfigService,
   ) {}
 
   async processFlutterwave(payload: any) {
@@ -438,12 +440,17 @@ export class WebhooksService {
       }
 
       // Find the user via the customer_id or receiver account number
-      const customerId = data.customer?.customer_id || data.receiver?.account_number;
+      const customerId: string | undefined = data.customer?.customer_id;
+      const receiverAccount: string | undefined = data.receiver?.account_number;
+      const lookups: any[] = [];
+      if (customerId) lookups.push({ reference: `PAYPT-${customerId}` });
+      if (receiverAccount) lookups.push({ accountNumber: receiverAccount });
+      if (lookups.length === 0) {
+        this.logger.warn(`PaymentPoint webhook: no customer/receiver info for transaction ${transactionId}`);
+        return;
+      }
       const virtualAccount = await this.prisma.virtualAccount.findFirst({
-        where: { isActive: true, OR: [
-          { reference: `PAYPT-${transactionId}` },
-          { customerId: customerId }
-        ]},
+        where: { isActive: true, provider: 'PAYMENTPOINT', OR: lookups },
       });
 
       if (!virtualAccount) {
