@@ -525,6 +525,7 @@ export const conversionAPI = {
 
 // ── Bank Accounts API ─────────────────────────────────────────────────────
 export const bankAPI = {
+  // Legacy: fetch bank list from backend (Flutterwave lookup)
   list: () =>
     tryWithMock(
       () => apiClient.get('/bank-accounts').then(r => r.data),
@@ -534,6 +535,21 @@ export const bankAPI = {
       ]
     ),
 
+  // NEW: Create a PaymentPoint virtual account
+  createPaymentPointVirtualAccount: async (
+    payload: {
+      customerEmail: string
+      customerName: string
+      customerPhone: string
+      bankCode: string  // '20946' = PalmPay, '20897' = OPay
+      businessId: string
+    }
+  ) => {
+    const response = await apiClient.post('/paymentpoint/create-virtual-account', payload)
+    return response.data
+  },
+
+  // Legacy: add bank account (backend creates virtual account)
   add: (payload: { bankCode: string; accountNumber: string; country: string }) =>
     tryWithMock(
       () => apiClient.post('/bank-accounts', payload).then(r => r.data),
@@ -546,12 +562,14 @@ export const bankAPI = {
       })
     ),
 
+  // Legacy: remove bank account
   remove: (id: string) =>
     tryWithMock(
       () => apiClient.delete(`/bank-accounts/${id}`).then(r => r.data),
       () => ({ success: true })
     ),
 
+  // Legacy: get banks list (for selector)
   getBanks: (country: string) =>
     tryWithMock(
       () => apiClient.get(`/bank-accounts/banks?country=${country}`).then(r => r.data),

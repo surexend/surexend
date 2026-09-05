@@ -57,7 +57,8 @@ export default function BankAccountsPage() {
       await bankAPI.add({ bankCode, accountNumber, country: 'NG' })
       toast.success('Bank account added')
       setShowAdd(false)
-      setBankCode(''); setAccountNumber('')
+      setBankCode('')
+      setAccountNumber('')
       load()
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'Could not add bank account')
