@@ -1300,8 +1300,8 @@ export default function DashboardPage() {
                         <p className="text-[10px] uppercase font-bold text-[#64748B] tracking-wider mb-1">
                           Account Number
                         </p>
-                        <div className="flex items-center justify-between gap-3 bg-black/40 border border-white/10 rounded-2xl px-4 py-3">
-                          <span className="text-2xl sm:text-3xl font-mono font-black text-white tracking-[0.2em] select-all">
+                        <div className="flex items-center gap-3 bg-black/40 border border-white/10 rounded-2xl overflow-hidden">
+                          <span className="flex-1 text-2xl sm:text-3xl font-mono font-black text-white tracking-[0.2em] select-all pl-4 py-3">
                             {vbaData.account.accountNumber}
                           </span>
                           <button
@@ -1312,10 +1312,10 @@ export default function DashboardPage() {
                               toast.success('Account number copied to clipboard!')
                               setTimeout(() => setCopiedVBA(false), 2200)
                             }}
-                            className="px-3.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shadow-md flex-shrink-0"
+                            className="h-full px-4 py-3 text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 flex-shrink-0 border-l border-white/10"
                             style={{
-                              background: copiedVBA ? '#10B981' : colors.primary,
-                              color: '#0A0D14',
+                              background: copiedVBA ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
+                              color: copiedVBA ? '#10B981' : colors.primary,
                             }}
                           >
                             {copiedVBA ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
