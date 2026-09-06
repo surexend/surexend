@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check, RefreshCcw, Crown, CheckCircle2, RefreshCw, Share2, ShieldCheck, Zap } from 'lucide-react'
+import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check, RefreshCcw, Crown, CheckCircle2, RefreshCw, Share2, ShieldCheck, Zap, QrCode } from 'lucide-react'
+import QRScannerModal, { ScannedQRResult } from '@/components/QRScannerModal'
 import dynamic from 'next/dynamic'
 import { walletAPI, transactionAPI, userAPI, conversionAPI, campaignsAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
@@ -68,6 +69,7 @@ export default function DashboardPage() {
   const [copiedVBA, setCopiedVBA] = useState(false)
   const [copiedField, setCopiedField] = useState<'number' | 'name' | 'bank' | 'all' | null>(null)
   const [isCheckingDeposit, setIsCheckingDeposit] = useState(false)
+  const [showQRScanner, setShowQRScanner] = useState(false)
   const [avatar, setAvatar] = useState<string | null>(null)
   const [showMarketPicker, setShowMarketPicker] = useState(false)
   const queryClient = useQueryClient()
@@ -84,6 +86,18 @@ export default function DashboardPage() {
     }, 2200)
   }
 
+  const handleDashboardQRScan = (result: ScannedQRResult) => {
+    if (result.address) {
+      if (result.network === 'SUREX_TAG' || result.address.startsWith('@')) {
+        router.push(`/app/send?type=tag&address=${encodeURIComponent(result.address.replace(/^@/, ''))}`)
+      } else {
+        const netParam = result.network ? `&network=${encodeURIComponent(result.network)}` : ''
+        const amtParam = result.amount ? `&amount=${encodeURIComponent(result.amount)}` : ''
+        router.push(`/app/send?type=crypto&address=${encodeURIComponent(result.address)}${netParam}${amtParam}`)
+      }
+    }
+  }
+
   const { data: vbaData, isLoading: isVbaLoading } = useQuery({
     queryKey: ['localFundingAccount'],
     queryFn: () => walletAPI.getLocalFundingAccount(),
@@ -97,13 +111,16 @@ export default function DashboardPage() {
     router.push(path)
   }
 
-
   // Back handler for modals — closes the top-most open modal on back press
-  const hasOpenDashboardLayer = showBankComingSoon || showVBAModal || showFundModal || showSendModal || showLocalCurrencyPicker || showMarketPicker
+  const hasOpenDashboardLayer = showBankComingSoon || showVBAModal || showFundModal || showSendModal || showLocalCurrencyPicker || showMarketPicker || showQRScanner
 
   useBackLayer(
     hasOpenDashboardLayer,
     useCallback(() => {
+      if (showQRScanner) {
+        setShowQRScanner(false)
+        return
+      }
       if (showBankComingSoon) {
         setShowBankComingSoon(false)
         return
@@ -128,7 +145,7 @@ export default function DashboardPage() {
         setShowMarketPicker(false)
         return
       }
-    }, [showBankComingSoon, showVBAModal, showFundModal, showSendModal, showLocalCurrencyPicker, showMarketPicker]),
+    }, [showQRScanner, showBankComingSoon, showVBAModal, showFundModal, showSendModal, showLocalCurrencyPicker, showMarketPicker]),
     20
   )
 
@@ -1027,6 +1044,33 @@ export default function DashboardPage() {
                   <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all flex-shrink-0" />
                 </button>
 
+                {/* Option 3: Scan QR Code (Instant Camera Scan) */}
+                <button
+                  onClick={() => {
+                    setShowSendModal(false)
+                    setShowQRScanner(true)
+                  }}
+                  className="w-full text-left group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-emerald-500/40 transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform flex-shrink-0">
+                      <QrCode className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-semibold text-white text-sm sm:text-base group-hover:text-emerald-400 transition-colors">
+                          Scan QR Code to Transfer
+                        </h4>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">Camera</span>
+                      </div>
+                      <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
+                        Scan any wallet address or SureX Tag QR code with camera or photo
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all flex-shrink-0" />
+                </button>
+
                 {/* Option 3: Bank Account — gated until bank rails are live. */}
                 <div
                   onClick={() => { setShowSendModal(false); setShowBankComingSoon(true) }}
@@ -1541,6 +1585,15 @@ export default function DashboardPage() {
           'Single flow for both deposit and payout, with the same PIN + biometrics you use today.',
           'Full transaction receipts you can download as PNG or PDF.',
         ]}
+      />
+
+      {/* ── QR Camera Scanner Modal ── */}
+      <QRScannerModal
+        open={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onScan={handleDashboardQRScan}
+        title="Scan to Transfer"
+        description="Scan any recipient crypto address or SureX Tag QR"
       />
     </div>
   )

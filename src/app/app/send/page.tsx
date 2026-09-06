@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { QrCode, ArrowRight, ArrowLeft, CheckCircle2, Tag, Send, Zap, ShieldCheck, UserCheck, Loader2 } from 'lucide-react'
+import { QrCode, ArrowRight, ArrowLeft, CheckCircle2, Tag, Send, Zap, ShieldCheck, UserCheck, Loader2, Clipboard } from 'lucide-react'
+import QRScannerModal, { ScannedQRResult, parseScannedCryptoURI } from '@/components/QRScannerModal'
 import Confetti from 'react-confetti'
 import toast from 'react-hot-toast'
 import { AFRICAN_CURRENCIES, walletAPI } from '@/lib/api'
@@ -49,13 +50,18 @@ export default function SendPage() {
   // rejected, so the user can immediately re-enter a PIN.
   const [pinError, setPinError] = useState<string | null>(null)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [showQRScanner, setShowQRScanner] = useState(false)
   const [windowSize, setWindowSize] = useState({ width: 1200, height: 800 })
   const queryClient = useQueryClient()
 
-  // Back handler for multi-step form
+  // Back handler for multi-step form & modal
   useBackLayer(
-    step > 1 || isSuccess,
+    showQRScanner || step > 1 || isSuccess,
     useCallback(() => {
+      if (showQRScanner) {
+        setShowQRScanner(false)
+        return
+      }
       if (isSuccess) {
         router.replace('/app/dashboard')
         return
@@ -63,7 +69,7 @@ export default function SendPage() {
       if (step > 1) {
         setStep(prev => prev - 1)
       }
-    }, [step, isSuccess, router]),
+    }, [showQRScanner, step, isSuccess, router]),
     30
   )
 
@@ -137,6 +143,43 @@ export default function SendPage() {
     resolver: zodResolver(sendSchema),
     defaultValues: { network: sendMode === 'TAG' ? 'SUREX_TAG' : 'ARC' }
   })
+
+  const handleScanResult = useCallback((result: ScannedQRResult) => {
+    if (result.address) {
+      if (result.network === 'SUREX_TAG' || result.address.startsWith('@')) {
+        setSendMode('TAG')
+        setValue('network', 'SUREX_TAG')
+        setValue('address', result.address.replace(/^@/, ''), { shouldValidate: true })
+      } else {
+        setSendMode('CRYPTO')
+        setValue('address', result.address, { shouldValidate: true })
+        if (result.network && SEND_NETWORKS.includes(result.network as any)) {
+          setValue('network', result.network as any)
+        }
+      }
+      if (result.amount) {
+        const amt = parseFloat(result.amount)
+        if (!isNaN(amt) && amt > 0) {
+          setValue('amount', amt)
+        }
+      }
+    }
+  }, [setValue])
+
+  useEffect(() => {
+    const addr = searchParams.get('address')
+    const net = searchParams.get('network')
+    if (addr) {
+      if (initialType === 'TAG') {
+        setValue('address', addr.replace(/^@/, ''), { shouldValidate: true })
+      } else {
+        setValue('address', addr, { shouldValidate: true })
+        if (net && SEND_NETWORKS.includes(net as any)) {
+          setValue('network', net as any)
+        }
+      }
+    }
+  }, [searchParams, initialType, setValue])
 
   const networkFee = 0.0
 
@@ -264,9 +307,18 @@ export default function SendPage() {
                 <div>
                   <label className="block text-xs font-semibold text-[#94A3B8] mb-2 flex items-center justify-between">
                     <span>Recipient SureX Tag (@username)</span>
-                    <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                      <Zap className="w-3 h-3" /> Zero Fee · Instant
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowQRScanner(true)}
+                        className="text-[10px] font-bold text-white/90 hover:text-white flex items-center gap-1 bg-white/[0.06] hover:bg-white/10 px-2 py-0.5 rounded-lg border border-white/10 transition-colors active:scale-95"
+                      >
+                        <QrCode className="w-3 h-3 text-emerald-400" /> Scan QR
+                      </button>
+                      <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                        <Zap className="w-3 h-3" /> Zero Fee · Instant
+                      </span>
+                    </div>
                   </label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">@</span>
@@ -340,16 +392,65 @@ export default function SendPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-[#94A3B8] mb-2">Recipient Wallet Address</label>
-                    <input
-                      {...register('address')}
-                      type="text"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      placeholder="Paste wallet address"
-                      className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.03] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-colors"
-                    />
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-semibold text-[#94A3B8]">Recipient Wallet Address</label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setShowQRScanner(true)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 border active:scale-95 shadow-sm"
+                          style={{
+                            background: `rgba(${colors.glowRgb}, 0.15)`,
+                            color: colors.primary,
+                            borderColor: `rgba(${colors.glowRgb}, 0.35)`,
+                          }}
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          <span>Scan QR</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const text = await navigator.clipboard.readText()
+                              if (text) {
+                                const parsed = parseScannedCryptoURI(text)
+                                setValue('address', parsed.address, { shouldValidate: true })
+                                if (parsed.network && SEND_NETWORKS.includes(parsed.network as any)) {
+                                  setValue('network', parsed.network as any)
+                                }
+                                toast.success('Address pasted from clipboard!')
+                              }
+                            } catch {
+                              toast.error('Clipboard access not allowed. Please paste manually.')
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-[#94A3B8] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition-all flex items-center gap-1 active:scale-95"
+                        >
+                          <Clipboard className="w-3.5 h-3.5" />
+                          <span>Paste</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <input
+                        {...register('address')}
+                        type="text"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        placeholder="Paste wallet address or scan QR"
+                        className="w-full pl-4 pr-11 py-3.5 rounded-2xl bg-white/[0.03] border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-white/30 focus:bg-white/[0.05] transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowQRScanner(true)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-xl text-[#94A3B8] hover:text-white hover:bg-white/10 transition-all active:scale-95"
+                        title="Scan QR Code with Camera"
+                      >
+                        <QrCode className="w-4 h-4" />
+                      </button>
+                    </div>
                     {errors.address && <p className="text-red-400 text-xs mt-1">{errors.address.message}</p>}
                   </div>
                 </>
@@ -559,6 +660,14 @@ export default function SendPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <QRScannerModal
+        open={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onScan={handleScanResult}
+        title="Scan Recipient QR Code"
+        description="Align recipient wallet QR code within the frame"
+      />
     </div>
   )
 }
