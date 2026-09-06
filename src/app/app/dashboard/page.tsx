@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check, RefreshCcw, Crown, CheckCircle2, RefreshCw, Share2 } from 'lucide-react'
+import { Eye, EyeOff, Send, Download, Repeat, Smartphone, ArrowUpRight, ArrowDownLeft, Clock, Coins, Activity, Building2, PlusCircle, Landmark, X, ChevronRight, Copy, Tag, Sparkles, Trophy, ChevronDown, Check, RefreshCcw, Crown, CheckCircle2, RefreshCw, Share2, ShieldCheck, Zap } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { walletAPI, transactionAPI, userAPI, conversionAPI, campaignsAPI, AFRICAN_CURRENCIES } from '@/lib/api'
 import { getSwapInfo, currencySymbol, formatAmount } from '@/lib/utils'
@@ -66,9 +66,23 @@ export default function DashboardPage() {
   const [showVBAModal, setShowVBAModal] = useState(false)
   const [showBankComingSoon, setShowBankComingSoon] = useState(false)
   const [copiedVBA, setCopiedVBA] = useState(false)
+  const [copiedField, setCopiedField] = useState<'number' | 'name' | 'bank' | 'all' | null>(null)
+  const [isCheckingDeposit, setIsCheckingDeposit] = useState(false)
   const [avatar, setAvatar] = useState<string | null>(null)
   const [showMarketPicker, setShowMarketPicker] = useState(false)
   const queryClient = useQueryClient()
+
+  const copyDetails = (text: string, field: 'number' | 'name' | 'bank' | 'all', toastMsg: string) => {
+    if (!text) return
+    navigator.clipboard.writeText(text)
+    setCopiedField(field)
+    if (field === 'number') setCopiedVBA(true)
+    toast.success(toastMsg)
+    setTimeout(() => {
+      setCopiedField(null)
+      if (field === 'number') setCopiedVBA(false)
+    }, 2200)
+  }
 
   const { data: vbaData, isLoading: isVbaLoading } = useQuery({
     queryKey: ['localFundingAccount'],
@@ -859,8 +873,10 @@ export default function DashboardPage() {
             {list.slice(0, 5).map((tx: any) => {
               const typeUpper = (tx.type || '').toUpperCase()
               const statusUpper = (tx.status || '').toUpperCase()
-              const isSend = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
-              const isReceive = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING'
+              const isCredit = typeUpper === 'RECEIVE' || typeUpper === 'REFERRAL_EARNING' || typeUpper === 'CONVERT'
+              const isDebit = typeUpper === 'SEND' || typeUpper === 'BILL_PAYMENT'
+              const sign = isCredit ? '+' : isDebit ? '-' : ''
+              const symbol = currencySymbol(tx.currency || 'USD')
               const swap = getSwapInfo(tx)
               const isFailed = statusUpper === 'FAILED'
               return (
@@ -871,9 +887,9 @@ export default function DashboardPage() {
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      isSend ? 'bg-white/[0.06] text-white' : isReceive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                      isDebit ? 'bg-white/[0.06] text-white' : isCredit ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
                     }`}>
-                      {isSend ? <ArrowUpRight className="w-5 h-5" /> : isReceive ? <ArrowDownLeft className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
+                      {isDebit ? <ArrowUpRight className="w-5 h-5" /> : isCredit ? <ArrowDownLeft className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
                     </div>
                     <div>
                       {swap ? (
@@ -905,8 +921,8 @@ export default function DashboardPage() {
                         </p>
                       </>
                     ) : (
-                      <p className={`text-sm font-bold ${isSend ? 'text-red-400' : 'text-white'}`}>
-                        {isSend ? '-' : '+'}${tx.amount} {tx.currency || 'USD'}
+                      <p className={`text-sm font-bold ${isDebit ? 'text-red-400' : 'text-white'}`}>
+                        {sign}{symbol}{formatAmount(Number(tx.amount || 0))} {tx.currency || 'USD'}
                       </p>
                     )}
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${
@@ -1264,110 +1280,176 @@ export default function DashboardPage() {
                   </div>
                 ) : vbaData?.configured && vbaData?.account ? (
                   <>
-                    {/* ── Realistic Fintech Virtual Debit Card Look ── */}
+                    {/* ── Billion-Dollar Fintech Virtual Account Card ── */}
                     <div
-                      className="rounded-3xl p-5 sm:p-6 border relative overflow-hidden shadow-2xl transition-transform"
+                      className="rounded-3xl p-5 sm:p-6 border relative overflow-hidden shadow-2xl transition-all"
                       style={{
-                        background: `linear-gradient(135deg, rgba(16, 20, 29, 0.95) 0%, rgba(8, 10, 16, 0.98) 100%)`,
-                        borderColor: `rgba(${colors.glowRgb}, 0.4)`,
-                        boxShadow: `0 12px 36px -8px rgba(0,0,0,0.8), 0 0 24px -6px rgba(${colors.glowRgb}, 0.25)`,
+                        background: `radial-gradient(ellipse at top left, rgba(16, 185, 129, 0.14) 0%, transparent 60%), radial-gradient(ellipse at bottom right, rgba(${colors.glowRgb}, 0.08) 0%, transparent 50%), linear-gradient(145deg, #0d121c 0%, #080b11 100%)`,
+                        borderColor: `rgba(16, 185, 129, 0.35)`,
+                        boxShadow: `0 16px 40px -10px rgba(0,0,0,0.85), 0 0 25px -5px rgba(16, 185, 129, 0.15)`,
                       }}
                     >
                       {/* Specular Card Accent Top Line */}
-                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-400/60 to-transparent" />
 
-                      {/* Card Top Row: Bank Badge & Flag */}
+                      {/* Card Top Row: Bank Badge & NGN Flag */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="px-3 py-1 rounded-xl bg-white/[0.06] border border-white/10 flex items-center gap-1.5 backdrop-blur-md">
+                          <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 backdrop-blur-md">
                             <Building2 className="w-3.5 h-3.5 text-emerald-400" />
                             <span className="text-xs font-black text-white tracking-wide uppercase">
-                              {vbaData.account.bankName || 'PalmPay / Wema'}
+                              {vbaData.account.bankName || 'PalmPay'}
                             </span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                           </div>
                           <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
                             Auto-Credit
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.04] border border-white/10">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.05] border border-white/10">
                           <span className="text-xs">🇳🇬</span>
                           <span className="text-[11px] font-extrabold text-white">NGN</span>
                         </div>
                       </div>
 
-                      {/* Card Middle: Large Metallic Account Number */}
+                      {/* Card Middle: Interactive Account Number */}
                       <div className="my-5">
-                        <p className="text-[10px] uppercase font-bold text-[#64748B] tracking-wider mb-1">
-                          Account Number
-                        </p>
-                        <div className="flex items-center gap-3 bg-black/40 border border-white/10 rounded-2xl overflow-hidden">
-                          <span className="flex-1 text-2xl sm:text-3xl font-mono font-black text-white tracking-[0.2em] select-all pl-4 py-3">
+                        <div className="flex items-center justify-between mb-1.5 px-0.5">
+                          <p className="text-[10px] uppercase font-bold text-[#64748B] tracking-wider">
+                            Account Number
+                          </p>
+                          <span className="text-[10px] text-emerald-400/80 font-medium">
+                            Tap to copy
+                          </span>
+                        </div>
+                        
+                        <div 
+                          onClick={() => copyDetails(vbaData.account.accountNumber, 'number', 'Account number copied!')}
+                          className="flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-2xl bg-black/50 border border-white/10 hover:border-emerald-500/40 transition-all cursor-pointer group"
+                        >
+                          <span className="text-xl sm:text-2xl md:text-3xl font-mono font-black text-white tracking-wide select-all pl-2">
                             {vbaData.account.accountNumber}
                           </span>
+                          
                           <button
-                            onClick={() => {
-                              if (!vbaData?.account?.accountNumber) return
-                              navigator.clipboard.writeText(vbaData.account.accountNumber)
-                              setCopiedVBA(true)
-                              toast.success('Account number copied to clipboard!')
-                              setTimeout(() => setCopiedVBA(false), 2200)
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              copyDetails(vbaData.account.accountNumber, 'number', 'Account number copied!')
                             }}
-                            className="h-full px-4 py-3 text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 flex-shrink-0 border-l border-white/10"
+                            className="flex-shrink-0 min-w-[85px] h-9 sm:h-10 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95"
                             style={{
-                              background: copiedVBA ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
-                              color: copiedVBA ? '#10B981' : colors.primary,
+                              background: copiedField === 'number' || copiedVBA ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.08)',
+                              color: copiedField === 'number' || copiedVBA ? '#10B981' : colors.primary,
+                              border: `1px solid ${copiedField === 'number' || copiedVBA ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.12)'}`,
                             }}
                           >
-                            {copiedVBA ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                            <span>{copiedVBA ? 'Copied' : 'Copy'}</span>
+                            {copiedField === 'number' || copiedVBA ? (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copy</span>
+                              </>
+                            )}
                           </button>
                         </div>
                       </div>
 
-                      {/* Card Bottom: Account Holder Name & SureXend Badge */}
-                      <div className="flex items-end justify-between pt-2 border-t border-white/5">
-                        <div>
-                          <p className="text-[9px] uppercase font-bold text-[#64748B] tracking-wider">Account Name</p>
-                          <p className="text-sm font-extrabold text-white mt-0.5 tracking-tight">
-                            {vbaData.account.accountName || 'SureXend User'}
-                          </p>
+                      {/* Card Bottom: Structured Account Info */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3 border-t border-white/10">
+                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+                          <div className="min-w-0 pr-2">
+                            <p className="text-[9px] uppercase font-bold text-[#64748B] tracking-wider">Account Name</p>
+                            <p className="text-xs font-extrabold text-white mt-0.5 truncate" title={vbaData.account.accountName}>
+                              {vbaData.account.accountName || 'SureXend User'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => copyDetails(vbaData.account.accountName, 'name', 'Account name copied!')}
+                            className="p-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] text-[#94A3B8] hover:text-white transition-colors flex-shrink-0"
+                            title="Copy Account Name"
+                          >
+                            {copiedField === 'name' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
                         </div>
-                        <div className="text-right">
-                          <p className="text-[9px] uppercase font-bold text-[#64748B] tracking-wider">Provider</p>
-                          <p className="text-[11px] font-mono font-bold text-[#94A3B8] mt-0.5">PaymentPoint</p>
+
+                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+                          <div>
+                            <p className="text-[9px] uppercase font-bold text-[#64748B] tracking-wider">Bank Name</p>
+                            <p className="text-xs font-extrabold text-white mt-0.5">
+                              {vbaData.account.bankName || 'PalmPay'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => copyDetails(vbaData.account.bankName || 'PalmPay', 'bank', 'Bank name copied!')}
+                            className="p-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] text-[#94A3B8] hover:text-white transition-colors flex-shrink-0"
+                            title="Copy Bank Name"
+                          >
+                            {copiedField === 'bank' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
                         </div>
                       </div>
                     </div>
 
+                    {/* ── One-Tap Copy All Bank Details Button ── */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const text = `Bank: ${vbaData.account.bankName || 'PalmPay'}\nAccount Number: ${vbaData.account.accountNumber}\nAccount Name: ${vbaData.account.accountName}`
+                        copyDetails(text, 'all', 'All bank details copied to clipboard!')
+                      }}
+                      className="w-full py-3 px-4 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 border active:scale-[0.99] shadow-md"
+                      style={{
+                        background: copiedField === 'all' ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
+                        borderColor: copiedField === 'all' ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.08)',
+                        color: copiedField === 'all' ? '#10B981' : '#E2E8F0',
+                      }}
+                    >
+                      {copiedField === 'all' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-emerald-400" />}
+                      <span>{copiedField === 'all' ? 'All Bank Details Copied!' : 'Copy All Bank Details'}</span>
+                    </button>
+
                     {/* ── 3-Step Clear Instruction Guide ── */}
-                    <div className="space-y-2.5">
+                    <div className="space-y-2">
                       <p className="text-xs font-bold text-white px-1">How to fund your wallet</p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
-                          <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-black text-white">
-                            1
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-black text-white">
+                              1
+                            </div>
+                            <p className="text-[11px] font-bold text-white">Transfer Funds</p>
                           </div>
-                          <p className="text-[11px] font-bold text-white">Transfer Funds</p>
                           <p className="text-[10px] text-[#64748B] leading-relaxed">
-                            Send from any bank (OPay, Kuda, GTB, Zenith, PalmPay, etc.).
+                            Send from any bank app (OPay, Kuda, GTB, Zenith, PalmPay, etc.).
                           </p>
                         </div>
 
                         <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
-                          <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-black">
-                            2
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-black">
+                              2
+                            </div>
+                            <p className="text-[11px] font-bold text-white">Auto Settlement</p>
                           </div>
-                          <p className="text-[11px] font-bold text-white">Auto Settlement</p>
                           <p className="text-[10px] text-[#64748B] leading-relaxed">
                             Credited to your NGN balance within 10–30 seconds.
                           </p>
                         </div>
 
                         <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
-                          <div className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-[10px] font-black">
-                            3
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-[10px] font-black">
+                              3
+                            </div>
+                            <p className="text-[11px] font-bold text-white">Zero Deposit Fee</p>
                           </div>
-                          <p className="text-[11px] font-bold text-white">Zero Deposit Fee</p>
                           <p className="text-[10px] text-[#64748B] leading-relaxed">
                             100% of your transfer amount lands in your wallet.
                           </p>
@@ -1378,15 +1460,23 @@ export default function DashboardPage() {
                     {/* Action buttons */}
                     <div className="pt-2 flex items-center gap-3">
                       <button
-                        onClick={() => {
-                          queryClient.invalidateQueries({ queryKey: ['walletBalance'] })
-                          queryClient.invalidateQueries({ queryKey: ['transactions'] })
-                          toast.success('Checking wallet for incoming deposits...')
+                        onClick={async () => {
+                          setIsCheckingDeposit(true)
+                          try {
+                            await Promise.all([
+                              queryClient.invalidateQueries({ queryKey: ['walletBalance'] }),
+                              queryClient.invalidateQueries({ queryKey: ['transactions'] }),
+                            ])
+                            toast.success('Wallet refreshed! Checking for incoming deposits...')
+                          } finally {
+                            setTimeout(() => setIsCheckingDeposit(false), 1200)
+                          }
                         }}
-                        className="flex-1 py-3.5 rounded-2xl text-xs font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white flex items-center justify-center gap-2 transition-all active:scale-98"
+                        disabled={isCheckingDeposit}
+                        className="flex-1 py-3.5 rounded-2xl text-xs font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-60"
                       >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        Check Balance
+                        <RefreshCw className={`w-3.5 h-3.5 ${isCheckingDeposit ? 'animate-spin text-emerald-400' : ''}`} />
+                        <span>{isCheckingDeposit ? 'Checking...' : 'Check Balance'}</span>
                       </button>
 
                       <button
@@ -1394,11 +1484,14 @@ export default function DashboardPage() {
                           if (navigator.share && vbaData?.account) {
                             navigator.share({
                               title: 'My SureXend Deposit Account',
-                              text: `Pay to my SureXend NGN Account:\nBank: ${vbaData.account.bankName}\nAccount: ${vbaData.account.accountNumber}\nName: ${vbaData.account.accountName}`,
+                              text: `Pay to my SureXend NGN Account:\nBank: ${vbaData.account.bankName || 'PalmPay'}\nAccount: ${vbaData.account.accountNumber}\nName: ${vbaData.account.accountName}`,
                             }).catch(() => {})
                           } else {
-                            navigator.clipboard.writeText(`${vbaData?.account?.bankName} - ${vbaData?.account?.accountNumber} (${vbaData?.account?.accountName})`)
-                            toast.success('Account details copied to clipboard!')
+                            copyDetails(
+                              `Bank: ${vbaData?.account?.bankName || 'PalmPay'}\nAccount: ${vbaData?.account?.accountNumber}\nName: ${vbaData?.account?.accountName}`,
+                              'all',
+                              'Account details copied to clipboard!'
+                            )
                           }
                         }}
                         className="py-3.5 px-5 rounded-2xl text-xs font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white flex items-center justify-center gap-2 transition-all active:scale-98"
