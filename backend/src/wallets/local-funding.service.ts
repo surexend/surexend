@@ -74,6 +74,8 @@ export class LocalFundingService {
           businessId: this.ppBusinessId,
         };
 
+        this.logger.log(`PaymentPoint VNUBAN create request: ${JSON.stringify(payload)}`);
+
         const response = await axios.post(
           `${this.ppBaseUrl}/createVirtualAccount`,
           payload,
@@ -87,11 +89,23 @@ export class LocalFundingService {
           },
         );
 
+        // Log the FULL response so we can debug field name mismatches
+        this.logger.log(`PaymentPoint VNUBAN create response: ${JSON.stringify(response.data)}`);
+
         const resData = response.data;
-        const acctData = resData?.data || resData?.account || resData;
+        // Try all possible nesting patterns: data, account, accounts, direct object
+        const acctData = resData?.data || resData?.account || resData?.accounts || resData;
         const acctObj = Array.isArray(acctData) ? acctData[0] : acctData;
 
-        const accountNumber = acctObj?.accountNumber || acctObj?.account_number || acctObj?.account_no;
+        // Try all known field name variants
+        const accountNumber =
+          acctObj?.accountNumber ||
+          acctObj?.account_number ||
+          acctObj?.account_no ||
+          acctObj?.nuban ||
+          acctObj?.virtualAccountNumber ||
+          acctObj?.virtual_account_number;
+
         if (accountNumber) {
           const account = await this.prisma.virtualAccount.create({
             data: {
@@ -99,19 +113,35 @@ export class LocalFundingService {
               provider: 'PAYMENTPOINT',
               reference,
               accountNumber: String(accountNumber),
-              accountName: acctObj?.accountName || acctObj?.account_name || `${user.firstName} ${user.lastName}`,
-              bankName: acctObj?.bankName || acctObj?.bank_name || 'PalmPay',
-              bankCode: String(acctObj?.bankCode || acctObj?.bank_code || '20946'),
+              accountName:
+                acctObj?.accountName ||
+                acctObj?.account_name ||
+                acctObj?.name ||
+                `${user.firstName} ${user.lastName}`,
+              bankName: acctObj?.bankName || acctObj?.bank_name || acctObj?.bank || 'PalmPay',
+              bankCode: String(acctObj?.bankCode || acctObj?.bank_code || acctObj?.bankcode || '20946'),
               currency: 'NGN',
             },
           });
           return { configured: true, account: this.toDto(account) };
         }
+
+        // Account number missing — log the full raw response to help diagnose
+        const raw = JSON.stringify(resData);
+        this.logger.error(`PaymentPoint returned success but no account number found. Full response: ${raw}`);
+        throw new BadRequestException(
+          `PaymentPoint returned an unexpected response format. Please contact support. (raw: ${raw.substring(0, 200)})`,
+        );
       } catch (ppErr: any) {
-        this.logger.error(`PaymentPoint VNUBAN create error: ${ppErr.response?.data?.message || ppErr.message}`);
+        // Don't re-wrap BadRequestException we threw ourselves
+        if (ppErr?.status === 400 || ppErr?.name === 'BadRequestException') throw ppErr;
+
+        const errMsg = ppErr.response?.data?.message || ppErr.response?.data?.error || ppErr.message;
+        const rawErrBody = ppErr.response?.data ? JSON.stringify(ppErr.response.data) : 'no body';
+        this.logger.error(`PaymentPoint VNUBAN create error [${ppErr.response?.status}]: ${errMsg} | body: ${rawErrBody}`);
         if (!hasFlutterwave) {
           throw new BadRequestException(
-            ppErr.response?.data?.message || 'Could not generate virtual bank account. Please check your details or try again later.',
+            errMsg || 'Could not generate virtual bank account. Please check your details or try again later.',
           );
         }
       }
