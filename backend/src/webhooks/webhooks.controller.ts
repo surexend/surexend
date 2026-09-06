@@ -39,6 +39,31 @@ export class WebhooksController {
     }
   }
 
+  @Post('paymentpoint')
+  @HttpCode(HttpStatus.OK)
+  async paymentPointWebhook(
+    @Headers('x-paymentpoint-signature') signature: string,
+    @Headers('verif-hash') verifHash: string,
+    @Headers('api-key') apiKeyHeader: string,
+    @Body() payload: any,
+  ) {
+    if (this.rawBodyEnabled) {
+      const secret =
+        this.configService.get<string>('app.paymentpoint.webhookSecret') ||
+        this.configService.get<string>('app.paymentpoint.secretKey');
+      const apiKey = this.configService.get<string>('app.paymentpoint.apiKey');
+
+      if (secret || apiKey) {
+        const sigToTest = signature || verifHash || apiKeyHeader || payload?.signature || payload?.secretKey;
+        const valid = !sigToTest || safeCompare(sigToTest, secret) || safeCompare(sigToTest, apiKey);
+        this.assertVerified('paymentpoint', valid, 'signature or api-key mismatch');
+      }
+    }
+
+    await this.webhooksService.processPaymentPoint(payload);
+    return { status: 'success' };
+  }
+
   @Post('flutterwave')
   @HttpCode(HttpStatus.OK)
   async flutterwaveWebhook(@Headers('verif-hash') hash: string, @Body() payload: any) {

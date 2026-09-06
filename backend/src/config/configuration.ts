@@ -25,10 +25,11 @@ export default registerAs('app', () => ({
     webhookHash: process.env.FLUTTERWAVE_WEBHOOK_HASH,
   },
   paymentpoint: {
-    secretKey: process.env.PAYMENTPOINT_SECRET_KEY,
-    apiKey: process.env.PAYMENTPOINT_API_KEY,
-    webhookSecret: process.env.PAYMENTPOINT_WEBHOOK_SECRET,
-    businessId: process.env.PAYMENTPOINT_BUSINESS_ID,
+    apiKey: process.env.PAYMENTPOINT_API_KEY || process.env.PAYMENT_POINT_API_KEY,
+    secretKey: process.env.PAYMENTPOINT_SECRET_KEY || process.env.PAYMENT_POINT_SECRET_KEY,
+    businessId: process.env.PAYMENTPOINT_BUSINESS_ID || process.env.PAYMENT_POINT_BUSINESS_ID,
+    webhookSecret: process.env.PAYMENTPOINT_WEBHOOK_SECRET || process.env.PAYMENT_POINT_WEBHOOK_SECRET || process.env.PAYMENTPOINT_SECRET_KEY || process.env.PAYMENT_POINT_SECRET_KEY,
+    baseUrl: process.env.PAYMENTPOINT_BASE_URL || process.env.PAYMENT_POINT_BASE_URL || 'https://api.paymentpoint.co/api/v1',
   },
   vtpass: {
     apiKey: process.env.VTPASS_API_KEY,

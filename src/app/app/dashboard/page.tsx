@@ -70,6 +70,13 @@ export default function DashboardPage() {
   const [showMarketPicker, setShowMarketPicker] = useState(false)
   const queryClient = useQueryClient()
 
+  const { data: vbaData, isLoading: isVbaLoading } = useQuery({
+    queryKey: ['localFundingAccount'],
+    queryFn: () => walletAPI.getLocalFundingAccount(),
+    enabled: showVBAModal || showFundModal,
+    staleTime: 60000,
+  })
+
   const handleModalNavigate = (path: string) => {
     setShowSendModal(false)
     setShowFundModal(false)
@@ -1074,9 +1081,9 @@ export default function DashboardPage() {
 
               {/* Options */}
               <div className="space-y-3">
-                {/* PRIMARY OPTION 1: Deposit Local Currency (Bank Transfer) — gated until Flutterwave is live. */}
+                {/* PRIMARY OPTION 1: Deposit Local Currency (Bank Transfer) */}
                 <div
-                  onClick={() => { setShowFundModal(false); setShowBankComingSoon(true) }}
+                  onClick={() => { setShowFundModal(false); setShowVBAModal(true) }}
                   className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.08] transition-colors duration-300 relative cursor-pointer"
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
@@ -1088,12 +1095,12 @@ export default function DashboardPage() {
                         <h4 className="font-bold text-white text-sm sm:text-base text-emerald-400 transition-colors">
                           Deposit Local Currency (Bank Transfer)
                         </h4>
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-white/10 text-[#94A3B8] border border-white/10">
-                          Coming soon
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          Instant NGN
                         </span>
                       </div>
                       <p className="text-[11px] sm:text-xs text-[#94A3B8] leading-relaxed mt-0.5">
-                        Get a dedicated NGN Virtual Account for instant bank transfers
+                        Get your dedicated NGN Virtual Account for instant bank transfers
                       </p>
                     </div>
                   </div>
@@ -1202,6 +1209,230 @@ export default function DashboardPage() {
             </div>
           )}
         </AnimatePresence>
+
+      {/* ── Virtual Bank Account (VBA) Modal for Local Funding ── */}
+      <AnimatePresence>
+        {showVBAModal && (
+          <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4 liquid-backdrop">
+            <motion.div
+              initial={{ opacity: 0, y: 100, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 100, scale: 0.96 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+              className="w-full max-w-lg liquid-glass rounded-t-[32px] sm:rounded-3xl p-6 sm:p-7 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] border border-white/15 relative overflow-hidden max-h-[90vh] overflow-y-auto"
+              style={{ borderColor: `rgba(${colors.glowRgb}, 0.35)` }}
+            >
+              {/* Top ambient luxury glow */}
+              <div
+                className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-36 rounded-full blur-3xl pointer-events-none opacity-40"
+                style={{ background: colors.primary }}
+              />
+
+              {/* Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-white/10 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg border border-white/15"
+                    style={{ background: `linear-gradient(135deg, rgba(${colors.glowRgb}, 0.25), rgba(255,255,255,0.03))`, color: colors.primary }}
+                  >
+                    <Landmark className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-extrabold text-white text-base sm:text-lg tracking-tight">NGN Bank Deposit</h3>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        Live
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#94A3B8]">Dedicated Nigerian virtual bank account</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowVBAModal(false)}
+                  className="p-2 rounded-full bg-white/[0.04] hover:bg-white/10 text-[#94A3B8] hover:text-white transition-all active:scale-95"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="mt-5 space-y-5 relative z-10">
+                {isVbaLoading ? (
+                  <div className="space-y-4 py-8">
+                    <div className="h-44 bg-white/[0.03] border border-white/10 rounded-3xl animate-pulse" />
+                    <div className="h-14 bg-white/[0.03] border border-white/10 rounded-2xl animate-pulse" />
+                  </div>
+                ) : vbaData?.configured && vbaData?.account ? (
+                  <>
+                    {/* ── Realistic Fintech Virtual Debit Card Look ── */}
+                    <div
+                      className="rounded-3xl p-5 sm:p-6 border relative overflow-hidden shadow-2xl transition-transform"
+                      style={{
+                        background: `linear-gradient(135deg, rgba(16, 20, 29, 0.95) 0%, rgba(8, 10, 16, 0.98) 100%)`,
+                        borderColor: `rgba(${colors.glowRgb}, 0.4)`,
+                        boxShadow: `0 12px 36px -8px rgba(0,0,0,0.8), 0 0 24px -6px rgba(${colors.glowRgb}, 0.25)`,
+                      }}
+                    >
+                      {/* Specular Card Accent Top Line */}
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+
+                      {/* Card Top Row: Bank Badge & Flag */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="px-3 py-1 rounded-xl bg-white/[0.06] border border-white/10 flex items-center gap-1.5 backdrop-blur-md">
+                            <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="text-xs font-black text-white tracking-wide uppercase">
+                              {vbaData.account.bankName || 'PalmPay / Wema'}
+                            </span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                            Auto-Credit
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.04] border border-white/10">
+                          <span className="text-xs">🇳🇬</span>
+                          <span className="text-[11px] font-extrabold text-white">NGN</span>
+                        </div>
+                      </div>
+
+                      {/* Card Middle: Large Metallic Account Number */}
+                      <div className="my-5">
+                        <p className="text-[10px] uppercase font-bold text-[#64748B] tracking-wider mb-1">
+                          Account Number
+                        </p>
+                        <div className="flex items-center justify-between gap-3 bg-black/40 border border-white/10 rounded-2xl px-4 py-3">
+                          <span className="text-2xl sm:text-3xl font-mono font-black text-white tracking-[0.2em] select-all">
+                            {vbaData.account.accountNumber}
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (!vbaData?.account?.accountNumber) return
+                              navigator.clipboard.writeText(vbaData.account.accountNumber)
+                              setCopiedVBA(true)
+                              toast.success('Account number copied to clipboard!')
+                              setTimeout(() => setCopiedVBA(false), 2200)
+                            }}
+                            className="px-3.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 shadow-md flex-shrink-0"
+                            style={{
+                              background: copiedVBA ? '#10B981' : colors.primary,
+                              color: '#0A0D14',
+                            }}
+                          >
+                            {copiedVBA ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                            <span>{copiedVBA ? 'Copied' : 'Copy'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Card Bottom: Account Holder Name & SureXend Badge */}
+                      <div className="flex items-end justify-between pt-2 border-t border-white/5">
+                        <div>
+                          <p className="text-[9px] uppercase font-bold text-[#64748B] tracking-wider">Account Name</p>
+                          <p className="text-sm font-extrabold text-white mt-0.5 tracking-tight">
+                            {vbaData.account.accountName || 'SureXend User'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] uppercase font-bold text-[#64748B] tracking-wider">Provider</p>
+                          <p className="text-[11px] font-mono font-bold text-[#94A3B8] mt-0.5">PaymentPoint</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── 3-Step Clear Instruction Guide ── */}
+                    <div className="space-y-2.5">
+                      <p className="text-xs font-bold text-white px-1">How to fund your wallet</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
+                          <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-black text-white">
+                            1
+                          </div>
+                          <p className="text-[11px] font-bold text-white">Transfer Funds</p>
+                          <p className="text-[10px] text-[#64748B] leading-relaxed">
+                            Send from any bank (OPay, Kuda, GTB, Zenith, PalmPay, etc.).
+                          </p>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
+                          <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-black">
+                            2
+                          </div>
+                          <p className="text-[11px] font-bold text-white">Auto Settlement</p>
+                          <p className="text-[10px] text-[#64748B] leading-relaxed">
+                            Credited to your NGN balance within 10–30 seconds.
+                          </p>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
+                          <div className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-[10px] font-black">
+                            3
+                          </div>
+                          <p className="text-[11px] font-bold text-white">Zero Deposit Fee</p>
+                          <p className="text-[10px] text-[#64748B] leading-relaxed">
+                            100% of your transfer amount lands in your wallet.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="pt-2 flex items-center gap-3">
+                      <button
+                        onClick={() => {
+                          queryClient.invalidateQueries({ queryKey: ['walletBalance'] })
+                          queryClient.invalidateQueries({ queryKey: ['transactions'] })
+                          toast.success('Checking wallet for incoming deposits...')
+                        }}
+                        className="flex-1 py-3.5 rounded-2xl text-xs font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white flex items-center justify-center gap-2 transition-all active:scale-98"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Check Balance
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (navigator.share && vbaData?.account) {
+                            navigator.share({
+                              title: 'My SureXend Deposit Account',
+                              text: `Pay to my SureXend NGN Account:\nBank: ${vbaData.account.bankName}\nAccount: ${vbaData.account.accountNumber}\nName: ${vbaData.account.accountName}`,
+                            }).catch(() => {})
+                          } else {
+                            navigator.clipboard.writeText(`${vbaData?.account?.bankName} - ${vbaData?.account?.accountNumber} (${vbaData?.account?.accountName})`)
+                            toast.success('Account details copied to clipboard!')
+                          }
+                        }}
+                        className="py-3.5 px-5 rounded-2xl text-xs font-bold border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white flex items-center justify-center gap-2 transition-all active:scale-98"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        Share
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-8 text-center space-y-4">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-400 shadow-lg">
+                      <Landmark className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-base font-extrabold text-white">Initializing Virtual Account</p>
+                      <p className="text-xs text-[#94A3B8] max-w-sm mx-auto leading-relaxed">
+                        {vbaData?.message || 'Virtual accounts are being generated via PaymentPoint. Please retry in a few seconds.'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => queryClient.invalidateQueries({ queryKey: ['localFundingAccount'] })}
+                      className="px-5 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-lg"
+                      style={{ background: colors.primary, color: '#0A0D14' }}
+                    >
+                      Retry Connection
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* ── Bank flows (deposit + send-to-bank) — Coming Soon until Flutterwave ships ── */}
       <ComingSoon

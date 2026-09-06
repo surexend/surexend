@@ -21,6 +21,142 @@ export class WebhooksService {
     private configService: ConfigService,
   ) {}
 
+  async processPaymentPoint(payload: any) {
+    this.logger.log(`PaymentPoint webhook received: ${JSON.stringify(payload)}`);
+    const data = payload?.data || payload;
+
+    const transactionId =
+      data.transaction_id ||
+      data.transactionId ||
+      data.reference ||
+      data.paymentReference ||
+      data.id ||
+      payload.transaction_id ||
+      payload.reference;
+
+    if (!transactionId) {
+      this.logger.warn(`PaymentPoint webhook missing transaction identifier: ${JSON.stringify(payload)}`);
+      return;
+    }
+
+    const reference = `DEP-PP-${transactionId}`;
+    const existing = await this.prisma.transaction.findUnique({ where: { reference } });
+    if (existing) {
+      this.logger.log(`PaymentPoint deposit ${reference} already processed.`);
+      return;
+    }
+
+    const accountNumber = String(
+      data.account_number ||
+      data.accountNumber ||
+      data.virtual_account_number ||
+      data.virtualAccountNumber ||
+      payload.account_number ||
+      payload.accountNumber ||
+      ''
+    );
+
+    const email = (data.email || data.customer_email || payload.email || '').toLowerCase();
+
+    const virtualAccount = await this.prisma.virtualAccount.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          ...(accountNumber ? [{ accountNumber }] : []),
+          ...(email ? [{ user: { email } }] : []),
+        ],
+      },
+      include: { user: true },
+    });
+
+    if (!virtualAccount) {
+      this.logger.warn(`PaymentPoint deposit for unknown account number (${accountNumber}) or email (${email})`);
+      return;
+    }
+
+    const rawAmount = data.amount || data.amount_paid || data.settled_amount || payload.amount;
+    const amount = parseFloat(String(rawAmount));
+    if (!amount || amount <= 0) {
+      this.logger.warn(`PaymentPoint deposit with invalid amount: ${rawAmount}`);
+      return;
+    }
+
+    const currency = 'NGN';
+    const bankName = data.bank_name || data.bankName || virtualAccount.bankName || 'PalmPay';
+    const senderName = data.sender_name || data.senderName || data.payer_name || 'Bank Transfer';
+
+    await this.prisma.$transaction(async (prisma) => {
+      let localBalances: Record<string, number> = {};
+      try {
+        const wallet = await prisma.wallet.findUnique({
+          where: { userId: virtualAccount.userId },
+          select: { localBalances: true, localBalance: true },
+        });
+        const parsed = wallet?.localBalances as any;
+        if (parsed && typeof parsed === 'object') localBalances = { ...parsed };
+        if ((wallet?.localBalance || 0) > 0 && !localBalances['NGN']) localBalances['NGN'] = wallet.localBalance;
+      } catch { /* ignore */ }
+
+      localBalances[currency] = (localBalances[currency] || 0) + amount;
+      const realIncrement = { realLocalBalance: { increment: amount } };
+
+      try {
+        await prisma.wallet.update({
+          where: { userId: virtualAccount.userId },
+          data: { localBalances, ...realIncrement },
+        });
+      } catch {
+        await prisma.wallet.update({
+          where: { userId: virtualAccount.userId },
+          data: { localBalance: localBalances['NGN'] || 0, ...realIncrement },
+        });
+      }
+
+      await this.transactionsService.createTransaction(prisma, {
+        userId: virtualAccount.userId,
+        type: 'RECEIVE',
+        status: 'COMPLETED',
+        amount,
+        fee: 0,
+        currency,
+        reference,
+        metadata: {
+          channel: 'bank_transfer',
+          provider: 'PAYMENTPOINT',
+          transactionId,
+          bankName,
+          senderName,
+          accountNumber: virtualAccount.accountNumber,
+          settledAt: new Date().toISOString(),
+        },
+      });
+
+      await this.ledger.record([
+        { transferId: reference, account: this.ledger.externalAccount('PAYMENTPOINT', currency), currency, amountMinor: -toMinor(amount, currency), reference, kind: 'BANK_TRANSFER_SOURCE' },
+        { transferId: reference, account: this.ledger.userAccount(virtualAccount.userId, currency), currency, amountMinor: toMinor(amount, currency), reference, kind: 'BANK_TRANSFER_DEPOSIT' },
+      ], prisma);
+    });
+
+    await this.notificationsService.createNotification(virtualAccount.userId, {
+      title: 'NGN Deposit Received',
+      body: `Your bank transfer deposit of ₦${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} has been credited to your NGN wallet.`,
+      type: 'RECEIVE',
+      data: { amount, currency: 'NGN', reference, channel: 'bank_transfer' },
+    });
+
+    if (virtualAccount.user?.email) {
+      await this.notificationsService.sendTransactionEmail(
+        virtualAccount.user.email,
+        amount,
+        'NGN',
+        reference,
+        'Bank Transfer Deposit'
+      ).catch(() => {});
+    }
+
+    this.logger.log(`Successfully credited ${amount} NGN to user ${virtualAccount.userId} via PaymentPoint (${reference})`);
+  }
+
   async processFlutterwave(payload: any) {
     // Bank-transfer deposits to a user's virtual account arrive as
     // charge.completed with a transfer/account payment type.
