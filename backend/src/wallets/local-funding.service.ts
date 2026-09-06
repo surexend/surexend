@@ -104,8 +104,14 @@ export class LocalFundingService {
         this.logger.log(`PaymentPoint VNUBAN create response: ${JSON.stringify(response.data)}`);
 
         const resData = response.data;
-        // Try all possible nesting patterns: data, account, accounts, direct object
-        const acctData = resData?.data || resData?.account || resData?.accounts || resData;
+        // PaymentPoint returns: { bankAccounts: [{accountNumber, accountName, bankName, bankCode}] }
+        // Fall back to other common nesting patterns for safety.
+        const acctData =
+          resData?.bankAccounts ||
+          resData?.data ||
+          resData?.account ||
+          resData?.accounts ||
+          resData;
         const acctObj = Array.isArray(acctData) ? acctData[0] : acctData;
 
         // Try all known field name variants
@@ -118,11 +124,13 @@ export class LocalFundingService {
           acctObj?.virtual_account_number;
 
         if (accountNumber) {
+          // Use PP customer_id as reference so webhook service can match inbound payments
+          const ppCustomerId = resData?.customer?.customer_id;
           const account = await this.prisma.virtualAccount.create({
             data: {
               userId,
               provider: 'PAYMENTPOINT',
-              reference,
+              reference: ppCustomerId ? `PAYPT-${ppCustomerId}` : reference,
               accountNumber: String(accountNumber),
               accountName:
                 acctObj?.accountName ||
