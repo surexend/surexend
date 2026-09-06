@@ -63,13 +63,24 @@ export class LocalFundingService {
     const reference = `VA-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
     const phone = /^\+?\d[\d\s-]{6,}$/.test(user.phone || '') ? user.phone : undefined;
 
+    // PaymentPoint requires exactly 11-digit local Nigerian format (07XXXXXXXXX).
+    // Strip any international prefix (+234 or 234) and convert to local format.
+    const normalizeNigerianPhone = (raw?: string | null): string => {
+      if (!raw) return '08000000000';
+      const digits = raw.replace(/[^\d]/g, ''); // strip +, spaces, dashes
+      if (digits.startsWith('234') && digits.length === 13) return '0' + digits.slice(3);
+      if (digits.length === 11 && digits.startsWith('0')) return digits;
+      if (digits.length === 10) return '0' + digits; // rare: already dropped leading 0
+      return '08000000000'; // safe fallback
+    };
+
     // 1. Try PaymentPoint first
     if (hasPaymentPoint) {
       try {
         const payload = {
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'SureXend User',
           email: user.email,
-          phoneNumber: phone || '08000000000',
+          phoneNumber: normalizeNigerianPhone(phone),
           bankCode: ['20946', '20897'],
           businessId: this.ppBusinessId,
         };
