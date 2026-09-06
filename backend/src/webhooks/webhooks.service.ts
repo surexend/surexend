@@ -21,7 +21,7 @@ export class WebhooksService {
     private configService: ConfigService,
   ) {}
 
-  async processPaymentPoint(payload: any) {
+  async processPaymentPoint(payload: any, signature?: string) {
     this.logger.log(`PaymentPoint webhook received: ${JSON.stringify(payload)}`);
     const data = payload?.data || payload;
 
@@ -56,15 +56,20 @@ export class WebhooksService {
       ''
     );
 
-    const email = (data.email || data.customer_email || payload.email || '').toLowerCase();
+    const receiverAccount = data.receiver?.account_number || data.receiverAccount;
+    const customerId = data.customer?.customer_id || data.customerId;
+    const email = (data.email || data.customer_email || data.customer?.email || payload.email || '').toLowerCase();
+
+    const lookups: any[] = [];
+    if (accountNumber) lookups.push({ accountNumber });
+    if (receiverAccount && receiverAccount !== accountNumber) lookups.push({ accountNumber: receiverAccount });
+    if (customerId) lookups.push({ reference: `PAYPT-${customerId}` });
+    if (email) lookups.push({ user: { email } });
 
     const virtualAccount = await this.prisma.virtualAccount.findFirst({
       where: {
         isActive: true,
-        OR: [
-          ...(accountNumber ? [{ accountNumber }] : []),
-          ...(email ? [{ user: { email } }] : []),
-        ],
+        ...(lookups.length > 0 ? { OR: lookups } : {}),
       },
       include: { user: true },
     });
@@ -529,148 +534,6 @@ export class WebhooksService {
           }
         }
       }
-    }
-  }
-
-  async processPaymentPoint(payload: any, signature: string) {
-    // Get webhook secret, fallback to secretKey if not separately configured
-    const webhookSecret = this.configService.get('app.paymentpoint.webhookSecret') ||
-                         this.configService.get('app.paymentpoint.secretKey');
-    
-    if (!webhookSecret) {
-      this.logger.error('PaymentPoint webhook secret not configured; accepting webhook');
-      // If no secret is configured, accept the webhook (less secure but works with limited config)
-    } else {
-      // Verify the webhook signature using HMAC-SHA256
-      const calculatedSignature = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(JSON.stringify(payload), 'utf-8')
-        .digest('hex');
-
-      if (calculatedSignature !== signature) {
-        this.logger.error('Invalid PaymentPoint webhook signature');
-        throw new BadRequestException('Invalid webhook signature');
-      }
-    }
-
-    const data = payload.data || {};
-
-    // Handle payment successful webhook
-    if (payload.notification_status === 'payment_successful' || payload.transaction_status === 'success') {
-      const transactionId = data.transaction_id || payload.transaction_id;
-      const amountPaid = parseFloat(data.amount_paid || 0);
-
-      if (!transactionId || amountPaid <= 0) {
-        this.logger.log(`PaymentPoint webhook: missing transaction data`);
-        return;
-      }
-
-      // Check if this transaction has already been processed
-      const existingTransaction = await this.prisma.transaction.findUnique({
-        where: { reference: `PAYPT-${transactionId}` },
-      });
-
-      if (existingTransaction) {
-        this.logger.log(`PaymentPoint transaction ${transactionId} already processed`);
-        return;
-      }
-
-      // Find the user via the customer_id or receiver account number
-      const customerId: string | undefined = data.customer?.customer_id;
-      const receiverAccount: string | undefined = data.receiver?.account_number;
-      const lookups: any[] = [];
-      if (customerId) lookups.push({ reference: `PAYPT-${customerId}` });
-      if (receiverAccount) lookups.push({ accountNumber: receiverAccount });
-      if (lookups.length === 0) {
-        this.logger.warn(`PaymentPoint webhook: no customer/receiver info for transaction ${transactionId}`);
-        return;
-      }
-      const virtualAccount = await this.prisma.virtualAccount.findFirst({
-        where: { isActive: true, provider: 'PAYMENTPOINT', OR: lookups },
-      });
-
-      if (!virtualAccount) {
-        this.logger.warn(`PaymentPoint webhook: unknown virtual account for transaction ${transactionId}`);
-        return;
-      }
-
-      await this.prisma.$transaction(async (prisma) => {
-        // Credit the per-currency local balance (defensive against a missing
-        // localBalances column, mirroring the conversions service).
-        let localBalances: Record<string, number> = {};
-        try {
-          const wallet = await prisma.wallet.findUnique({
-            where: { userId: virtualAccount.userId },
-            select: { localBalances: true, localBalance: true },
-          });
-          const parsed = wallet?.localBalances as any;
-          if (parsed && typeof parsed === 'object') localBalances = { ...parsed };
-          if ((wallet?.localBalance || 0) > 0 && !localBalances['NGN']) localBalances['NGN'] = wallet.localBalance;
-        } catch { /* ignore */ }
-
-        localBalances['NGN'] = (localBalances['NGN'] || 0) + amountPaid;
-
-        // Credit the real-money pool so the balance can pay bills / withdraw
-        const realIncrement = { realLocalBalance: { increment: amountPaid } };
-
-        try {
-          await prisma.wallet.update({
-            where: { userId: virtualAccount.userId },
-            data: { localBalances, ...realIncrement },
-          });
-        } catch {
-          await prisma.wallet.update({
-            where: { userId: virtualAccount.userId },
-            data: { localBalance: localBalances['NGN'] || 0, ...realIncrement },
-          });
-        }
-
-        await this.transactionsService.createTransaction(prisma, {
-          userId: virtualAccount.userId,
-          type: 'RECEIVE',
-          status: 'COMPLETED',
-          amount: amountPaid,
-          fee: parseFloat(data.settlement_fee || 0),
-          currency: 'NGN',
-          reference: `PAYPT-${transactionId}`,
-          metadata: {
-            channel: 'bank_transfer',
-            provider: 'PAYMENTPOINT',
-            transactionId,
-            settlementAmount: parseFloat(data.settlement_amount || 0),
-            settlementFee: parseFloat(data.settlement_fee || 0),
-            senderName: data.sender?.name,
-            senderAccount: data.sender?.account_number,
-            receiverName: data.receiver?.name,
-            receiverAccount: data.receiver?.account_number,
-            receiverBank: data.receiver?.bank,
-            customerName: data.customer?.name,
-            customerEmail: data.customer?.email,
-            description: data.description,
-            timestamp: data.timestamp,
-          },
-        });
-
-        await this.ledger.record([
-          { transferId: `PAYPT-${transactionId}`, account: this.ledger.externalAccount('PAYMENTPOINT', 'NGN'), currency: 'NGN', amountMinor: -toMinor(amountPaid, 'NGN'), reference: `PAYPT-${transactionId}`, kind: 'BANK_TRANSFER_SOURCE' },
-          { transferId: `PAYPT-${transactionId}`, account: this.ledger.userAccount(virtualAccount.userId, 'NGN'), currency: 'NGN', amountMinor: toMinor(amountPaid, 'NGN'), reference: `PAYPT-${transactionId}`, kind: 'BANK_TRANSFER_DEPOSIT' },
-        ], prisma);
-      });
-
-      await this.notificationsService.createNotification(virtualAccount.userId, {
-        title: 'Payment Received',
-        body: `${amountPaid.toLocaleString()} NGN credited to your wallet. Reference: ${transactionId}`,
-        type: 'DEPOSIT',
-        data: { reference: transactionId, amount: amountPaid, currency: 'NGN', channel: 'paymentpoint' },
-      });
-
-      await this.notificationsService.sendTransactionEmail(
-        (await this.prisma.user.findUnique({ where: { id: virtualAccount.userId } })).email,
-        amountPaid,
-        'NGN',
-        transactionId,
-        'Payment Received'
-      );
     }
   }
 }
