@@ -951,7 +951,7 @@ export class BillsService {
             providerState: metadataPatch.providerState || 'FAILED',
             error: String(message).slice(0, 500),
             ...metadataPatch,
-          },
+          } as any,
         },
       });
       if (claimed.count !== 1) return;
@@ -984,7 +984,7 @@ export class BillsService {
             providerState: metadataPatch.providerState || 'FAILED',
             error: String(message).slice(0, 500),
             ...metadataPatch,
-          },
+          } as any,
         },
       });
       if (transactionClaimed.count !== 1) {
