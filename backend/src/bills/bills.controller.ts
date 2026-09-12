@@ -40,8 +40,16 @@ export class BillsController {
     @Body('passkeyToken') passkeyToken?: string,
     @Body('portedNumber') portedNumber?: boolean,
   ) {
+    const fingerprint = JSON.stringify({
+      type: String(type || '').toLowerCase(),
+      provider: String(provider || '').toUpperCase(),
+      recipient: String(recipient || '').trim(),
+      amount: Number(amount),
+      planCode: planCode ? String(planCode) : null,
+      portedNumber: Boolean(portedNumber),
+    });
     const { result } = await this.idempotency.run(
-      { userId: user.id, scope: 'bills.purchase', key: idempotencyKey },
+      { userId: user.id, scope: 'bills.purchase', key: idempotencyKey, fingerprint },
       () => this.billsService.purchaseBill(user.id, type, provider, recipient, amount, pin, planCode, passkeyToken, portedNumber),
     );
     return result;

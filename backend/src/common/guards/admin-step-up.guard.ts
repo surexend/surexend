@@ -13,7 +13,7 @@ export class AdminStepUpGuard implements CanActivate {
     await this.transactionAuthService.verify(user, {
       pin: body.adminPin,
       passkeyToken: body.adminPasskeyToken,
-    });
+    }, { action: 'admin.stepup' });
 
     if (request.body && typeof request.body === 'object') {
       delete request.body.adminPin;

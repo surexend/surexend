@@ -419,7 +419,7 @@ function LoginForm() {
             ) : (
               <>
                 <p className="text-sm text-[#94A3B8] text-center">
-                  We've sent a 6-digit code to <span className="text-white font-medium">{codeEmail}</span>
+                  We&apos;ve sent a 6-digit code to <span className="text-white font-medium">{codeEmail}</span>
                 </p>
                 <input
                   value={code}
@@ -460,7 +460,7 @@ function LoginForm() {
         )}
 
         <p className="mt-8 text-center text-[#94A3B8] text-sm">
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <Link href="/auth/register" style={{ color: colors.primary }} className="font-semibold hover:underline">
             Sign up
           </Link>

@@ -257,6 +257,12 @@ export class ConversionsService {
   }
 
   async execute(userId: string, from: string, to: string, amount: number, pin?: string, passkeyToken?: string) {
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
+      throw new BadRequestException('Money movement is disabled while this environment is in testnet or maintenance mode.');
+    }
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      throw new BadRequestException('Amount must be a finite number greater than zero.');
+    }
     const fromCode = (from || 'USD').toUpperCase();
     const toCode = (to || 'NGN').toUpperCase();
 
@@ -266,7 +272,12 @@ export class ConversionsService {
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
-    await this.transactionAuth.verify(user, { pin, passkeyToken });
+    await this.transactionAuth.verify(user, { pin, passkeyToken }, {
+      action: 'conversions.execute',
+      from: fromCode,
+      to: toCode,
+      amount: Number(amount),
+    });
 
     // SECURITY: balance check + debit MUST be atomic. The previous version read
     // the wallet outside the transaction and checked against that stale value,
@@ -302,7 +313,7 @@ export class ConversionsService {
       // the float for currencies the ledger has no rows for yet.
       let usdtPool = w.usdtBalance || 0;
       let usdcPool = w.usdcBalance || 0;
-      const usdAvailable = usdtPool + usdcPool;
+      let usdAvailable = usdtPool + usdcPool;
       if (this.ledgerReads()) {
         const lb: Record<string, bigint> = await this.ledger.balancesOfUser(userId, prisma);
         if (lb.USDT !== undefined) usdtPool = fromMinor(lb.USDT, 'USDT');
@@ -313,6 +324,7 @@ export class ConversionsService {
           if (ccy === 'USDC' || ccy === 'USDT' || ccy === 'USD') continue;
           localBalances[ccy] = fromMinor(minor, ccy);
         }
+        usdAvailable = usdtPool + usdcPool;
       }
 
       const fromRate = fromCode === 'USD' ? 1 : getLocalRate(fromCode);
@@ -380,41 +392,27 @@ export class ConversionsService {
         });
       }
 
-      // Apply local-balance changes in one update. Guarded: fall back to the
-      // legacy NGN-only field if the deployed DB lacks the localBalances column.
-      try {
-        await prisma.wallet.update({
-          where: { id: w.id },
-          data: { localBalances: updatedLocalBalances }
-        });
-      } catch (err: any) {
-        this.logger.warn(`localBalances column unavailable; falling back to legacy localBalance: ${err.message}`);
-        await prisma.wallet.update({
-          where: { id: w.id },
-          data: { localBalance: updatedLocalBalances['NGN'] ?? 0 }
-        });
-      }
+      // The production migration is a prerequisite for enabling movement.
+      // Do not fall back to a legacy write after an ambiguous DB error or
+      // continue without the durable conversion record.
+      await prisma.wallet.update({
+        where: { id: w.id },
+        data: { localBalances: updatedLocalBalances },
+      });
 
-      // Record Conversion record; skip gracefully if the table isn't migrated.
-      let conversionId: string | null = null;
-      try {
-        const conversion = await prisma.conversion.create({
-          data: {
-            userId,
-            usdtAmount: result.usdValue,
-            fiatAmount: result.receiveAmount,
-            fiatCurrency: toCode,
-            rate: result.rate,
-            fee: result.feeUsd,
-            status: 'COMPLETED',
-          }
-        });
-        conversionId = conversion.id;
-      } catch (err: any) {
-        this.logger.warn(`Conversion record unavailable; skipping: ${err.message}`);
-      }
-
-      const ledgerReference = `CONV-${conversionId ?? `SKIPPED-${Date.now()}-${Math.floor(Math.random() * 1000)}`}`;
+      const conversion = await prisma.conversion.create({
+        data: {
+          userId,
+          usdtAmount: result.usdValue,
+          fiatAmount: result.receiveAmount,
+          fiatCurrency: toCode,
+          rate: result.rate,
+          fee: result.feeUsd,
+          status: 'COMPLETED',
+        },
+      });
+      const conversionId = conversion.id;
+      const ledgerReference = `CONV-${conversionId}`;
       const sourceCurrencies = fromCode === 'USD' ? ['USDT', 'USDC'] : [fromCode];
       const sourceAmounts = fromCode === 'USD' ? [deductUsdt, deductUsdc] : [debitTotal];
       const entries = sourceCurrencies.flatMap((ccy, i) => {

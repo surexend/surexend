@@ -1,18 +1,66 @@
 # SureXend — Full Assessment & Roadmap
 
-**Date:** 2026-08-29 · **Branch:** `arena/01a04d9a-surexend` · **Reviewed:** whole repo (frontend, backend, schema, docs, git state)
+**Original review date:** 2026-08-29 · **Current update:** 2026-09-12 · **Branch:** `arena/01a096aa-surexend` · **Reviewed:** whole repo (frontend, backend, schema, docs, git state)
 
 This is a blunt read of where SureXend is, what is genuinely strong, what is
 dangerous, and what has to happen for this to become a billion-dollar fintech.
 It is written to be disagreed with — but every claim below is either read from
 the code or cited.
 
+> **Current launch gate — 2026-09-12:** This document's older sections are
+> historical unless they conflict with the current gate. The project is **not
+> approved for limited real-money/bills use or a mainnet/production financial
+> launch**. The only defensible scope is a read-only, explicitly labelled
+> testnet/demo deployment. Money movement is fail-closed unless
+> `MONEY_MOVEMENT_ENABLED=true`; production also requires ledger reads and
+> startup rejects all mainnet configurations because the current release still
+> contains testnet-only chain mappings. See the current evidence and required
+> actions in `docs/rollout-status.md`.
+
+## Latest remediation status — 2026-09-12
+
+The audit remediation branch now includes guarded operator workflows for
+ambiguous bill and Circle-send outcomes. `GET /admin/reconciliation` shows
+pending work; step-up-protected resolution routes require explicit provider
+reference and provider status, and successful decisions are written to
+`AuditLog`. A confirmed bill failure uses the atomic ledger reversal and wallet
+refund; a confirmed send failure releases the exact reservation; a confirmed
+success only settles the pending state and does not mint a second credit.
+Inconsistent reservations remain pending instead of being partially refunded.
+
+Ledger-drift alert delivery now has a checked-in `LedgerAlertDelivery` outbox
+with durable retry/backoff state. This removes process-memory-only alert
+acknowledgement, but still requires a real PostgreSQL migration drill, a
+configured alert destination, and an operator restart/failure drill.
+
+These changes improve recoverability; they do not prove provider contracts,
+production database compatibility, KYC/AML/compliance readiness, or real-money
+safety. GitHub CI passing is not a launch approval.
+
+The remaining technical work is now executable rather than implicit:
+`backend/scripts/financial-launch-gate.js` is a fail-closed configuration,
+migration, PostgreSQL, ledger, pending-reconciliation, alert-outbox, and
+operator-evidence gate; `provider-contract-preflight.js` performs only
+read-only Circle/Flutterwave checks and preserves Smartspeed/PaymentPoint as
+pending where authoritative contracts are absent; and `postgres-rehearsal.js`
+exercises real PostgreSQL conditional-claim locking and durable alert state in
+an isolated schema. Circle outbound webhook settlement now conditionally claims
+PENDING rows before releasing/refunding reservations, with duplicate-webhook
+coverage in the money-flow harness. `docs/financial-release-runbook.md` and
+`docs/provider-contracts.md` define the evidence, cutover, alert, operator,
+and rollback procedures. None of the real PostgreSQL/provider/alert drills has
+been executed in this environment because the required services and credentials
+are unavailable, so those gates remain blocked rather than being reported as
+successful.
+
+KYC/AML changes remain intentionally out of scope for this remediation.
+
 ---
 
 ## Status update — 2026-08-29 (same day, fixes applied)
 
 Sections 4–6 below describe the state as reviewed. Since then the following
-have been fixed on `arena/01a04d9a-surexend`:
+have been fixed on the remediation branch (historical branch label omitted):
 
 | Defect | Fix |
 |---|---|

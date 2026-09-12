@@ -294,7 +294,7 @@ export default function BridgePage() {
         <div className="flex items-start gap-2 p-3 rounded-2xl bg-purple-500/5 border border-purple-500/10">
           <Info className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />
           <p className="text-[10px] text-[#94A3B8] leading-normal">
-            Uses Circle's <strong className="text-white">CCTP Relayer (Forwarder)</strong>. Attestations and minting are handled automatically on the destination chain without requiring manual gas or transaction signing.
+            Uses Circle&apos;s <strong className="text-white">CCTP Relayer (Forwarder)</strong>. Attestations and minting are handled automatically on the destination chain without requiring manual gas or transaction signing.
           </p>
         </div>
 

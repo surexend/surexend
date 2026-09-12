@@ -11,7 +11,13 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('LedgerAlertService', () => {
   const auditFindMany = jest.fn();
-  const prisma: any = { auditLog: { findMany: auditFindMany } };
+  const deliveryUpsert = jest.fn();
+  const deliveryFindMany = jest.fn();
+  const deliveryUpdate = jest.fn();
+  const prisma: any = {
+    auditLog: { findMany: auditFindMany },
+    ledgerAlertDelivery: { upsert: deliveryUpsert, findMany: deliveryFindMany, update: deliveryUpdate },
+  };
 
   const config = (overrides: Record<string, any> = {}) =>
     ({
@@ -32,8 +38,19 @@ describe('LedgerAlertService', () => {
     metadata: { account: 'user:u1:USDC', currency: 'USDC', ledgerMinor: '5000000', legacy: 5.5 },
   });
 
+  const delivery = (row: any, channel = 'WEBHOOK', attempts = 0) => ({
+    id: `delivery-${row.id}-${channel}`,
+    channel,
+    attempts,
+    auditLog: row,
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedAxios.post.mockReset();
+    deliveryUpsert.mockResolvedValue({});
+    deliveryUpdate.mockResolvedValue({});
+    deliveryFindMany.mockResolvedValue([]);
   });
 
   it('does nothing when alerts are disabled', async () => {
@@ -43,58 +60,59 @@ describe('LedgerAlertService', () => {
     expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 
-  it('does nothing when there are no new drift rows', async () => {
+  it('does nothing when there are no drift rows', async () => {
     auditFindMany.mockResolvedValue([]);
     const service = new LedgerAlertService(prisma, config());
     await service.checkForDrift();
     expect(auditFindMany).toHaveBeenCalledTimes(1);
+    expect(deliveryUpsert).not.toHaveBeenCalled();
     expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 
-  it('POSTs new LEDGER_DRIFT rows to the configured webhook', async () => {
-    auditFindMany.mockResolvedValue([driftRow('a1'), driftRow('a2')]);
-    mockedAxios.post.mockResolvedValue({ status: 200 } as any);
-    const service = new LedgerAlertService(prisma, config({ webhookUrl: 'https://hooks.example.com/drift' }));
-    await service.checkForDrift();
-    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
-    const [url, payload] = mockedAxios.post.mock.calls[0];
-    expect(url).toBe('https://hooks.example.com/drift');
-    expect((payload as any).event).toBe('LEDGER_DRIFT');
-    expect((payload as any).count).toBe(2);
-    expect((payload as any).rows.map((r: any) => r.id)).toEqual(['a1', 'a2']);
-  });
-
-  it('does not re-alert rows already alerted in-process (high-water mark)', async () => {
-    const t1 = new Date('2026-08-30T10:00:00Z');
-    const t2 = new Date('2026-08-30T11:00:00Z');
-    auditFindMany.mockResolvedValueOnce([driftRow('a1', t1)]);
+  it('persists and POSTs each new drift row to the configured webhook', async () => {
+    const rows = [driftRow('a1'), driftRow('a2')];
+    auditFindMany.mockResolvedValue(rows);
+    deliveryFindMany.mockResolvedValue(rows.map((row) => delivery(row)));
     mockedAxios.post.mockResolvedValue({ status: 200 } as any);
     const service = new LedgerAlertService(prisma, config({ webhookUrl: 'https://hooks.example.com/drift' }));
 
     await service.checkForDrift();
-    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
-    expect((mockedAxios.post.mock.calls[0][1] as any).count).toBe(1);
 
-    // Second run replays the old row plus a new one: the watcher filters the
-    // already-alerted id and only alerts the fresh row.
-    auditFindMany.mockResolvedValueOnce([driftRow('a1', t1), driftRow('a2', t2)]);
-    await service.checkForDrift();
+    expect(deliveryUpsert).toHaveBeenCalledTimes(2);
     expect(mockedAxios.post).toHaveBeenCalledTimes(2);
-    expect((mockedAxios.post.mock.calls[1][1] as any).rows.map((r: any) => r.id)).toEqual(['a2']);
-
-    // Third run with no new rows: no further alerts.
-    auditFindMany.mockResolvedValueOnce([driftRow('a2', t2)]);
-    await service.checkForDrift();
-    expect(mockedAxios.post).toHaveBeenCalledTimes(2);
+    expect(mockedAxios.post.mock.calls[0][0]).toBe('https://hooks.example.com/drift');
+    expect((mockedAxios.post.mock.calls[0][1] as any).event).toBe('LEDGER_DRIFT');
+    expect((mockedAxios.post.mock.calls[0][1] as any).rows[0].id).toBe('a1');
+    expect(deliveryUpdate).toHaveBeenCalledTimes(2);
+    expect(deliveryUpdate.mock.calls[0][0].data.status).toBe('DELIVERED');
   });
 
-  it('keeps alerting (error log + other channels) when the webhook fails', async () => {
-    auditFindMany.mockResolvedValue([driftRow('a1')]);
-    mockedAxios.post.mockRejectedValue(new Error('network down'));
-    const errorSpy = jest.spyOn(Logger.prototype, 'error');
+  it('retries a failed channel through durable delivery state', async () => {
+    const row = driftRow('a1');
+    auditFindMany.mockResolvedValue(row ? [row] : []);
+    deliveryFindMany.mockResolvedValue([delivery(row, 'WEBHOOK', 0)]);
+    mockedAxios.post.mockRejectedValueOnce(new Error('network down'));
     const service = new LedgerAlertService(prisma, config({ webhookUrl: 'https://hooks.example.com/drift' }));
+
     await expect(service.checkForDrift()).resolves.toBeUndefined();
-    expect(errorSpy).toHaveBeenCalled();
+    expect(deliveryUpdate.mock.calls[0][0].data).toEqual(expect.objectContaining({ status: 'RETRY', attempts: 1 }));
+    expect(deliveryUpdate.mock.calls[0][0].data.nextAttemptAt).toBeInstanceOf(Date);
+
+    // A later process can consume the persisted RETRY row and mark it
+    // delivered; no in-memory high-water mark is required for correctness.
+    deliveryFindMany.mockResolvedValueOnce([delivery(row, 'WEBHOOK', 1)]);
+    mockedAxios.post.mockResolvedValueOnce({ status: 200 } as any);
+    await service.checkForDrift();
+    expect(deliveryUpdate.mock.calls[1][0].data.status).toBe('DELIVERED');
+  });
+
+  it('emits an explicit log when no alert destination is configured', async () => {
+    auditFindMany.mockResolvedValue([driftRow('a1')]);
+    const errorSpy = jest.spyOn(Logger.prototype, 'error');
+    const service = new LedgerAlertService(prisma, config());
+    await service.checkForDrift();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('no alert destination'));
+    expect(deliveryUpsert).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });
 
@@ -104,14 +122,14 @@ describe('LedgerAlertService', () => {
     await expect(service.checkForDrift()).resolves.toBeUndefined();
   });
 
-  it('always queries AuditLog for LEDGER_DRIFT rows newest-first from the watermark', async () => {
-    auditFindMany.mockResolvedValue([]);
-    const service = new LedgerAlertService(prisma, config());
+  it('queries durable delivery state with a retryable status and due time', async () => {
+    auditFindMany.mockResolvedValue([driftRow('a1')]);
+    const service = new LedgerAlertService(prisma, config({ webhookUrl: 'https://hooks.example.com/drift' }));
     await service.checkForDrift();
-    const args = auditFindMany.mock.calls[0][0];
-    expect(args.where.action).toBe('LEDGER_DRIFT');
-    expect(args.where.createdAt.gt).toBeInstanceOf(Date);
-    expect(args.orderBy).toEqual({ createdAt: 'asc' });
-    expect(args.select.id).toBe(true);
+    const args = deliveryFindMany.mock.calls[0][0];
+    expect(args.where.status.in).toEqual(['PENDING', 'RETRY']);
+    expect(args.where.nextAttemptAt.lte).toBeInstanceOf(Date);
+    expect(args.where.auditLog.action).toBe('LEDGER_DRIFT');
+    expect(args.include.auditLog.select.id).toBe(true);
   });
 });

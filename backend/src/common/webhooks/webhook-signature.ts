@@ -28,6 +28,17 @@ export function safeCompare(provided: string | undefined, expected: string | und
   return crypto.timingSafeEqual(a, b);
 }
 
+/** Flutterwave's current webhook scheme is HMAC-SHA256 over the raw body,
+ * encoded as base64 and sent in `flutterwave-signature`. */
+export function verifyHmacSha256(rawBody: Buffer | string | undefined, signature: string | undefined, secret: string | undefined): boolean {
+  if (!rawBody || !signature || !secret) return false;
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(typeof rawBody === 'string' ? Buffer.from(rawBody, 'utf8') : rawBody)
+    .digest('base64');
+  return safeCompare(signature, expected);
+}
+
 /**
  * Circle signs every v2 notification with ECDSA-SHA256.
  *

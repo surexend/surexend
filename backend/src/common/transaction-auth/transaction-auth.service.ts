@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import Redis from 'ioredis';
+import { PrismaService } from '../../prisma/prisma.service';
+import { transactionIntentHash } from './transaction-intent';
 
 const MAX_PIN_ATTEMPTS = 5;
 const ATTEMPT_WINDOW_SECONDS = 15 * 60;
@@ -32,6 +34,7 @@ export class TransactionAuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
   ) {
     this.redis = new Redis(this.configService.get<string>('app.redisUrl') || 'redis://localhost:6379');
     this.redis.on('error', (err: Error) => {
@@ -107,6 +110,7 @@ export class TransactionAuthService {
   async verify(
     user: { id: string; pin: string | null },
     body: { pin?: string; passkeyToken?: string },
+    intent?: Record<string, unknown>,
   ) {
     const pin = body?.pin;
     const passkeyToken = body?.passkeyToken;
@@ -127,16 +131,40 @@ export class TransactionAuthService {
     }
 
     if (passkeyToken) {
+      let payload: any;
       try {
-        const payload = this.jwtService.verify(passkeyToken);
-        if (payload?.purpose !== 'transaction' || payload.sub !== user.id) {
-          throw new ForbiddenException('Invalid or expired biometric approval');
-        }
-        await this.clearFailures(user.id);
-        return;
-      } catch (err) {
+        payload = this.jwtService.verify(passkeyToken);
+      } catch {
         throw new ForbiddenException('Invalid or expired biometric approval');
       }
+      if (
+        payload?.purpose !== 'transaction' ||
+        payload.sub !== user.id ||
+        typeof payload.jti !== 'string' ||
+        typeof payload.intentHash !== 'string' ||
+        !intent ||
+        payload.intentHash !== transactionIntentHash(intent)
+      ) {
+        throw new ForbiddenException('This biometric approval does not match the requested action');
+      }
+
+      // A JWT expiry is not enough: consume the approval in the database so a
+      // captured token cannot authorize a second action or another instance.
+      const consumed = await this.prisma.passkeyApproval.updateMany({
+        where: {
+          jti: payload.jti,
+          userId: user.id,
+          intentHash: payload.intentHash,
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: { usedAt: new Date() },
+      });
+      if (consumed.count !== 1) {
+        throw new ForbiddenException('This biometric approval has already been used or expired');
+      }
+      await this.clearFailures(user.id);
+      return;
     }
 
     if (!user?.pin) {

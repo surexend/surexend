@@ -229,7 +229,7 @@ export default function RegisterPage() {
                 />
               </div>
             </div>
-            <p className="text-[11px] text-[#64748B] mt-1">Your @tag is how friends send you money instantly, free. Optional — we'll auto-create one if you skip it.</p>
+            <p className="text-[11px] text-[#64748B] mt-1">Your @tag is how friends send you money instantly, free. Optional — we&apos;ll auto-create one if you skip it.</p>
             {errors.surexTag && <p className="text-[#EF4444] text-sm mt-1">{errors.surexTag.message}</p>}
           </div>
 
@@ -261,7 +261,7 @@ export default function RegisterPage() {
                 />
               </div>
             </div>
-            <p className="text-[11px] text-[#64748B] mt-1">So we can reach you when you're away from the app. We never send codes here.</p>
+            <p className="text-[11px] text-[#64748B] mt-1">So we can reach you when you&apos;re away from the app. We never send codes here.</p>
             {errors.whatsapp && <p className="text-[#EF4444] text-sm mt-1">{errors.whatsapp.message}</p>}
           </div>
 
@@ -324,7 +324,7 @@ export default function RegisterPage() {
               className="mt-1 w-4 h-4 rounded border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)]"
             />
             <label className="text-sm text-[#94A3B8]">
-              I agree to SureXend's <Link href="/terms" target="_blank" className="text-white hover:underline">Terms of Service</Link> and <Link href="/privacy" target="_blank" className="text-white hover:underline">Privacy Policy</Link>
+              I agree to SureXend&apos;s <Link href="/terms" target="_blank" className="text-white hover:underline">Terms of Service</Link> and <Link href="/privacy" target="_blank" className="text-white hover:underline">Privacy Policy</Link>
             </label>
           </div>
           {errors.terms && <p className="text-[#EF4444] text-sm">{errors.terms.message}</p>}

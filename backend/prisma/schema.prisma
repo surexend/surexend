@@ -48,6 +48,7 @@ model User {
   referralRewards ReferralReward[]
   virtualAccounts VirtualAccount[]
   passkeys        Passkey[]
+  passkeyApprovals PasskeyApproval[]
 
   @@index([email, phone])
 }
@@ -65,6 +66,20 @@ model Passkey {
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model PasskeyApproval {
+  id         String    @id @default(uuid())
+  jti        String    @unique
+  userId     String
+  intentHash String
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([usedAt])
 }
 
 model Wallet {
@@ -90,6 +105,7 @@ model WalletAddress {
   wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@unique([network, address])
+  @@unique([walletId, network])
 }
 
 model VirtualAccount {
@@ -232,12 +248,15 @@ model ReferralReward {
   currency            String   @default("USDT")
   status              String   @default("ELIGIBLE")
   platformWalletId    String?
-  circleTransactionId String?  @unique
-  reference           String   @unique
-  approvedById        String?
-  paidAt              DateTime?
-  failureReason       String?
-  createdAt           DateTime @default(now())
+  circleTransactionId  String?  @unique
+  providerIdempotencyKey String? @unique
+  providerState        String?
+  reconciliationRequired Boolean @default(false)
+  reference            String   @unique
+  approvedById         String?
+  paidAt               DateTime?
+  failureReason        String?
+  createdAt            DateTime @default(now())
   updatedAt           DateTime @updatedAt
   user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   platformWallet      PlatformWallet? @relation(fields: [platformWalletId], references: [id], onDelete: SetNull)
@@ -324,6 +343,24 @@ model AuditLog {
   metadata  Json?
   createdAt DateTime @default(now())
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ledgerAlertDeliveries LedgerAlertDelivery[]
+}
+
+model LedgerAlertDelivery {
+  id             String   @id @default(uuid())
+  auditLogId     String
+  channel        String   // WEBHOOK or EMAIL
+  status         String   @default("PENDING") // PENDING, RETRY, DELIVERED
+  attempts       Int      @default(0)
+  nextAttemptAt  DateTime @default(now())
+  deliveredAt    DateTime?
+  lastError      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  auditLog       AuditLog @relation(fields: [auditLogId], references: [id], onDelete: Cascade)
+
+  @@unique([auditLogId, channel])
+  @@index([status, nextAttemptAt])
 }
 
 model RateCache {
@@ -346,15 +383,20 @@ model FeeConfig {
 // `Idempotency-Key` header; the first response is stored here and replayed for
 // any retry carrying the same key, so a double-tap can only ever charge once.
 model IdempotencyRecord {
-  id        String   @id @default(uuid())
-  userId    String
-  scope     String
-  key       String
-  response  Json
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  userId      String
+  scope       String
+  key         String
+  requestHash String?
+  status      String   @default("PROCESSING") // PROCESSING, COMPLETED, FAILED
+  response    Json?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([userId, scope, key])
   @@index([createdAt])
+  @@index([status, updatedAt])
 }
 
 // Admin-controlled pricing overrides for billed services (Smartspeed).

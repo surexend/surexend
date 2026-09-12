@@ -1,4 +1,5 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { Interval } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -7,6 +8,7 @@ import { TransactionAuthService } from '../common/transaction-auth/transaction-a
 import { LedgerService } from '../common/ledger.service';
 import { toMinor } from '../common/money';
 import axios from 'axios';
+import { randomUUID } from 'crypto';
 
 // Static provider lists for categories not yet wired to Smartspeed (electricity,
 // tv, internet). Airtime and data are served live from the Smartspeed catalog.
@@ -142,8 +144,50 @@ export class BillsService {
     if (body.detail) return true;
     if (body.error) return true;
     if (body.success === false) return true;
-    const status = (body.Status ?? body.status ?? '').toString().toLowerCase();
-    return !!status && (status.includes('fail') || status.includes('error'));
+    const statuses = this.providerStatuses(body);
+    return statuses.some((status) => /fail|error|reject|denied|cancel|reverse/.test(status));
+  }
+
+  private providerStatuses(body: any): string[] {
+    if (!body || typeof body !== 'object') return [];
+    const candidates = [
+      body.status,
+      body.Status,
+      body.transaction_status,
+      body.transactionStatus,
+      body.data?.status,
+      body.data?.Status,
+      body.data?.transaction_status,
+      body.data?.transactionStatus,
+    ];
+    return candidates
+      .filter((value) => value !== undefined && value !== null)
+      .map((value) => String(value).trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  private assertPurchaseConfirmed(body: any) {
+    if (this.isFailed(body)) {
+      const knownFailure: any = new Error(this.errorMessage(body));
+      knownFailure.providerOutcomeKnown = true;
+      throw knownFailure;
+    }
+
+    const statuses = this.providerStatuses(body);
+    const pending = statuses.some((status) => /pending|processing|initiated|queued|in_progress/.test(status));
+    const confirmed = statuses.some((status) => /success|successful|complete|completed|delivered/.test(status));
+    const explicitlySuccessful = body?.success === true;
+    if (!pending && (confirmed || explicitlySuccessful)) return;
+
+    // Smartspeed's response contract has not been independently verified. A
+    // 2xx response without an explicit final-success signal may mean pending,
+    // not delivered. Keep the debit pending and reconcile instead of telling a
+    // customer that a bill completed or issuing a duplicate request.
+    const unknown: any = new Error(
+      statuses.length ? `Smartspeed returned non-final status: ${statuses.join(', ')}` : 'Smartspeed returned no final success status',
+    );
+    unknown.providerOutcomeUnknown = true;
+    throw unknown;
   }
 
   private errorMessage(body: any): string {
@@ -418,6 +462,12 @@ export class BillsService {
   // ── Purchase ────────────────────────────────────────────────────────────
 
   async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin?: string, planCode?: string, passkeyToken?: string, portedNumber?: boolean) {
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
+      throw new BadRequestException('Money movement is disabled while this environment is in testnet or maintenance mode.');
+    }
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      throw new BadRequestException('Amount must be a finite number greater than zero.');
+    }
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     // Safety guard: bills spend REAL naira at Smartspeed, so only allow
@@ -433,9 +483,17 @@ export class BillsService {
       }
     }
 
-    await this.transactionAuth.verify(user, { pin, passkeyToken });
-
     const category = (type || 'airtime').toLowerCase();
+    await this.transactionAuth.verify(user, { pin, passkeyToken }, {
+      action: 'bills.purchase',
+      type: category,
+      provider: String(provider || '').toUpperCase(),
+      recipient: String(recipient || '').trim(),
+      amount: Number(amount),
+      planCode: planCode ? String(planCode) : null,
+      portedNumber: Boolean(portedNumber),
+    });
+
     if (!['airtime', 'data'].includes(category)) {
       throw new BadRequestException(`${category} is not available yet. Airtime and Data are live.`);
     }
@@ -535,25 +593,39 @@ export class BillsService {
       );
     }
 
-    const reference = `SS-${Date.now()}${Math.floor(Math.random() * 1000)}`;
-
-    const billMeta: any = {
-      networkId,
-      rate,
-      sellPrice: chargeAmount,
-    };
-    if (costPrice != null) billMeta.costPrice = costPrice;
-    if (marginPct != null) billMeta.marginPct = marginPct;
-    if (planCode) {
-      billMeta.planCode = planCode;
-      billMeta.planName = planResolved?.name || null;
-      billMeta.planValidity = planResolved?.validity || null;
+    // A provider-unknown request must be reconciled before another request for
+    // the same service/recipient is allowed, even if the client supplies a new
+    // idempotency key. This is a local duplicate barrier while Smartspeed's
+    // request-id/status contract is still being verified.
+    const unresolved = await this.prisma.billPayment.findFirst({
+      where: { userId, type: category, provider, recipient, status: 'PENDING' },
+      select: { reference: true },
+    });
+    if (unresolved) {
+      throw new ServiceUnavailableException(
+        `A previous ${category} request for this recipient is still awaiting provider reconciliation (${unresolved.reference}). Do not retry yet.`,
+      );
     }
 
-    return this.prisma.$transaction(async (prisma) => {
-      // SECURITY: lock the wallet row and re-verify real-naira balance INSIDE
-      // the transaction. Checking against the unlocked pre-read allowed
-      // concurrent bill payments to all pass validation and overdraw.
+    const reference = `SS-${randomUUID()}`;
+    const billMeta = {
+      provider,
+      recipient,
+      category,
+      networkId,
+      rate,
+      channel: 'real_ngn',
+      costPrice,
+      marginPct,
+      ...(planCode ? { planCode, planName: planResolved?.name || null, planValidity: planResolved?.validity || null } : {}),
+    };
+
+    // Commit the debit and a durable PENDING provider operation BEFORE calling
+    // Smartspeed. Never hold a database transaction open across an external
+    // money-moving request: a process crash after the provider accepts the bill
+    // must leave an auditable pending row, not roll the user's debit back and
+    // make a retry capable of delivering the bill twice.
+    const prepared = await this.prisma.$transaction(async (prisma) => {
       const lockedRows = await prisma.$queryRaw<Array<{ id: string; localBalances: any; localBalance: number; realLocalBalance: number }>>`
         SELECT "id", "localBalances", "localBalance", "realLocalBalance"
         FROM "Wallet"
@@ -561,34 +633,26 @@ export class BillsService {
         FOR UPDATE`;
       const lw = lockedRows[0];
       if (!lw) throw new BadRequestException('Wallet not found');
-      let lockedLocals: Record<string, number> = {};
-      const parsedLocked = typeof lw.localBalances === 'string'
-        ? (() => { try { return JSON.parse(lw.localBalances); } catch { return null; } })()
-        : lw.localBalances;
-      if (parsedLocked && typeof parsedLocked === 'object') lockedLocals = { ...parsedLocked };
-      if ((lw.localBalance || 0) > 0 && !lockedLocals['NGN']) lockedLocals['NGN'] = lw.localBalance;
 
-      const lockedReal = lw.realLocalBalance || 0;
+      const lockedLocals = this.parseLocalBalances(lw.localBalances, lw.localBalance || 0);
+      const lockedReal = Number(lw.realLocalBalance || 0);
       if (lockedReal < chargeAmount) {
         throw new BadRequestException(
-          `You need ₦${chargeAmount.toFixed(2)} of real naira for this bill — you have ₦${lockedReal.toFixed(2)}. Crypto and testnet funds can't pay bills. Fund your NGN wallet via bank transfer on the Receive page.`
+          `You need ₦${chargeAmount.toFixed(2)} of real naira for this bill — you have ₦${lockedReal.toFixed(2)}. Crypto and testnet funds can't pay bills. Fund your NGN wallet via bank transfer on the Receive page.`,
         );
       }
 
-      // Deduct REAL naira from both the total NGN pool and the real-money pool.
-      const ngnTotal = lockedLocals['NGN'] || 0;
-      const newLocalBalances = { ...lockedLocals, NGN: Math.max(0, ngnTotal - chargeAmount) };
-      try {
-        await prisma.wallet.update({
-          where: { id: wallet.id },
-          data: { localBalances: newLocalBalances, realLocalBalance: { decrement: chargeAmount } }
-        });
-      } catch {
-        await prisma.wallet.update({
-          where: { id: wallet.id },
-          data: { localBalance: newLocalBalances['NGN'] ?? 0, realLocalBalance: { decrement: chargeAmount } }
-        });
-      }
+      const newLocalBalances = {
+        ...lockedLocals,
+        NGN: Math.max(0, Number(lockedLocals.NGN || 0) - chargeAmount),
+      };
+      // The production baseline includes localBalances. Do not fall back to a
+      // second write after an ambiguous database error: that can double-debit
+      // the wallet if the first statement committed but its response was lost.
+      await prisma.wallet.update({
+        where: { id: wallet.id },
+        data: { localBalances: newLocalBalances, realLocalBalance: { decrement: chargeAmount } },
+      });
 
       const billPayment = await prisma.billPayment.create({
         data: {
@@ -600,8 +664,8 @@ export class BillsService {
           usdtAmount: chargeAmount / rate,
           reference,
           status: 'PENDING',
-          metadata: billMeta
-        }
+          metadata: { ...billMeta, providerState: 'PENDING_EXTERNAL' },
+        },
       });
 
       await this.ledger.record([
@@ -617,81 +681,333 @@ export class BillsService {
         fee: 0,
         currency: 'NGN',
         reference: billPayment.reference,
-        metadata: { provider, recipient, rate, channel: 'real_ngn', ...(planCode ? { planCode, planName: planResolved?.name || null, planValidity: planResolved?.validity || null } : {}) }
+        metadata: {
+          provider,
+          recipient,
+          rate,
+          channel: 'real_ngn',
+          providerState: 'PENDING_EXTERNAL',
+          ...(planCode ? { planCode, planName: planResolved?.name || null, planValidity: planResolved?.validity || null } : {}),
+        },
       });
 
-      try {
-        // Big apps (OPay, PalmPay) handle ported numbers seamlessly behind the scenes by
-        // instructing the VTU gateway to route to the selected operator.
-        const payload: Record<string, unknown> = { Ported_number: true };
-        let endpoint: string;
-        if (category === 'airtime') {
-          endpoint = '/topup/';
-          payload.network = networkId;
-          payload.amount = amount;
-          payload.mobile_number = recipient;
-          payload.airtime_type = 'VTU';
-        } else {
-          endpoint = '/data/';
-          payload.network = networkId;
-          payload.mobile_number = recipient;
-          payload.plan = Number(planCode) || planCode;
+      return { billPayment, transaction, walletId: wallet.id };
+    });
+
+    let providerBody: any;
+    try {
+      providerBody = await this.executeSmartspeedPurchase({
+        category,
+        networkId,
+        providerAmount,
+        recipient,
+        planCode,
+        portedNumber,
+      });
+    } catch (error: any) {
+      const message = error?.message || 'Transaction failed';
+      this.logger.error(`Smartspeed purchase failed (${reference}): ${message}`);
+
+      // A timeout, connection reset, or process boundary means the provider's
+      // final state is unknown. Do NOT refund and do NOT automatically retry:
+      // Smartspeed may already have delivered the bill. Leave the debit and
+      // PENDING row for provider reconciliation, and alert operations.
+      const providerHttpStatus = Number(error?.response?.status || 0);
+      const outcomeUnknown = !error?.providerOutcomeKnown && (
+        error?.providerOutcomeUnknown ||
+        !error?.response ||
+        providerHttpStatus >= 500 ||
+        [408, 409, 429].includes(providerHttpStatus)
+      );
+      if (outcomeUnknown) {
+        await this.markBillForReconciliation(prepared, message);
+        throw new ServiceUnavailableException(
+          'The bill provider did not confirm the result. Your funds are held while support reconciles the payment; do not retry yet.',
+        );
+      }
+
+      await this.refundPendingBill(prepared, message);
+      throw new BadRequestException(`Purchase failed: ${message}`);
+    }
+
+    const completedMetadata = {
+      ...((prepared.billPayment.metadata as Record<string, unknown>) || {}),
+      providerState: 'COMPLETED',
+      smartspeed: providerBody,
+      settledAt: new Date().toISOString(),
+    };
+    const settled = await this.prisma.$transaction(async (prisma) => {
+      const claimed = await prisma.billPayment.updateMany({
+        where: { id: prepared.billPayment.id, status: 'PENDING' },
+        data: { status: 'COMPLETED', metadata: completedMetadata },
+      });
+      if (claimed.count !== 1) return false;
+
+      const transactionClaimed = await prisma.transaction.updateMany({
+        where: { id: prepared.transaction.id, status: 'PENDING' },
+        data: { status: 'COMPLETED', metadata: { ...((prepared.transaction.metadata as Record<string, unknown>) || {}), ...completedMetadata } },
+      });
+      if (transactionClaimed.count !== 1) {
+        throw new Error(`Bill ${reference} was completed by the provider but its transaction row could not be settled.`);
+      }
+      return true;
+    });
+    if (!settled) {
+      throw new ServiceUnavailableException('The bill provider completed the request but the local settlement was already claimed. Contact support before retrying.');
+    }
+
+    return { ...prepared.billPayment, status: 'COMPLETED', metadata: completedMetadata };
+  }
+
+  /**
+   * Return bill reservations that require an operator/provider decision. This
+   * endpoint intentionally does not infer a result from age, amount, or a
+   * missing response.
+   */
+  async listPendingReconciliation(limit = 100) {
+    const take = Math.min(200, Math.max(1, Number(limit) || 100));
+    const rows = await this.prisma.billPayment.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      take,
+      select: { id: true, reference: true, userId: true, type: true, provider: true, recipient: true, amount: true, status: true, metadata: true, createdAt: true },
+    });
+    return rows.map((row) => ({
+      ...row,
+      ageSeconds: Math.max(0, Math.floor((Date.now() - new Date(row.createdAt).getTime()) / 1000)),
+      reconciliationRequired: Boolean((row.metadata as any)?.reconciliationRequired),
+    }));
+  }
+
+  /**
+   * Resolve a pending bill only from explicit provider evidence supplied by an
+   * authorized operator. A failed resolution refunds the already-committed
+   * reservation exactly once; a completed resolution only releases the pending
+   * state because the debit already represents the provider settlement.
+   */
+  async resolvePendingBill(reference: string, outcome: string, evidence: unknown) {
+    const normalizedOutcome = String(outcome || '').toUpperCase();
+    if (!['COMPLETED', 'FAILED'].includes(normalizedOutcome)) {
+      throw new BadRequestException('Reconciliation outcome must be COMPLETED or FAILED.');
+    }
+    const resolutionEvidence = this.normalizeReconciliationEvidence(evidence);
+    const billPayment = await this.prisma.billPayment.findUnique({ where: { reference } });
+    if (!billPayment) throw new NotFoundException('Bill reservation not found.');
+    const transaction = await this.prisma.transaction.findUnique({ where: { reference } });
+    if (!transaction) throw new NotFoundException('Bill transaction record not found.');
+    if (billPayment.status !== 'PENDING' || transaction.status !== 'PENDING') {
+      throw new ConflictException('This bill is already in a terminal state; no reconciliation mutation was made.');
+    }
+
+    if (normalizedOutcome === 'COMPLETED') {
+      const metadata = {
+        ...((billPayment.metadata as Record<string, unknown>) || {}),
+        providerState: 'COMPLETED_CONFIRMED_BY_OPERATOR',
+        reconciliationRequired: false,
+        reconciliationEvidence: resolutionEvidence,
+        settledAt: new Date().toISOString(),
+      };
+      const claimed = await this.prisma.$transaction(async (prisma) => {
+        const billClaim = await prisma.billPayment.updateMany({
+          where: { id: billPayment.id, status: 'PENDING' },
+          data: { status: 'COMPLETED', metadata },
+        });
+        if (billClaim.count !== 1) return false;
+        const txClaim = await prisma.transaction.updateMany({
+          where: { id: transaction.id, status: 'PENDING' },
+          data: {
+            status: 'COMPLETED',
+            metadata: { ...((transaction.metadata as Record<string, unknown>) || {}), ...metadata },
+          },
+        });
+        if (txClaim.count !== 1) throw new Error(`Bill ${reference} could not be settled atomically.`);
+        return true;
+      });
+      if (!claimed) throw new ConflictException('Another reconciliation worker already claimed this bill.');
+      return { reference, status: 'COMPLETED', resolutionEvidence };
+    }
+
+    const wallet = await this.prisma.wallet.findUnique({ where: { userId: billPayment.userId }, select: { id: true } });
+    if (!wallet) throw new NotFoundException('Wallet for bill reservation not found.');
+    await this.refundPendingBill(
+      { billPayment, transaction, walletId: wallet.id },
+      `Provider failure confirmed by operator: ${resolutionEvidence.providerStatus}`,
+      { reconciliationRequired: false, reconciliationEvidence: resolutionEvidence, resolvedByOperator: true },
+    );
+    const finalTransaction = await this.prisma.transaction.findUnique({ where: { reference } });
+    if (finalTransaction?.status !== 'FAILED') {
+      throw new ConflictException('The bill could not be atomically refunded; it remains pending for reconciliation.');
+    }
+    return { reference, status: 'FAILED', resolutionEvidence };
+  }
+
+  private normalizeReconciliationEvidence(evidence: unknown) {
+    const value = evidence && typeof evidence === 'object' ? evidence as Record<string, unknown> : {};
+    const providerReference = String(value.providerReference || '').trim().slice(0, 200);
+    const providerStatus = String(value.providerStatus || '').trim().toUpperCase().slice(0, 100);
+    const note = String(value.note || '').trim().slice(0, 1000);
+    if (!providerReference || !providerStatus) {
+      throw new BadRequestException('Provider reference and provider status are required reconciliation evidence.');
+    }
+    return { providerReference, providerStatus, ...(note ? { note } : {}), checkedAt: new Date().toISOString() };
+  }
+
+  private parseLocalBalances(raw: unknown, fallbackNgn = 0): Record<string, number> {
+    const parsed = typeof raw === 'string'
+      ? (() => { try { return JSON.parse(raw); } catch { return {}; } })()
+      : raw;
+    const balances = parsed && typeof parsed === 'object'
+      ? { ...(parsed as Record<string, number>) }
+      : {};
+    if (!balances.NGN && fallbackNgn > 0) balances.NGN = fallbackNgn;
+    return balances;
+  }
+
+  private async executeSmartspeedPurchase(params: {
+    category: string;
+    networkId: number;
+    providerAmount: number;
+    recipient: string;
+    planCode?: string;
+    portedNumber?: boolean;
+  }) {
+    const payload: Record<string, unknown> = { Ported_number: Boolean(params.portedNumber) };
+    let endpoint: string;
+    if (params.category === 'airtime') {
+      endpoint = '/topup/';
+      payload.network = params.networkId;
+      payload.amount = params.providerAmount;
+      payload.mobile_number = params.recipient;
+      payload.airtime_type = 'VTU';
+    } else {
+      endpoint = '/data/';
+      payload.network = params.networkId;
+      payload.mobile_number = params.recipient;
+      payload.plan = Number(params.planCode) || params.planCode;
+    }
+
+    const headers = this.smartspeedHeaders();
+    try {
+      const response = await axios.post(`${this.smartspeedBaseUrl()}${endpoint}`, payload, {
+        headers,
+        timeout: 60000,
+      });
+      const body = response.data;
+      this.assertPurchaseConfirmed(body);
+      return body;
+    } catch (error: any) {
+      // A provider HTTP response or an explicit failure body is a known
+      // outcome. Transport errors are deliberately unknown because the request
+      // may have reached Smartspeed before the connection failed.
+      if (!error?.response && !error?.providerOutcomeKnown) {
+        if (error) error.providerOutcomeUnknown = true;
+        else {
+          const unknown: any = new Error('Smartspeed returned no result.');
+          unknown.providerOutcomeUnknown = true;
+          throw unknown;
         }
+      }
+      throw error;
+    }
+  }
 
-        const response = await axios.post(`${this.smartspeedBaseUrl()}${endpoint}`, payload, {
-          headers: this.smartspeedHeaders(),
-          timeout: 60000,
+  private async markBillForReconciliation(prepared: any, message: string) {
+    const billMetadata = {
+      ...((prepared.billPayment.metadata as Record<string, unknown>) || {}),
+      providerState: 'UNKNOWN_REQUIRES_RECONCILIATION',
+      reconciliationRequired: true,
+      reconciliationMessage: String(message).slice(0, 500),
+    };
+    const txMetadata = {
+      ...((prepared.transaction.metadata as Record<string, unknown>) || {}),
+      providerState: 'UNKNOWN_REQUIRES_RECONCILIATION',
+      reconciliationRequired: true,
+      reconciliationMessage: String(message).slice(0, 500),
+    };
+    try {
+      await this.prisma.$transaction(async (prisma) => {
+        await prisma.billPayment.updateMany({
+          where: { id: prepared.billPayment.id, status: 'PENDING' },
+          data: { metadata: billMetadata },
         });
-
-        const body = response.data;
-        if (this.isFailed(body)) {
-          throw new Error(this.errorMessage(body));
-        }
-
-        await prisma.billPayment.update({
-          where: { id: billPayment.id },
-          data: { status: 'COMPLETED', metadata: { ...(billPayment.metadata as object || {}), smartspeed: body } }
+        await prisma.transaction.updateMany({
+          where: { id: prepared.transaction.id, status: 'PENDING' },
+          data: { metadata: txMetadata },
         });
-        await prisma.transaction.update({
-          where: { id: transaction.id },
-          data: { status: 'COMPLETED', metadata: { ...(transaction.metadata as object || {}), smartspeed: body } }
-        });
+      });
+    } catch (error: any) {
+      this.logger.error(`Could not mark bill ${prepared.billPayment.reference} for reconciliation: ${error?.message || error}`);
+    }
+  }
 
-        return { ...billPayment, status: 'COMPLETED' };
-      } catch (error: any) {
-        let message = error?.message || 'Transaction failed';
-        if (error?.response?.data) {
-          message = this.errorMessage(error.response.data);
-        }
-        this.logger.error(`Smartspeed purchase failed (${reference}): ${message}`);
+  private async refundPendingBill(prepared: any, message: string, metadataPatch: Record<string, unknown> = {}) {
+    await this.prisma.$transaction(async (prisma) => {
+      const claimed = await prisma.billPayment.updateMany({
+        where: { id: prepared.billPayment.id, status: 'PENDING' },
+        data: {
+          status: 'FAILED',
+          metadata: {
+            ...((prepared.billPayment.metadata as Record<string, unknown>) || {}),
+            providerState: metadataPatch.providerState || 'FAILED',
+            error: String(message).slice(0, 500),
+            ...metadataPatch,
+          } as any,
+        },
+      });
+      if (claimed.count !== 1) return;
 
-        // Refund the real naira and mark both records FAILED — never keep funds
-        // for a bill that was not delivered.
-        try {
-          await prisma.wallet.update({
-            where: { id: wallet.id },
-            data: { localBalances: { ...newLocalBalances, NGN: (newLocalBalances['NGN'] || 0) + chargeAmount }, realLocalBalance: { increment: chargeAmount } }
-          });
-        } catch {
-          await prisma.wallet.update({
-            where: { id: wallet.id },
-            data: { localBalance: (newLocalBalances['NGN'] || 0) + chargeAmount, realLocalBalance: { increment: chargeAmount } }
-          });
-        }
-        // Undo the bill debit in the double-entry ledger so reconciliation is
-        // clean after a refund; the ledger entry is keyed by the same reference.
-        await this.ledger.reverse(reference, prisma);
-        await prisma.billPayment.update({
-          where: { id: billPayment.id },
-          data: { status: 'FAILED', metadata: { ...(billPayment.metadata as object || {}), error: message } }
-        });
-        await prisma.transaction.update({
-          where: { id: transaction.id },
-          data: { status: 'FAILED', metadata: { ...(transaction.metadata as object || {}), error: message } }
-        });
+      const rows = await prisma.$queryRaw<Array<{ id: string; localBalances: any; localBalance: number }>>`
+        SELECT "id", "localBalances", "localBalance"
+        FROM "Wallet"
+        WHERE "id" = ${prepared.walletId}
+        FOR UPDATE`;
+      const walletRow = rows[0];
+      if (!walletRow) throw new Error(`Wallet missing while refunding bill ${prepared.billPayment.reference}`);
+      const balances = this.parseLocalBalances(walletRow.localBalances, walletRow.localBalance || 0);
+      const refundAmount = Number(prepared.billPayment.amount);
+      balances.NGN = Number(balances.NGN || 0) + refundAmount;
+      // As with the reservation, one unambiguous wallet write is required.
+      // Schema compatibility fallbacks would risk a double refund after a
+      // database response timeout.
+      await prisma.wallet.update({
+        where: { id: walletRow.id },
+        data: { localBalances: balances, realLocalBalance: { increment: refundAmount } },
+      });
 
-        throw new BadRequestException(`Purchase failed: ${message}`);
+      await this.ledger.reverse(prepared.billPayment.reference, prisma);
+      const transactionClaimed = await prisma.transaction.updateMany({
+        where: { id: prepared.transaction.id, status: 'PENDING' },
+        data: {
+          status: 'FAILED',
+          metadata: {
+            ...((prepared.transaction.metadata as Record<string, unknown>) || {}),
+            providerState: metadataPatch.providerState || 'FAILED',
+            error: String(message).slice(0, 500),
+            ...metadataPatch,
+          } as any,
+        },
+      });
+      if (transactionClaimed.count !== 1) {
+        throw new Error(`Bill ${prepared.billPayment.reference} refund lost its transaction claim; rolled back for reconciliation.`);
       }
     });
+  }
+
+  @Interval(60000)
+  async reportStaleBills() {
+    try {
+      const stale = await this.prisma.billPayment.findMany({
+        where: { status: 'PENDING', createdAt: { lt: new Date(Date.now() - 5 * 60 * 1000) } },
+        select: { reference: true, userId: true, amount: true, metadata: true, createdAt: true },
+        take: 100,
+      });
+      for (const bill of stale) {
+        this.logger.error(`STALE BILL REQUIRES PROVIDER RECONCILIATION reference=${bill.reference} user=${bill.userId} amount=${bill.amount} metadata=${JSON.stringify(bill.metadata)}`);
+      }
+      return stale.length;
+    } catch (error: any) {
+      this.logger.error(`stale bill scan failed: ${error?.message || error}`);
+      return 0;
+    }
   }
 }

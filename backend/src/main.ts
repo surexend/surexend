@@ -2,16 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import * as dns from 'dns';
 import { PrismaService } from './prisma/prisma.service';
 
-// Set DNS servers to prevent local network resolution timeouts
-// Trigger deployment with auto-deploy active
-dns.setServers(['8.8.8.8', '1.1.1.1']);
 import helmet from 'helmet';
 import * as compression from 'compression';
 import * as bcrypt from 'bcryptjs';
-import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 
 /**
@@ -28,8 +23,19 @@ function assertRequiredEnv() {
         'Copy backend/.env.example and set real values.',
     );
   }
-  if (process.env.NODE_ENV === 'production' && process.env.TESTING_ENABLED === 'true') {
-    throw new Error('Refusing to start: TESTING_ENABLED must not be true in production (it accepts a default PIN).');
+  if (process.env.NODE_ENV === 'production') {
+    if (process.env.TESTING_ENABLED === 'true') {
+      throw new Error('Refusing to start: TESTING_ENABLED must not be true in production.');
+    }
+    if (process.env.WEBHOOK_REQUIRE_SIGNATURE === 'false') {
+      throw new Error('Refusing to start: WEBHOOK_REQUIRE_SIGNATURE=false is never allowed in production.');
+    }
+    if (process.env.BILLS_REQUIRE_FUNDING === 'false') {
+      throw new Error('Refusing to start: BILLS_REQUIRE_FUNDING=false is never allowed in production.');
+    }
+    if (process.env.MONEY_MOVEMENT_ENABLED === 'true' && process.env.LEDGER_READS_ENABLED !== 'true') {
+      throw new Error('Refusing to start: production money movement requires LEDGER_READS_ENABLED=true after the ledger baseline has been reconciled.');
+    }
   }
 }
 
@@ -54,19 +60,12 @@ function assertNetworkConfig() {
   }
 
   if (mainnetEnabled || chainEnv === 'mainnet') {
-    if (!circleKey) {
-      throw new Error('Refusing to start: mainnet is enabled but CIRCLE_API_KEY is missing; a test key with mainnet enabled would mix testnet into the live mapping.');
-    }
-    if (!circleIsMainnet) {
-      throw new Error('Refusing to start: mainnet is enabled but CIRCLE_API_KEY has the TEST_ prefix. Mainnet is NOT yet reviewed/approved for this deployment.');
-    }
-    const rpc = process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network';
-    if (rpc.includes('testnet')) {
-      throw new Error('Refusing to start: mainnet is enabled but ARC_RPC_URL still points at testnet. Set the reviewed mainnet RPC.');
-    }
-    if (!process.env.ARC_USDC_CONTRACT_ADDRESS) {
-      throw new Error('Refusing to start: mainnet is enabled but ARC_USDC_CONTRACT_ADDRESS is not set. The default is the Arc TESTNET precompile address and must never be used for mainnet.');
-    }
+    // The current implementation still hard-codes ARC-TESTNET in wallet
+    // creation, native transfers, and provider reconciliation. Do not let a
+    // live Circle key or a plausible RPC silently turn those paths into a
+    // mixed testnet/mainnet deployment. Mainnet requires a separately reviewed
+    // chain mapping and release, so it is an explicit startup failure here.
+    throw new Error('Refusing to start: mainnet financial movement is not implemented and has not been approved for this release. Keep CHAIN_ENV=testnet and MAINNET_ENABLED=false.');
   } else if (circleIsMainnet) {
     throw new Error(
       'Refusing to start: CIRCLE_API_KEY does not have the TEST_ prefix but MAINNET_ENABLED is not true. ' +
@@ -85,68 +84,35 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   const configService = app.get(ConfigService);
 
-  // Admin bootstrap — guarantee essential admin accounts (demo@surexend.com,
-  // surexendofficial@gmail.com, and any ADMIN_EMAILS/ADMIN_EMAIL) exist, are active,
-  // and have role: 'ADMIN'. If the account is missing or inactive, auto-provision
-  // or reactivate it so admins never get locked out.
+  // Admins must be provisioned explicitly by an operator or a controlled
+  // migration. Never create demo accounts, reactivate banned users, or fall
+  // back to a password embedded in application code at server startup.
   const prisma = app.get(PrismaService);
-  const defaultAdminEmails = ['demo@surexend.com', 'surexendofficial@gmail.com'];
   const envAdminEmails = [process.env.ADMIN_EMAIL, ...(process.env.ADMIN_EMAILS || '').split(',')]
     .map((s) => (s || '').trim().toLowerCase())
     .filter(Boolean);
-  const targetAdminEmails = Array.from(new Set([...defaultAdminEmails, ...envAdminEmails]));
-
-  const adminPassword = process.env.ADMIN_PASSWORD || 'Admin123!';
-  const defaultHash = await bcrypt.hash(adminPassword, 10);
-
-  for (const email of targetAdminEmails) {
-    try {
-      const existing = await prisma.user.findUnique({
-        where: { email },
-        select: { id: true, role: true, isActive: true, isBanned: true }
-      });
-      if (existing) {
-        await prisma.user.update({
-          where: { id: existing.id },
-          data: {
-            role: 'ADMIN',
-            isActive: true,
-            isBanned: false,
-            // If ADMIN_PASSWORD or ADMIN_RESET_PASSWORD is set, update passwordHash
-            ...(process.env.ADMIN_PASSWORD || process.env.ADMIN_RESET_PASSWORD === 'true'
-              ? { passwordHash: defaultHash }
-              : {}),
-          },
-        });
-        console.log(`[admin] Verified and activated admin account for ${email} (role: ADMIN)`);
-      } else {
-        const surexTag = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'admin';
-        const tagExists = await prisma.user.findUnique({ where: { surexTag } });
-        const finalTag = tagExists ? `${surexTag}.${Math.floor(100 + Math.random() * 900)}` : surexTag;
-
-        const created = await prisma.user.create({
-          data: {
-            email,
-            phone: `+12345678${Math.floor(1000 + Math.random() * 9000)}`,
-            firstName: 'Admin',
-            lastName: 'User',
-            surexTag: finalTag,
-            role: 'ADMIN',
-            isActive: true,
-            isBanned: false,
-            kycStatus: 'VERIFIED',
-            kycTier: 3,
-            passwordHash: defaultHash,
-            referralCode: crypto.randomBytes(4).toString('hex').toUpperCase(),
-            wallet: {
-              create: {}
-            }
-          }
-        });
-        console.log(`[admin] Auto-provisioned missing ADMIN account: ${email} (ID: ${created.id})`);
+  const adminPassword = process.env.ADMIN_PASSWORD?.trim();
+  if (envAdminEmails.length && !adminPassword) {
+    throw new Error('Refusing to start: ADMIN_EMAIL/ADMIN_EMAILS were supplied without ADMIN_PASSWORD. Provision admins through a controlled one-time procedure.');
+  }
+  if (envAdminEmails.length && adminPassword) {
+    const adminHash = await bcrypt.hash(adminPassword, 12);
+    for (const email of Array.from(new Set(envAdminEmails))) {
+      const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+      if (!existing) {
+        throw new Error(`Refusing to start: configured admin ${email} does not exist. Create it through the controlled admin provisioning procedure; the app will not bootstrap accounts.`);
       }
-    } catch (error) {
-      console.warn(`[admin] Admin bootstrap notice for ${email}: ${(error as Error).message}`);
+      if (process.env.ADMIN_RESET_PASSWORD === 'true') {
+        await prisma.user.update({ where: { id: existing.id }, data: { role: 'ADMIN', passwordHash: adminHash } });
+      } else {
+        await prisma.user.update({ where: { id: existing.id }, data: { role: 'ADMIN' } });
+      }
+    }
+  }
+  if (process.env.NODE_ENV === 'production') {
+    const adminCount = await prisma.user.count({ where: { role: 'ADMIN', isActive: true, isBanned: false } });
+    if (adminCount < 1) {
+      throw new Error('Refusing to start: no active, unbanned administrator is provisioned.');
     }
   }
 
@@ -158,31 +124,22 @@ async function bootstrap() {
   // and audit logs.
   app.set('trust proxy', true);
 
-  const allowedOrigins = [
+  const configuredFrontend = configService.get<string>('app.frontendUrl') || '';
+  const allowedOrigins = new Set([
     'https://surexend.com',
-    'https://surexend.vercel.app',
-    'https://surexend.netlify.app',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://localhost:3003',
-  ];
+    configuredFrontend,
+  ].filter(Boolean));
+  if (process.env.NODE_ENV !== 'production') {
+    ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003']
+      .forEach((origin) => allowedOrigins.add(origin));
+  }
 
   app.enableCors({
     origin: (origin, callback) => {
-      const isAllowed =
-        !origin ||
-        allowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app') ||
-        origin.endsWith('.netlify.app') ||
-        origin.endsWith('.monkeycode-ai.live') ||
-        origin.endsWith('.e2b.app') ||
-        origin.startsWith('http://localhost:');
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        callback(null, false);
-      }
+      // Requests without an Origin header include provider webhooks and
+      // server-to-server calls; CORS does not apply to them.
+      if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+      return callback(null, false);
     },
     credentials: true,
   });
