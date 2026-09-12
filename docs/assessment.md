@@ -37,6 +37,24 @@ These changes improve recoverability; they do not prove provider contracts,
 production database compatibility, KYC/AML/compliance readiness, or real-money
 safety. GitHub CI passing is not a launch approval.
 
+The remaining technical work is now executable rather than implicit:
+`backend/scripts/financial-launch-gate.js` is a fail-closed configuration,
+migration, PostgreSQL, ledger, pending-reconciliation, alert-outbox, and
+operator-evidence gate; `provider-contract-preflight.js` performs only
+read-only Circle/Flutterwave checks and preserves Smartspeed/PaymentPoint as
+pending where authoritative contracts are absent; and `postgres-rehearsal.js`
+exercises real PostgreSQL conditional-claim locking and durable alert state in
+an isolated schema. Circle outbound webhook settlement now conditionally claims
+PENDING rows before releasing/refunding reservations, with duplicate-webhook
+coverage in the money-flow harness. `docs/financial-release-runbook.md` and
+`docs/provider-contracts.md` define the evidence, cutover, alert, operator,
+and rollback procedures. None of the real PostgreSQL/provider/alert drills has
+been executed in this environment because the required services and credentials
+are unavailable, so those gates remain blocked rather than being reported as
+successful.
+
+KYC/AML changes remain intentionally out of scope for this remediation.
+
 ---
 
 ## Status update — 2026-08-29 (same day, fixes applied)

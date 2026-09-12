@@ -1904,6 +1904,11 @@ export class WalletsService implements OnModuleInit {
       blockchain: 'ARC-TESTNET',
       tokenAddress: '0x3600000000000000000000000000000000000000',
       destinationAddress: destAddress,
+      // Circle exposes refId in transaction/webhook payloads. Keep the local
+      // send reference attached to the provider object in addition to the
+      // UUIDv4 idempotency key so a lost response can be reconciled without
+      // matching only by amount or address.
+      refId: reference,
       amounts: [amount.toFixed(6).replace(/\.?0+$/, '')],
       feeLevel: 'MEDIUM',
     };

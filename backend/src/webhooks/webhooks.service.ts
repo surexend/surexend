@@ -337,12 +337,15 @@ export class WebhooksService {
       const transaction = payload.notification;
       if (!transaction) return;
 
-      const txStatus = transaction.state; // e.g. "CONFIRMED", "COMPLETED", "FAILED"
+      // Circle documents terminal transfer state as `complete` (some older
+      // payloads use `completed`). Normalize only the known terminal spellings;
+      // pending/running/unknown states must never move the ledger.
+      const txStatus = String(transaction.state || '').toUpperCase(); // e.g. "CONFIRMED", "COMPLETE", "COMPLETED", "FAILED"
       const refId = transaction.refId; // reference ID we passed
 
       // Handle inbound transaction (Deposit)
       if (eventType === 'transactions.inbound') {
-        if (txStatus === 'CONFIRMED' || txStatus === 'COMPLETED') {
+        if (txStatus === 'CONFIRMED' || txStatus === 'COMPLETE' || txStatus === 'COMPLETED') {
           const blockchain = transaction.blockchain;
           const txId = transaction.txHash || transaction.id;
           const amount = parseFloat(transaction.amount);
@@ -450,22 +453,29 @@ export class WebhooksService {
         // status so a later webhook can't double-release / double-refund.
         if (matchingTx.status !== 'PENDING') return;
 
-        if (txStatus === 'COMPLETED') {
+        if (txStatus === 'COMPLETE' || txStatus === 'COMPLETED') {
           // Release locked balance, mark completed. The send initiation locks
           // amount + network fee together, so both must be released here or the
           // fee stays frozen in lockedBalance and spendable is permanently short.
           const totalLocked = (matchingTx.amount || 0) + (matchingTx.fee || 0);
+          let settled = false;
           await this.prisma.$transaction(async (prisma) => {
+            // Claim the pending row before changing lockedBalance. Duplicate
+            // webhooks can arrive concurrently; an unconditional update after
+            // a pre-read would release the same reservation twice.
+            const claimed = await prisma.transaction.updateMany({
+              where: { id: matchingTx.id, status: 'PENDING' },
+              data: { status: 'COMPLETED' },
+            });
+            if (claimed.count !== 1) return;
+
             await prisma.wallet.update({
               where: { userId: matchingTx.userId },
               data: { lockedBalance: { decrement: totalLocked } }
             });
-
-            await prisma.transaction.update({
-              where: { id: matchingTx.id },
-              data: { status: 'COMPLETED' }
-            });
+            settled = true;
           });
+          if (!settled) return;
 
           const user = await this.prisma.user.findUnique({ where: { id: matchingTx.userId } });
           if (user) {
@@ -504,7 +514,24 @@ export class WebhooksService {
             || transaction.reason
             || transaction.errorCode
             || 'Transfer failed on Circle.';
+          let settled = false;
           await this.prisma.$transaction(async (prisma) => {
+            // Claim before refunding. If history sync or a duplicate webhook
+            // already settled this send, count=0 prevents a second wallet or
+            // ledger mutation. Any later error rolls the claim back.
+            const claimed = await prisma.transaction.updateMany({
+              where: { id: matchingTx.id, status: 'PENDING' },
+              data: {
+                status: 'FAILED',
+                metadata: {
+                  ...((matchingTx.metadata as Record<string, any>) || {}),
+                  errorReason,
+                  failedAt: 'circle-webhook'
+                }
+              }
+            });
+            if (claimed.count !== 1) return;
+
             await prisma.wallet.update({
               where: { userId: matchingTx.userId },
               data: {
@@ -515,19 +542,9 @@ export class WebhooksService {
             });
 
             await this.ledger.reverse(matchingTx.reference, prisma);
-
-            await prisma.transaction.update({
-              where: { id: matchingTx.id },
-              data: {
-                status: 'FAILED',
-                metadata: {
-                  ...((matchingTx.metadata as Record<string, any>) || {}),
-                  errorReason,
-                  failedAt: 'circle-webhook'
-                }
-              }
-            });
+            settled = true;
           });
+          if (!settled) return;
 
           const user = await this.prisma.user.findUnique({ where: { id: matchingTx.userId } });
           if (user) {

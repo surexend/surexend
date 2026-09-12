@@ -694,6 +694,77 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     await env.expectLedgerMatchesFloat('u1', USD_COINS);
   });
 
+  it('Circle outbound duplicate webhooks release a reservation only once', async () => {
+    env.seedUser('u1', 'alice.sx');
+    await env.seedWallet('u1', { usdcBalance: 50 });
+    const ref = 'SEND-ARC-DUPLICATE';
+    await env.prisma.wallet.update({
+      where: { userId: 'u1' },
+      data: { usdcBalance: { decrement: 5.01 }, lockedBalance: { increment: 5.01 } },
+    });
+    await env.ledger.record([
+      { transferId: ref, account: 'user:u1:USDC', currency: 'USDC', amountMinor: -5010000n, reference: ref, kind: 'SEND' },
+      { transferId: ref, account: 'external:ARC-TESTNET:USDC', currency: 'USDC', amountMinor: 5000000n, reference: ref, kind: 'EXTERNAL_SEND' },
+      { transferId: ref, account: 'platform:fees:USDC', currency: 'USDC', amountMinor: 10000n, reference: ref, kind: 'FEE' },
+    ]);
+    env.prisma.transactionRows.push({
+      id: 'tx-send-duplicate', userId: 'u1', type: 'SEND', status: 'PENDING', amount: 5, fee: 0.01,
+      currency: 'USDC', reference: ref, metadata: {}, createdAt: new Date(),
+    });
+
+    const payload = {
+      notificationType: 'transactions.outbound',
+      notification: {
+        state: 'FAILED', refId: ref, blockchain: 'ARC-TESTNET', txHash: '0xburn-duplicate',
+        id: 'circ-o-duplicate', amount: '0', errorMessage: 'Reverted on chain',
+      },
+    };
+    await Promise.all([env.webhooks.processCircle(payload), env.webhooks.processCircle(payload)]);
+
+    const w = env.wallet('u1');
+    expect(w.usdcBalance).toBeCloseTo(50, 6);
+    expect(w.lockedBalance).toBe(0);
+    expect(env.prisma.ledgerRows.filter((row) => row.transferId === `${ref}-REFUND`)).toHaveLength(3);
+    expect(await env.ledgerOf('user:u1:USDC', 'USDC')).toBe(50000000n);
+    await env.expectDoubleEntry();
+    await env.expectLedgerMatchesFloat('u1', USD_COINS);
+  });
+
+  it('Circle outbound documented COMPLETE state releases the lock without refunding the send', async () => {
+    env.seedUser('u1', 'alice.sx');
+    await env.seedWallet('u1', { usdcBalance: 50 });
+    const ref = 'SEND-ARC-COMPLETE';
+    await env.prisma.wallet.update({
+      where: { userId: 'u1' },
+      data: { usdcBalance: { decrement: 5.01 }, lockedBalance: { increment: 5.01 } },
+    });
+    await env.ledger.record([
+      { transferId: ref, account: 'user:u1:USDC', currency: 'USDC', amountMinor: -5010000n, reference: ref, kind: 'SEND' },
+      { transferId: ref, account: 'external:ARC-TESTNET:USDC', currency: 'USDC', amountMinor: 5000000n, reference: ref, kind: 'EXTERNAL_SEND' },
+      { transferId: ref, account: 'platform:fees:USDC', currency: 'USDC', amountMinor: 10000n, reference: ref, kind: 'FEE' },
+    ]);
+    env.prisma.transactionRows.push({
+      id: 'tx-send-complete', userId: 'u1', type: 'SEND', status: 'PENDING', amount: 5, fee: 0.01,
+      currency: 'USDC', reference: ref, metadata: {}, createdAt: new Date(),
+    });
+
+    await env.webhooks.processCircle({
+      notificationType: 'transactions.outbound',
+      notification: {
+        state: 'COMPLETE', refId: ref, blockchain: 'ARC-TESTNET', txHash: '0xcomplete',
+        id: 'circ-o-complete', amount: '0',
+      },
+    });
+
+    const w = env.wallet('u1');
+    expect(w.usdcBalance).toBeCloseTo(44.99, 6);
+    expect(w.lockedBalance).toBe(0);
+    expect(env.prisma.transactionRows.find((t) => t.reference === ref)?.status).toBe('COMPLETED');
+    expect(await env.ledgerOf('user:u1:USDC', 'USDC')).toBe(44990000n);
+    await env.expectDoubleEntry();
+    await env.expectLedgerMatchesFloat('u1', USD_COINS);
+  });
+
   it('Row 7b — Circle outbound FAILED refunds a split reservation to its exact buckets', async () => {
     env.seedUser('u1', 'alice.sx');
     await env.seedWallet('u1', { usdtBalance: 28.43, usdcBalance: 5 });

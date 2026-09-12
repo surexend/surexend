@@ -326,3 +326,37 @@ runbooks with rollback and operator approval.
 Current scope remains: read-only, explicitly labelled testnet/demo is the only
 defensible launch scope. Limited real-money/bills use and mainnet/production
 financial launch remain **NO** until the evidence above exists.
+
+### 2026-09-12 — executable release gates and operational rehearsals added
+
+- `backend/scripts/financial-launch-gate.js` now verifies configuration,
+  applied migrations, required financial tables, stale provider-pending rows,
+  durable alert retries, idempotency claims, persisted drift, and the pg-only
+  ledger report. It supports `testnet-demo`, `limited-real-money`, and a
+  deliberately blocked `mainnet` scope and writes only redacted evidence.
+- `backend/scripts/provider-contract-preflight.js` performs only authenticated
+  read-only Circle/Flutterwave checks. Smartspeed and PaymentPoint remain
+  `PENDING_UNVERIFIED` where their authoritative status/idempotency or callback
+  contracts are not established; the script never guesses an endpoint or sends
+  money. See `docs/provider-contracts.md`.
+- `backend/scripts/postgres-rehearsal.js` exercises the guarded PostgreSQL
+  pending-row claim with two real connections and verifies durable alert state
+  across a connection/process boundary in an isolated random schema. It refuses
+  to use `DATABASE_URL` unless explicitly allowed and reports pending when no
+  dedicated PostgreSQL URL exists.
+- Circle outbound webhook completion/failure now claims the PENDING transaction
+  row with a conditional update before releasing or refunding locked funds.
+  Concurrent duplicate webhooks therefore cannot release/refund the same
+  reservation twice. `money-flows.integration.spec.ts` covers the duplicate
+  webhook race in the service-level harness; the real PostgreSQL rehearsal is
+  still required.
+- `docs/financial-release-runbook.md` consolidates snapshot/migration restore,
+  ledger baseline and read cutover, provider evidence, alert restart, operator
+  approval, rollback, and receipt procedures. KYC/AML remains intentionally
+  excluded from this remediation.
+
+These tools were added but not externally executed in this checkout: no
+`DATABASE_URL`, dedicated PostgreSQL service, provider credentials, sandbox
+accounts, or alert destination is available. Their corresponding release
+checks must remain pending/blocking until an operator runs them with real
+services.
