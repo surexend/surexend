@@ -982,6 +982,40 @@ export class AdminService {
     return { ...transaction, invoiceNumber: transaction.reference, bill };
   }
 
+  // ── Provider reconciliation ───────────────────────────────────────────────
+
+  async listPendingReconciliation() {
+    const [bills, sends] = await Promise.all([
+      this.billsService.listPendingReconciliation(),
+      this.walletsService.listPendingReconciliation(),
+    ]);
+    return { bills, sends, total: bills.length + sends.length };
+  }
+
+  async resolvePendingBill(reference: string, body: { outcome: string; evidence: unknown }, adminId: string) {
+    const result = await this.billsService.resolvePendingBill(reference, body.outcome, body.evidence);
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'BILL_PROVIDER_RECONCILED',
+        metadata: { reference, outcome: result.status, evidence: result.resolutionEvidence },
+      },
+    });
+    return result;
+  }
+
+  async resolvePendingSend(reference: string, body: { outcome: string; evidence: unknown }, adminId: string) {
+    const result = await this.walletsService.resolvePendingSend(reference, body.outcome, body.evidence);
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'SEND_PROVIDER_RECONCILED',
+        metadata: { reference, outcome: result.status, evidence: result.resolutionEvidence },
+      },
+    });
+    return result;
+  }
+
   // ── Broadcast / announcement ────────────────────────────────────────────────────
 
   async broadcastMessage(body: { title: string; body: string; type?: string; data?: any }, adminId: string) {

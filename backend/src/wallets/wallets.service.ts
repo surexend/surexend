@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -1690,6 +1690,98 @@ export class WalletsService implements OnModuleInit {
   }
 
   /**
+   * Return outbound sends that still require exact provider evidence. Pending
+   * age or amount is never used to infer a result.
+   */
+  async listPendingReconciliation(limit = 100) {
+    const take = Math.min(200, Math.max(1, Number(limit) || 100));
+    const rows = await this.prisma.transaction.findMany({
+      where: { type: 'SEND', status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      take,
+      select: { id: true, userId: true, reference: true, amount: true, fee: true, currency: true, status: true, metadata: true, createdAt: true },
+    });
+    return rows
+      .filter((row) => Boolean((row.metadata as any)?.reconciliationRequired) || Date.now() - new Date(row.createdAt).getTime() >= 5 * 60 * 1000)
+      .map((row) => ({
+        ...row,
+        ageSeconds: Math.max(0, Math.floor((Date.now() - new Date(row.createdAt).getTime()) / 1000)),
+        reconciliationRequired: Boolean((row.metadata as any)?.reconciliationRequired),
+      }));
+  }
+
+  private normalizeReconciliationEvidence(evidence: unknown) {
+    const value = evidence && typeof evidence === 'object' ? evidence as Record<string, unknown> : {};
+    const providerReference = String(value.providerReference || value.providerTransactionId || value.txHash || '').trim().slice(0, 300);
+    const providerStatus = String(value.providerStatus || '').trim().toUpperCase().slice(0, 100);
+    const note = String(value.note || '').trim().slice(0, 1000);
+    if (!providerReference || !providerStatus) {
+      throw new BadRequestException('Provider transaction reference and provider status are required reconciliation evidence.');
+    }
+    return { providerReference, providerStatus, ...(note ? { note } : {}), checkedAt: new Date().toISOString() };
+  }
+
+  /**
+   * Resolve a pending outbound send only from explicit provider evidence. A
+   * confirmed failure releases the exact reservation; a confirmed completion
+   * releases only lockedBalance because the ledger debit already represents
+   * the external spend.
+   */
+  async resolvePendingSend(reference: string, outcome: string, evidence: unknown) {
+    const normalizedOutcome = String(outcome || '').toUpperCase();
+    if (!['COMPLETED', 'FAILED'].includes(normalizedOutcome)) {
+      throw new BadRequestException('Reconciliation outcome must be COMPLETED or FAILED.');
+    }
+    const resolutionEvidence = this.normalizeReconciliationEvidence(evidence);
+    const tx = await this.prisma.transaction.findUnique({ where: { reference } });
+    if (!tx) throw new NotFoundException('Send transaction not found.');
+    if (tx.type !== 'SEND' || tx.status !== 'PENDING') {
+      throw new ConflictException('This send is already in a terminal state; no reconciliation mutation was made.');
+    }
+    const wallet = await this.prisma.wallet.findUnique({ where: { userId: tx.userId }, select: { id: true } });
+    if (!wallet) throw new NotFoundException('Wallet for send reservation not found.');
+    const totalDebit = Number(tx.amount || 0) + Number(tx.fee || 0);
+    if (!Number.isFinite(totalDebit) || totalDebit <= 0) throw new ConflictException('Pending send has an invalid reservation amount.');
+
+    if (normalizedOutcome === 'COMPLETED') {
+      const metadata = {
+        ...((tx.metadata as Record<string, unknown>) || {}),
+        providerState: 'COMPLETED_CONFIRMED_BY_OPERATOR',
+        reconciliationRequired: false,
+        reconciliationEvidence: resolutionEvidence,
+        settledAt: new Date().toISOString(),
+      };
+      const claimed = await this.prisma.$transaction(async (prisma) => {
+        const walletRows = await prisma.$queryRaw<Array<{ lockedBalance: number }>>`
+          SELECT "lockedBalance" FROM "Wallet" WHERE "id" = ${wallet.id} FOR UPDATE`;
+        const locked = Number(walletRows[0]?.lockedBalance || 0);
+        if (locked < totalDebit) throw new ConflictException('Send reservation is smaller than the pending debit; manual ledger review is required.');
+        const txClaim = await prisma.transaction.updateMany({
+          where: { id: tx.id, status: 'PENDING' },
+          data: { status: 'COMPLETED', metadata },
+        });
+        if (txClaim.count !== 1) return false;
+        await prisma.wallet.update({ where: { id: wallet.id }, data: { lockedBalance: { decrement: totalDebit } } });
+        return true;
+      });
+      if (!claimed) throw new ConflictException('Another reconciliation worker already claimed this send.');
+      return { reference, status: 'COMPLETED', resolutionEvidence };
+    }
+
+    await this.releaseReservedSend(wallet.id, reference, totalDebit, {
+      providerState: 'FAILED_CONFIRMED_BY_OPERATOR',
+      reconciliationRequired: false,
+      reconciliationEvidence: resolutionEvidence,
+      resolvedByOperator: true,
+    });
+    const final = await this.prisma.transaction.findUnique({ where: { reference } });
+    if (final?.status !== 'FAILED') {
+      throw new ConflictException('The send could not be atomically refunded; it remains pending for reconciliation.');
+    }
+    return { reference, status: 'FAILED', resolutionEvidence };
+  }
+
+  /**
    * Release funds reserved for a send the chain rejected. Safe to call twice:
    * if the webhook or history sync already settled this row the status is no
    * longer PENDING and nothing is released — releasing twice would create
@@ -1709,11 +1801,29 @@ export class WalletsService implements OnModuleInit {
         });
         if (!tx || tx.status !== 'PENDING') return;
 
+        // Claim the pending row before touching the wallet. A webhook/history
+        // settlement racing this operation must observe a terminal row and
+        // skip its own release; any later error rolls this claim back with the
+        // wallet and ledger changes.
+        const claimed = await prisma.transaction.updateMany({
+          where: { id: tx.id, status: 'PENDING' },
+          data: { status: 'FAILED', metadata: { ...((tx.metadata as Record<string, unknown>) || {}), ...meta } as any },
+        });
+        if (claimed.count !== 1) return;
+
         const walletRow = await prisma.wallet.findUnique({
           where: { id: walletId },
           select: { lockedBalance: true },
         });
-        const release = Math.min(totalDebit, Math.max(0, Number(walletRow?.lockedBalance || 0)));
+        const lockedBalance = Number(walletRow?.lockedBalance || 0);
+        // Never turn a partial reservation into a terminal failure. A missing
+        // or undersized lock means the wallet and ledger need operator review;
+        // throwing here rolls back the whole transaction and leaves the send
+        // pending for reconciliation.
+        if (!walletRow || !Number.isFinite(lockedBalance) || lockedBalance < totalDebit) {
+          throw new Error(`Reservation mismatch for ${reference}: locked=${lockedBalance}, required=${totalDebit}`);
+        }
+        const release = totalDebit;
         if (release > 0) {
           // Restore the exact currencies the reservation took (legacy rows have
           // no reserveSplit — they were 100% USDC).
@@ -1731,12 +1841,12 @@ export class WalletsService implements OnModuleInit {
           });
         }
 
-        // Undo the initiation debit in the double-entry ledger. Guarded by the
-        // status === 'PENDING' check above, so a refund that was already
-        // settled here can never reverse the ledger twice. If the float could
-        // only be partially refunded (anomalous lockedBalance), do NOT reverse
-        // the full ledger — that would fabricate a bigger refund than the
-        // wallet actually received; reconciliation will flag the anomaly.
+        // Undo the initiation debit in the double-entry ledger. The guarded
+        // conditional claim above means a refund that was already settled here
+        // can never reverse the ledger twice. If the float could only be
+        // partially refunded (anomalous lockedBalance), do NOT reverse the full
+        // ledger — that would fabricate a bigger refund than the wallet actually
+        // received; reconciliation will flag the anomaly.
         if (release > 0 && release >= totalDebit) {
           await this.ledger.reverse(reference, prisma);
         } else if (release < totalDebit) {

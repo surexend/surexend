@@ -45,21 +45,8 @@ Status key: ✅ done · ⏳ in progress · ⛔ blocked/pre-requisite missing.
 - Manual/CI check: `npm run ledger:report` (backend) renders the same
   comparison plus the double-entry zero-sum invariant and exits non-zero on
   drift.
-- **Alerting hook (`LedgerAlertService`, shipped 2026-08-30):** runs every 15
-  min, queries `AuditLog` for `LEDGER_DRIFT` rows newer than its in-process
-  high-water mark, filters already-alerted ids, and (a) emits an error-level
-  log line always, (b) POSTs a JSON envelope (`{event:'LEDGER_DRIFT', count,
-  rows[]}`) to `LEDGER_DRIFT_WEBHOOK_URL` if set, (c) emails
-  `LEDGER_DRIFT_ALERT_EMAIL` via Resend if set. Channel failures are caught
-  (never breaks reconciliation and never throws out of the cron); attempted
-  rows are marked alerted so a broken channel cannot spam. Env:
-  `LEDGER_DRIFT_ALERTS_ENABLED` (default true), `LEDGER_DRIFT_WEBHOOK_URL`,
-  `LEDGER_DRIFT_ALERT_EMAIL`. Unit tests: `backend/test/ledger-alert.service.spec.ts`
-  (7 cases: disabled, clean, webhook delivery, high-water dedupe across runs,
-  webhook failure non-fatal, DB failure non-fatal, query shape).
-- Remaining (ops, optional): point the webhook at the alerting vendor
-  (Slack/PagerDuty/GCP/Datadog incoming endpoint) or add a Grafana query over
-  the `LEDGER_DRIFT` log line.
+- **Alerting hook (`LedgerAlertService`, shipped 2026-08-30 and hardened 2026-09-12):** runs every 15 min and persists one `LedgerAlertDelivery` outbox row per drift row and configured channel. Webhook/email delivery is retried with durable `PENDING`/`RETRY` state and exponential backoff, so a process restart cannot silently lose an alert. Every delivery attempt is logged, while reconciliation and money paths remain isolated from alert failures. With no destination configured, an explicit error-level log remains the durable-ops fallback. Env: `LEDGER_DRIFT_ALERTS_ENABLED` (default true), `LEDGER_DRIFT_WEBHOOK_URL`, `LEDGER_DRIFT_ALERT_EMAIL`, plus the existing Resend variables for email. Unit tests: `backend/test/ledger-alert.service.spec.ts` (durable enqueue, success, retry, disabled, no-destination, and DB-failure cases).
+- Required before production: point the webhook at the alerting vendor (Slack/PagerDuty/GCP/Datadog incoming endpoint), configure Resend if email is required, and run a failure/restart drill proving a `RETRY` row is delivered after the process returns.
 
 ## 3. Switching balance reads from legacy floats to ledger balances — ⏳ implemented, flag-gated (not enabled)
 
@@ -118,9 +105,15 @@ reversal cannot double-fire.
 
 - Legacy columns still live: `usdtBalance`, `usdcBalance`, `lockedBalance`,
   `localBalance`, `realLocalBalance`, `pendingBalance` (`Wallet`), all `Float`.
-- **No `backend/prisma/migrations/` directory exists.** Schema changes are
-  applied by `prisma db push` in `prestart:prod` with errors swallowed.
-  Column removal is NOT safe before checked-in migrations exist.
+- Checked-in migrations now exist, including the reviewed baseline and
+  incremental idempotency, wallet-address, passkey, referral-reconciliation,
+  and durable ledger-alert-delivery migrations. Production startup uses
+  `prisma migrate deploy`; it must not use `prisma db push` or swallow schema
+  errors.
+- The baseline and every incremental migration still need to be rehearsed on
+  a disposable real PostgreSQL database and a restored production snapshot
+  before any financial deployment. Column removal remains unsafe until the
+  ledger read cutover and rollback evidence are complete.
 - `LedgerEntry.amountMinor` is `BigInt`; the record service converts via
   `toMinor` (6dp USDC/USDT, 0dp XOF-class currencies, 2dp others).
 
@@ -147,7 +140,7 @@ reversal cannot double-fire.
   ledger (the old per-row `Promise.all` could commit partial rows inside a
   successful transaction).
 
-## Current baseline (verified 2026-08-30)
+## Historical baseline (verified 2026-08-30; see 2026-09-12 gate below)
 
 - Backend `npx tsc -p tsconfig.json --noEmit` → exit 0.
 - `npx jest` → 6 suites / 51 tests green (ledger + reconciliation suites cover
@@ -158,17 +151,15 @@ reversal cannot double-fire.
 
 ----
 
-### 2026-08-30 follow-up
+### 2026-08-30 follow-up (historical; superseded by the 2026-09-12 gate below)
 - `docs/testnet-e2e-runbook.md` added (step 1 execution checklist).
 - `docs/mainnet-config.md` + `assertNetworkConfig()` boot guard added (step 6
   preparation; mainnet still NOT enabled).
 - Reconciliation unit tests added (`backend/test/ledger-reconciliation.spec.ts`).
-- Checked-in Prisma migrations: still NOT done (step 5 prerequisite). The
-  sandbox cannot run `prisma migrate diff` (engine host unreachable); do NOT
-  hand-write baseline SQL for a money product — generate it on a machine with
-  engine access, then baseline the existing prod DB with
-  `prisma migrate resolve --applied` before switching `prestart:prod` from
-  `prisma db push` to `prisma migrate deploy`.
+- At that point checked-in Prisma migrations were still pending. The current
+  branch now contains a reviewed baseline plus incremental migrations, but the
+  migration chain still needs execution against real PostgreSQL before a
+  financial deployment.
 
 ----
 
@@ -311,6 +302,16 @@ explicit across every environment:
   rehearsed migration/ledger preflight before deployment.
 - The post-deploy data runner fails closed and no longer reactivates hard-coded
   administrator accounts or rewrites transaction history.
+- Admin reconciliation now exposes a read-only queue at `GET /admin/reconciliation`
+  and step-up-protected evidence-based resolutions at
+  `POST /admin/reconciliation/bills/:reference` and
+  `POST /admin/reconciliation/sends/:reference`. Operators must provide a
+  provider reference and provider status; ambiguous outcomes stay pending and
+  are never auto-refunded or auto-retried. Successful resolutions are written
+  to `AuditLog`.
+- Ledger drift alert delivery is durable through the
+  `LedgerAlertDelivery` migration; webhook/email failures remain `RETRY` rows
+  with backoff rather than being marked delivered in process memory.
 
 Required before any `MONEY_MOVEMENT_ENABLED=true` deployment: generate Prisma
 client with engine access; run the real PostgreSQL migration on a disposable

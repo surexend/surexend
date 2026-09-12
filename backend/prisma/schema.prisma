@@ -343,6 +343,24 @@ model AuditLog {
   metadata  Json?
   createdAt DateTime @default(now())
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ledgerAlertDeliveries LedgerAlertDelivery[]
+}
+
+model LedgerAlertDelivery {
+  id             String   @id @default(uuid())
+  auditLogId     String
+  channel        String   // WEBHOOK or EMAIL
+  status         String   @default("PENDING") // PENDING, RETRY, DELIVERED
+  attempts       Int      @default(0)
+  nextAttemptAt  DateTime @default(now())
+  deliveredAt    DateTime?
+  lastError      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  auditLog       AuditLog @relation(fields: [auditLogId], references: [id], onDelete: Cascade)
+
+  @@unique([auditLogId, channel])
+  @@index([status, nextAttemptAt])
 }
 
 model RateCache {

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -759,6 +759,99 @@ export class BillsService {
     return { ...prepared.billPayment, status: 'COMPLETED', metadata: completedMetadata };
   }
 
+  /**
+   * Return bill reservations that require an operator/provider decision. This
+   * endpoint intentionally does not infer a result from age, amount, or a
+   * missing response.
+   */
+  async listPendingReconciliation(limit = 100) {
+    const take = Math.min(200, Math.max(1, Number(limit) || 100));
+    const rows = await this.prisma.billPayment.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      take,
+      select: { id: true, reference: true, userId: true, type: true, provider: true, recipient: true, amount: true, status: true, metadata: true, createdAt: true },
+    });
+    return rows.map((row) => ({
+      ...row,
+      ageSeconds: Math.max(0, Math.floor((Date.now() - new Date(row.createdAt).getTime()) / 1000)),
+      reconciliationRequired: Boolean((row.metadata as any)?.reconciliationRequired),
+    }));
+  }
+
+  /**
+   * Resolve a pending bill only from explicit provider evidence supplied by an
+   * authorized operator. A failed resolution refunds the already-committed
+   * reservation exactly once; a completed resolution only releases the pending
+   * state because the debit already represents the provider settlement.
+   */
+  async resolvePendingBill(reference: string, outcome: string, evidence: unknown) {
+    const normalizedOutcome = String(outcome || '').toUpperCase();
+    if (!['COMPLETED', 'FAILED'].includes(normalizedOutcome)) {
+      throw new BadRequestException('Reconciliation outcome must be COMPLETED or FAILED.');
+    }
+    const resolutionEvidence = this.normalizeReconciliationEvidence(evidence);
+    const billPayment = await this.prisma.billPayment.findUnique({ where: { reference } });
+    if (!billPayment) throw new NotFoundException('Bill reservation not found.');
+    const transaction = await this.prisma.transaction.findUnique({ where: { reference } });
+    if (!transaction) throw new NotFoundException('Bill transaction record not found.');
+    if (billPayment.status !== 'PENDING' || transaction.status !== 'PENDING') {
+      throw new ConflictException('This bill is already in a terminal state; no reconciliation mutation was made.');
+    }
+
+    if (normalizedOutcome === 'COMPLETED') {
+      const metadata = {
+        ...((billPayment.metadata as Record<string, unknown>) || {}),
+        providerState: 'COMPLETED_CONFIRMED_BY_OPERATOR',
+        reconciliationRequired: false,
+        reconciliationEvidence: resolutionEvidence,
+        settledAt: new Date().toISOString(),
+      };
+      const claimed = await this.prisma.$transaction(async (prisma) => {
+        const billClaim = await prisma.billPayment.updateMany({
+          where: { id: billPayment.id, status: 'PENDING' },
+          data: { status: 'COMPLETED', metadata },
+        });
+        if (billClaim.count !== 1) return false;
+        const txClaim = await prisma.transaction.updateMany({
+          where: { id: transaction.id, status: 'PENDING' },
+          data: {
+            status: 'COMPLETED',
+            metadata: { ...((transaction.metadata as Record<string, unknown>) || {}), ...metadata },
+          },
+        });
+        if (txClaim.count !== 1) throw new Error(`Bill ${reference} could not be settled atomically.`);
+        return true;
+      });
+      if (!claimed) throw new ConflictException('Another reconciliation worker already claimed this bill.');
+      return { reference, status: 'COMPLETED', resolutionEvidence };
+    }
+
+    const wallet = await this.prisma.wallet.findUnique({ where: { userId: billPayment.userId }, select: { id: true } });
+    if (!wallet) throw new NotFoundException('Wallet for bill reservation not found.');
+    await this.refundPendingBill(
+      { billPayment, transaction, walletId: wallet.id },
+      `Provider failure confirmed by operator: ${resolutionEvidence.providerStatus}`,
+      { reconciliationRequired: false, reconciliationEvidence: resolutionEvidence, resolvedByOperator: true },
+    );
+    const finalTransaction = await this.prisma.transaction.findUnique({ where: { reference } });
+    if (finalTransaction?.status !== 'FAILED') {
+      throw new ConflictException('The bill could not be atomically refunded; it remains pending for reconciliation.');
+    }
+    return { reference, status: 'FAILED', resolutionEvidence };
+  }
+
+  private normalizeReconciliationEvidence(evidence: unknown) {
+    const value = evidence && typeof evidence === 'object' ? evidence as Record<string, unknown> : {};
+    const providerReference = String(value.providerReference || '').trim().slice(0, 200);
+    const providerStatus = String(value.providerStatus || '').trim().toUpperCase().slice(0, 100);
+    const note = String(value.note || '').trim().slice(0, 1000);
+    if (!providerReference || !providerStatus) {
+      throw new BadRequestException('Provider reference and provider status are required reconciliation evidence.');
+    }
+    return { providerReference, providerStatus, ...(note ? { note } : {}), checkedAt: new Date().toISOString() };
+  }
+
   private parseLocalBalances(raw: unknown, fallbackNgn = 0): Record<string, number> {
     const parsed = typeof raw === 'string'
       ? (() => { try { return JSON.parse(raw); } catch { return {}; } })()
@@ -847,7 +940,7 @@ export class BillsService {
     }
   }
 
-  private async refundPendingBill(prepared: any, message: string) {
+  private async refundPendingBill(prepared: any, message: string, metadataPatch: Record<string, unknown> = {}) {
     await this.prisma.$transaction(async (prisma) => {
       const claimed = await prisma.billPayment.updateMany({
         where: { id: prepared.billPayment.id, status: 'PENDING' },
@@ -855,8 +948,9 @@ export class BillsService {
           status: 'FAILED',
           metadata: {
             ...((prepared.billPayment.metadata as Record<string, unknown>) || {}),
-            providerState: 'FAILED',
+            providerState: metadataPatch.providerState || 'FAILED',
             error: String(message).slice(0, 500),
+            ...metadataPatch,
           },
         },
       });
@@ -881,17 +975,21 @@ export class BillsService {
       });
 
       await this.ledger.reverse(prepared.billPayment.reference, prisma);
-      await prisma.transaction.updateMany({
+      const transactionClaimed = await prisma.transaction.updateMany({
         where: { id: prepared.transaction.id, status: 'PENDING' },
         data: {
           status: 'FAILED',
           metadata: {
             ...((prepared.transaction.metadata as Record<string, unknown>) || {}),
-            providerState: 'FAILED',
+            providerState: metadataPatch.providerState || 'FAILED',
             error: String(message).slice(0, 500),
+            ...metadataPatch,
           },
         },
       });
+      if (transactionClaimed.count !== 1) {
+        throw new Error(`Bill ${prepared.billPayment.reference} refund lost its transaction claim; rolled back for reconciliation.`);
+      }
     });
   }
 

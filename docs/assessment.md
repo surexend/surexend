@@ -17,12 +17,32 @@ the code or cited.
 > contains testnet-only chain mappings. See the current evidence and required
 > actions in `docs/rollout-status.md`.
 
+## Latest remediation status — 2026-09-12
+
+The audit remediation branch now includes guarded operator workflows for
+ambiguous bill and Circle-send outcomes. `GET /admin/reconciliation` shows
+pending work; step-up-protected resolution routes require explicit provider
+reference and provider status, and successful decisions are written to
+`AuditLog`. A confirmed bill failure uses the atomic ledger reversal and wallet
+refund; a confirmed send failure releases the exact reservation; a confirmed
+success only settles the pending state and does not mint a second credit.
+Inconsistent reservations remain pending instead of being partially refunded.
+
+Ledger-drift alert delivery now has a checked-in `LedgerAlertDelivery` outbox
+with durable retry/backoff state. This removes process-memory-only alert
+acknowledgement, but still requires a real PostgreSQL migration drill, a
+configured alert destination, and an operator restart/failure drill.
+
+These changes improve recoverability; they do not prove provider contracts,
+production database compatibility, KYC/AML/compliance readiness, or real-money
+safety. GitHub CI passing is not a launch approval.
+
 ---
 
 ## Status update — 2026-08-29 (same day, fixes applied)
 
 Sections 4–6 below describe the state as reviewed. Since then the following
-have been fixed on `arena/01a04d9a-surexend`:
+have been fixed on the remediation branch (historical branch label omitted):
 
 | Defect | Fix |
 |---|---|

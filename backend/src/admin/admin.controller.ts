@@ -67,6 +67,31 @@ export class AdminController {
     return this.adminService.getTransactionDetail(id);
   }
 
+  @Get('reconciliation')
+  listPendingReconciliation() {
+    return this.adminService.listPendingReconciliation();
+  }
+
+  @UseGuards(AdminStepUpGuard)
+  @Post('reconciliation/bills/:reference')
+  resolvePendingBill(
+    @Param('reference') reference: string,
+    @Body() body: { outcome: string; evidence: unknown },
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.resolvePendingBill(reference, body, admin.id);
+  }
+
+  @UseGuards(AdminStepUpGuard)
+  @Post('reconciliation/sends/:reference')
+  resolvePendingSend(
+    @Param('reference') reference: string,
+    @Body() body: { outcome: string; evidence: unknown },
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.resolvePendingSend(reference, body, admin.id);
+  }
+
   // ── Referral reward campaign / Circle-admin wallet ──────────────────────
 
   @Get('referral-rewards/wallet')
