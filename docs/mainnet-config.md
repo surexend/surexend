@@ -16,12 +16,12 @@ Chain selection lives in two independent places and they MUST stay consistent:
 | Circle blockchain strings | `wallets/wallets.service.ts` `getBlockchainName()` | `CIRCLE_API_KEY` prefix (`TEST_` → testnet) | `ARC-TESTNET`, `ETH-SEPOLIA`, … | `ARC`, `ETH`, `POLYGON`, `AVAX`, `ARB`, `BASE`, `OP`, `SOL`, `MONAD` |
 
 ⚠️ Landmine (now guarded at boot): a mainnet Circle key flips **only** the second
-mapping. `assertNetworkConfig()` in `main.ts` refuses to boot on:
-- `MAINNET_ENABLED=true` / `CHAIN_ENV=mainnet` without a non-test Circle key,
-  with an `ARC_RPC_URL` still pointing at testnet, or without an explicit
-  `ARC_USDC_CONTRACT_ADDRESS` (the code default is the Arc **testnet**
-  precompile `0x3600000000000000000000000000000000000000`);
-- a non-test Circle key while `MAINNET_ENABLED` is false (mixed mapping).
+mapping. `assertNetworkConfig()` in `main.ts` currently refuses to boot on
+**all** `MAINNET_ENABLED=true` / `CHAIN_ENV=mainnet` configurations because the
+current release still hard-codes `ARC-TESTNET` in wallet creation, native
+transfers, and BridgeKit reconciliation. It also refuses a non-test Circle key
+while `MAINNET_ENABLED` is false (mixed mapping). A separately reviewed release
+must add and test the mainnet BridgeKit mapping before this guard is relaxed.
 
 ## 2. Values to source & review (NONE are committed / hardcoded)
 
@@ -44,10 +44,12 @@ mapping. `assertNetworkConfig()` in `main.ts` refuses to boot on:
 2. Code change: make `NETWORK_TO_CHAIN` (and ARC defaults) select the mainnet
    variant **only when `MAINNET_ENABLED=true`** — keep testnet as the default
    path so the current deployment is untouched.
-3. Deploy with mainnet Circle key + testnet flag still off → boot guard passes
-   only after step 4's explicit checks; no traffic changes.
-4. Flip `MAINNET_ENABLED=true` + `CHAIN_ENV=mainnet` + mainnet ARC vars on
-   Railway **and** the matching frontend env at the same time.
+3. Implement and independently review the mainnet BridgeKit/Circle mapping,
+   provider contracts, reconciliation, and explorer links; the current boot
+   guard must remain closed during this work.
+4. Only after a separate release is approved, flip `MAINNET_ENABLED=true` +
+   `CHAIN_ENV=mainnet` + mainnet ARC vars on Railway **and** the matching
+   frontend env at the same time.
 5. Verify with a **tiny** real deposit to a controlled address, then
    `npm run ledger:report` must be clean.
 6. Keep `TESTING_ENABLED` off in production (already enforced at boot).

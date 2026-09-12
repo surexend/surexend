@@ -140,8 +140,8 @@ export default function ComingSoon({ open, onClose, title, subtitle, features, e
                     <Check className="w-4 h-4" strokeWidth={3} />
                   </span>
                   <div>
-                    <p className="text-xs font-bold text-white">You're on the list</p>
-                    <p className="text-[10px] text-[#94A3B8]">We'll email you the moment it goes live.</p>
+                    <p className="text-xs font-bold text-white">You&apos;re on the list</p>
+                    <p className="text-[10px] text-[#94A3B8]">We&apos;ll email you the moment it goes live.</p>
                   </div>
                 </div>
               ) : (

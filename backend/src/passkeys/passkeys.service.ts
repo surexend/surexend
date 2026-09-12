@@ -17,6 +17,7 @@ import type {
 } from '@simplewebauthn/types';
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
+import { transactionIntentHash } from '../common/transaction-auth/transaction-intent';
 
 const CHALLENGE_TTL = 300; // seconds
 
@@ -24,7 +25,7 @@ const CHALLENGE_TTL = 300; // seconds
 export class PasskeysService {
   private readonly logger = new Logger(PasskeysService.name);
   private redis: Redis | null = null;
-  private memStore = new Map<string, { challenge: string; expiresAt: number }>();
+  private memStore = new Map<string, { challenge: string; intentHash?: string; expiresAt: number }>();
 
   constructor(
     private prisma: PrismaService,
@@ -44,29 +45,40 @@ export class PasskeysService {
     return this.redis;
   }
 
-  private async saveChallenge(key: string, challenge: string) {
+  private async saveChallenge(key: string, challenge: string, intentHash?: string) {
+    const value = JSON.stringify({ challenge, intentHash });
     const redis = this.getRedis();
     if (redis) {
-      await redis.set(key, challenge, 'EX', CHALLENGE_TTL).catch(() => {});
-      return;
+      try {
+        await redis.set(key, value, 'EX', CHALLENGE_TTL);
+        return;
+      } catch {
+        this.redis = null;
+      }
     }
-    this.memStore.set(key, { challenge, expiresAt: Date.now() + CHALLENGE_TTL * 1000 });
+    this.memStore.set(key, { challenge, intentHash, expiresAt: Date.now() + CHALLENGE_TTL * 1000 });
   }
 
-  private async getChallenge(key: string): Promise<string | null> {
+  private async getChallenge(key: string): Promise<{ challenge: string; intentHash?: string } | null> {
     const redis = this.getRedis();
     if (redis) {
-      const value = await redis.get(key).catch(() => null);
-      if (value) {
-        await redis.del(key).catch(() => {});
-        return value;
+      try {
+        // GETDEL is atomic. A separate GET followed by DEL lets two API
+        // instances complete the same WebAuthn challenge concurrently.
+        const raw = await redis.call('GETDEL', key) as string | null;
+        if (raw) {
+          try { return JSON.parse(raw); } catch { return null; }
+        }
+        return null;
+      } catch {
+        this.redis = null;
       }
     }
     const entry = this.memStore.get(key);
     if (!entry) return null;
     this.memStore.delete(key);
     if (entry.expiresAt < Date.now()) return null;
-    return entry.challenge;
+    return { challenge: entry.challenge, intentHash: entry.intentHash };
   }
 
   private webauthnConfig() {
@@ -107,7 +119,7 @@ export class PasskeysService {
       userDisplayName: `${user.firstName} ${user.lastName}`.trim() || user.email,
       userID: Buffer.from(user.id, 'utf8'),
       attestationType: 'none',
-      authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+      authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
       excludeCredentials: existing.map((p) => ({ id: p.credentialId })),
       timeout: 120000,
     });
@@ -126,7 +138,7 @@ export class PasskeysService {
     const { origin, rpID } = this.webauthnConfig();
     let verification;
     try {
-      verification = await verifyRegistrationResponse({ response, expectedChallenge: challenge, expectedOrigin: origin, expectedRPID: rpID });
+      verification = await verifyRegistrationResponse({ response, expectedChallenge: challenge.challenge, expectedOrigin: origin, expectedRPID: rpID });
     } catch (err) {
       throw new BadRequestException(`Biometric registration failed: ${(err as Error).message}`);
     }
@@ -176,7 +188,7 @@ const credential = verification.registrationInfo.credential;
     const options = await generateAuthenticationOptions({
       rpID,
       allowCredentials,
-      userVerification: 'preferred',
+      userVerification: 'required',
       timeout: 120000,
     });
 
@@ -200,7 +212,7 @@ const credential = verification.registrationInfo.credential;
     try {
       verification = await verifyAuthenticationResponse({
         response,
-        expectedChallenge: challenge,
+        expectedChallenge: challenge.challenge,
         expectedOrigin: origin,
         expectedRPID: rpID,
         credential: { id: passkey.credentialId, publicKey: isoBase64URL.toBuffer(passkey.publicKey), counter: passkey.counter },
@@ -245,11 +257,16 @@ const credential = verification.registrationInfo.credential;
   }
 
   // ── Transaction approval (Face ID / fingerprint instead of PIN) ──────────
-  async approveBegin(userId: string) {
+  async approveBegin(userId: string, intent: Record<string, unknown>) {
     const passkeys = await this.userPasskeys(userId);
     if (passkeys.length === 0) {
       throw new BadRequestException('No biometric registered. Enroll one in Settings > Biometrics first.');
     }
+    if (!intent || typeof intent !== 'object' || typeof intent.action !== 'string') {
+      throw new BadRequestException('A transaction description is required before biometric approval.');
+    }
+    const intentHash = transactionIntentHash(intent);
+    const challengeId = crypto.randomBytes(16).toString('hex');
     const { rpID } = this.webauthnConfig();
     const options = await generateAuthenticationOptions({
       rpID,
@@ -258,16 +275,17 @@ const credential = verification.registrationInfo.credential;
         type: 'public-key' as const,
         transports: this.transportsOf(p.transports),
       })),
-      userVerification: 'preferred',
+      userVerification: 'required',
       timeout: 120000,
     });
-    await this.saveChallenge(`passkey:approve:${userId}`, options.challenge);
-    return options;
+    await this.saveChallenge(`passkey:approve:${userId}:${challengeId}`, options.challenge, intentHash);
+    return { ...options, challengeId };
   }
 
-  async approveComplete(userId: string, response: AuthenticationResponseJSON) {
-    const challenge = await this.getChallenge(`passkey:approve:${userId}`);
-    if (!challenge) throw new BadRequestException('Approval challenge expired. Please try again.');
+  async approveComplete(userId: string, challengeId: string, response: AuthenticationResponseJSON) {
+    if (!challengeId) throw new BadRequestException('Missing approval challengeId');
+    const challenge = await this.getChallenge(`passkey:approve:${userId}:${challengeId}`);
+    if (!challenge?.intentHash) throw new BadRequestException('Approval challenge expired. Please try again.');
 
     const passkey = await this.prisma.passkey.findUnique({ where: { credentialId: response.id } });
     if (!passkey || passkey.userId !== userId) {
@@ -279,7 +297,7 @@ const credential = verification.registrationInfo.credential;
     try {
       verification = await verifyAuthenticationResponse({
         response,
-        expectedChallenge: challenge,
+        expectedChallenge: challenge.challenge,
         expectedOrigin: origin,
         expectedRPID: rpID,
         credential: { id: passkey.credentialId, publicKey: isoBase64URL.toBuffer(passkey.publicKey), counter: passkey.counter },
@@ -289,14 +307,22 @@ const credential = verification.registrationInfo.credential;
     }
     if (!verification.verified) throw new UnauthorizedException('Biometric approval was not verified');
 
-    await this.prisma.passkey.update({
-      where: { id: passkey.id },
+    const updated = await this.prisma.passkey.updateMany({
+      where: { id: passkey.id, counter: passkey.counter },
       data: { counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() },
     });
+    if (updated.count !== 1) {
+      throw new UnauthorizedException('This biometric approval was already used. Please try again.');
+    }
 
-    // Short-lived, single-purpose token consumed by the transaction-auth flow
+    const jti = crypto.randomBytes(16).toString('hex');
+    const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+    await this.prisma.passkeyApproval.create({
+      data: { jti, userId, intentHash: challenge.intentHash, expiresAt },
+    });
+
     const passkeyToken = this.jwtService.sign(
-      { sub: userId, purpose: 'transaction' },
+      { sub: userId, purpose: 'transaction', jti, intentHash: challenge.intentHash },
       { expiresIn: '2m' },
     );
     return { passkeyToken };

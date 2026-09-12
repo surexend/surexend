@@ -109,7 +109,7 @@ function VerifyOTPForm() {
         
         <h1 className="text-3xl font-bold text-white mb-2">Verify Account</h1>
         <p className="text-[#94A3B8] mb-8">
-          We've sent a 6-digit code to <br />
+          We&apos;ve sent a 6-digit code to <br />
           <span className="text-white font-medium">{identifier}</span>
         </p>
 

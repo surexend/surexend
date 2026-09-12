@@ -79,19 +79,6 @@ export default function SendPage() {
     }
   }, [])
 
-  // Lock page scroll while the secure PIN overlay is up (same as bills): the
-  // overlay is `fixed inset-0 h-[100dvh]`, and locking the body scroll is
-  // belt-and-braces so the page can't slide underneath on small screens. We
-  // only toggle `overflow`, not `position`, to keep the scroll position.
-  useEffect(() => {
-    if (step !== 4) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [step])
-
   const { data: balanceData, isLoading: balanceLoading } = useQuery({
     queryKey: ['sendBalance'],
     queryFn: walletAPI.getBalance,
@@ -256,6 +243,14 @@ export default function SendPage() {
   const { approve: approveWithBiometric, biometricBusy } = useBiometricApproval(
     (passkeyToken) => void executeSend(undefined, passkeyToken),
     () => setStep(4),
+    {
+      action: 'wallets.send',
+      toAddress: String(formData.address || '').trim(),
+      amount: Number(formData.amount || 0),
+      network: String(sendMode === 'TAG' ? 'SUREX_TAG' : formData.network || '').toUpperCase(),
+      destinationNetwork: sendMode === 'TAG' ? null : (formData.network ? String(formData.network).toUpperCase() : null),
+      currency: String(transferCurrency || 'USDC').toUpperCase(),
+    },
   )
 
   const handleConfirmSend = () => {
@@ -573,7 +568,7 @@ export default function SendPage() {
 
             {/* Amount hero */}
             <div className="text-center py-2">
-              <p className="text-[9px] uppercase tracking-[0.25em] text-[#64748B] font-bold mb-1">You're sending</p>
+              <p className="text-[9px] uppercase tracking-[0.25em] text-[#64748B] font-bold mb-1">You&apos;re sending</p>
               <p className="text-4xl font-black text-white tracking-tight">{formatTransferAmount(Number(formData.amount || 0))}</p>
             </div>
 
@@ -632,7 +627,20 @@ export default function SendPage() {
                 accentHex={colors.primary}
                 accentRgb={isGold ? '212, 160, 23' : '181, 226, 61'}
                 onCancel={() => { setPinError(null); setStep(3) }}
-                extra={<BiometricApproveButton onApproved={(token) => executeSend(undefined, token)} disabled={isLoading} />}
+                extra={
+                  <BiometricApproveButton
+                    onApproved={(token) => executeSend(undefined, token)}
+                    intent={{
+                      action: 'wallets.send',
+                      toAddress: String(formData.address || '').trim(),
+                      amount: Number(formData.amount || 0),
+                      network: String(sendMode === 'TAG' ? 'SUREX_TAG' : formData.network || '').toUpperCase(),
+                      destinationNetwork: sendMode === 'TAG' ? null : (formData.network ? String(formData.network).toUpperCase() : null),
+                      currency: String(transferCurrency || 'USDC').toUpperCase(),
+                    }}
+                    disabled={isLoading}
+                  />
+                }
               />
             </div>
           </div>

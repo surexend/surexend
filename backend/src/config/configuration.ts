@@ -7,7 +7,9 @@ export default registerAs('app', () => ({
   databaseUrl: process.env.DATABASE_URL,
   redisUrl: process.env.REDIS_URL,
   testing: {
-    enabled: process.env.TESTING_ENABLED === 'true' || (process.env.NODE_ENV || 'development') !== 'production',
+    // Test PIN behavior is opt-in too; a non-production NODE_ENV must not
+    // silently expose a default credential on a public demo.
+    enabled: process.env.TESTING_ENABLED === 'true',
     defaultPin: process.env.DEFAULT_PIN || '0000',
   },
   jwt: {
@@ -28,7 +30,13 @@ export default registerAs('app', () => ({
     apiKey: process.env.PAYMENTPOINT_API_KEY || process.env.PAYMENT_POINT_API_KEY,
     secretKey: process.env.PAYMENTPOINT_SECRET_KEY || process.env.PAYMENT_POINT_SECRET_KEY,
     businessId: process.env.PAYMENTPOINT_BUSINESS_ID || process.env.PAYMENT_POINT_BUSINESS_ID,
-    webhookSecret: process.env.PAYMENTPOINT_WEBHOOK_SECRET || process.env.PAYMENT_POINT_WEBHOOK_SECRET || process.env.PAYMENTPOINT_SECRET_KEY || process.env.PAYMENT_POINT_SECRET_KEY,
+    // Do not reuse the API secret as a guessed webhook credential. PaymentPoint's
+    // callback signature scheme must be confirmed with the provider and supplied
+    // separately before this money-crediting endpoint is enabled.
+    webhookSecret: process.env.PAYMENTPOINT_WEBHOOK_SECRET || process.env.PAYMENT_POINT_WEBHOOK_SECRET,
+    // Disabled until PaymentPoint's documented callback authentication contract
+    // is verified with a captured production webhook.
+    webhookEnabled: process.env.PAYMENTPOINT_WEBHOOK_ENABLED === 'true',
     baseUrl: process.env.PAYMENTPOINT_BASE_URL || process.env.PAYMENT_POINT_BASE_URL || 'https://api.paymentpoint.co/api/v1',
   },
   vtpass: {
@@ -37,6 +45,7 @@ export default registerAs('app', () => ({
     secretKey: process.env.VTPASS_SECRET_KEY,
     baseUrl: process.env.VTPASS_BASE_URL,
     webhookSecret: process.env.VTPASS_WEBHOOK_SECRET,
+    webhookEnabled: process.env.VTPASS_WEBHOOK_ENABLED === 'true',
   },
   webhooks: {
     // Fail closed. Every inbound webhook is cryptographically verified before
@@ -50,9 +59,15 @@ export default registerAs('app', () => ({
   },
   bills: {
     // Safety guard: users can only buy bills once they have a real deposit, so
-    // testnet/empty balances can never spend real naira at Smartspeed. Disable
-    // with BILLS_REQUIRE_FUNDING=false.
+    // testnet/empty balances can never spend real naira at Smartspeed. This is
+    // deliberately not configurable off in production (main.ts rejects it).
     requireFunding: process.env.BILLS_REQUIRE_FUNDING !== 'false',
+  },
+  moneyMovement: {
+    // Every environment is disabled unless the operator explicitly opts in.
+    // A demo/testnet process must never reach a live provider just because
+    // NODE_ENV is not production.
+    enabled: process.env.MONEY_MOVEMENT_ENABLED === 'true',
   },
   yellowCard: {
     apiKey: process.env.YELLOW_CARD_API_KEY,

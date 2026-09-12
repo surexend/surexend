@@ -5,133 +5,111 @@ type Row = {
   userId: string;
   scope: string;
   key: string;
-  response: unknown;
+  requestHash?: string | null;
+  status: string;
+  response?: unknown;
+  error?: string | null;
   createdAt: Date;
+  updatedAt: Date;
 };
 
-/**
- * Minimal in-memory stand-in for the IdempotencyRecord table. It reproduces the
- * behaviour the service depends on: lookup by (userId, scope, key) and a
- * P2002 error when the unique constraint is violated by a concurrent insert.
- */
 function fakePrisma() {
   const rows = new Map<string, Row>();
-  const id = (userId: string, scope: string, key: string) => `${userId}|${scope}|${key}`;
-
-  return {
+  const keyOf = (userId: string, scope: string, key: string) => `${userId}|${scope}|${key}`;
+  const fake: any = {
     rows,
-    // Flip to simulate a competing request that commits first.
-    raceOnCreate: false,
     idempotencyRecord: {
       findUnique: jest.fn(async ({ where }: any) => {
         const { userId, scope, key } = where.userId_scope_key;
-        return rows.get(id(userId, scope, key)) || null;
+        return rows.get(keyOf(userId, scope, key)) || null;
       }),
       create: jest.fn(async ({ data }: any) => {
-        const pk = id(data.userId, data.scope, data.key);
-        if (rows.has(pk) || (fake as any).raceOnCreate) {
+        const pk = keyOf(data.userId, data.scope, data.key);
+        if (rows.has(pk)) {
           const err: any = new Error('Unique constraint failed');
           err.code = 'P2002';
           throw err;
         }
-        const row: Row = { id: `row-${rows.size + 1}`, createdAt: new Date(), ...data };
+        const now = new Date();
+        const row: Row = { id: `row-${rows.size + 1}`, createdAt: now, updatedAt: now, ...data };
         rows.set(pk, row);
+        return row;
+      }),
+      update: jest.fn(async ({ where, data }: any) => {
+        const { userId, scope, key } = where.userId_scope_key;
+        const row = rows.get(keyOf(userId, scope, key));
+        if (!row) throw new Error('Not found');
+        Object.assign(row, data, { updatedAt: new Date() });
         return row;
       }),
       deleteMany: jest.fn(async () => ({ count: 0 })),
     },
   };
+  return fake;
 }
 
-const fake: any = fakePrisma();
-
 describe('IdempotencyService', () => {
+  let fake: any;
   let service: IdempotencyService;
 
   beforeEach(() => {
-    fake.rows.clear();
-    fake.raceOnCreate = false;
-    fake.idempotencyRecord.findUnique.mockClear();
-    fake.idempotencyRecord.create.mockClear();
+    fake = fakePrisma();
     service = new IdempotencyService(fake as any);
   });
 
-  it('executes once and stores the response', async () => {
+  it('claims before executing and replays the completed response', async () => {
     const fn = jest.fn(async () => ({ reference: 'TX-1' }));
 
-    const first = await service.run({ userId: 'u1', scope: 'wallets.send', key: 'k1' }, fn);
+    const first = await service.run({ userId: 'u1', scope: 'wallets.send', key: 'k1', fingerprint: 'same' }, fn);
+    const retry = await service.run({ userId: 'u1', scope: 'wallets.send', key: 'k1', fingerprint: 'same' }, fn);
 
     expect(fn).toHaveBeenCalledTimes(1);
     expect(first).toEqual({ result: { reference: 'TX-1' }, replayed: false });
-    expect(fake.idempotencyRecord.create).toHaveBeenCalledTimes(1);
-  });
-
-  it('replays the stored response instead of executing twice', async () => {
-    const fn = jest.fn(async () => ({ reference: 'TX-1' }));
-
-    await service.run({ userId: 'u1', scope: 'wallets.send', key: 'k1' }, fn);
-    const retry = await service.run({ userId: 'u1', scope: 'wallets.send', key: 'k1' }, fn);
-
-    expect(fn).toHaveBeenCalledTimes(1);
     expect(retry).toEqual({ result: { reference: 'TX-1' }, replayed: true });
+    expect(fake.rows.get('u1|wallets.send|k1')?.status).toBe('COMPLETED');
   });
 
-  it('scopes keys per operation, so the same key is independent across scopes', async () => {
+  it('rejects reusing a key for different parameters', async () => {
+    await service.run({ userId: 'u1', scope: 'wallets.send', key: 'k1', fingerprint: 'first' }, async () => ({ ok: true }));
+
+    await expect(
+      service.run({ userId: 'u1', scope: 'wallets.send', key: 'k1', fingerprint: 'different' }, async () => ({ ok: false })),
+    ).rejects.toThrow(/different operation parameters/);
+  });
+
+  it('does not execute a concurrent loser while the winner is processing', async () => {
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    let calls = 0;
+    const first = service.run({ userId: 'u1', scope: 'wallets.send', key: 'race', fingerprint: 'same' }, async () => {
+      calls += 1;
+      await blocked;
+      return { reference: 'winner' };
+    });
+
+    // Let the first request claim the row before starting the race.
+    await new Promise((resolve) => setImmediate(resolve));
+    const second = service.run({ userId: 'u1', scope: 'wallets.send', key: 'race', fingerprint: 'same' }, async () => {
+      calls += 1;
+      return { reference: 'loser' };
+    });
+
+    release();
+    await expect(first).resolves.toEqual({ result: { reference: 'winner' }, replayed: false });
+    await expect(second).resolves.toEqual({ result: { reference: 'winner' }, replayed: true });
+    expect(calls).toBe(1);
+  });
+
+  it('requires a usable key', async () => {
+    await expect(service.run({ userId: 'u1', scope: 'wallets.send' }, async () => ({ ok: true }))).rejects.toThrow(/Idempotency-Key is required/);
+    await expect(service.run({ userId: 'u1', scope: 'wallets.send', key: 'x'.repeat(129) }, async () => ({ ok: true }))).rejects.toThrow(/Idempotency-Key is required/);
+  });
+
+  it('scopes keys by user and operation', async () => {
     const fn = jest.fn(async () => ({ ok: true }));
-
-    await service.run({ userId: 'u1', scope: 'wallets.send', key: 'k1' }, fn);
-    await service.run({ userId: 'u1', scope: 'bills.purchase', key: 'k1' }, fn);
-
-    expect(fn).toHaveBeenCalledTimes(2);
-  });
-
-  it('scopes keys per user, so one user cannot replay another', async () => {
-    const fn = jest.fn(async () => ({ ok: true }));
-
-    await service.run({ userId: 'u1', scope: 'wallets.send', key: 'shared' }, fn);
-    const other = await service.run({ userId: 'u2', scope: 'wallets.send', key: 'shared' }, fn);
-
-    expect(fn).toHaveBeenCalledTimes(2);
-    expect(other.replayed).toBe(false);
-  });
-
-  it('returns the winning response when a concurrent request commits first', async () => {
-    const fn = jest.fn(async () => ({ reference: 'from-this-call' }));
-
-    // First pass stores the record and returns it.
-    await service.run({ userId: 'u1', scope: 'wallets.send', key: 'k1' }, async () => ({
-      reference: 'winner',
-    }));
-
-    // Now make finds miss and creates collide, as they would mid-race.
-    fake.idempotencyRecord.findUnique
-      .mockImplementationOnce(async () => null)
-      .mockImplementationOnce(async () => ({ response: { reference: 'winner' } }));
-    fake.raceOnCreate = true;
-
-    const result = await service.run({ userId: 'u1', scope: 'wallets.send', key: 'k1' }, fn);
-
-    expect(result).toEqual({ result: { reference: 'winner' }, replayed: true });
-  });
-
-  it('still executes when the client sends no key', async () => {
-    const fn = jest.fn(async () => ({ ok: true }));
-
-    const result = await service.run({ userId: 'u1', scope: 'wallets.send' }, fn);
-
-    expect(result).toEqual({ result: { ok: true }, replayed: false });
-    expect(fake.idempotencyRecord.create).not.toHaveBeenCalled();
-  });
-
-  it('ignores oversized keys rather than failing the request', async () => {
-    const fn = jest.fn(async () => ({ ok: true }));
-
-    const result = await service.run(
-      { userId: 'u1', scope: 'wallets.send', key: 'x'.repeat(500) },
-      fn,
-    );
-
-    expect(result.replayed).toBe(false);
-    expect(fake.idempotencyRecord.create).not.toHaveBeenCalled();
+    await service.run({ userId: 'u1', scope: 'wallets.send', key: 'shared', fingerprint: 'a' }, fn);
+    await service.run({ userId: 'u1', scope: 'bills.purchase', key: 'shared', fingerprint: 'a' }, fn);
+    await service.run({ userId: 'u2', scope: 'wallets.send', key: 'shared', fingerprint: 'a' }, fn);
+    expect(fn).toHaveBeenCalledTimes(3);
   });
 });

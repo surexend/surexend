@@ -11,12 +11,12 @@
     "ledger:report": "node scripts/ledger-drift-report.js",
     "ledger:baseline": "node scripts/backfill-ledger-baseline.js",
     "ledger:db": "node scripts/db-ledger-ops.js",
-    "db:deploy": "prisma db push --accept-data-loss && node scripts/apply-data-migrations.js",
+    "db:deploy": "node scripts/deploy-database.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "prestart": "npm run db:deploy || echo \"[prestart] database preparation failed; continuing in development\"",
-    "prestart:prod": "npm run db:deploy || echo \"[prestart:prod] db deploy notice; starting server\""
+    "prestart": "npm run db:deploy",
+    "prestart:prod": "npm run db:deploy"
   },
   "dependencies": {
     "@circle-fin/adapter-circle-wallets": "^1.6.0",

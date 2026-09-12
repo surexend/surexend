@@ -285,9 +285,10 @@ export const passkeyAPI = {
     return result
   },
 
-  approveBegin: () => apiClient.post('/auth/passkey/approve/begin').then(r => r.data),
-  approveComplete: (response: any) =>
-    apiClient.post('/auth/passkey/approve/complete', { response }).then(r => r.data as { passkeyToken: string }),
+  approveBegin: (intent: Record<string, unknown>) =>
+    apiClient.post('/auth/passkey/approve/begin', { intent }).then(r => r.data),
+  approveComplete: (challengeId: string, response: any) =>
+    apiClient.post('/auth/passkey/approve/complete', { challengeId, response }).then(r => r.data as { passkeyToken: string }),
 
   listDevices: () => apiClient.get('/auth/passkey/devices').then(r => r.data as any[]),
   removeDevice: (id: string) => apiClient.delete(`/auth/passkey/devices/${id}`),

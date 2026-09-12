@@ -113,6 +113,7 @@ export default function AdminStepUpModal({
 
               <BiometricApproveButton
                 onApproved={(passkeyToken) => onApprove({ adminPasskeyToken: passkeyToken })}
+                intent={{ action: 'admin.stepup' }}
                 accentHex={accentHex}
                 accentRgb={accentRgb}
                 disabled={loading}

@@ -141,7 +141,10 @@ export class ReferralsService {
       .sort((a, b) => b.month.localeCompare(a.month));
   }
 
-  async processReferralEarning(referrerId: string, txFeeAmount: number) {
+  async processReferralEarning(referrerId: string, txFeeAmount: number, sourceReference: string) {
+    if (!sourceReference || !String(sourceReference).trim()) {
+      throw new Error('Referral commission requires a durable source transaction reference.');
+    }
     const totalReferrals = await this.prisma.referral.count({ where: { referrerId } });
     
     let commissionRate = 0.3 / 100; // 0.3% default
@@ -152,7 +155,13 @@ export class ReferralsService {
     const commissionAmount = txFeeAmount * commissionRate;
     if (commissionAmount <= 0) return;
 
-    const reference = `REF-EARN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // One commission belongs to one completed source transaction. A stable
+    // reference makes duplicate provider webhooks harmless and lets the unique
+    // Transaction.reference constraint protect the wallet write transaction.
+    const reference = `REF-EARN-${String(sourceReference).trim()}`;
+    const existing = await this.prisma.transaction.findUnique({ where: { reference } });
+    if (existing) return;
+
     await this.prisma.$transaction(async (prisma) => {
       const wallet = await prisma.wallet.findUnique({
         where: { userId: referrerId },

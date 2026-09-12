@@ -9,12 +9,14 @@ import BiometricSuccessOverlay from '@/components/BiometricSuccessOverlay'
 
 export default function BiometricApproveButton({
   onApproved,
+  intent,
   accentHex,
   accentRgb,
   disabled,
   label,
 }: {
   onApproved: (passkeyToken: string) => void
+  intent: Record<string, unknown>
   accentHex?: string
   accentRgb?: string
   disabled?: boolean
@@ -26,10 +28,9 @@ export default function BiometricApproveButton({
   const handle = async () => {
     setLoading(true)
     try {
-      const options = await passkeyAPI.approveBegin()
+      const options = await passkeyAPI.approveBegin(intent)
       const response = await startAuthentication({ optionsJSON: options })
-      const { passkeyToken } = await passkeyAPI.approveComplete(response)
-      // Play the Apple-style success moment, then hand the token over.
+      const { passkeyToken } = await passkeyAPI.approveComplete(options.challengeId, response)
       setSuccess(true)
       setTimeout(() => {
         setSuccess(false)

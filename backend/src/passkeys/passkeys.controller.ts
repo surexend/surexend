@@ -44,15 +44,19 @@ export class PasskeysController {
   @UseGuards(JwtAuthGuard)
   @Post('approve/begin')
   @HttpCode(200)
-  async approveBegin(@CurrentUser() user: any) {
-    return this.passkeysService.approveBegin(user.id);
+  async approveBegin(@CurrentUser() user: any, @Body('intent') intent: Record<string, unknown>) {
+    return this.passkeysService.approveBegin(user.id, intent);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('approve/complete')
   @HttpCode(200)
-  async approveComplete(@CurrentUser() user: any, @Body('response') response: any) {
-    return this.passkeysService.approveComplete(user.id, response);
+  async approveComplete(
+    @CurrentUser() user: any,
+    @Body('challengeId') challengeId: string,
+    @Body('response') response: any,
+  ) {
+    return this.passkeysService.approveComplete(user.id, challengeId, response);
   }
 
   // Authenticated: manage enrolled devices

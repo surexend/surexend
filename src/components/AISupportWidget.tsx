@@ -288,7 +288,17 @@ function ActionCard({
               <span className="text-[9px] text-[#64748B] uppercase tracking-wider">or</span>
               <div className="flex-1 h-px bg-white/10"></div>
             </div>
-            <BiometricApproveButton onApproved={(token) => run(token)} accentRgb={accentRgb} disabled={busy} label="Use Face ID or fingerprint" />
+            <BiometricApproveButton
+              onApproved={(token) => run(token)}
+              intent={isSend
+                ? { action: 'wallets.send', toAddress: String(form.to || '').trim(), amount: Number(form.amount), network: String(form.network || '').toUpperCase(), destinationNetwork: null, currency: 'USDC' }
+                : isBill
+                  ? { action: 'bills.purchase', type: String(form.type || '').toLowerCase(), provider: String(form.provider || '').toUpperCase(), recipient: String(form.recipient || '').trim(), amount: Number(form.amount), planCode: null, portedNumber: false }
+                  : { action: 'conversions.execute', from: String(form.from || '').toUpperCase(), to: String(form.to || '').toUpperCase(), amount: Number(form.amount) }}
+              accentRgb={accentRgb}
+              disabled={busy}
+              label="Use Face ID or fingerprint"
+            />
           </div>
         )}
       </div>

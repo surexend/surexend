@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -429,6 +429,28 @@ export class AdminService {
     return this.configService.get<string>('app.circle.referralRewardBlockchain') || '';
   }
 
+  private providerIdempotencyKey(scope: string): string {
+    // Circle expects a UUID-shaped idempotency key. Derive it from a durable
+    // application operation, never from an attempt, so a lost response can be
+    // replayed without creating a second wallet or payout.
+    const digest = crypto.createHash('sha256').update(`surexend:${scope}`).digest('hex');
+    return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+  }
+
+  private circleOutcomeUnknown(error: any): boolean {
+    // Local validation/configuration failures did not reach Circle and are safe
+    // to mark FAILED. Transport errors and ambiguous provider responses are not.
+    if (error instanceof BadRequestException || error instanceof NotFoundException) return false;
+    const status = Number(error?.response?.status || 0);
+    return !error?.response || status >= 500 || [408, 409, 429].includes(status);
+  }
+
+  private assertMoneyMovementEnabled() {
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
+      throw new BadRequestException('Money movement is disabled while this environment is in testnet or maintenance mode.');
+    }
+  }
+
   private assertCircleConfigured() {
     if (!this.circleApiKey || !this.circleEntitySecret) {
       throw new BadRequestException('Circle wallet credentials are not configured. Add CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET before creating the campaign wallet.');
@@ -544,6 +566,7 @@ export class AdminService {
   }
 
   async createReferralRewardWallet(adminId: string) {
+    this.assertMoneyMovementEnabled();
     const existing = await this.prisma.platformWallet.findUnique({ where: { key: REFERRAL_REWARD_WALLET_KEY } });
     if (existing?.circleWalletId) return this.getReferralRewardWallet();
     this.assertCircleConfigured();
@@ -580,7 +603,7 @@ export class AdminService {
         const createSetResponse = await axios.post(
           `${this.circleBaseUrl}/v1/w3s/developer/walletSets`,
           {
-            idempotencyKey: crypto.randomUUID(),
+            idempotencyKey: this.providerIdempotencyKey('referral:wallet-set'),
             entitySecretCiphertext: this.encryptCircleEntitySecret(this.circleEntitySecret, publicKey),
             name: 'SureXend Referral Rewards',
           },
@@ -599,7 +622,7 @@ export class AdminService {
       const createResponse = await axios.post(
         `${this.circleBaseUrl}/v1/w3s/developer/wallets`,
         {
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey: this.providerIdempotencyKey('referral:wallet'),
           blockchains: [this.referralRewardBlockchain()],
           entitySecretCiphertext,
           walletSetId,
@@ -694,12 +717,24 @@ export class AdminService {
   }
 
   async payReferralReward(rewardId: string, adminId: string) {
+    this.assertMoneyMovementEnabled();
     // Claim first so a double click or two operators can never submit two Circle
-    // transfers for one reward. A failed chain request deliberately becomes
-    // FAILED, which can be explicitly retried by an authorized operator.
+    // transfers for one reward. A failed, provider-confirmed rejection becomes
+    // FAILED and may be explicitly retried; a timeout/5xx remains PROCESSING
+    // until reconciliation proves the outcome.
+    const rewardBeforeClaim = await this.prisma.referralReward.findUnique({ where: { id: rewardId }, select: { reference: true } });
+    if (!rewardBeforeClaim) throw new NotFoundException('Referral reward not found.');
+    const providerIdempotencyKey = this.providerIdempotencyKey(`referral:payout:${rewardBeforeClaim.reference}`);
     const claimed = await this.prisma.referralReward.updateMany({
       where: { id: rewardId, status: { in: ['ELIGIBLE', 'FAILED'] } },
-      data: { status: 'PROCESSING', failureReason: null, approvedById: adminId },
+      data: {
+        status: 'PROCESSING',
+        failureReason: null,
+        approvedById: adminId,
+        providerIdempotencyKey,
+        providerState: 'SUBMITTING',
+        reconciliationRequired: false,
+      },
     });
     if (!claimed.count) throw new BadRequestException('This reward is already being processed or has already been paid.');
 
@@ -740,7 +775,7 @@ export class AdminService {
       const transferResponse = await axios.post(
         `${this.circleBaseUrl}/v1/w3s/developer/transactions/transfer`,
         {
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey: providerIdempotencyKey,
           entitySecretCiphertext,
           walletAddress: source.address,
           blockchain: source.blockchain,
@@ -763,6 +798,9 @@ export class AdminService {
           status: 'PENDING',
           platformWalletId: source.id,
           circleTransactionId: circleTransaction.id,
+          providerState: String(circleTransaction.state || 'INITIATED').toUpperCase(),
+          reconciliationRequired: false,
+          failureReason: null,
         },
       });
       await this.prisma.auditLog.create({
@@ -775,7 +813,32 @@ export class AdminService {
       return { reward: updated, circleTransaction: { id: circleTransaction.id, state: circleTransaction.state || 'INITIATED' } };
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || 'Could not submit the referral reward payout.';
-      await this.prisma.referralReward.update({ where: { id: reward.id }, data: { status: 'FAILED', failureReason: message } });
+      if (this.circleOutcomeUnknown(error)) {
+        // The provider may have accepted the exact idempotent request even when
+        // this process saw a timeout or 5xx. Never mark it retryable or submit
+        // a new key; retain the claim for reconciliation.
+        await this.prisma.referralReward.update({
+          where: { id: reward.id },
+          data: {
+            status: 'PROCESSING',
+            providerState: 'UNKNOWN_REQUIRES_RECONCILIATION',
+            reconciliationRequired: true,
+            failureReason: String(message).slice(0, 500),
+          },
+        });
+        this.logger.error(`Referral reward payout ${reward.id} has an unknown Circle outcome: ${message}`);
+        throw new ServiceUnavailableException('Circle did not confirm the reward payout. The reward is held for reconciliation; do not retry yet.');
+      }
+
+      await this.prisma.referralReward.update({
+        where: { id: reward.id },
+        data: {
+          status: 'FAILED',
+          providerState: 'FAILED',
+          reconciliationRequired: false,
+          failureReason: String(message).slice(0, 500),
+        },
+      });
       this.logger.error(`Referral reward payout ${reward.id} failed: ${message}`);
       throw error instanceof BadRequestException ? error : new BadRequestException(message);
     }
@@ -797,7 +860,16 @@ export class AdminService {
       if (!circleTransaction) return reward;
       const state = String(circleTransaction.state || '').toUpperCase();
       if (['COMPLETE', 'COMPLETED', 'CONFIRMED'].includes(state) && reward.status !== 'PAID') {
-        const paid = await this.prisma.referralReward.update({ where: { id: reward.id }, data: { status: 'PAID', paidAt: new Date(), failureReason: null } });
+        const paid = await this.prisma.referralReward.update({
+          where: { id: reward.id },
+          data: {
+            status: 'PAID',
+            paidAt: new Date(),
+            providerState: state,
+            reconciliationRequired: false,
+            failureReason: null,
+          },
+        });
         await this.notificationsService.createNotification(reward.userId, {
           title: 'Referral reward sent',
           body: `Your ${reward.amount.toFixed(2)} ${reward.currency} reward for inviting ${reward.requiredReferrals} friends has been sent to your wallet.`,
@@ -807,7 +879,15 @@ export class AdminService {
         return paid;
       }
       if (['FAILED', 'DENIED'].includes(state)) {
-        return this.prisma.referralReward.update({ where: { id: reward.id }, data: { status: 'FAILED', failureReason: circleTransaction.errorMessage || circleTransaction.errorCode || 'Circle payout failed.' } });
+        return this.prisma.referralReward.update({
+          where: { id: reward.id },
+          data: {
+            status: 'FAILED',
+            providerState: state,
+            reconciliationRequired: false,
+            failureReason: circleTransaction.errorMessage || circleTransaction.errorCode || 'Circle payout failed.',
+          },
+        });
       }
       return reward;
     } catch (error: any) {

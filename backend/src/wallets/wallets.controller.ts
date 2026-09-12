@@ -2,9 +2,9 @@ import { Controller, Get, Post, Body, Query, UseGuards, Headers } from '@nestjs/
 import { WalletsService } from './wallets.service';
 import { LocalFundingService } from './local-funding.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { PinGuard } from '../common/guards/pin.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
+import { TransactionAuthService } from '../common/transaction-auth/transaction-auth.service';
 
 @Controller('wallets')
 @UseGuards(JwtAuthGuard)
@@ -13,6 +13,7 @@ export class WalletsController {
     private readonly walletsService: WalletsService,
     private readonly localFundingService: LocalFundingService,
     private readonly idempotency: IdempotencyService,
+    private readonly transactionAuth: TransactionAuthService,
   ) {}
 
   @Get('balance')
@@ -20,7 +21,6 @@ export class WalletsController {
     return this.walletsService.getBalance(user.id);
   }
 
-  // Dedicated bank account for funding the local-currency wallet by transfer.
   @Get('local-funding/account')
   async getLocalFundingAccount(@CurrentUser() user: any) {
     return this.localFundingService.getOrCreateAccount(user.id);
@@ -39,9 +39,6 @@ export class WalletsController {
     return this.walletsService.getNetworks();
   }
 
-  // Cross-chain (CCTP) network fee estimate for the chosen destination, so the
-  // send form can show the user what Circle's forwarder will deduct before
-  // they confirm.
   @Get('cctp-fee')
   async getCctpFee(
     @CurrentUser() user: any,
@@ -56,7 +53,6 @@ export class WalletsController {
   }
 
   @Post('send')
-  @UseGuards(PinGuard)
   async sendCrypto(
     @CurrentUser() user: any,
     @Headers('idempotency-key') idempotencyKey: string,
@@ -65,13 +61,30 @@ export class WalletsController {
     @Body('network') network: string,
     @Body('destinationNetwork') destinationNetwork?: string,
     @Body('currency') currency?: string,
-    @Body('pin') pin?: string, // PIN is validated by PinGuard
+    @Body('pin') pin?: string,
+    @Body('passkeyToken') passkeyToken?: string,
   ) {
-    // A retry with the same key replays the first response instead of sending
-    // a second time.
+    const fingerprint = JSON.stringify({
+      toAddress: String(toAddress || '').trim(),
+      amount: Number(amount),
+      network: String(network || '').toUpperCase(),
+      destinationNetwork: destinationNetwork ? String(destinationNetwork).toUpperCase() : null,
+      currency: String(currency || 'USDC').toUpperCase(),
+    });
+
     const { result } = await this.idempotency.run(
-      { userId: user.id, scope: 'wallets.send', key: idempotencyKey },
-      () => this.walletsService.sendCrypto(user.id, toAddress, amount, network, destinationNetwork, currency),
+      { userId: user.id, scope: 'wallets.send', key: idempotencyKey, fingerprint },
+      async () => {
+        await this.transactionAuth.verify(user, { pin, passkeyToken }, {
+          action: 'wallets.send',
+          toAddress: String(toAddress || '').trim(),
+          amount: Number(amount),
+          network: String(network || '').toUpperCase(),
+          destinationNetwork: destinationNetwork ? String(destinationNetwork).toUpperCase() : null,
+          currency: String(currency || 'USDC').toUpperCase(),
+        });
+        return this.walletsService.sendCrypto(user.id, toAddress, amount, network, destinationNetwork, currency);
+      },
     );
     return result;
   }

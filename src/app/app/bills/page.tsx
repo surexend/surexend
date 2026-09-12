@@ -266,20 +266,6 @@ export default function BillsPage() {
     30
   )
 
-  // Lock page scroll while the secure PIN / processing overlay is up, so the
-  // keypad and PIN dots can never move, scroll, or slide off-screen. The overlay
-  // is `fixed inset-0`, but locking the body scroll is belt-and-braces so the
-  // page can't scroll underneath on small screens. We only toggle `overflow`,
-  // not `position`, to avoid resetting the page's scroll position.
-  useEffect(() => {
-    if (step !== 'pin') return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [step])
-
   // Real wallet balances
   const { data: walletBal } = useQuery({
     queryKey: ['bill-wallet-balance'],
@@ -451,9 +437,19 @@ export default function BillsPage() {
   // user-gesture handler (the "Continue" button) because browsers only allow
   // navigator.credentials.get() inside a transient activation.
   // (Shared hook — the same logic is used by Send and Convert.)
+  const billIntent = {
+    action: 'bills.purchase',
+    type: selectedPlan ? 'data' : 'airtime',
+    provider: String(selectedNetwork || '').toUpperCase(),
+    recipient: String(phoneValidation.normalized || phoneNumber || '').trim(),
+    amount: Number(selectedPlan ? selectedPlan.amount : amount),
+    planCode: selectedPlan?.code ? String(selectedPlan.code) : null,
+    portedNumber: false,
+  }
   const { approve: approveWithBiometric, biometricBusy } = useBiometricApproval(
     (passkeyToken) => void executePurchase(undefined, passkeyToken),
     () => setStep('pin'),
+    billIntent,
   )
 
   const handleConfirmPayment = () => {
@@ -1005,6 +1001,7 @@ export default function BillsPage() {
                 <div className="max-w-xs mx-auto">
                   <BiometricApproveButton
                     onApproved={(token) => executePurchase(undefined, token)}
+                    intent={billIntent}
                     accentHex={accentHex}
                     accentRgb={accentRgb}
                     disabled={processing}

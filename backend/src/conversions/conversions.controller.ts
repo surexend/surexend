@@ -42,8 +42,13 @@ export class ConversionsController {
     @Headers('idempotency-key') idempotencyKey: string,
     @Body() dto: CreateConversionDto,
   ) {
+    const fingerprint = JSON.stringify({
+      from: String(dto.from || '').toUpperCase(),
+      to: String(dto.to || '').toUpperCase(),
+      amount: Number(dto.amount),
+    });
     const { result } = await this.idempotency.run(
-      { userId: user.id, scope: 'conversions.execute', key: idempotencyKey },
+      { userId: user.id, scope: 'conversions.execute', key: idempotencyKey, fingerprint },
       () =>
         this.conversionsService.execute(
           user.id,

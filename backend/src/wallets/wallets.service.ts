@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -44,6 +44,33 @@ export class WalletsService implements OnModuleInit {
     this.logger.log(`Circle API initialized: ${this.baseUrl}`);
   }
 
+  private stableProviderIdempotencyKey(seed: string): string {
+    const digest = crypto.createHash('sha256').update(seed).digest('hex');
+    return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+  }
+
+  private walletCreationIdempotencyKey(userId: string, network: string, blockchain: string): string {
+    return this.stableProviderIdempotencyKey(
+      `surexend:wallet:${userId}:${network.toUpperCase()}:${blockchain.toUpperCase()}`,
+    );
+  }
+
+  private async saveWalletAddress(walletId: string, network: string, address: string) {
+    try {
+      return await this.prisma.walletAddress.create({
+        data: { walletId, network: network.toUpperCase(), address },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        const existing = await this.prisma.walletAddress.findUnique({
+          where: { walletId_network: { walletId, network: network.toUpperCase() } },
+        });
+        if (existing) return existing;
+      }
+      throw err;
+    }
+  }
+
   // Resolve the standard Circle wallet set lazily. Existing installations can
   // keep CIRCLE_WALLET_SET_ID; a new installation creates one exactly once and
   // stores it in the database, so no operator has to copy a set ID from Circle.
@@ -82,7 +109,7 @@ export class WalletsService implements OnModuleInit {
         const response = await axios.post(
           `${this.baseUrl}/v1/w3s/developer/walletSets`,
           {
-            idempotencyKey: crypto.randomUUID(),
+            idempotencyKey: this.stableProviderIdempotencyKey('surexend:wallet-set:application'),
             entitySecretCiphertext: this.encryptSecret(this.entitySecret, publicKey),
             name: 'SureXend Application Wallets',
           },
@@ -186,7 +213,7 @@ export class WalletsService implements OnModuleInit {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
           accept: 'application/json',
-          'Idempotency-Key': crypto.randomUUID(),
+          'Idempotency-Key': this.stableProviderIdempotencyKey(`surexend:arc-derive:${userId}:${address.toLowerCase()}`),
         },
       }
     );
@@ -195,38 +222,30 @@ export class WalletsService implements OnModuleInit {
     return 'registered';
   }
 
-  // Spendable USD = the combined USDC + USDT float (the app is USDC-only, but
-  // legacy USDT balances must still be spendable so funds are never stranded in
-  // an invisible bucket), minus the CONVERT ledger (conversions out of USD are
-  // bookkeeping with no chain movement, so they reduce what is actually
-  // spendable). Mirrors the netting done in getBalance so sends and the
-  // balance screen always agree.
+  // Spendable USD is the wallet's combined stablecoin pool minus reservations.
+  // Conversion execution already debits/credits these wallet columns, so
+  // subtracting completed CONVERT rows here would double-count the same move
+  // (and adding conversion-in rows could mint phantom spendable balance).
   private async computeSpendableUsd(userId: string, wallet: any, amount: number): Promise<number> {
-    let spendable = (wallet.usdcBalance || 0) + (wallet.usdtBalance || 0);
-    try {
-      const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
-        `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
-           SELECT 'out' AS kind, amount::float8 AS total
-             FROM "Transaction"
-            WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
-              AND (metadata->>'from' = 'USD')
-           UNION ALL
-           SELECT 'in', COALESCE((metadata->>'toAmount')::float8, 0)
-             FROM "Transaction"
-            WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
-              AND (metadata->>'to' = 'USD')
-         ) t GROUP BY kind`,
-        userId
-      );
-      const convertedOut = rows.find((r) => r.kind === 'out')?.total || 0;
-      const convertedIn = rows.find((r) => r.kind === 'in')?.total || 0;
-      if (convertedOut > 0 || convertedIn > 0) {
-        spendable = Math.max(0, spendable - convertedOut + convertedIn);
+    let usdc = Number(wallet.usdcBalance || 0);
+    let usdt = Number(wallet.usdtBalance || 0);
+
+    // During the ledger cutover, use the ledger when a currency has a balance
+    // account. The transaction below still re-checks under a wallet row lock.
+    if (this.ledgerReads()) {
+      try {
+        const balances = await this.ledger.balancesOfUser(userId);
+        if (balances.USDC !== undefined) usdc = fromMinor(balances.USDC, 'USDC');
+        if (balances.USDT !== undefined) usdt = fromMinor(balances.USDT, 'USDT');
+        // Ledger balances already include committed SEND reservations, so do
+        // not subtract the legacy lock a second time after cutover.
+        return Math.max(0, usdc + usdt);
+      } catch (err: any) {
+        this.logger.error(`Ledger spendable read failed for ${userId}: ${err.message}`);
       }
-    } catch (err: any) {
-      this.logger.error(`Spendable USDC net failed for ${userId}: ${err.message}`);
     }
-    return Math.max(0, spendable - (wallet.lockedBalance || 0));
+
+    return Math.max(0, usdc + usdt - Number(wallet.lockedBalance || 0));
   }
 
   private encryptSecret(secretHex: string, publicKeyPem: string): string {    const buffer = Buffer.from(secretHex, 'hex');
@@ -342,36 +361,9 @@ export class WalletsService implements OnModuleInit {
       }
     }
 
-    // Wallet balances reflect on-chain deposits/sends; conversions out of USD
-    // (USDC -> local currency) are bookkeeping with no chain movement, so the
-    // reconciled on-chain total must be net of the CONVERT ledger to show only
-    // spendable USD. Only needed for legacy float reads — the ledger already
-    // nets conversions.
-    if (!this.ledgerReads()) try {
-      const rows = await this.prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
-        `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
-           SELECT 'out' AS kind, amount::float8 AS total
-             FROM "Transaction"
-            WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
-              AND (metadata->>'from' = 'USD')
-           UNION ALL
-           SELECT 'in', COALESCE((metadata->>'toAmount')::float8, 0)
-             FROM "Transaction"
-            WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
-              AND (metadata->>'to' = 'USD')
-         ) t GROUP BY kind`,
-        userId
-      );
-      const convertedOut = rows.find((r) => r.kind === 'out')?.total || 0;
-      const convertedIn = rows.find((r) => r.kind === 'in')?.total || 0;
-      if (convertedOut > 0 || convertedIn > 0) {
-        const ledgerNet = Math.max(0, usdcBalance - convertedOut + convertedIn);
-        this.logger.log(`USD ledger for ${userId}: gross=${usdcBalance} out=${convertedOut} in=${convertedIn} spendable=${ledgerNet}`);
-        usdcBalance = ledgerNet;
-      }
-    } catch (err: any) {
-      this.logger.error(`USD ledger net failed: ${err.message}`);
-    }
+    // The float columns are already updated by conversion execution and send
+    // reservations. Do not net CONVERT transaction rows a second time. When
+    // ledger reads are enabled, the ledger branch above is authoritative.
 
     // Sync real deposit/withdrawal history from Circle is backgrounded above so
     // this endpoint stays fast; no synchronous Circle calls here.
@@ -594,9 +586,14 @@ export class WalletsService implements OnModuleInit {
           // Check if an unanchored balance fallback record was created for this address
           const fallbackRec = await this.prisma.transaction.findFirst({
             where: {
-              userId,
-              type: 'RECEIVE',
-              metadata: { path: ['detectedBy'], equals: 'onchain-balance-reconciler' },
+              AND: [
+                { userId },
+                { type: 'RECEIVE' },
+                { metadata: { path: ['detectedBy'], equals: 'onchain-balance-reconciler' } },
+                // Never attach another address's fallback balance record to this
+                // history row; shared-EVM accounts may have several networks.
+                { metadata: { path: ['destinationAddress'], equals: addressRecord.address } },
+              ],
             }
           });
           if (fallbackRec) {
@@ -633,9 +630,9 @@ export class WalletsService implements OnModuleInit {
           // local send, UPDATE the pending row instead of creating a duplicate
           // (the user had seen the same send listed twice: one PENDING with no
           // details and one COMPLETED). Prefer an exact recipient match; for
-          // CCTP the burn's destination is the bridge contract, so fall back to
-          // the txHash the pending row already recorded (from bridge steps) or a
-          // recent PENDING send of the same amount. Fail open if nothing matches.
+          // CCTP the burn's destination is the bridge contract, so use only the
+          // txHash the pending row already recorded (from bridge steps). Never
+          // merge solely by amount: that can settle the wrong concurrent send.
           if (type === 'SEND') {
             const pendingWhere: any = {
               userId,
@@ -643,7 +640,9 @@ export class WalletsService implements OnModuleInit {
               status: 'PENDING',
               createdAt: { gte: new Date(Date.now() - 6 * 60 * 60 * 1000) },
             };
-            if (!isCctpStep && amount > 0) pendingWhere.amount = amount;
+            // Do not filter by amount here: CCTP burn amounts include the
+            // relay fee while the local row stores the requested amount. The
+            // guarded recipient/hash match below is the identity check.
 
             const candidates = await this.prisma.transaction.findMany({
               where: pendingWhere,
@@ -660,7 +659,7 @@ export class WalletsService implements OnModuleInit {
               const recorded = (c.metadata as any)?.txHashes;
               if (Array.isArray(recorded) && recorded.some((h: any) => typeof h?.txHash === 'string' && h.txHash.toLowerCase() === hashLower)) return true;
               return false;
-            }) || candidates[0];
+            });
 
             if (pendingMatch) {
               // For CCTP, prefer the burn hash over the approve hash as the
@@ -814,7 +813,7 @@ export class WalletsService implements OnModuleInit {
           const createResponse = await axios.post(
             `${this.baseUrl}/v1/w3s/developer/wallets`,
             {
-              idempotencyKey: crypto.randomUUID(),
+              idempotencyKey: this.walletCreationIdempotencyKey(userId, 'ARC', 'ARC-TESTNET'),
               blockchains: ['ARC-TESTNET'],
               entitySecretCiphertext: ciphertext,
               walletSetId,
@@ -835,39 +834,14 @@ export class WalletsService implements OnModuleInit {
           );
 
           const circleWallet = createResponse.data.data.wallets[0];
-          walletAddress = await this.prisma.walletAddress.create({
-            data: {
-              walletId: wallet.id,
-              network: 'ARC',
-              address: circleWallet.address,
-            }
-          });
+          walletAddress = await this.saveWalletAddress(wallet.id, 'ARC', circleWallet.address);
         } catch (err: any) {
-          // Fallback: Circle API rejected ARC-TESTNET (e.g. not available on this
-          // key). Reuse the existing EVM address so deposit addresses keep working.
-          this.logger.warn(`ARC-TESTNET wallet creation failed; reusing EVM address: ${err.message}`);
-          const evmAddressRecord = await this.prisma.walletAddress.findFirst({
-            where: {
-              walletId: wallet.id,
-              network: { in: ['ETHEREUM', 'POLYGON', 'ARBITRUM', 'BASE', 'OPTIMISM', 'BSC', 'BEP20', 'AVALANCHE'] }
-            }
-          });
-
-          let address = '';
-          if (evmAddressRecord) {
-            address = evmAddressRecord.address;
-          } else {
-            const ethWalletRecord = await this.getDepositAddress(userId, 'ETHEREUM', walletSetId);
-            address = ethWalletRecord.address;
-          }
-
-          walletAddress = await this.prisma.walletAddress.create({
-            data: {
-              walletId: wallet.id,
-              network: 'ARC',
-              address
-            }
-          });
+          // Never alias an unregistered EVM address as an Arc deposit address.
+          // If Circle accepted a request but the response was lost, retrying the
+          // deterministic provider key is safe; displaying a fallback address is
+          // not, because deposits could become unobservable.
+          this.logger.error(`ARC wallet creation failed for ${userId}: ${err.response?.data?.message || err.message}`);
+          throw new BadRequestException('Arc deposit address is temporarily unavailable. Please retry.');
         }
       } else {
         try {
@@ -885,7 +859,7 @@ export class WalletsService implements OnModuleInit {
           const createResponse = await axios.post(
             `${this.baseUrl}/v1/w3s/developer/wallets`,
             {
-              idempotencyKey: crypto.randomUUID(),
+              idempotencyKey: this.walletCreationIdempotencyKey(userId, network, blockchain),
               blockchains: [blockchain],
               entitySecretCiphertext: ciphertext,
               walletSetId,
@@ -907,13 +881,7 @@ export class WalletsService implements OnModuleInit {
 
           const circleWallet = createResponse.data.data.wallets[0];
           
-          walletAddress = await this.prisma.walletAddress.create({
-            data: {
-              walletId: wallet.id,
-              network: network.toUpperCase(),
-              address: circleWallet.address,
-            }
-          });
+          walletAddress = await this.saveWalletAddress(wallet.id, network, circleWallet.address);
         } catch (err: any) {
           this.logger.error('Error generating Circle wallet:', err.response?.data || err.message);
           const details = err.response?.data?.errors
@@ -937,6 +905,9 @@ export class WalletsService implements OnModuleInit {
   }
 
   async sendCrypto(userId: string, toAddress: string, amount: number, network: string, destinationNetwork?: string, currency?: string) {
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
+      throw new BadRequestException('Money movement is disabled while this environment is in testnet or maintenance mode.');
+    }
     if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       throw new BadRequestException('Amount must be greater than 0');
     }
@@ -958,6 +929,7 @@ export class WalletsService implements OnModuleInit {
       where: { userId },
       select: { id: true, lockedBalance: true, usdcBalance: true, usdtBalance: true }
     });
+    if (!wallet) throw new BadRequestException('Wallet not found.');
 
     // All funds sit on Arc (native USDC), regardless of where the recipient's
     // wallet is. The picked network is the DESTINATION chain; CCTP bridges
@@ -1024,14 +996,17 @@ export class WalletsService implements OnModuleInit {
         this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDC'), 'USDC'),
         this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDT'), 'USDT'),
       ]);
-      spendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') + fromMinor(ledgerUsdt, 'USDT') - Number(senderWallet.lockedBalance || 0));
+        // The ledger already contains the debit for every committed pending
+        // reservation, so subtracting lockedBalance again would double-count
+        // prior sends after the ledger cutover.
+        spendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') + fromMinor(ledgerUsdt, 'USDT'));
     }
     if (spendable < sendAmount) {
       const reason = `Insufficient balance. You can send up to ${spendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`;
       throw new BadRequestException(reason);
     }
 
-    const reference = `TAG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const reference = `TAG-${crypto.randomUUID()}`;
     const receiveReference = `${reference}-R`;
     const result = await this.prisma.$transaction(async (prisma) => {
       // SECURITY: lock both wallet rows FOR UPDATE and re-derive spendable
@@ -1052,7 +1027,9 @@ export class WalletsService implements OnModuleInit {
           this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDC'), 'USDC', prisma),
           this.ledger.balanceOf(this.ledger.userAccount(senderUserId, 'USDT'), 'USDT', prisma),
         ]);
-        lockedSpendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') + fromMinor(ledgerUsdt, 'USDT') - Number(lockedSender.lockedBalance || 0));
+        // The ledger already includes committed on-chain reservations; do not
+        // subtract lockedBalance a second time after ledger cutover.
+        lockedSpendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') + fromMinor(ledgerUsdt, 'USDT'));
       }
       if (lockedSpendable < sendAmount) {
         throw new BadRequestException(`Insufficient balance. You can send up to ${lockedSpendable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC.`);
@@ -1208,11 +1185,17 @@ export class WalletsService implements OnModuleInit {
       const ledgerBalances = await this.ledger.balancesOfUser(senderUserId);
       if (ledgerBalances[currency] !== undefined) previewAvailable = fromMinor(ledgerBalances[currency], currency);
     }
+    // NGN carries a real-funds subledger. Never let test/demo local balance
+    // pay another user's real balance or a later bill; an internal NGN send is
+    // spendable only up to the sender's realLocalBalance.
+    if (currency === 'NGN') {
+      previewAvailable = Math.min(previewAvailable, Math.max(0, Number(senderWallet.realLocalBalance || 0)));
+    }
     if (previewAvailable < sendAmount) {
       throw new BadRequestException(`Insufficient ${currency} balance. You can send up to ${previewAvailable.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}.`);
     }
 
-    const reference = `TAG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const reference = `TAG-${crypto.randomUUID()}`;
     const receiveReference = `${reference}-R`;
     const senderName = `${senderWallet.user?.firstName || ''} ${senderWallet.user?.lastName || ''}`.trim();
     const recipientName = `${recipient.firstName} ${recipient.lastName}`.trim();
@@ -1249,15 +1232,19 @@ export class WalletsService implements OnModuleInit {
         sourceBalances[currency] = available;
         destinationBalances[currency] = recipientAvailable;
       }
+      const totalSourceBalance = Number(sourceBalances[currency] || 0);
+      if (currency === 'NGN') {
+        available = Math.min(available, Math.max(0, Number(lockedSender.realLocalBalance || 0)));
+      }
       if (available < sendAmount) {
         throw new BadRequestException(`Insufficient ${currency} balance. You can send up to ${available.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}.`);
       }
 
-      sourceBalances[currency] = roundMinor(Math.max(0, available - sendAmount), currency);
+      // Decrease the displayed total by the transfer amount, while the
+      // spendability check above is restricted to real NGN for NGN sends.
+      sourceBalances[currency] = roundMinor(Math.max(0, totalSourceBalance - sendAmount), currency);
       destinationBalances[currency] = roundMinor(recipientAvailable + sendAmount, currency);
-      const realNgnMoved = currency === 'NGN'
-        ? Math.min(sendAmount, Math.max(0, Number(lockedSender.realLocalBalance || 0)))
-        : 0;
+      const realNgnMoved = currency === 'NGN' ? sendAmount : 0;
 
       await prisma.wallet.update({
         where: { id: senderWallet.id },
@@ -1446,7 +1433,7 @@ export class WalletsService implements OnModuleInit {
       }
     }
 
-    const reference = `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const reference = `TX-${crypto.randomUUID()}`;
     const totalDebit = amount + fee;
 
     // ── 1. Reserve the funds BEFORE the chain leg ───────────────────────────
@@ -1462,40 +1449,25 @@ export class WalletsService implements OnModuleInit {
       const lw = lockedRows[0];
       if (!lw) throw new BadRequestException('Wallet not found.');
 
-      let lockedSpendable = (lw.usdcBalance || 0) + (lw.usdtBalance || 0);
-      try {
-        const netRows = await prisma.$queryRawUnsafe<Array<{ kind: string; total: number }>>(
-          `SELECT kind, COALESCE(SUM(total), 0)::float8 AS total FROM (
-             SELECT 'out' AS kind, amount::float8 AS total
-               FROM "Transaction"
-              WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
-                AND (metadata->>'from' = 'USD')
-             UNION ALL
-             SELECT 'in', COALESCE((metadata->>'toAmount')::float8, 0)
-               FROM "Transaction"
-              WHERE "userId" = $1 AND type = 'CONVERT' AND status = 'COMPLETED'
-                AND (metadata->>'to' = 'USD')
-           ) t GROUP BY kind`,
-          userId
-        );
-        const cOut = netRows.find((r) => r.kind === 'out')?.total || 0;
-        const cIn = netRows.find((r) => r.kind === 'in')?.total || 0;
-        if (cOut > 0 || cIn > 0) lockedSpendable = Math.max(0, lockedSpendable - cOut + cIn);
-      } catch (netErr: any) {
-        this.logger.warn(`In-tx conversion netting failed (${netErr.message}); using gross-locked`);
-      }
-      lockedSpendable = Math.max(0, lockedSpendable - (lw.lockedBalance || 0));
+      // Conversion execution already updates these buckets. Read the locked
+      // wallet directly; applying completed CONVERT rows here would double-count
+      // the same debit/credit and could permit phantom sends.
+      let lockedSpendable = Math.max(
+        0,
+        Number(lw.usdcBalance || 0) + Number(lw.usdtBalance || 0) - Number(lw.lockedBalance || 0),
+      );
 
       // LEDGER READS: the ledger is authoritative for spendable USD (it already
-      // nets conversions), read inside the same locked transaction so a
-      // concurrent conversion cannot interleave. Falls back to the float net
+      // includes conversions), read inside the same locked transaction so a
+      // concurrent conversion cannot interleave. Falls back to the float balance
       // if the ledger has no rows for this account yet.
       if (this.ledgerReads()) {
         const [ledgerUsdc, ledgerUsdt] = await Promise.all([
           this.ledger.balanceOf(this.ledger.userAccount(userId, 'USDC'), 'USDC', prisma),
           this.ledger.balanceOf(this.ledger.userAccount(userId, 'USDT'), 'USDT', prisma),
         ]);
-        lockedSpendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') + fromMinor(ledgerUsdt, 'USDT') - (lw.lockedBalance || 0));
+        // Ledger balances already include prior committed reservations.
+        lockedSpendable = Math.max(0, fromMinor(ledgerUsdc, 'USDC') + fromMinor(ledgerUsdt, 'USDT'));
       }
 
       if (lockedSpendable < totalDebit) {
@@ -1575,7 +1547,12 @@ export class WalletsService implements OnModuleInit {
             recipientAddress: toAddress,
             amount: totalDebit,
           })
-        : await this.sendNativeArcTransfer(userId, sourceAddressRecord.address, toAddress, amount);
+        : await this.sendNativeArcTransfer(userId, sourceAddressRecord.address, toAddress, amount, reference);
+
+      const providerState = String(result?.state || '').toLowerCase();
+      if (providerState && /failed|rejected|cancelled|canceled/.test(providerState)) {
+        throw new BadRequestException(`Transfer was rejected by the provider (${result.state}).`);
+      }
 
       await this.mergeTransactionMetadata(reference, {
         txState: result?.state,
@@ -1586,11 +1563,37 @@ export class WalletsService implements OnModuleInit {
       const reason = err?.response?.data?.message
         || err?.message
         || 'Transfer failed on Arc.';
-      // Nothing left the wallet, so give the money back instead of leaving it
-      // locked against a send that never happened.
+
+      // A provider timeout, connection reset, SDK ambiguity, or process crash
+      // can occur after Circle has accepted the operation. Releasing the
+      // reservation here would let a retry spend the same funds twice. Keep the
+      // PENDING row and locked balance until Circle history/webhook evidence or
+      // an operator-approved reconciliation resolves it.
+      const providerHttpStatus = Number(err?.response?.status || 0);
+      if (
+        err?.providerOutcomeUnknown ||
+        (!err?.response && !(err instanceof BadRequestException)) ||
+        providerHttpStatus >= 500 ||
+        [408, 409, 429].includes(providerHttpStatus)
+      ) {
+        await this.markSendForReconciliation(reference, {
+          providerState: 'UNKNOWN_REQUIRES_RECONCILIATION',
+          reconciliationRequired: true,
+          errorReason: reason,
+          failedAt: 'provider-outcome-unknown',
+        });
+        this.logger.error(`Transfer outcome unknown ${reference} (${delivery}): ${reason}`);
+        throw new ServiceUnavailableException(
+          'The transfer provider did not confirm the result. Your funds remain reserved while support reconciles the transfer; do not retry yet.',
+        );
+      }
+
+      // An explicit provider HTTP rejection means nothing was accepted, so the
+      // committed reservation can be refunded in a guarded transaction.
       await this.releaseReservedSend(wallet.id, reference, totalDebit, {
         errorReason: reason,
-        failedAt: 'chain-rejection'
+        failedAt: 'chain-rejection',
+        providerState: 'FAILED',
       });
       this.logger.error(`Transfer rejected ${reference} (${delivery}): ${reason}`);
       throw new BadRequestException(reason);
@@ -1633,7 +1636,7 @@ export class WalletsService implements OnModuleInit {
         amount: params.amount,
         fee: params.fee,
         currency: 'USDC',
-        reference: `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        reference: `TX-${crypto.randomUUID()}`,
         metadata: {
           toAddress: params.toAddress,
           network: 'ARC',
@@ -1662,6 +1665,27 @@ export class WalletsService implements OnModuleInit {
       });
     } catch (err: any) {
       this.logger.error(`Failed to update metadata for ${reference}: ${err.message}`);
+    }
+  }
+
+  private async markSendForReconciliation(reference: string, patch: Record<string, unknown>) {
+    try {
+      const tx = await this.prisma.transaction.findUnique({
+        where: { reference },
+        select: { metadata: true, status: true },
+      });
+      if (!tx || tx.status !== 'PENDING') return;
+      await this.prisma.transaction.update({
+        where: { reference },
+        data: {
+          metadata: {
+            ...((tx.metadata as Record<string, unknown>) || {}),
+            ...patch,
+          } as any,
+        },
+      });
+    } catch (error: any) {
+      this.logger.error(`Could not mark send ${reference} for reconciliation: ${error?.message || error}`);
     }
   }
 
@@ -1727,8 +1751,15 @@ export class WalletsService implements OnModuleInit {
       });
     } catch (err: any) {
       // A stuck reservation is recoverable by reconciliation, but it must never
-      // turn into a second attempt at the same send.
+      // turn into a second attempt at the same send. The guarded transaction
+      // rolled back, so leave the row pending and make the manual action
+      // explicit rather than pretending the refund succeeded.
       this.logger.error(`Failed to release reserved send ${reference}: ${err.message}`);
+      await this.markSendForReconciliation(reference, {
+        providerState: 'REFUND_FAILED_REQUIRES_RECONCILIATION',
+        reconciliationRequired: true,
+        reconciliationMessage: String(err.message || err).slice(0, 500),
+      });
     }
   }
 
@@ -1740,6 +1771,7 @@ export class WalletsService implements OnModuleInit {
     sourceAddress: string,
     destAddress: string,
     amount: number,
+    reference: string,
   ) {
     const pubKeyResponse = await axios.get(`${this.baseUrl}/v1/w3s/config/entity/publicKey`, {
       headers: {
@@ -1750,8 +1782,13 @@ export class WalletsService implements OnModuleInit {
     const publicKeyPem = pubKeyResponse.data.data.publicKey;
     const ciphertext = this.encryptSecret(this.entitySecret, publicKeyPem);
 
+    const digest = crypto.createHash('sha256').update(`surexend:send:${reference}`).digest('hex');
+    const providerIdempotencyKey = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
     const body = {
-      idempotencyKey: crypto.randomUUID(),
+      // Stable for this committed send reference. If the HTTP response is lost,
+      // an operator can safely query/replay the exact Circle request rather than
+      // creating a second transfer with a fresh UUID.
+      idempotencyKey: providerIdempotencyKey,
       entitySecretCiphertext: ciphertext,
       walletAddress: sourceAddress,
       blockchain: 'ARC-TESTNET',

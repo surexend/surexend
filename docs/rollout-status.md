@@ -272,3 +272,56 @@ to be exercised on testnet before enabling on real funds at mainnet.)
   --applied`, then switch `prestart:prod` to `migrate deploy`); (5) testnet
   E2E runbook with real Circle TEST_ key / Arc testnet / Flutterwave sandbox;
   (6) mainnet review per `docs/mainnet-config.md` — mainnet stays OFF.
+
+### 2026-09-12 — launch gate hardening (Arena review)
+
+This branch is **not a financial-launch approval**. The safe default is now
+explicit across every environment:
+
+- `MONEY_MOVEMENT_ENABLED` must equal `true` before send, conversion, or bill
+  purchase paths can run. `NODE_ENV=development` no longer enables movement.
+- `TESTING_ENABLED` is also explicit; a public non-production process does not
+  silently expose the default PIN.
+- Bill purchase now commits a wallet reservation, ledger debit, and `PENDING`
+  `BillPayment`/`Transaction` before the Smartspeed request. The provider call
+  is outside the database transaction. Explicit provider rejection has a
+  guarded refund transaction; transport errors, 5xx/timeout/ambiguous results
+  remain reserved and `PENDING` with reconciliation metadata. A 2xx response
+  without an independently verified final-success status is also treated as
+  ambiguous. Stale rows are logged for operations and are never automatically
+  retried or refunded.
+- Outbound Circle sends use a committed reservation and stable provider
+  idempotency key for native Arc transfers. Unknown provider outcomes remain
+  reserved; history settlement no longer guesses by amount or merges another
+  concurrent send. The CCTP SDK contract still needs a verified provider-side
+  idempotency/status reconciliation procedure before real funds are enabled.
+- Admin referral payouts are gated by `MONEY_MOVEMENT_ENABLED`, use durable
+  deterministic Circle idempotency keys, and retain `PROCESSING` rewards for
+  unknown timeouts/5xx/409/429 outcomes. Provider-confirmed failures alone are
+  retryable; reward payout status reconciliation still needs authenticated
+  provider-contract evidence.
+- Flutterwave current HMAC verification uses the raw request body. PaymentPoint
+  and VtPass callback routes are closed unless explicitly enabled; PaymentPoint
+  cannot be enabled for production until its callback signature contract is
+  verified from provider documentation/captured traffic.
+- A reviewed checked-in schema bootstrap baseline is in
+  `backend/prisma/migrations/20260830000000_initial_schema_baseline/`; the
+  incremental migrations are safe on a fresh database and production deploy
+  uses `prisma migrate deploy`. Existing production databases still require a
+  rehearsed migration/ledger preflight before deployment.
+- The post-deploy data runner fails closed and no longer reactivates hard-coded
+  administrator accounts or rewrites transaction history.
+
+Required before any `MONEY_MOVEMENT_ENABLED=true` deployment: generate Prisma
+client with engine access; run the real PostgreSQL migration on a disposable
+fresh database and a restored production snapshot; run all backend tests and
+authenticated integration tests; reconcile ledger versus floats with a clean
+report; obtain and test Smartspeed request idempotency/status semantics;
+exercise Circle native/CCTP accepted, rejected, timeout, duplicate-webhook,
+process-crash, and reconciliation scenarios; verify all webhook signatures
+against provider contracts; and complete monitored testnet/financial incident
+runbooks with rollback and operator approval.
+
+Current scope remains: read-only, explicitly labelled testnet/demo is the only
+defensible launch scope. Limited real-money/bills use and mainnet/production
+financial launch remain **NO** until the evidence above exists.

@@ -21,11 +21,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         }
       }
     }
-    // Do NOT throw: let the app boot so the deploy stays up. Prisma will
-    // reconnect lazily on the next query once the DB becomes reachable.
-    this.logger.error(
-      'Database unreachable after retries. Continuing; queries will retry until the DB is reachable.',
-    );
+    // A server that is reachable but cannot read/write its database must never
+    // advertise a healthy money API. Boot failure lets the orchestrator retry
+    // and prevents requests from running against a partial or stale state.
+    throw new Error('Database unreachable after startup retries; refusing to start.');
   }
 
   async onModuleDestroy() {

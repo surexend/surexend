@@ -176,7 +176,14 @@ export class CctpService {
         err?.message || err,
         err?.stack,
       );
-      throw new BadRequestException(err?.message || 'Cross-chain transfer failed.');
+      // BridgeKit does not provide an application-level idempotency key for
+      // this operation. A transport failure after submission therefore leaves
+      // the burn/delivery outcome unknown; callers must keep the reservation
+      // pending instead of refunding and inviting a duplicate bridge.
+      const unknown: any = new Error('CCTP provider outcome is unknown; reconciliation is required.');
+      unknown.providerOutcomeUnknown = true;
+      unknown.cause = err;
+      throw unknown;
     }
   }
 }

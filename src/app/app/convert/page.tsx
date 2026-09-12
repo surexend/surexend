@@ -48,19 +48,6 @@ export default function ConvertPage() {
     setStep(1)
   }, [step, router]), 30)
 
-  // Lock page scroll while the secure PIN overlay is up (same as bills): the
-  // overlay is `fixed inset-0 h-[100dvh]`, and locking the body scroll is
-  // belt-and-braces so the page can't slide underneath on small screens. We
-  // only toggle `overflow`, not `position`, to keep the scroll position.
-  useEffect(() => {
-    if (step !== 2) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [step])
-
   // ── Real balances ────────────────────────────────────────────────────────
   const { data: balanceData, refetch: refetchBalance } = useQuery({
     queryKey: ['balance'],
@@ -187,6 +174,7 @@ export default function ConvertPage() {
   const { approve: approveWithBiometric, biometricBusy } = useBiometricApproval(
     (passkeyToken) => void executeConversion(undefined, passkeyToken),
     () => setStep(2),
+    { action: 'conversions.execute', from: fromCode, to: toCode, amount: Number(numAmount) },
   )
 
   const resetAll = () => {
@@ -339,7 +327,7 @@ export default function ConvertPage() {
 
               {fromCode === 'USD' && toCode !== 'USD' && (
                 <div className="mt-3 rounded-xl px-4 py-3 text-xs text-amber-300 border border-amber-500/30 bg-amber-500/10">
-                  Swapping crypto to naira creates <b>testnet naira</b> — great for testing, but it can't pay real bills or be withdrawn. Real bills are paid from the NGN wallet you fund by bank transfer. Crypto bill payments go live at mainnet launch.
+                  Swapping crypto to naira creates <b>testnet naira</b> — great for testing, but it can&apos;t pay real bills or be withdrawn. Real bills are paid from the NGN wallet you fund by bank transfer. Crypto bill payments go live at mainnet launch.
                 </div>
               )}
               {fromCode === 'NGN' && (
@@ -386,7 +374,13 @@ export default function ConvertPage() {
                 accentHex={accentHex}
                 accentRgb={accentRgb}
                 onCancel={() => { setPinError(null); setStep(1) }}
-                extra={<BiometricApproveButton onApproved={(token) => executeConversion(undefined, token)} disabled={isLoading} />}
+                extra={
+          <BiometricApproveButton
+            onApproved={(token) => executeConversion(undefined, token)}
+            intent={{ action: 'conversions.execute', from: fromCode, to: toCode, amount: Number(numAmount) }}
+            disabled={isLoading}
+          />
+        }
               />
             </div>
           </div>

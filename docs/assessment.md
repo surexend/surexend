@@ -1,11 +1,21 @@
 # SureXend — Full Assessment & Roadmap
 
-**Date:** 2026-08-29 · **Branch:** `arena/01a04d9a-surexend` · **Reviewed:** whole repo (frontend, backend, schema, docs, git state)
+**Original review date:** 2026-08-29 · **Current update:** 2026-09-12 · **Branch:** `arena/01a096aa-surexend` · **Reviewed:** whole repo (frontend, backend, schema, docs, git state)
 
 This is a blunt read of where SureXend is, what is genuinely strong, what is
 dangerous, and what has to happen for this to become a billion-dollar fintech.
 It is written to be disagreed with — but every claim below is either read from
 the code or cited.
+
+> **Current launch gate — 2026-09-12:** This document's older sections are
+> historical unless they conflict with the current gate. The project is **not
+> approved for limited real-money/bills use or a mainnet/production financial
+> launch**. The only defensible scope is a read-only, explicitly labelled
+> testnet/demo deployment. Money movement is fail-closed unless
+> `MONEY_MOVEMENT_ENABLED=true`; production also requires ledger reads and
+> startup rejects all mainnet configurations because the current release still
+> contains testnet-only chain mappings. See the current evidence and required
+> actions in `docs/rollout-status.md`.
 
 ---
 

@@ -71,6 +71,7 @@ class FakePrisma {
   ledgerRows: any[] = [];
   transactionRows: any[] = [];
   servicePricingRows: any[] = [];
+  private transactionQueue: Promise<void> = Promise.resolve();
 
   wallet = {
     findUnique: async (args: any) => {
@@ -183,6 +184,14 @@ class FakePrisma {
       Object.assign(row, args.data);
       return row;
     },
+    updateMany: async (args: any) => {
+      const row = this.transactionRows.find(t =>
+        t.id === args?.where?.id &&
+        (args?.where?.status == null || t.status === args.where.status));
+      if (!row) return { count: 0 };
+      Object.assign(row, args.data);
+      return { count: 1 };
+    },
   };
 
   ledgerEntry = {
@@ -244,6 +253,20 @@ class FakePrisma {
       if (row) Object.assign(row, args.data);
       return row;
     },
+    updateMany: async (args: any) => {
+      const row = this.billPayments.find(b =>
+        b.id === args?.where?.id &&
+        (args?.where?.status == null || b.status === args.where.status));
+      if (!row) return { count: 0 };
+      Object.assign(row, args.data);
+      return { count: 1 };
+    },
+    findFirst: async (args: any) => this.billPayments.find(b => {
+      const where = args?.where || {};
+      return Object.entries(where).every(([key, value]: [string, any]) => b[key] === value);
+    }) || null,
+    findMany: async (args: any) => this.billPayments.filter(b =>
+      (args?.where?.status == null || b.status === args.where.status)),
   };
 
   referral = { count: async (args: any) => this.referrals.filter(r => r.referrerId === args?.where?.referrerId).length };
@@ -256,7 +279,18 @@ class FakePrisma {
   auditLog = { findFirst: async () => null, create: async (args: any) => ({ id: nextId('audit'), ...args.data }) };
 
   async $transaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
-    return fn(this as any);
+    // Model PostgreSQL's row-lock serialization for the money-flow tests. The
+    // real query uses SELECT ... FOR UPDATE; the fake queue makes concurrent
+    // NGN-send coverage exercise the same repeat-check behavior.
+    let release!: () => void;
+    const previous = this.transactionQueue;
+    this.transactionQueue = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      return await fn(this as any);
+    } finally {
+      release();
+    }
   }
 
   $queryRaw(parts: TemplateStringsArray, ...values: any[]): Promise<any[]> {
@@ -303,6 +337,9 @@ class TestEnv {
     this.configValues['app.smartspeed.apiKey'] = 'test';
     this.configValues['app.smartspeed.baseUrl'] = 'https://smartspeed.test/api';
     this.configValues['app.bills.requireFunding'] = true;
+    // Money-moving service tests must opt in explicitly, matching production
+    // configuration behavior; undefined is fail-closed in the services.
+    this.configValues['app.moneyMovement.enabled'] = true;
 
     const verify = jest.fn().mockResolvedValue(undefined);
     const notifications: any = {
@@ -404,7 +441,8 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     env = new TestEnv(reads);
     jest.clearAllMocks();
     mockedAxios.get.mockResolvedValue({ data: {} });
-    mockedAxios.post.mockRejectedValue(new Error('provider rejected'));
+    // An HTTP rejection is a known provider outcome and is safe to refund.
+    mockedAxios.post.mockRejectedValue({ response: { status: 400 }, message: 'provider rejected' });
   });
 
   it('Row 1 — Circle inbound deposit credits float AND ledger', async () => {
@@ -482,7 +520,7 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     await env.webhooks.processFlutterwave({
       event: 'charge.completed',
       data: {
-        id: 'flw1', tx_ref: 'VA-1', flw_ref: 'FLW-X', amount: '5000', currency: 'NGN',
+        id: 'flw1', tx_ref: 'VA-1', flw_ref: 'FLW-X', amount: '5000', currency: 'NGN', status: 'successful',
         payment_type: 'account transfer', meta: { product_id: 'VA-1' },
       },
     });
@@ -501,7 +539,7 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     env.seedUser('u1', 'alice.sx');
     await env.seedWallet('u1');
 
-    await env.referrals.processReferralEarning('u1', 10); // 0.3% = 0.03 USDC
+    await env.referrals.processReferralEarning('u1', 10, 'CONV-source-1'); // 0.3% = 0.03 USDC
 
     const w = env.wallet('u1');
     expect(w.usdcBalance).toBeCloseTo(0.03, 8);
@@ -511,6 +549,9 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     const earning = env.prisma.transactionRows.find(t => t.type === 'REFERRAL_EARNING');
     expect(earning?.status).toBe('COMPLETED');
     expect(earning?.currency).toBe('USDC');
+    // Replayed settlement processing must not mint a second commission.
+    await env.referrals.processReferralEarning('u1', 10, 'CONV-source-1');
+    expect(w.usdcBalance).toBeCloseTo(0.03, 8);
     await env.expectDoubleEntry();
     await env.expectLedgerMatchesFloat('u1', USD_COINS);
   });
@@ -717,6 +758,89 @@ describe.each([[false], [true]])('money flows (ledgerReads=%s)', (reads) => {
     expect(env.prisma.billPayments[0]?.status).toBe('FAILED');
     await env.expectDoubleEntry();
     await env.expectLedgerMatchesFloat('u1', ['NGN']);
+  });
+
+  it('Bill transport timeout keeps the reservation pending instead of refunding an unknown provider outcome', async () => {
+    env.seedUser('u1', 'alice.sx');
+    await env.seedWallet('u1', { localBalances: { NGN: 1000 }, localBalance: 1000, realLocalBalance: 1000 });
+    env.prisma.transactionRows.push({
+      id: 'tx-fund-timeout', userId: 'u1', type: 'RECEIVE', status: 'COMPLETED', amount: 5000,
+      fee: 0, currency: 'NGN', reference: 'DEP-FLW-FUND-TIMEOUT', metadata: {}, createdAt: new Date(),
+    });
+    mockedAxios.post.mockRejectedValue(new Error('socket timeout'));
+
+    await expect(env.bills.purchaseBill('u1', 'airtime', 'MTN', '08012345678', 100, '0000'))
+      .rejects.toThrow(/held while support reconciles/i);
+
+    const w = env.wallet('u1');
+    expect(w.realLocalBalance).toBe(900);
+    expect(env.prisma.billPayments[0]?.status).toBe('PENDING');
+    expect(env.prisma.billPayments[0]?.metadata?.reconciliationRequired).toBe(true);
+    expect(env.prisma.transactionRows.find(t => t.type === 'BILL_PAYMENT')?.status).toBe('PENDING');
+    expect(await env.ledgerOf('user:u1:NGN', 'NGN')).toBe(90000n);
+    await env.expectDoubleEntry();
+  });
+
+  it('Bill provider 5xx keeps the reservation pending, while a confirmed success settles it', async () => {
+    env.seedUser('u1', 'alice.sx');
+    await env.seedWallet('u1', { localBalances: { NGN: 1000 }, localBalance: 1000, realLocalBalance: 1000 });
+    env.prisma.transactionRows.push({
+      id: 'tx-fund-5xx', userId: 'u1', type: 'RECEIVE', status: 'COMPLETED', amount: 5000,
+      fee: 0, currency: 'NGN', reference: 'DEP-FLW-FUND-5XX', metadata: {}, createdAt: new Date(),
+    });
+    mockedAxios.post.mockRejectedValueOnce({ response: { status: 503 }, message: 'provider unavailable' });
+
+    await expect(env.bills.purchaseBill('u1', 'airtime', 'MTN', '08012345678', 100, '0000'))
+      .rejects.toThrow(/held while support reconciles/i);
+    expect(env.prisma.billPayments[0]?.status).toBe('PENDING');
+    expect(env.prisma.billPayments[0]?.metadata?.providerState).toBe('UNKNOWN_REQUIRES_RECONCILIATION');
+
+    // A provider response is only accepted when it carries an explicit final
+    // success status; this is the contract evidence the live integration still
+    // needs to establish with Smartspeed.
+    mockedAxios.post.mockResolvedValueOnce({ data: { status: 'success', transaction_id: 'ss-ok-1' } });
+    await expect(env.bills.purchaseBill('u1', 'airtime', 'MTN', '08012345679', 100, '0000'))
+      .resolves.toMatchObject({ status: 'COMPLETED' });
+    expect(env.prisma.billPayments[1]?.status).toBe('COMPLETED');
+    expect(env.wallet('u1').realLocalBalance).toBe(800);
+    await env.expectDoubleEntry();
+  });
+
+  it('Bill 2xx pending response is not mistaken for delivery', async () => {
+    env.seedUser('u1', 'alice.sx');
+    await env.seedWallet('u1', { localBalances: { NGN: 1000 }, localBalance: 1000, realLocalBalance: 1000 });
+    env.prisma.transactionRows.push({
+      id: 'tx-fund-pending', userId: 'u1', type: 'RECEIVE', status: 'COMPLETED', amount: 5000,
+      fee: 0, currency: 'NGN', reference: 'DEP-FLW-FUND-PENDING', metadata: {}, createdAt: new Date(),
+    });
+    mockedAxios.post.mockResolvedValueOnce({ data: { status: 'pending', transaction_id: 'ss-pending-1' } });
+
+    await expect(env.bills.purchaseBill('u1', 'airtime', 'MTN', '08012345678', 100, '0000'))
+      .rejects.toThrow(/held while support reconciles/i);
+    expect(env.prisma.billPayments[0]?.status).toBe('PENDING');
+    expect(env.wallet('u1').realLocalBalance).toBe(900);
+  });
+
+  it('Concurrent NGN tag sends serialize and only one can spend the real balance', async () => {
+    env.seedUser('u1', 'alice.sx');
+    env.seedUser('u2', 'bob.sx');
+    await env.seedWallet('u1', { localBalances: { NGN: 100 }, localBalance: 100, realLocalBalance: 100 });
+    await env.seedWallet('u2', { localBalances: { NGN: 0 }, localBalance: 0, realLocalBalance: 0 });
+
+    const results = await Promise.allSettled([
+      env.wallets.sendCrypto('u1', '@bob.sx', 75, 'SUREX_TAG', undefined, 'NGN'),
+      env.wallets.sendCrypto('u1', '@bob.sx', 75, 'SUREX_TAG', undefined, 'NGN'),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(env.wallet('u1').realLocalBalance).toBe(25);
+    expect(env.wallet('u1').localBalances.NGN).toBe(25);
+    expect(env.wallet('u2').realLocalBalance).toBe(75);
+    expect(env.wallet('u2').localBalances.NGN).toBe(75);
+    await env.expectDoubleEntry();
+    await env.expectLedgerMatchesFloat('u1', ['NGN']);
+    await env.expectLedgerMatchesFloat('u2', ['NGN']);
   });
 
   it('Late check — ledger read flag gates spendable checks (backfill-complete state)', async () => {

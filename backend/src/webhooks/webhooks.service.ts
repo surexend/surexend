@@ -79,43 +79,44 @@ export class WebhooksService {
       return;
     }
 
+    const providerStatus = String(data.status || data.Status || data.payment_status || data.paymentStatus || '').toLowerCase();
+    if (!providerStatus || !['success', 'successful', 'completed', 'settled', 'paid'].includes(providerStatus)) {
+      this.logger.warn(`PaymentPoint webhook ${transactionId} is not a confirmed successful settlement (status=${providerStatus || 'missing'}); ignoring.`);
+      return;
+    }
+
     const rawAmount = data.amount || data.amount_paid || data.settled_amount || payload.amount;
     const amount = parseFloat(String(rawAmount));
-    if (!amount || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       this.logger.warn(`PaymentPoint deposit with invalid amount: ${rawAmount}`);
       return;
     }
 
-    const currency = 'NGN';
+    const currency = String(data.currency || payload.currency || 'NGN').toUpperCase();
+    if (currency !== 'NGN') {
+      this.logger.warn(`PaymentPoint deposit ${transactionId} has unsupported currency ${currency}; ignoring.`);
+      return;
+    }
     const bankName = data.bank_name || data.bankName || virtualAccount.bankName || 'PalmPay';
     const senderName = data.sender_name || data.senderName || data.payer_name || 'Bank Transfer';
 
     await this.prisma.$transaction(async (prisma) => {
-      let localBalances: Record<string, number> = {};
-      try {
-        const wallet = await prisma.wallet.findUnique({
-          where: { userId: virtualAccount.userId },
-          select: { localBalances: true, localBalance: true },
-        });
-        const parsed = wallet?.localBalances as any;
-        if (parsed && typeof parsed === 'object') localBalances = { ...parsed };
-        if ((wallet?.localBalance || 0) > 0 && !localBalances['NGN']) localBalances['NGN'] = wallet.localBalance;
-      } catch { /* ignore */ }
-
+      const wallet = await prisma.wallet.findUnique({
+        where: { userId: virtualAccount.userId },
+        select: { localBalances: true, localBalance: true },
+      });
+      if (!wallet) throw new Error(`Wallet missing for PaymentPoint account ${virtualAccount.userId}`);
+      const parsed = wallet.localBalances as any;
+      const localBalances: Record<string, number> = parsed && typeof parsed === 'object' ? { ...parsed } : {};
+      if ((wallet.localBalance || 0) > 0 && !localBalances.NGN) localBalances.NGN = wallet.localBalance;
       localBalances[currency] = (localBalances[currency] || 0) + amount;
-      const realIncrement = { realLocalBalance: { increment: amount } };
 
-      try {
-        await prisma.wallet.update({
-          where: { userId: virtualAccount.userId },
-          data: { localBalances, ...realIncrement },
-        });
-      } catch {
-        await prisma.wallet.update({
-          where: { userId: virtualAccount.userId },
-          data: { localBalance: localBalances['NGN'] || 0, ...realIncrement },
-        });
-      }
+      // The production baseline includes localBalances. One wallet write inside
+      // this transaction avoids double-crediting after an ambiguous DB error.
+      await prisma.wallet.update({
+        where: { userId: virtualAccount.userId },
+        data: { localBalances, realLocalBalance: { increment: amount } },
+      });
 
       await this.transactionsService.createTransaction(prisma, {
         userId: virtualAccount.userId,
@@ -167,8 +168,14 @@ export class WebhooksService {
     // charge.completed with a transfer/account payment type.
     if (payload.event === 'charge.completed') {
       const data = payload.data || {};
+      const status = String(data.status || data.payment_status || '').toLowerCase();
+      if (!['successful', 'success', 'completed', 'settled'].includes(status)) {
+        this.logger.warn(`Ignoring Flutterwave charge.completed without a successful status: ${status || 'missing'}`);
+        return;
+      }
       const paymentType = String(data.payment_type || data?.meta?.payment_type || '').toLowerCase();
-      if (paymentType.includes('transfer') || paymentType.includes('account')) {
+      const currency = String(data.currency || '').toUpperCase();
+      if ((paymentType.includes('transfer') || paymentType.includes('account')) && currency === 'NGN') {
         await this.processBankTransferDeposit(data);
       }
       return;
@@ -181,40 +188,55 @@ export class WebhooksService {
       if (!transaction) return;
 
       if (transaction.type === 'CONVERT') {
-        const conversionId = transaction.metadata['conversionId'];
-        
-        await this.prisma.$transaction(async (prisma) => {
-          await prisma.conversion.update({
-            where: { id: conversionId },
-            data: { status: 'COMPLETED' }
-          });
-          
-          await prisma.transaction.update({
-            where: { id: transaction.id },
-            data: { status: 'COMPLETED' }
-          });
-        });
-
-        // Check if referral earning applies
-        const user = await this.prisma.user.findUnique({ where: { id: transaction.userId } });
-        if (user && user.referredById) {
-          await this.referralsService.processReferralEarning(user.referredById, transaction.fee);
+        const conversionId = (transaction.metadata as any)?.conversionId;
+        if (!conversionId) {
+          this.logger.error(`Flutterwave settlement ${reference} is missing conversionId; refusing to mutate it.`);
+          return;
         }
 
-        await this.notificationsService.createNotification(transaction.userId, {
-          title: 'Withdrawal Completed',
-          body: `Your conversion & withdrawal of ${transaction.amount} ${transaction.currency} was completed successfully.`,
-          type: 'WITHDRAWAL',
-          data: { amount: transaction.amount, currency: transaction.currency, reference }
+        // Claim the settlement exactly once. Duplicate provider webhooks still
+        // run the idempotent referral check below so a process crash between
+        // settlement and commission creation can recover without double-credit.
+        let newlySettled = false;
+        await this.prisma.$transaction(async (prisma) => {
+          const claimed = await prisma.transaction.updateMany({
+            where: { id: transaction.id, status: 'PENDING' },
+            data: { status: 'COMPLETED' },
+          });
+          if (claimed.count !== 1 && transaction.status !== 'COMPLETED') return;
+          newlySettled = claimed.count === 1;
+          await prisma.conversion.update({
+            where: { id: conversionId },
+            data: { status: 'COMPLETED' },
+          });
         });
 
-        await this.notificationsService.sendTransactionEmail(
-          user.email,
-          transaction.amount,
-          'USDC',
-          reference,
-          'Conversion & Withdrawal'
-        );
+        const settledTransaction = await this.prisma.transaction.findUnique({ where: { reference } });
+        if (!settledTransaction || settledTransaction.status !== 'COMPLETED') return;
+
+        const user = await this.prisma.user.findUnique({ where: { id: transaction.userId } });
+        if (user?.referredById) {
+          await this.referralsService.processReferralEarning(user.referredById, transaction.fee, reference);
+        }
+
+        if (newlySettled) {
+          await this.notificationsService.createNotification(transaction.userId, {
+            title: 'Withdrawal Completed',
+            body: `Your conversion & withdrawal of ${transaction.amount} ${transaction.currency} was completed successfully.`,
+            type: 'WITHDRAWAL',
+            data: { amount: transaction.amount, currency: transaction.currency, reference }
+          });
+
+          if (user) {
+            await this.notificationsService.sendTransactionEmail(
+              user.email,
+              transaction.amount,
+              'USDC',
+              reference,
+              'Conversion & Withdrawal'
+            );
+          }
+        }
       }
     }
   }
@@ -251,36 +273,22 @@ export class WebhooksService {
     const currency = (data.currency || 'NGN').toUpperCase();
 
     await this.prisma.$transaction(async (prisma) => {
-      // Credit the per-currency local balance (defensive against a missing
-      // localBalances column, mirroring the conversions service).
-      let localBalances: Record<string, number> = {};
-      try {
-        const wallet = await prisma.wallet.findUnique({
-          where: { userId: virtualAccount.userId },
-          select: { localBalances: true, localBalance: true },
-        });
-        const parsed = wallet?.localBalances as any;
-        if (parsed && typeof parsed === 'object') localBalances = { ...parsed };
-        if ((wallet?.localBalance || 0) > 0 && !localBalances['NGN']) localBalances['NGN'] = wallet.localBalance;
-      } catch { /* ignore */ }
-
+      const wallet = await prisma.wallet.findUnique({
+        where: { userId: virtualAccount.userId },
+        select: { localBalances: true, localBalance: true },
+      });
+      if (!wallet) throw new Error(`Wallet missing for Flutterwave account ${virtualAccount.userId}`);
+      const parsed = wallet.localBalances as any;
+      const localBalances: Record<string, number> = parsed && typeof parsed === 'object' ? { ...parsed } : {};
+      if ((wallet.localBalance || 0) > 0 && !localBalances.NGN) localBalances.NGN = wallet.localBalance;
       localBalances[currency] = (localBalances[currency] || 0) + amount;
 
       // Bank transfers are REAL money — also credit the real-money pool so the
       // balance can pay bills / withdraw (and can never be swapped to crypto).
-      const realIncrement = currency === 'NGN' ? { realLocalBalance: { increment: amount } } : {};
-
-      try {
-        await prisma.wallet.update({
-          where: { userId: virtualAccount.userId },
-          data: { localBalances, ...realIncrement },
-        });
-      } catch {
-        await prisma.wallet.update({
-          where: { userId: virtualAccount.userId },
-          data: { localBalance: localBalances['NGN'] || 0, ...realIncrement },
-        });
-      }
+      await prisma.wallet.update({
+        where: { userId: virtualAccount.userId },
+        data: { localBalances, realLocalBalance: { increment: amount } },
+      });
 
       await this.transactionsService.createTransaction(prisma, {
         userId: virtualAccount.userId,
@@ -339,7 +347,11 @@ export class WebhooksService {
           const txId = transaction.txHash || transaction.id;
           const amount = parseFloat(transaction.amount);
           const destinationAddress = transaction.destinationAddress;
-          
+
+          if (!Number.isFinite(amount) || amount <= 0) {
+            this.logger.warn(`Circle inbound ${txId || 'unknown'} has an invalid amount; ignoring.`);
+            return;
+          }
           if (!destinationAddress) return;
 
           // Find the database record for this address
