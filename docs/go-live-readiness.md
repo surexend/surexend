@@ -75,9 +75,18 @@ provider, legal/compliance, independent-review, or recovery-evidence blockers.
   stream-json paths with no safe non-breaking fix; they remain tracked but no
   longer trip the high-severity `security:audit` gate. The GitHub workflow update
   is still pending repository workflow permission.
-- No production PostgreSQL migration/restore rehearsal, provider contract
-  preflight, end-to-end testnet receipt packet, alert restart drill, or external
-  penetration test was available in this environment.
+- An isolated embedded PostgreSQL server rehearsal has now passed the guarded
+  concurrent-duplicate-claim and durable-alert-restart checks in
+  `scripts/postgres-rehearsal.js`. This is real PostgreSQL concurrency evidence,
+  but it is not a substitute for the dedicated production-like PostgreSQL
+  migration/backup/restore rehearsal.
+- Provider preflight was executed with `--all --network`, but all four providers
+  remain `PENDING_UNVERIFIED` because no authenticated provider credentials are
+  configured in this environment. No provider contract evidence was fabricated.
+- No production PostgreSQL migration/restore packet, end-to-end testnet receipt
+  packet, external penetration test, custody approval, KYC/AML approval,
+  sanctions approval, independent security review, or staged-canary observation
+  packet was available in this environment.
 
 ## Blockers before mainnet
 
