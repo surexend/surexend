@@ -65,15 +65,15 @@ provider, legal/compliance, independent-review, or recovery-evidence blockers.
   Prisma client generation was blocked by the unavailable Prisma engine download,
   so the generated client was incomplete and Jest reported generated-client
   type errors. This is **pending evidence**, not a pass.
-- `npm audit --omit=dev` now reports **40 advisories: 0 critical, 7 high,
-  25 moderate, 8 low** after upgrading direct `sharp` to `^0.35.4`, applying
-  safe `body-parser`, `multer`, `qs`, and `glob` overrides, and retaining the
-  direct Multer update. Remaining high findings are in Nest/config, lodash,
-  and Circle/Solana/Anchor dependency paths; a real release requires safe
-  upgrades or documented compensating controls and must not treat the audit as
-  clean. The `security:audit` script is a high-severity blocking gate; the
-  GitHub workflow update is pending repository workflow permission, so operators
-  must run it explicitly and retain its report.
+- `npm audit --omit=dev` now reports **38 advisories: 0 critical, 6 high,
+  24 moderate, 8 low** after upgrading direct `sharp` to `^0.35.4`, moving
+  `@nestjs/config` to the Nest-compatible 4.x line, and applying safe
+  `body-parser`, `multer`, `qs`, and `glob` overrides. Remaining high findings
+  include vulnerable transitive TOML and Circle/Solana/Anchor paths; a real
+  release requires safe upgrades or documented compensating controls and must
+  not treat the audit as clean. The `security:audit` script is a high-severity
+  blocking gate; the GitHub workflow update is pending repository workflow
+  permission, so operators must run it explicitly and retain its report.
 - No production PostgreSQL migration/restore rehearsal, provider contract
   preflight, end-to-end testnet receipt packet, alert restart drill, or external
   penetration test was available in this environment.
