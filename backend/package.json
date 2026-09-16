@@ -117,7 +117,6 @@
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
     "@nestjs/testing": "^10.0.0",
-    "@railway/cli": "^5.57.4",
     "@types/jest": "^29.5.2",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.14.10",
