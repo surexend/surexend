@@ -149,9 +149,23 @@ Replay each duplicate webhook and prove that both the float and ledger change
 only once. A timeout, 408, 409, 429, 5xx, connection reset, process crash, or
 non-terminal status remains pending; do not refund or retry automatically.
 
-## 5. Alerting and restart drill
+## 5. Health, monitoring, and alerting
+
+The backend exposes orchestrator-safe probes under its global API prefix:
+
+```bash
+curl --fail https://api.example.com/api/v1/health/live
+curl --fail https://api.example.com/api/v1/health/ready
+```
+
+`live` only proves the process is responding. `ready` proves PostgreSQL,
+the financial-control tables and global circuit-breaker row are readable, and,
+when movement is enabled, the ledger baseline is complete. Configure the load
+balancer to remove an instance on readiness failure; never use a superficial
+HTTP 200 probe as proof that money movement is safe.
 
 Before any money movement:
+
 
 1. configure `LEDGER_DRIFT_ALERTS_ENABLED=true`;
 2. configure `LEDGER_DRIFT_WEBHOOK_URL`, or

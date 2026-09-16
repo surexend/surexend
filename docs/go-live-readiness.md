@@ -65,27 +65,29 @@ provider, legal/compliance, independent-review, or recovery-evidence blockers.
   Prisma client generation was blocked by the unavailable Prisma engine download,
   so the generated client was incomplete and Jest reported generated-client
   type errors. This is **pending evidence**, not a pass.
-- `npm audit --omit=dev` now reports **22 advisories: 0 critical, 0 high,
-  9 moderate, 13 low**. The high-severity findings were removed by upgrading
-  direct `sharp`, `@nestjs/config`, `uuid`, and `multer`, and by applying
-  reviewed `body-parser`, `qs`, `glob`, `file-type`, `toml`, and scoped UUID
-  overrides. The dependency smoke check confirms `toml.parse`, Anchor, and the
-  Solana RPC WebSocket UUID exception still load. Remaining moderate/low items
-  are transitive Circle/Solana crypto, Nest major-line, WebAuthn, and
-  stream-json paths with no safe non-breaking fix; they remain tracked but no
-  longer trip the high-severity `security:audit` gate. The GitHub workflow update
+- Backend `npm audit --omit=dev` now reports **8 advisories: 0 critical, 0 high,
+  7 moderate, 1 low**. The provider/Solana elliptic, stream-json, UUID, and
+  web3 findings were removed with the same Noble-backed secp256k1 compatibility
+  adapter and reviewed overrides used by the root project. Remaining backend
+  findings are the Nest 10 major-line and SimpleWebAuthn 11 attestation paths;
+  their fixes require major upgrades (`@nestjs/*` 12 and SimpleWebAuthn 14) that
+  need a deliberate compatibility/security migration rather than
+  `npm audit fix --force`. They remain release-review items even though they do
+  not trip the high-severity `security:audit` gate. The GitHub workflow update
   is still pending repository workflow permission.
-- Root/frontend `npm audit --audit-level=high` now passes with **0 critical and
-  0 high advisories** (the full audit reports 8 low and 10 moderate transitive
-  findings). `next` resolves to 15.5.25, which includes the requested 15.5.24
-  security floor; `jspdf` resolves to 4.2.1; the unused vulnerable `next-pwa`
-  dependency was removed; and reviewed overrides pin compatible `sharp`,
-  `postcss`, `fast-uri`, `js-yaml`, `nanoid`, `serialize-javascript`, and
-  `toml` versions. The Circle Bridge Kit was updated to 1.15.0. Build and
-  typecheck passed after these changes. The remaining frontend findings are
-  transitive Circle/Solana provider dependencies with no safe fix available;
-  they remain a release-review item even though they do not trip the high
-  severity gate.
+- Root/frontend `npm audit` now reports **0 vulnerabilities**. `next` resolves to
+  15.5.25, which includes the requested 15.5.24 security floor; `jspdf`
+  resolves to 4.2.1; the unused vulnerable `next-pwa` dependency was removed;
+  and reviewed overrides pin compatible `sharp`, `postcss`, `fast-uri`,
+  `js-yaml`, `nanoid`, `serialize-javascript`, `toml`, `uuid`,
+  `stream-json`, and `@solana/web3.js` versions. The Circle Bridge Kit was
+  updated to 1.15.0. The remaining unpatched `elliptic` dependency from the
+  Circle/Ethers v5 graph was replaced with a narrow, local secp256k1
+  compatibility adapter backed by `@noble/curves` in `vendor/elliptic`;
+  `scripts/verify-crypto-adapter.js` checks known-key, signing, and recovery
+  vectors. This removes the vulnerable package from the installed SBOM, but it
+  is not a substitute for independent cryptographic review. Build, typecheck,
+  clean-install, dependency smoke, and crypto-compatibility checks passed.
 - An isolated embedded PostgreSQL server rehearsal has now passed the guarded
   concurrent-duplicate-claim and durable-alert-restart checks in
   `scripts/postgres-rehearsal.js`. A second isolated run applied all nine
@@ -189,6 +191,14 @@ provider, legal/compliance, independent-review, or recovery-evidence blockers.
   returns an explicit successful state and a real successful-step transaction
   hash. It no longer invents a transaction hash or reports an ambiguous bridge
   outcome as customer-visible success.
+- The backend exposes `/api/v1/health/live` and `/api/v1/health/ready` probes;
+  readiness verifies PostgreSQL, the financial-control schema/row, and the
+  ledger baseline when movement is enabled. This is implementation support for
+  monitoring, not evidence that a production deployment has been observed.
+- The PostgreSQL migration rehearsal now executes a real `pg_dump`/`pg_restore`
+  checksum-and-restore drill when separate authorized source/restore URLs and
+  tool paths are supplied. It refuses production-looking URLs and remains
+  explicitly pending when those environment-dependent inputs are absent.
 
 These changes are safety improvements, not launch approval. They must be
 validated by the backend test suite and a deployed rehearsal environment.

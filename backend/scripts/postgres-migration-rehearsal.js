@@ -17,8 +17,11 @@
  * evidence because no dedicated database was supplied or backup tooling was not
  * supplied.
  */
+const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { Client } = require('pg');
 
 const url = process.env.POSTGRES_MIGRATION_REHEARSAL_DATABASE_URL
@@ -34,13 +37,85 @@ const migrations = fs.readdirSync(migrationRoot, { withFileTypes: true })
   .map((entry) => entry.name)
   .sort();
 
-function client() {
+function client(connectionString = url) {
   return new Client({
-    connectionString: url,
+    connectionString,
     ...(process.env.POSTGRES_MIGRATION_REHEARSAL_SSL === 'false' ? {} : { ssl: { rejectUnauthorized: false } }),
     connectionTimeoutMillis: 20_000,
     query_timeout: 120_000,
   });
+}
+
+function looksProductionLike(connectionString) {
+  return /prod|production|mainnet|primary|live/i.test(String(connectionString || ''));
+}
+
+function runTool(binary, args) {
+  return execFileSync(binary, args, {
+    encoding: 'utf8',
+    timeout: 10 * 60 * 1000,
+    maxBuffer: 4 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+async function verifyRestoredDatabase(restoreUrl) {
+  const restored = client(restoreUrl);
+  await restored.connect();
+  try {
+    const requiredTables = ['User', 'Wallet', 'LedgerEntry', 'FinancialControl', 'FinancialControlChange', 'FinancialLimitBucket', 'FinancialLimitReservation'];
+    const tableRows = await restored.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = ANY($1::text[])
+    `, [requiredTables]);
+    const found = new Set(tableRows.rows.map((row) => row.table_name));
+    const missing = requiredTables.filter((table) => !found.has(table));
+    if (missing.length) throw new Error(`restored database is missing ${missing.join(', ')}`);
+    const control = await restored.query('SELECT "moneyMovementEnabled", "cryptoEnabled", "billPaymentsEnabled", "inboundCreditsEnabled" FROM "FinancialControl" WHERE id = $1', ['global']);
+    const row = control.rows[0];
+    if (!row || row.moneyMovementEnabled || row.cryptoEnabled || row.billPaymentsEnabled || row.inboundCreditsEnabled) {
+      throw new Error('restored financial control is not fail-closed');
+    }
+    return { tableCount: found.size, controlState: 'PAUSED' };
+  } finally {
+    await restored.end().catch(() => undefined);
+  }
+}
+
+async function runBackupRestoreDrill() {
+  const dumpBin = process.env.PG_DUMP_BIN;
+  const restoreBin = process.env.PG_RESTORE_BIN;
+  const restoreUrl = process.env.POSTGRES_MIGRATION_REHEARSAL_RESTORE_DATABASE_URL;
+  if (!dumpBin || !restoreBin) {
+    return { name: 'backup-restore-tooling', status: 'PENDING_EVIDENCE', detail: 'Set PG_DUMP_BIN and PG_RESTORE_BIN and run the backup/restore drill against dedicated source and restore databases.' };
+  }
+  if (!restoreUrl) {
+    return { name: 'backup-restore-restore-target', status: 'PENDING_EVIDENCE', detail: 'Set POSTGRES_MIGRATION_REHEARSAL_RESTORE_DATABASE_URL to a separate authorized disposable restore database.' };
+  }
+  if (looksProductionLike(url) || looksProductionLike(restoreUrl)) {
+    return { name: 'backup-restore-production-target-guard', status: 'BLOCKED', detail: 'Backup/restore rehearsal URLs look production-like; use explicitly isolated database URLs.' };
+  }
+
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'surexend-pg-backup-'));
+  const dumpPath = path.join(workDir, 'rehearsal.dump');
+  try {
+    runTool(dumpBin, ['--format=custom', '--no-owner', '--no-privileges', '--file', dumpPath, '--dbname', url]);
+    const checksum = crypto.createHash('sha256').update(fs.readFileSync(dumpPath)).digest('hex');
+    runTool(restoreBin, ['--clean', '--if-exists', '--no-owner', '--no-privileges', '--dbname', restoreUrl, dumpPath]);
+    const restored = await verifyRestoredDatabase(restoreUrl);
+    return {
+      name: 'backup-restore-rehearsal',
+      status: 'PASS',
+      dumpSha256: checksum,
+      restored,
+      sourceDatabase: 'redacted',
+      restoreDatabase: 'redacted',
+    };
+  } catch (error) {
+    return { name: 'backup-restore-rehearsal', status: 'FAIL', detail: String(error?.stderr || error?.message || error).slice(-1200) };
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
 }
 
 async function main() {
@@ -97,13 +172,7 @@ async function main() {
     }
     results.push({ name: 'transaction-rollback', status: 'PASS' });
 
-    const dumpBin = process.env.PG_DUMP_BIN;
-    const restoreBin = process.env.PG_RESTORE_BIN;
-    if (dumpBin && restoreBin) {
-      results.push({ name: 'backup-restore-tooling-configured', status: 'PENDING_EXTERNAL_EXECUTION', detail: 'pg_dump/pg_restore paths supplied; execute against the dedicated database and retain the dump checksum.' });
-    } else {
-      results.push({ name: 'backup-restore-tooling', status: 'PENDING_EVIDENCE', detail: 'Set PG_DUMP_BIN and PG_RESTORE_BIN and run the backup/restore drill against the dedicated database.' });
-    }
+    results.push(await runBackupRestoreDrill());
 
     const evidence = { checkedAt: new Date().toISOString(), migrations, results };
     console.log(JSON.stringify(evidence, null, 2));

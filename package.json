@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint src --ext .ts,.tsx",
     "check:mobile-safety": "node scripts/check-mobile-safety.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "security:crypto-compat": "node scripts/verify-crypto-adapter.js"
   },
   "dependencies": {
     "@circle-fin/adapter-viem-v2": "^1.15.0",
@@ -48,7 +49,9 @@
     "viem": "^2.55.13",
     "workbox-window": "^7.1.0",
     "zod": "^3.23.8",
-    "zustand": "^4.5.4"
+    "zustand": "^4.5.4",
+    "@noble/curves": "^1.9.7",
+    "elliptic": "file:vendor/elliptic"
   },
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.3.3",
@@ -72,6 +75,13 @@
     "js-yaml": "4.3.2",
     "nanoid": "3.3.18",
     "serialize-javascript": "7.0.3",
-    "toml": "5.0.0"
+    "toml": "5.0.0",
+    "uuid": "11.1.1",
+    "stream-json": "3.6.0",
+    "@solana/web3.js": "1.99.0",
+    "rpc-websockets": {
+      "uuid": "14.0.1"
+    },
+    "elliptic": "$elliptic"
   }
 }
