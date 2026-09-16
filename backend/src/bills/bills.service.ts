@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,7 +6,8 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { ConversionsService } from '../conversions/conversions.service';
 import { TransactionAuthService } from '../common/transaction-auth/transaction-auth.service';
 import { LedgerService } from '../common/ledger.service';
-import { toMinor } from '../common/money';
+import { toMinor, fromMinor } from '../common/money';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 
@@ -63,6 +64,7 @@ export class BillsService {
     private conversionsService: ConversionsService,
     private transactionAuth: TransactionAuthService,
     private ledger: LedgerService,
+    @Optional() private financialSafety?: FinancialSafetyService,
   ) {}
 
   // ── Smartspeed plumbing ─────────────────────────────────────────────────
@@ -462,6 +464,7 @@ export class BillsService {
   // ── Purchase ────────────────────────────────────────────────────────────
 
   async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin?: string, planCode?: string, passkeyToken?: string, portedNumber?: boolean) {
+    await this.financialSafety?.assertEnabled('bills', userId);
     if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
       throw new BadRequestException('Money movement is disabled while this environment is in testnet or maintenance mode.');
     }
@@ -586,7 +589,15 @@ export class BillsService {
     } catch { /* ignore */ }
     if ((wallet.localBalance || 0) > 0 && !localBalances['NGN']) localBalances['NGN'] = wallet.localBalance;
 
-    const realNgn = wallet.realLocalBalance || 0;
+    let realNgn = wallet.realLocalBalance || 0;
+    if (this.ledgerReads()) {
+      try {
+        realNgn = fromMinor(await this.ledger.balanceOf(this.ledger.userAccount(userId, 'NGN'), 'NGN'), 'NGN');
+      } catch (error: any) {
+        this.logger.error(`Ledger NGN read failed for ${userId}: ${error.message}`);
+        throw new ServiceUnavailableException('Ledger is unavailable; the bill was not started.');
+      }
+    }
     if (realNgn < chargeAmount) {
       throw new BadRequestException(
         `You need ₦${chargeAmount.toFixed(2)} of real naira for this bill — you have ₦${realNgn.toFixed(2)}. Crypto and testnet funds can't pay bills. Fund your NGN wallet via bank transfer on the Receive page.`
@@ -608,6 +619,13 @@ export class BillsService {
     }
 
     const reference = `SS-${randomUUID()}`;
+    await this.financialSafety?.reserveDailyLimit({
+      userId,
+      reference,
+      amount: chargeAmount,
+      currency: 'NGN',
+      limit: this.configService.get<number>('app.transactionLimits.billsNgnDaily') || 500000,
+    });
     const billMeta = {
       provider,
       recipient,
@@ -635,7 +653,10 @@ export class BillsService {
       if (!lw) throw new BadRequestException('Wallet not found');
 
       const lockedLocals = this.parseLocalBalances(lw.localBalances, lw.localBalance || 0);
-      const lockedReal = Number(lw.realLocalBalance || 0);
+      let lockedReal = Number(lw.realLocalBalance || 0);
+      if (this.ledgerReads()) {
+        lockedReal = fromMinor(await this.ledger.balanceOf(this.ledger.userAccount(userId, 'NGN'), 'NGN', prisma), 'NGN');
+      }
       if (lockedReal < chargeAmount) {
         throw new BadRequestException(
           `You need ₦${chargeAmount.toFixed(2)} of real naira for this bill — you have ₦${lockedReal.toFixed(2)}. Crypto and testnet funds can't pay bills. Fund your NGN wallet via bank transfer on the Receive page.`,
@@ -644,7 +665,10 @@ export class BillsService {
 
       const newLocalBalances = {
         ...lockedLocals,
-        NGN: Math.max(0, Number(lockedLocals.NGN || 0) - chargeAmount),
+        // When ledger reads are enabled, the ledger-backed real NGN amount is
+        // authoritative; using a stale JSON balance here could erase a
+        // concurrent deposit or leave the display ahead of the journal.
+        NGN: Math.max(0, (this.ledgerReads() ? lockedReal : Number(lockedLocals.NGN || 0)) - chargeAmount),
       };
       // The production baseline includes localBalances. Do not fall back to a
       // second write after an ambiguous database error: that can double-debit

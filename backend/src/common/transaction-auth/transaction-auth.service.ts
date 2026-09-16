@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, Logger, ServiceUnavailableException, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -26,7 +26,8 @@ const LOCKOUT_SECONDS = 15 * 60;
  * a real PIN (or enroll a passkey) before they can transact.
  */
 @Injectable()
-export class TransactionAuthService {
+export class TransactionAuthService implements OnModuleDestroy {
+  private readonly production = process.env.NODE_ENV === 'production';
   private readonly logger = new Logger(TransactionAuthService.name);
   private readonly redis: Redis;
   private readonly memory = new Map<string, { count: number; until: number }>();
@@ -40,6 +41,10 @@ export class TransactionAuthService {
     this.redis.on('error', (err: Error) => {
       this.logger.error(`redis unavailable for PIN attempt tracking: ${err.message}`);
     });
+  }
+
+  onModuleDestroy() {
+    void this.redis.quit().catch(() => undefined);
   }
 
   private attemptKey(userId: string) {
@@ -63,6 +68,9 @@ export class TransactionAuthService {
       }
       return 0;
     } catch {
+      if (this.production) {
+        throw new ServiceUnavailableException('Transaction authorization is temporarily unavailable. Please try again.');
+      }
       const mem = this.memory.get(userId);
       if (!mem || mem.until <= Date.now()) return 0;
       return Math.ceil((mem.until - Date.now()) / 1000);
@@ -82,8 +90,12 @@ export class TransactionAuthService {
       }
       return;
     } catch {
-      // Redis down — degrade to an in-memory counter so attempts are still
-      // metered on this instance.
+      // A production transaction must never fall back to a per-instance
+      // counter: another instance could accept the next PIN guess. Fail closed
+      // until the shared lockout store is healthy again.
+      if (this.production) {
+        throw new ServiceUnavailableException('Transaction authorization is temporarily unavailable. Please try again.');
+      }
       this.logger.warn('redis unavailable; using in-memory PIN attempt counter');
     }
 

@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import Redis from 'ioredis';
@@ -7,6 +7,7 @@ const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 @Injectable()
 export class RefreshSessionService implements OnModuleDestroy {
+  private readonly production = process.env.NODE_ENV === 'production';
   private readonly logger = new Logger(RefreshSessionService.name);
   private redis: Redis | null = null;
   private readonly memSessions = new Map<string, { userId: string; tokenHash: string; expiresAt: number }>();
@@ -77,6 +78,10 @@ export class RefreshSessionService implements OnModuleDestroy {
       }
     }
 
+    if (this.production) {
+      throw new ServiceUnavailableException('Session storage is temporarily unavailable. Please try again.');
+    }
+
     this.memSessions.set(jti, {
       userId,
       tokenHash,
@@ -99,6 +104,10 @@ export class RefreshSessionService implements OnModuleDestroy {
         this.logger.warn(`Refresh-session validation fallback: ${error?.message || 'unknown error'}`);
         this.redis = null;
       }
+    }
+
+    if (this.production) {
+      throw new ServiceUnavailableException('Session storage is temporarily unavailable. Please try again.');
     }
 
     const entry = this.memSessions.get(jti);
@@ -125,6 +134,10 @@ export class RefreshSessionService implements OnModuleDestroy {
         this.logger.warn(`Refresh-session revoke fallback: ${error?.message || 'unknown error'}`);
         this.redis = null;
       }
+    }
+
+    if (this.production) {
+      throw new ServiceUnavailableException('Session storage is temporarily unavailable. Please try again.');
     }
 
     const session = this.memSessions.get(jti);
@@ -156,6 +169,10 @@ export class RefreshSessionService implements OnModuleDestroy {
         this.logger.warn(`Refresh-session revokeAll fallback: ${error?.message || 'unknown error'}`);
         this.redis = null;
       }
+    }
+
+    if (this.production) {
+      throw new ServiceUnavailableException('Session storage is temporarily unavailable. Please try again.');
     }
 
     const indexed = this.memUserIndex.get(userId);

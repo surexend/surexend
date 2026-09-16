@@ -1,8 +1,9 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 
 // Local-currency funding via Flutterwave VNUBAN virtual accounts. Each user
 // gets a permanent dedicated bank account number; when they transfer to it,
@@ -15,6 +16,7 @@ export class LocalFundingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    @Optional() private readonly financialSafety?: FinancialSafetyService,
   ) {}
 
   private get ppApiKey(): string {
@@ -40,11 +42,16 @@ export class LocalFundingService {
   // Returns the user's dedicated bank account, creating it via PaymentPoint (or Flutterwave fallback) on
   // first request. If neither is configured yet, returns "configured: false".
   async getOrCreateAccount(userId: string) {
+    await this.financialSafety?.assertEnabled('inbound', userId);
     const existing = await this.prisma.virtualAccount.findFirst({
       where: { userId, isActive: true },
     });
     if (existing) {
       return { configured: true, account: this.toDto(existing) };
+    }
+
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
+      throw new BadRequestException('Bank funding is disabled while this environment is in testnet or maintenance mode.');
     }
 
     const hasPaymentPoint = !!(this.ppApiKey || this.ppSecretKey);
@@ -85,7 +92,7 @@ export class LocalFundingService {
           businessId: this.ppBusinessId,
         };
 
-        this.logger.log(`PaymentPoint VNUBAN create request: ${JSON.stringify(payload)}`);
+        this.logger.log(`PaymentPoint VNUBAN create request for user ${userId}`);
 
         const response = await axios.post(
           `${this.ppBaseUrl}/createVirtualAccount`,
@@ -100,8 +107,7 @@ export class LocalFundingService {
           },
         );
 
-        // Log the FULL response so we can debug field name mismatches
-        this.logger.log(`PaymentPoint VNUBAN create response: ${JSON.stringify(response.data)}`);
+        this.logger.log('PaymentPoint VNUBAN create response received');
 
         const resData = response.data;
         // PaymentPoint returns: { bankAccounts: [{accountNumber, accountName, bankName, bankCode}] }
@@ -146,18 +152,14 @@ export class LocalFundingService {
         }
 
         // Account number missing — log the full raw response to help diagnose
-        const raw = JSON.stringify(resData);
-        this.logger.error(`PaymentPoint returned success but no account number found. Full response: ${raw}`);
-        throw new BadRequestException(
-          `PaymentPoint returned an unexpected response format. Please contact support. (raw: ${raw.substring(0, 200)})`,
-        );
+        this.logger.error('PaymentPoint returned success but no account number was present');
+        throw new BadRequestException('PaymentPoint returned an unexpected response format. Please contact support.');
       } catch (ppErr: any) {
         // Don't re-wrap BadRequestException we threw ourselves
         if (ppErr?.status === 400 || ppErr?.name === 'BadRequestException') throw ppErr;
 
         const errMsg = ppErr.response?.data?.message || ppErr.response?.data?.error || ppErr.message;
-        const rawErrBody = ppErr.response?.data ? JSON.stringify(ppErr.response.data) : 'no body';
-        this.logger.error(`PaymentPoint VNUBAN create error [${ppErr.response?.status}]: ${errMsg} | body: ${rawErrBody}`);
+        this.logger.error(`PaymentPoint VNUBAN create error [${ppErr.response?.status}]: ${String(errMsg || 'unknown provider error').slice(0, 240)}`);
         if (!hasFlutterwave) {
           throw new BadRequestException(
             errMsg || 'Could not generate virtual bank account. Please check your details or try again later.',

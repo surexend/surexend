@@ -20,6 +20,14 @@ const SENSITIVE_KEYS = new Set([
   'twofactorsecret',
   'secret',
   'otpauthurl',
+  'apikey',
+  'authorization',
+  'webhooksignature',
+  'signature',
+  'entitysecret',
+  'privatekey',
+  'mnemonic',
+  'seedphrase',
 ]);
 
 type AuditJson = string | number | boolean | null | AuditJson[] | { [key: string]: AuditJson };
@@ -33,7 +41,13 @@ function sanitizeForAudit(value: unknown): AuditJson {
     return value.toISOString();
   }
 
-  if (typeof value === 'string' || typeof value === 'boolean') {
+  if (typeof value === 'string') {
+    // Do not let a base64 avatar, document, or attacker-controlled body turn
+    // audit logging into an unbounded database write.
+    return value.length > 512 ? `${value.slice(0, 512)}…[TRUNCATED]` : value;
+  }
+
+  if (typeof value === 'boolean') {
     return value;
   }
 

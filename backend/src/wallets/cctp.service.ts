@@ -37,10 +37,13 @@ export class CctpService {
   // NETWORK_TO_CHAIN can be used as a source OR destination since CCTP burns on
   // one supported chain and mints on another (bidirectional by design).
   private getChain(network: string, role: 'source' | 'destination'): string {
-    const chain = NETWORK_TO_CHAIN[network.toUpperCase()];
+    const normalized = network.toUpperCase();
+    const isMainnet = this.configService.get<string>('app.network.environment') === 'mainnet';
+    const reviewed = this.configService.get<Record<string, { cctpChain: string }>>('app.network.matrix') || {};
+    const chain = isMainnet ? reviewed[normalized]?.cctpChain : NETWORK_TO_CHAIN[normalized];
     if (!chain) {
       throw new BadRequestException(
-        `${role === 'source' ? 'Source' : 'Destination'} network ${network} is not supported for CCTP bridging.`
+        `${role === 'source' ? 'Source' : 'Destination'} network ${network} has no reviewed CCTP chain mapping for this environment.`
       );
     }
     return chain;
@@ -66,7 +69,8 @@ export class CctpService {
     amount: number;
   }): Promise<number> {
     const { sourceNetwork, sourceAddress, destNetwork, recipientAddress, amount } = params;
-    if (sourceNetwork.toUpperCase() === destNetwork.toUpperCase()) {
+    const destNet = destNetwork.toUpperCase();
+    if (sourceNetwork.toUpperCase() === destNet) {
       return 0;
     }
     const sourceChain = this.getChain(sourceNetwork.toUpperCase(), 'source');
@@ -83,7 +87,7 @@ export class CctpService {
       amount: amountStr,
       config: { transferSpeed: 'FAST' },
       to:
-        destChain === BridgeChain.Solana_Devnet
+        destNet === 'SOLANA'
           ? {
               chain: destChain as any,
               recipientAddress,
@@ -129,7 +133,7 @@ export class CctpService {
     this.logger.log(
       `Initiating CCTP bridge: ${amount} USDC from ${sourceChain} (${sourceAddress}) -> ${destChain} (${recipientAddress})`
     );
-    if (destChain === BridgeChain.Solana_Devnet) {
+    if (destNet === 'SOLANA') {
       this.logger.log('CCTP delivery mode: Solana (default relayer)');
     }
 
@@ -143,7 +147,7 @@ export class CctpService {
         amount: amountStr,
         config: { transferSpeed: 'FAST' },
         to:
-          destChain === BridgeChain.Solana_Devnet
+          destNet === 'SOLANA'
             ? {
                 chain: destChain as any,
                 recipientAddress,

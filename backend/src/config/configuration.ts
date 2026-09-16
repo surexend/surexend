@@ -1,6 +1,19 @@
 import { registerAs } from '@nestjs/config';
+import { parseReviewedNetworkMatrix, validateEnabledMainnetNetworks } from './network-matrix';
 
-export default registerAs('app', () => ({
+export default registerAs('app', () => {
+  const chainEnvironment = (process.env.CHAIN_ENV || 'testnet').toLowerCase();
+  const mainnetEnabled = process.env.MAINNET_ENABLED === 'true';
+  const reviewedMatrix = chainEnvironment === 'mainnet' || mainnetEnabled
+    ? parseReviewedNetworkMatrix(process.env.MAINNET_CHAIN_MATRIX_JSON)
+    : {};
+  const enabledMainnetNetworks = chainEnvironment === 'mainnet' || mainnetEnabled
+    ? validateEnabledMainnetNetworks(reviewedMatrix, process.env.MAINNET_ENABLED_NETWORKS)
+    : [];
+
+  const reviewedArc = reviewedMatrix.ARC;
+
+  return {
   port: parseInt(process.env.PORT, 10) || 3001,
   nodeEnv: process.env.NODE_ENV || 'development',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -69,6 +82,21 @@ export default registerAs('app', () => ({
     // NODE_ENV is not production.
     enabled: process.env.MONEY_MOVEMENT_ENABLED === 'true',
   },
+  compliance: {
+    // Production and mainnet require verified KYC before customer movement.
+    // Testnet demos can opt in only for controlled rehearsals.
+    requireKyc: process.env.REQUIRE_KYC_FOR_MONEY_MOVEMENT === 'true' || process.env.NODE_ENV === 'production' || chainEnvironment === 'mainnet',
+    blockedAddresses: process.env.SANCTIONS_BLOCKED_ADDRESSES || '',
+  },
+  transactionLimits: {
+    cryptoUsdDaily: Number(process.env.MAX_DAILY_CRYPTO_SEND_USD || '1000'),
+    conversionUsdDaily: Number(process.env.MAX_DAILY_CONVERSION_USD || '1000'),
+    billsNgnDaily: Number(process.env.MAX_DAILY_BILL_NGN || '500000'),
+  },
+  canary: {
+    enabled: process.env.CANARY_MODE === 'true',
+    userIds: (process.env.CANARY_USER_IDS || '').split(',').map((value) => value.trim()).filter(Boolean),
+  },
   yellowCard: {
     apiKey: process.env.YELLOW_CARD_API_KEY,
     secret: process.env.YELLOW_CARD_SECRET,
@@ -112,17 +140,17 @@ export default registerAs('app', () => ({
     referralRewardUsdtTokenAddress: process.env.CIRCLE_REFERRAL_REWARD_USDT_TOKEN_ADDRESS,
   },
   network: {
-    environment: process.env.CHAIN_ENV || 'testnet',
-    mainnetEnabled: process.env.MAINNET_ENABLED === 'true',
+    environment: chainEnvironment,
+    mainnetEnabled,
+    matrix: reviewedMatrix,
+    enabledMainnetNetworks,
   },
   ledger: {
-    // Gradual cutover switch for balance READS. OFF = legacy float columns
-    // (current behavior, additive & testnet-safe). ON = read the double-entry
-    // ledger (LedgerEntry) as the source of truth, falling back to the float
-    // for a currency that has no ledger rows yet, so enabling this is safe
-    // even before scripts/backfill-ledger-baseline.js has been run. Writes
-    // keep updating floats in BOTH modes until each path is verified and the
-    // columns are removed.
+    // Production money movement requires this switch. ON = read the
+    // double-entry ledger (LedgerEntry) as the source of truth; an absent
+    // ledger row is zero. The startup baseline gate must pass before this can
+    // safely be enabled. Legacy float columns remain compatibility mirrors
+    // until a later schema cleanup.
     reads: process.env.LEDGER_READS_ENABLED === 'true',
     alerts: {
       // LEDGER_DRIFT rows are persisted to AuditLog by the hourly
@@ -136,8 +164,9 @@ export default registerAs('app', () => ({
     },
   },
   arc: {
-    rpcUrl: process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network',
-    chainId: parseInt(process.env.ARC_CHAIN_ID || '5042002', 10),
-    usdcContractAddress: process.env.ARC_USDC_CONTRACT_ADDRESS || '0x3600000000000000000000000000000000000000'
+    rpcUrl: reviewedArc?.rpcUrls?.[0] || process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network',
+    chainId: reviewedArc?.chainId || parseInt(process.env.ARC_CHAIN_ID || '5042002', 10),
+    usdcContractAddress: reviewedArc?.usdcContract || process.env.ARC_USDC_CONTRACT_ADDRESS || '0x3600000000000000000000000000000000000000',
   }
-}));
+  };
+});

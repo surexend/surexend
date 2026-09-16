@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, OnModuleInit, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -8,6 +8,7 @@ import { DepositMonitorService } from './deposit-monitor.service';
 import { getLocalRate, SUPPORTED_LOCAL_CURRENCIES } from '../common/currency.constants';
 import { LedgerService } from '../common/ledger.service';
 import { toMinor, fromMinor, roundMinor } from '../common/money';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
@@ -36,6 +37,7 @@ export class WalletsService implements OnModuleInit {
     private depositMonitor: DepositMonitorService,
     private notifications: NotificationsService,
     private ledger: LedgerService,
+    @Optional() private financialSafety?: FinancialSafetyService,
   ) {
     this.apiKey = this.configService.get<string>('app.circle.apiKey') || '';
     this.entitySecret = this.configService.get<string>('app.circle.entitySecret');
@@ -81,6 +83,9 @@ export class WalletsService implements OnModuleInit {
     this.defaultWalletSetInit = (async () => {
       if (!this.apiKey || !this.entitySecret) {
         throw new BadRequestException('Circle is not configured. Add CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET before creating a wallet.');
+      }
+      if (this.configService.get<string>('app.network.environment') === 'mainnet') {
+        throw new BadRequestException('Mainnet requires a pre-created, custody-reviewed CIRCLE_WALLET_SET_ID; automatic wallet-set creation is disabled.');
       }
 
       const existing = await this.prisma.platformWallet.findUnique({ where: { key: 'APPLICATION_WALLET_SET' } });
@@ -149,10 +154,15 @@ export class WalletsService implements OnModuleInit {
   // ARC wallet at a pre-existing address (unlike create, which only ever yields
   // freshly-derived addresses).
   async onModuleInit() {
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) return;
     try {
-      await this.ensureAllAddressesHaveArcWallets();
+      const result = await this.ensureAllAddressesHaveArcWallets();
+      if (this.configService.get<string>('app.network.environment') === 'mainnet' && result.failed.length) {
+        throw new Error(`mainnet Circle address coverage failed for ${result.failed.length} address(es)`);
+      }
     } catch (err: any) {
       this.logger.error(`automatic ARC wallet registration failed: ${err.message}`);
+      if (this.configService.get<string>('app.network.environment') === 'mainnet') throw err;
     }
   }
 
@@ -185,7 +195,8 @@ export class WalletsService implements OnModuleInit {
   // 'registered' if it was missing and we derived it, 'skipped' if it already
   // existed. Throws if Circle rejects the derivation.
   private async ensureArcWalletAtAddress(address: string, userId?: string): Promise<'registered' | 'skipped'> {
-    const existing = await this.getCircleWalletByAddress(address, 'ARC-TESTNET');
+    const arcBlockchain = this.arcBlockchainName();
+    const existing = await this.getCircleWalletByAddress(address, arcBlockchain);
     if (existing) return 'skipped';
 
     // Find a source EVM chain where Circle already has a wallet at this address.
@@ -218,7 +229,7 @@ export class WalletsService implements OnModuleInit {
       }
     );
     const w = res.data.data.wallet;
-    this.logger.log(`Derived ARC-TESTNET wallet at ${w.address} (${w.id})`);
+    this.logger.log(`Derived ${arcBlockchain} wallet at ${w.address} (${w.id})`);
     return 'registered';
   }
 
@@ -235,13 +246,16 @@ export class WalletsService implements OnModuleInit {
     if (this.ledgerReads()) {
       try {
         const balances = await this.ledger.balancesOfUser(userId);
-        if (balances.USDC !== undefined) usdc = fromMinor(balances.USDC, 'USDC');
-        if (balances.USDT !== undefined) usdt = fromMinor(balances.USDT, 'USDT');
+        usdc = fromMinor(balances.USDC || 0n, 'USDC');
+        usdt = fromMinor(balances.USDT || 0n, 'USDT');
         // Ledger balances already include committed SEND reservations, so do
         // not subtract the legacy lock a second time after cutover.
         return Math.max(0, usdc + usdt);
       } catch (err: any) {
         this.logger.error(`Ledger spendable read failed for ${userId}: ${err.message}`);
+        if (this.configService.get<boolean>('app.moneyMovement.enabled') === true) {
+          throw new ServiceUnavailableException('Ledger is unavailable; the transaction was not started.');
+        }
       }
     }
 
@@ -261,32 +275,41 @@ export class WalletsService implements OnModuleInit {
   }
 
   private getBlockchainName(network: string): string {
-    const isTestKey = this.apiKey.startsWith('TEST_');
     const net = network.toUpperCase();
-    if (isTestKey) {
-      if (net === 'POLYGON') return 'MATIC-AMOY';
-      if (net === 'AVALANCHE') return 'AVAX-FUJI';
-      if (net === 'ARBITRUM') return 'ARB-SEPOLIA';
-      if (net === 'ETHEREUM') return 'ETH-SEPOLIA';
-      if (net === 'BASE') return 'BASE-SEPOLIA';
-      if (net === 'OPTIMISM') return 'OP-SEPOLIA';
-      if (net === 'SOLANA') return 'SOL-DEVNET';
-      if (net === 'BSC' || net === 'BEP20') return 'EVM-TESTNET';
-      if (net === 'ARC') return 'ARC-TESTNET';
-      if (net === 'MONAD') return 'MONAD-TESTNET';
-    } else {
-      if (net === 'POLYGON') return 'POLYGON';
-      if (net === 'AVALANCHE') return 'AVAX';
-      if (net === 'ARBITRUM') return 'ARB';
-      if (net === 'ETHEREUM') return 'ETH';
-      if (net === 'BASE') return 'BASE';
-      if (net === 'OPTIMISM') return 'OP';
-      if (net === 'SOLANA') return 'SOL';
-      if (net === 'BSC' || net === 'BEP20') return 'EVM';
-      if (net === 'ARC') return 'ARC';
-      if (net === 'MONAD') return 'MONAD';
+    const environment = this.configService.get<string>('app.network.environment');
+    if (environment === 'mainnet') {
+      const reviewed = this.configService.get<Record<string, { circleBlockchain: string }>>('app.network.matrix') || {};
+      const value = reviewed[net]?.circleBlockchain;
+      if (!value) {
+        throw new BadRequestException(`No reviewed Circle mainnet blockchain mapping exists for ${net}.`);
+      }
+      return value;
     }
-    return net;
+
+    const testnetMap: Record<string, string> = {
+      POLYGON: 'MATIC-AMOY',
+      AVALANCHE: 'AVAX-FUJI',
+      ARBITRUM: 'ARB-SEPOLIA',
+      ETHEREUM: 'ETH-SEPOLIA',
+      BASE: 'BASE-SEPOLIA',
+      OPTIMISM: 'OP-SEPOLIA',
+      SOLANA: 'SOL-DEVNET',
+      BSC: 'EVM-TESTNET',
+      BEP20: 'EVM-TESTNET',
+      ARC: 'ARC-TESTNET',
+      MONAD: 'MONAD-TESTNET',
+    };
+    return testnetMap[net] || net;
+  }
+
+  private arcBlockchainName(): string {
+    return this.getBlockchainName('ARC');
+  }
+
+  private arcUsdcTokenAddress(): string {
+    const address = this.configService.get<string>('app.arc.usdcContractAddress');
+    if (!address) throw new BadRequestException('Arc USDC contract is not configured for this environment.');
+    return address;
   }
 
   // Reverse of getBlockchainName(): map a Circle blockchain value from the tx
@@ -294,6 +317,10 @@ export class WalletsService implements OnModuleInit {
   // history/explorer links point at the right chain regardless of which address
   // record is being iterated. Returns undefined for unknown values.
   private getNetworkFromBlockchain(blockchain: string): string | undefined {
+    const reviewed = this.configService.get<Record<string, { circleBlockchain: string }>>('app.network.matrix') || {};
+    const normalizedBlockchain = (blockchain || '').toUpperCase();
+    const reviewedMatch = Object.entries(reviewed).find(([, entry]) => String(entry.circleBlockchain).toUpperCase() === normalizedBlockchain);
+    if (reviewedMatch) return reviewedMatch[0];
     const map: Record<string, string> = {
       'ARC-TESTNET': 'ARC',
       'ETH-SEPOLIA': 'ETHEREUM',
@@ -346,18 +373,19 @@ export class WalletsService implements OnModuleInit {
       this.logger.error(`Background Circle history sync failed for ${userId}: ${err.message}`);
     });
 
-    // LEDGER READS (gradual cutover): the double-entry ledger is the source of
-    // truth for USDC/USDT and all local currencies. A currency that has NO
-    // ledger rows yet (pre-rollout history not backfilled) falls back to the
-    // float, so enabling LEDGER_READS_ENABLED is safe before the baseline
-    // script runs — per-currency, not all-or-nothing.
+    // LEDGER READS: the double-entry ledger is the source of truth for
+    // USDC/USDT and all local currencies. The startup baseline gate must pass
+    // before money movement can be enabled; an absent ledger row is zero.
     if (this.ledgerReads()) {
       try {
         ledgerBalances = await this.ledger.balancesOfUser(userId);
-        if (ledgerBalances.USDC !== undefined) usdcBalance = fromMinor(ledgerBalances.USDC, 'USDC');
-        if (ledgerBalances.USDT !== undefined) usdtBalance = fromMinor(ledgerBalances.USDT, 'USDT');
+        usdcBalance = fromMinor(ledgerBalances.USDC || 0n, 'USDC');
+        usdtBalance = fromMinor(ledgerBalances.USDT || 0n, 'USDT');
       } catch (err: any) {
-        this.logger.error(`Ledger read failed for ${userId}; continuing with floats: ${err.message}`);
+        this.logger.error(`Ledger read failed for ${userId}: ${err.message}`);
+        if (this.configService.get<boolean>('app.moneyMovement.enabled') === true) {
+          throw new ServiceUnavailableException('Ledger is unavailable; balance display is temporarily paused.');
+        }
       }
     }
 
@@ -393,8 +421,10 @@ export class WalletsService implements OnModuleInit {
       localBalances['NGN'] = localVal;
     }
 
-    // Overlay ledger-backed local balances (per currency, legacy fallback for
-    // any currency the ledger has no rows for yet).
+    // Overlay ledger-backed local balances. Once ledger reads are enabled,
+    // do not retain JSON/float local balances for currencies with no journal
+    // rows: an absent ledger balance is zero after the required baseline.
+    if (ledgerBalances && this.ledgerReads()) localBalances = {};
     if (ledgerBalances) {
       for (const [ccy, minor] of Object.entries(ledgerBalances)) {
         // Skip stablecoin denominations; 'USD' is a legacy ledger pseudo-currency
@@ -769,6 +799,10 @@ export class WalletsService implements OnModuleInit {
   }
 
   async getDepositAddress(userId: string, network: string, walletSetIdOverride?: string) {
+    await this.financialSafety?.assertEnabled('crypto', userId);
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
+      throw new BadRequestException('Deposit address provisioning is disabled while this environment is in testnet or maintenance mode.');
+    }
     const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'MONAD'];
     if (!validNetworks.includes(network.toUpperCase())) {
       throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20, ARC, MONAD');
@@ -813,8 +847,8 @@ export class WalletsService implements OnModuleInit {
           const createResponse = await axios.post(
             `${this.baseUrl}/v1/w3s/developer/wallets`,
             {
-              idempotencyKey: this.walletCreationIdempotencyKey(userId, 'ARC', 'ARC-TESTNET'),
-              blockchains: ['ARC-TESTNET'],
+              idempotencyKey: this.walletCreationIdempotencyKey(userId, 'ARC', this.arcBlockchainName()),
+              blockchains: [this.arcBlockchainName()],
               entitySecretCiphertext: ciphertext,
               walletSetId,
               metadata: [
@@ -894,17 +928,26 @@ export class WalletsService implements OnModuleInit {
       }
     }
 
-    // Newly-created Circle address: make sure Circle also holds an ARC-TESTNET
-    // wallet at this exact address so Arc-side deposits stay visible on console.
-    // Fire-and-forget; a failure here must not block address generation.
-    this.ensureArcWalletAtAddress(walletAddress.address, userId).catch((err: any) => {
-      this.logger.warn(`ARC coverage for new address ${walletAddress.address} failed: ${err.message}`);
-    });
+    // Newly-created Circle address: ensure Circle also holds the configured Arc
+    // wallet at this exact address. Mainnet waits for this coverage so an
+    // address is never shown to a customer while its provider observability is
+    // uncertain; testnet keeps the historical asynchronous refresh behavior.
+    if (this.configService.get<string>('app.network.environment') === 'mainnet') {
+      await this.ensureArcWalletAtAddress(walletAddress.address, userId);
+    } else {
+      this.ensureArcWalletAtAddress(walletAddress.address, userId).catch((err: any) => {
+        this.logger.warn(`ARC coverage for new address ${walletAddress.address} failed: ${err.message}`);
+      });
+    }
 
     return { network: walletAddress.network, address: walletAddress.address };
   }
 
   async sendCrypto(userId: string, toAddress: string, amount: number, network: string, destinationNetwork?: string, currency?: string) {
+    const requestedNetwork = String(network || '').toUpperCase();
+    const safetyOperation = requestedNetwork === 'SUREX_TAG' && String(currency || 'USDC').toUpperCase() !== 'USDC' ? 'bills' : 'crypto';
+    await this.financialSafety?.assertEnabled(safetyOperation, userId);
+    this.financialSafety?.assertRecipientAllowed(toAddress);
     if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
       throw new BadRequestException('Money movement is disabled while this environment is in testnet or maintenance mode.');
     }
@@ -913,6 +956,7 @@ export class WalletsService implements OnModuleInit {
     }
 
     const net = network.toUpperCase();
+    this.financialSafety?.assertRecipientShape(destinationNetwork?.toUpperCase() || net, toAddress);
     // Tag transfers are internal ledger movements. They may carry USDC or a
     // supported local currency; on-chain sends remain USDC-only by design.
     if (net === 'SUREX_TAG') {
@@ -1007,6 +1051,13 @@ export class WalletsService implements OnModuleInit {
     }
 
     const reference = `TAG-${crypto.randomUUID()}`;
+    await this.financialSafety?.reserveDailyLimit({
+      userId: senderUserId,
+      reference,
+      amount: sendAmount,
+      currency: 'USDC',
+      limit: this.configService.get<number>('app.transactionLimits.cryptoUsdDaily') || 1000,
+    });
     const receiveReference = `${reference}-R`;
     const result = await this.prisma.$transaction(async (prisma) => {
       // SECURITY: lock both wallet rows FOR UPDATE and re-derive spendable
@@ -1183,19 +1234,30 @@ export class WalletsService implements OnModuleInit {
     let previewAvailable = Number(previewBalances[currency] || 0);
     if (this.ledgerReads()) {
       const ledgerBalances = await this.ledger.balancesOfUser(senderUserId);
-      if (ledgerBalances[currency] !== undefined) previewAvailable = fromMinor(ledgerBalances[currency], currency);
+      previewAvailable = fromMinor(ledgerBalances[currency] || 0n, currency);
     }
     // NGN carries a real-funds subledger. Never let test/demo local balance
     // pay another user's real balance or a later bill; an internal NGN send is
     // spendable only up to the sender's realLocalBalance.
     if (currency === 'NGN') {
-      previewAvailable = Math.min(previewAvailable, Math.max(0, Number(senderWallet.realLocalBalance || 0)));
+      if (!this.ledgerReads()) {
+        previewAvailable = Math.min(previewAvailable, Math.max(0, Number(senderWallet.realLocalBalance || 0)));
+      }
     }
     if (previewAvailable < sendAmount) {
       throw new BadRequestException(`Insufficient ${currency} balance. You can send up to ${previewAvailable.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}.`);
     }
 
     const reference = `TAG-${crypto.randomUUID()}`;
+    await this.financialSafety?.reserveDailyLimit({
+      userId: senderUserId,
+      reference,
+      amount: sendAmount,
+      currency,
+      limit: currency === 'NGN'
+        ? (this.configService.get<number>('app.transactionLimits.billsNgnDaily') || 500000)
+        : (this.configService.get<number>('app.transactionLimits.cryptoUsdDaily') || 1000),
+    });
     const receiveReference = `${reference}-R`;
     const senderName = `${senderWallet.user?.firstName || ''} ${senderWallet.user?.lastName || ''}`.trim();
     const recipientName = `${recipient.firstName} ${recipient.lastName}`.trim();
@@ -1224,8 +1286,8 @@ export class WalletsService implements OnModuleInit {
           this.ledger.balancesOfUser(senderUserId, prisma),
           this.ledger.balancesOfUser(recipient.id, prisma),
         ]);
-        if (senderLedgerBalances[currency] !== undefined) available = fromMinor(senderLedgerBalances[currency], currency);
-        if (recipientLedgerBalances[currency] !== undefined) recipientAvailable = fromMinor(recipientLedgerBalances[currency], currency);
+        available = fromMinor(senderLedgerBalances[currency] || 0n, currency);
+        recipientAvailable = fromMinor(recipientLedgerBalances[currency] || 0n, currency);
         // Bring the snapshots to the ledger baseline before applying this
         // movement. Without this, an older snapshot could be decremented from
         // zero after a ledger-backed check and manufacture a display drift.
@@ -1233,7 +1295,7 @@ export class WalletsService implements OnModuleInit {
         destinationBalances[currency] = recipientAvailable;
       }
       const totalSourceBalance = Number(sourceBalances[currency] || 0);
-      if (currency === 'NGN') {
+      if (currency === 'NGN' && !this.ledgerReads()) {
         available = Math.min(available, Math.max(0, Number(lockedSender.realLocalBalance || 0)));
       }
       if (available < sendAmount) {
@@ -1435,6 +1497,13 @@ export class WalletsService implements OnModuleInit {
 
     const reference = `TX-${crypto.randomUUID()}`;
     const totalDebit = amount + fee;
+    await this.financialSafety?.reserveDailyLimit({
+      userId,
+      reference,
+      amount: totalDebit,
+      currency: 'USDC',
+      limit: this.configService.get<number>('app.transactionLimits.cryptoUsdDaily') || 1000,
+    });
 
     // ── 1. Reserve the funds BEFORE the chain leg ───────────────────────────
     // An on-chain transfer cannot be undone, so the ledger must already hold
@@ -1901,8 +1970,8 @@ export class WalletsService implements OnModuleInit {
       idempotencyKey: providerIdempotencyKey,
       entitySecretCiphertext: ciphertext,
       walletAddress: sourceAddress,
-      blockchain: 'ARC-TESTNET',
-      tokenAddress: '0x3600000000000000000000000000000000000000',
+      blockchain: this.arcBlockchainName(),
+      tokenAddress: this.arcUsdcTokenAddress(),
       destinationAddress: destAddress,
       // Circle exposes refId in transaction/webhook payloads. Keep the local
       // send reference attached to the provider object in addition to the
