@@ -5,9 +5,10 @@ approved for mainnet or unrestricted real-money launch.
 
 ## Current release decision
 
-The backend intentionally fails closed for mainnet configuration. The only
-defensible public scope is a clearly labelled testnet/demo deployment with
-money movement disabled:
+The backend intentionally fails closed for mainnet configuration unless an
+explicit, reviewed deployment matrix and release evidence are supplied. The
+only defensible public scope today is a clearly labelled testnet/demo
+deployment with money movement disabled:
 
 ```text
 CHAIN_ENV=testnet
@@ -37,5 +38,6 @@ npm test -- --ci
 
 The backend requires PostgreSQL, Redis, JWT secrets, and explicit provider
 configuration. Never use `.env.example` values in a deployed environment and
-never enable `MAINNET_ENABLED` until the mainnet implementation and independent
-review are complete.
+never enable `MAINNET_ENABLED` until `MAINNET_CHAIN_MATRIX_JSON` is populated
+with provider-verified values, the database control plane is rehearsed, and
+independent security, custody, compliance, and recovery review are complete.

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, OnModuleInit, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -8,6 +8,7 @@ import { DepositMonitorService } from './deposit-monitor.service';
 import { getLocalRate, SUPPORTED_LOCAL_CURRENCIES } from '../common/currency.constants';
 import { LedgerService } from '../common/ledger.service';
 import { toMinor, fromMinor, roundMinor } from '../common/money';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
@@ -36,6 +37,7 @@ export class WalletsService implements OnModuleInit {
     private depositMonitor: DepositMonitorService,
     private notifications: NotificationsService,
     private ledger: LedgerService,
+    @Optional() private financialSafety?: FinancialSafetyService,
   ) {
     this.apiKey = this.configService.get<string>('app.circle.apiKey') || '';
     this.entitySecret = this.configService.get<string>('app.circle.entitySecret');
@@ -262,32 +264,31 @@ export class WalletsService implements OnModuleInit {
   }
 
   private getBlockchainName(network: string): string {
-    const isTestKey = this.apiKey.startsWith('TEST_');
     const net = network.toUpperCase();
-    if (isTestKey) {
-      if (net === 'POLYGON') return 'MATIC-AMOY';
-      if (net === 'AVALANCHE') return 'AVAX-FUJI';
-      if (net === 'ARBITRUM') return 'ARB-SEPOLIA';
-      if (net === 'ETHEREUM') return 'ETH-SEPOLIA';
-      if (net === 'BASE') return 'BASE-SEPOLIA';
-      if (net === 'OPTIMISM') return 'OP-SEPOLIA';
-      if (net === 'SOLANA') return 'SOL-DEVNET';
-      if (net === 'BSC' || net === 'BEP20') return 'EVM-TESTNET';
-      if (net === 'ARC') return 'ARC-TESTNET';
-      if (net === 'MONAD') return 'MONAD-TESTNET';
-    } else {
-      if (net === 'POLYGON') return 'POLYGON';
-      if (net === 'AVALANCHE') return 'AVAX';
-      if (net === 'ARBITRUM') return 'ARB';
-      if (net === 'ETHEREUM') return 'ETH';
-      if (net === 'BASE') return 'BASE';
-      if (net === 'OPTIMISM') return 'OP';
-      if (net === 'SOLANA') return 'SOL';
-      if (net === 'BSC' || net === 'BEP20') return 'EVM';
-      if (net === 'ARC') return 'ARC';
-      if (net === 'MONAD') return 'MONAD';
+    const environment = this.configService.get<string>('app.network.environment');
+    if (environment === 'mainnet') {
+      const reviewed = this.configService.get<Record<string, { circleBlockchain: string }>>('app.network.matrix') || {};
+      const value = reviewed[net]?.circleBlockchain;
+      if (!value) {
+        throw new BadRequestException(`No reviewed Circle mainnet blockchain mapping exists for ${net}.`);
+      }
+      return value;
     }
-    return net;
+
+    const testnetMap: Record<string, string> = {
+      POLYGON: 'MATIC-AMOY',
+      AVALANCHE: 'AVAX-FUJI',
+      ARBITRUM: 'ARB-SEPOLIA',
+      ETHEREUM: 'ETH-SEPOLIA',
+      BASE: 'BASE-SEPOLIA',
+      OPTIMISM: 'OP-SEPOLIA',
+      SOLANA: 'SOL-DEVNET',
+      BSC: 'EVM-TESTNET',
+      BEP20: 'EVM-TESTNET',
+      ARC: 'ARC-TESTNET',
+      MONAD: 'MONAD-TESTNET',
+    };
+    return testnetMap[net] || net;
   }
 
   // Reverse of getBlockchainName(): map a Circle blockchain value from the tx
@@ -295,6 +296,10 @@ export class WalletsService implements OnModuleInit {
   // history/explorer links point at the right chain regardless of which address
   // record is being iterated. Returns undefined for unknown values.
   private getNetworkFromBlockchain(blockchain: string): string | undefined {
+    const reviewed = this.configService.get<Record<string, { circleBlockchain: string }>>('app.network.matrix') || {};
+    const normalizedBlockchain = (blockchain || '').toUpperCase();
+    const reviewedMatch = Object.entries(reviewed).find(([, entry]) => String(entry.circleBlockchain).toUpperCase() === normalizedBlockchain);
+    if (reviewedMatch) return reviewedMatch[0];
     const map: Record<string, string> = {
       'ARC-TESTNET': 'ARC',
       'ETH-SEPOLIA': 'ETHEREUM',
@@ -770,6 +775,7 @@ export class WalletsService implements OnModuleInit {
   }
 
   async getDepositAddress(userId: string, network: string, walletSetIdOverride?: string) {
+    await this.financialSafety?.assertEnabled('crypto', userId);
     if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
       throw new BadRequestException('Deposit address provisioning is disabled while this environment is in testnet or maintenance mode.');
     }
@@ -909,6 +915,10 @@ export class WalletsService implements OnModuleInit {
   }
 
   async sendCrypto(userId: string, toAddress: string, amount: number, network: string, destinationNetwork?: string, currency?: string) {
+    const requestedNetwork = String(network || '').toUpperCase();
+    const safetyOperation = requestedNetwork === 'SUREX_TAG' && String(currency || 'USDC').toUpperCase() !== 'USDC' ? 'bills' : 'crypto';
+    await this.financialSafety?.assertEnabled(safetyOperation, userId);
+    this.financialSafety?.assertRecipientAllowed(toAddress);
     if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
       throw new BadRequestException('Money movement is disabled while this environment is in testnet or maintenance mode.');
     }
@@ -1011,6 +1021,13 @@ export class WalletsService implements OnModuleInit {
     }
 
     const reference = `TAG-${crypto.randomUUID()}`;
+    await this.financialSafety?.reserveDailyLimit({
+      userId: senderUserId,
+      reference,
+      amount: sendAmount,
+      currency: 'USDC',
+      limit: this.configService.get<number>('app.transactionLimits.cryptoUsdDaily') || 1000,
+    });
     const receiveReference = `${reference}-R`;
     const result = await this.prisma.$transaction(async (prisma) => {
       // SECURITY: lock both wallet rows FOR UPDATE and re-derive spendable
@@ -1200,6 +1217,15 @@ export class WalletsService implements OnModuleInit {
     }
 
     const reference = `TAG-${crypto.randomUUID()}`;
+    await this.financialSafety?.reserveDailyLimit({
+      userId: senderUserId,
+      reference,
+      amount: sendAmount,
+      currency,
+      limit: currency === 'NGN'
+        ? (this.configService.get<number>('app.transactionLimits.billsNgnDaily') || 500000)
+        : (this.configService.get<number>('app.transactionLimits.cryptoUsdDaily') || 1000),
+    });
     const receiveReference = `${reference}-R`;
     const senderName = `${senderWallet.user?.firstName || ''} ${senderWallet.user?.lastName || ''}`.trim();
     const recipientName = `${recipient.firstName} ${recipient.lastName}`.trim();
@@ -1439,6 +1465,13 @@ export class WalletsService implements OnModuleInit {
 
     const reference = `TX-${crypto.randomUUID()}`;
     const totalDebit = amount + fee;
+    await this.financialSafety?.reserveDailyLimit({
+      userId,
+      reference,
+      amount: totalDebit,
+      currency: 'USDC',
+      limit: this.configService.get<number>('app.transactionLimits.cryptoUsdDaily') || 1000,
+    });
 
     // ── 1. Reserve the funds BEFORE the chain leg ───────────────────────────
     // An on-chain transfer cannot be undone, so the ledger must already hold

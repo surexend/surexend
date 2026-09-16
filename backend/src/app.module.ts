@@ -26,6 +26,7 @@ import { AdminModule } from './admin/admin.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { PasskeysModule } from './passkeys/passkeys.module';
 import { LedgerModule } from './common/ledger.module';
+import { FinancialSafetyModule } from './common/financial-safety.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { LedgerModule } from './common/ledger.module';
     CampaignsModule,
     PasskeysModule,
     LedgerModule,
+    FinancialSafetyModule,
   ],
   providers: [
     // Applied globally so no new endpoint ships unthrottled by default.

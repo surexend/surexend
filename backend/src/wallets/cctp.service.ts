@@ -37,10 +37,13 @@ export class CctpService {
   // NETWORK_TO_CHAIN can be used as a source OR destination since CCTP burns on
   // one supported chain and mints on another (bidirectional by design).
   private getChain(network: string, role: 'source' | 'destination'): string {
-    const chain = NETWORK_TO_CHAIN[network.toUpperCase()];
+    const normalized = network.toUpperCase();
+    const isMainnet = this.configService.get<string>('app.network.environment') === 'mainnet';
+    const reviewed = this.configService.get<Record<string, { cctpChain: string }>>('app.network.matrix') || {};
+    const chain = isMainnet ? reviewed[normalized]?.cctpChain : NETWORK_TO_CHAIN[normalized];
     if (!chain) {
       throw new BadRequestException(
-        `${role === 'source' ? 'Source' : 'Destination'} network ${network} is not supported for CCTP bridging.`
+        `${role === 'source' ? 'Source' : 'Destination'} network ${network} has no reviewed CCTP chain mapping for this environment.`
       );
     }
     return chain;

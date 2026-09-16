@@ -1,8 +1,9 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 
 // Local-currency funding via Flutterwave VNUBAN virtual accounts. Each user
 // gets a permanent dedicated bank account number; when they transfer to it,
@@ -15,6 +16,7 @@ export class LocalFundingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    @Optional() private readonly financialSafety?: FinancialSafetyService,
   ) {}
 
   private get ppApiKey(): string {
@@ -40,6 +42,7 @@ export class LocalFundingService {
   // Returns the user's dedicated bank account, creating it via PaymentPoint (or Flutterwave fallback) on
   // first request. If neither is configured yet, returns "configured: false".
   async getOrCreateAccount(userId: string) {
+    await this.financialSafety?.assertEnabled('inbound', userId);
     const existing = await this.prisma.virtualAccount.findFirst({
       where: { userId, isActive: true },
     });

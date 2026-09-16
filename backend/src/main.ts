@@ -3,11 +3,13 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
+import { FinancialSafetyService } from './common/financial-safety.service';
 
 import helmet from 'helmet';
 import * as compression from 'compression';
 import * as bcrypt from 'bcryptjs';
 import { ConfigService } from '@nestjs/config';
+import { parseReviewedNetworkMatrix, validateEnabledMainnetNetworks } from './config/network-matrix';
 
 /**
  * Refuse to boot without the secrets that protect customer accounts. A missing
@@ -53,6 +55,13 @@ function assertRequiredEnv() {
     if (process.env.BILLS_REQUIRE_FUNDING === 'false') {
       throw new Error('Refusing to start: BILLS_REQUIRE_FUNDING=false is never allowed in production.');
     }
+    if (process.env.REQUIRE_KYC_FOR_MONEY_MOVEMENT === 'false') {
+      throw new Error('Refusing to start: REQUIRE_KYC_FOR_MONEY_MOVEMENT=false is never allowed in production.');
+    }
+    const limits = [process.env.MAX_DAILY_CRYPTO_SEND_USD || '1000', process.env.MAX_DAILY_CONVERSION_USD || '1000', process.env.MAX_DAILY_BILL_NGN || '500000'].map(Number);
+    if (limits.some((limit) => !Number.isFinite(limit) || limit <= 0)) {
+      throw new Error('Refusing to start: daily financial limits must be finite positive numbers.');
+    }
     if (process.env.MONEY_MOVEMENT_ENABLED === 'true' && process.env.LEDGER_READS_ENABLED !== 'true') {
       throw new Error('Refusing to start: production money movement requires LEDGER_READS_ENABLED=true after the ledger baseline has been reconciled.');
     }
@@ -88,12 +97,26 @@ function assertNetworkConfig() {
   }
 
   if (mainnetEnabled || chainEnv === 'mainnet') {
-    // The current implementation still hard-codes ARC-TESTNET in wallet
-    // creation, native transfers, and provider reconciliation. Do not let a
-    // live Circle key or a plausible RPC silently turn those paths into a
-    // mixed testnet/mainnet deployment. Mainnet requires a separately reviewed
-    // chain mapping and release, so it is an explicit startup failure here.
-    throw new Error('Refusing to start: mainnet financial movement is not implemented and has not been approved for this release. Keep CHAIN_ENV=testnet and MAINNET_ENABLED=false.');
+    if (chainEnv !== 'mainnet' || !mainnetEnabled) {
+      throw new Error('Refusing to start: mainnet requires both CHAIN_ENV=mainnet and MAINNET_ENABLED=true.');
+    }
+    if (!circleIsMainnet) {
+      throw new Error('Refusing to start: mainnet requires a non-TEST_ Circle credential.');
+    }
+    if (process.env.MAINNET_CONFIG_APPROVED !== 'true') {
+      throw new Error('Refusing to start: MAINNET_CONFIG_APPROVED=true is required only after the reviewed chain/provider matrix is signed off.');
+    }
+    // Mainnet data is deployment evidence, not a guessed fallback. Validate the
+    // exact set of chain identifiers, RPCs, Circle names, token addresses and
+    // explorers that this deployment is allowed to touch before booting.
+    const matrix = parseReviewedNetworkMatrix(process.env.MAINNET_CHAIN_MATRIX_JSON);
+    validateEnabledMainnetNetworks(matrix, process.env.MAINNET_ENABLED_NETWORKS);
+    if (!process.env.CIRCLE_API_KEY || !process.env.CIRCLE_ENTITY_SECRET) {
+      throw new Error('Refusing to start: mainnet Circle API credentials are required.');
+    }
+    if (process.env.MONEY_MOVEMENT_ENABLED === 'true' && process.env.FINANCIAL_RELEASE_APPROVED !== 'true') {
+      throw new Error('Refusing to start: real-money movement requires a separately recorded financial release approval.');
+    }
   } else if (circleIsMainnet) {
     throw new Error(
       'Refusing to start: CIRCLE_API_KEY does not have the TEST_ prefix but MAINNET_ENABLED is not true. ' +
@@ -122,6 +145,13 @@ async function bootstrap() {
   // migration. Never create demo accounts, reactivate banned users, or fall
   // back to a password embedded in application code at server startup.
   const prisma = app.get(PrismaService);
+  // The control-plane migration is mandatory even for a read-only process. A
+  // missing/partial control table must fail startup rather than be discovered
+  // only after a customer request reaches a financial path.
+  const financialSafety = app.get(FinancialSafetyService);
+  await financialSafety.assertStorageReady();
+  await financialSafety.assertLedgerBaselineReady();
+  await financialSafety.getControl();
   const envAdminEmails = [process.env.ADMIN_EMAIL, ...(process.env.ADMIN_EMAILS || '').split(',')]
     .map((s) => (s || '').trim().toLowerCase())
     .filter(Boolean);

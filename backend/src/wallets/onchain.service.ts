@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 
 export interface ChainConfig {
@@ -25,6 +26,34 @@ export const EVM_CHAINS: ChainConfig[] = [
   { key: 'MONAD-TESTNET', label: 'MONAD', rpcUrl: 'https://testnet-rpc.monad.xyz', rpcUrls: ['https://testnet-rpc.monad.xyz', 'https://rpc.ankr.com/monad_testnet', 'https://rpc-testnet.monadinfra.com'], usdcContract: '0x534b2f3A21130d7a60830c2Df862319e593943A3', usdcDecimals: 6 },
 ];
 
+export function getConfiguredEvmChains(configService: ConfigService): ChainConfig[] {
+  const environment = configService.get<string>('app.network.environment');
+  if (environment !== 'mainnet') return EVM_CHAINS;
+  const matrix = configService.get<Record<string, {
+    circleBlockchain?: string;
+    rpcUrls: string[];
+    chainId: number;
+    usdcContract: string;
+    usdcDecimals: number;
+  }>>('app.network.matrix') || {};
+  const enabled = configService.get<string[]>('app.network.enabledMainnetNetworks') || [];
+  return enabled
+    .filter((network) => network !== 'SOLANA')
+    .map((network) => {
+      const entry = matrix[network];
+      if (!entry) throw new Error(`Missing reviewed mainnet matrix entry for ${network}.`);
+      const [rpcUrl, ...rpcUrls] = entry.rpcUrls;
+      return {
+        key: entry.circleBlockchain || network,
+        label: network,
+        rpcUrl,
+        rpcUrls,
+        usdcContract: entry.usdcContract,
+        usdcDecimals: entry.usdcDecimals,
+      };
+    });
+}
+
 export const TRANSFER_TOPIC =
   '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
@@ -44,6 +73,12 @@ export interface OnChainTransfer {
 @Injectable()
 export class OnchainService {
   private readonly logger = new Logger(OnchainService.name);
+
+  constructor(private readonly configService: ConfigService) {}
+
+  getConfiguredChains(): ChainConfig[] {
+    return getConfiguredEvmChains(this.configService);
+  }
 
   private async rpc(chain: ChainConfig, method: string, params: any[]): Promise<any> {
     const urls = [chain.rpcUrl, ...(chain.rpcUrls || [])];
@@ -67,12 +102,12 @@ export class OnchainService {
   }
 
   getChainByKey(key: string): ChainConfig | undefined {
-    return EVM_CHAINS.find((c) => c.key === key);
+    return this.getConfiguredChains().find((c) => c.key === key);
   }
 
   getChainByNetwork(network: string): ChainConfig | undefined {
     const net = network.toUpperCase();
-    return EVM_CHAINS.find((c) => c.label === net);
+    return this.getConfiguredChains().find((c) => c.label === net);
   }
 
   async getLatestBlock(chain: ChainConfig): Promise<number> {

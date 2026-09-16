@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, Logger, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,6 +7,7 @@ import { ConversionsService } from '../conversions/conversions.service';
 import { TransactionAuthService } from '../common/transaction-auth/transaction-auth.service';
 import { LedgerService } from '../common/ledger.service';
 import { toMinor } from '../common/money';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 
@@ -63,6 +64,7 @@ export class BillsService {
     private conversionsService: ConversionsService,
     private transactionAuth: TransactionAuthService,
     private ledger: LedgerService,
+    @Optional() private financialSafety?: FinancialSafetyService,
   ) {}
 
   // ── Smartspeed plumbing ─────────────────────────────────────────────────
@@ -462,6 +464,7 @@ export class BillsService {
   // ── Purchase ────────────────────────────────────────────────────────────
 
   async purchaseBill(userId: string, type: string, provider: string, recipient: string, amount: number, pin?: string, planCode?: string, passkeyToken?: string, portedNumber?: boolean) {
+    await this.financialSafety?.assertEnabled('bills', userId);
     if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
       throw new BadRequestException('Money movement is disabled while this environment is in testnet or maintenance mode.');
     }
@@ -608,6 +611,13 @@ export class BillsService {
     }
 
     const reference = `SS-${randomUUID()}`;
+    await this.financialSafety?.reserveDailyLimit({
+      userId,
+      reference,
+      amount: chargeAmount,
+      currency: 'NGN',
+      limit: this.configService.get<number>('app.transactionLimits.billsNgnDaily') || 500000,
+    });
     const billMeta = {
       provider,
       recipient,

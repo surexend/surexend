@@ -6,11 +6,13 @@
 
 ## Executive decision
 
-SureXend is not ready to move from testnet to mainnet. The backend deliberately
-refuses to boot when `CHAIN_ENV=mainnet` or `MAINNET_ENABLED=true`, because the
-wallet, Arc transfer, CCTP, reconciliation, and explorer mappings still contain
-Arc/testnet assumptions. That fail-closed behavior is correct and must not be
-removed as a release shortcut.
+SureXend is not ready to move from testnet to mainnet. Mainnet now has an
+explicit, fail-closed reviewed-matrix validator: `CHAIN_ENV=mainnet`,
+`MAINNET_ENABLED=true`, `MAINNET_CONFIG_APPROVED=true`, a real non-test Circle
+credential, and a complete `MAINNET_CHAIN_MATRIX_JSON` are all required before
+boot. The matrix is deployment evidence, not a source-code default; no mainnet
+values are invented here, and the release remains blocked until the matrix is
+independently verified on-chain and against provider documentation.
 
 No software can honestly guarantee “no loss whatsoever.” A billion-dollar-grade
 financial release requires defense in depth, independent review, operational
@@ -28,6 +30,29 @@ MAINNET_ENABLED=false
 MONEY_MOVEMENT_ENABLED=false
 ```
 
+## Controls implemented in this pass
+
+- `FinancialControl` is a database-backed circuit breaker seeded disabled. Every
+  crypto send, conversion, bill payment, administrative credit/referral payout,
+  and provider inbound credit requires both the deployment flag and the matching
+  database switch. An emergency pause is immediate; enabling movement requires a
+  pending change approved by a distinct, stepped-up admin.
+- Customer movement in production/mainnet requires `KYCStatus.VERIFIED`, and
+  configured exact-match blocked-address screening is fail-closed. This is a
+  technical control, not a substitute for a licensed sanctions/AML provider or
+  compliance program.
+- Daily minor-unit reservations are atomic and conservative. They use a locked
+  per-user/day/currency bucket and a stable operation reference; failed or
+  unknown provider outcomes consume the reservation rather than allowing retry
+  abuse.
+- Mainnet consumers (CCTP, Circle wallet blockchain names, and EVM deposit
+  monitoring) read the reviewed matrix instead of silently converting a testnet
+  key into mainnet behavior. Mainnet remains disabled by default.
+
+These controls still require a real PostgreSQL migration rehearsal and generated
+Prisma-client validation before release. They do not close the external custody,
+provider, legal/compliance, independent-review, or recovery-evidence blockers.
+
 ## Evidence collected
 
 - Source and Prisma schema reviewed across frontend, backend, migrations, auth,
@@ -41,7 +66,9 @@ MONEY_MOVEMENT_ENABLED=false
   25 moderate, 9 low** in the installed backend dependency graph after
   removing the unused native `bcrypt` dependency and upgrading direct Multer.
   A real release requires triage, upgrades, or documented compensating controls;
-  this repository must not treat the audit as clean.
+  this repository must not treat the audit as clean. CI now blocks production
+  dependency advisories at high severity and uploads the audit report; the
+  current known high findings therefore remain an active release blocker.
 - No production PostgreSQL migration/restore rehearsal, provider contract
   preflight, end-to-end testnet receipt packet, alert restart drill, or external
   penetration test was available in this environment.
@@ -50,22 +77,27 @@ MONEY_MOVEMENT_ENABLED=false
 
 ### P0 — financial correctness and custody
 
-1. **Mainnet chain matrix is not implemented or independently reviewed.** The
-   current release contains `ARC-TESTNET`, testnet BridgeKit chains, and testnet
-   RPC/token defaults. Mainnet must use an explicit, versioned matrix sourced
-   from Circle/Arc documentation and verified on-chain; never infer mainnet from
-   an API-key prefix.
-2. **Balances still have legacy `Float` fields.** Financial balances should be
-   integer minor units or a rigorously specified decimal type. The double-entry
-   ledger migration is additive and flag-gated, but legacy writes/reads and
-   baseline reconciliation still need real PostgreSQL rehearsal and canary
-   evidence.
-3. **Custody/key management is not at institutional standard.** Circle entity
-   secrets and provider credentials must be held in a managed secrets system,
-   wallets must be least-privilege and segregated, treasury actions must have
-   dual control, withdrawal limits, allowlists, anomaly detection, and an
-   emergency pause. A production application environment must not be the only
-   control over customer funds.
+1. **Mainnet chain matrix is code-validated but not release-approved.** The
+   application now consumes an explicit `MAINNET_CHAIN_MATRIX_JSON` for enabled
+   networks and rejects incomplete, local, non-HTTPS, malformed, or unreviewed
+   entries at startup. Real values must still be sourced from Circle/Arc
+   documentation, verified on-chain, versioned in the release packet, and
+   independently reviewed; never infer mainnet from an API-key prefix.
+2. **Legacy `Float` columns remain compatibility snapshots.** All newly
+   enabled money movement must use the integer-minor-unit ledger as its source
+   of truth; startup now refuses money movement when non-zero float balances lack
+   a ledger baseline, and the production gate requires ledger reads. The legacy
+   columns are still written for compatibility and need a real PostgreSQL
+   rehearsal, drift report, full-path test, and eventual removal before the
+   accounting cutover can be called complete.
+3. **Custody/key management is not at institutional standard.** The code now
+   provides a database emergency pause, two-person release workflow, atomic
+   per-user daily limits, and an audit surface for financial-control changes.
+   Circle entity secrets and provider credentials must still be held in a
+   managed secrets system, wallets must be least-privilege and segregated,
+   treasury actions need custody-side dual control and allowlists, anomaly
+   detection must be operational, and a production application environment
+   must not be the only control over customer funds.
 4. **Provider outcome contracts are incomplete.** Circle CCTP, bank funding,
    and bill-provider contracts need authoritative status, idempotency, timeout,
    reconciliation, and webhook replay evidence. Unknown provider outcomes must
@@ -115,6 +147,12 @@ MONEY_MOVEMENT_ENABLED=false
   application logs where they could expose PII or payment details.
 - Bank-account/provider provisioning is closed while money movement is disabled,
   preventing a read-only demo from initiating provider side effects.
+- The financial-control migration (`20260916010000_financial_control_plane`)
+  seeds movement disabled, adds atomic daily limit buckets/reservations, and the
+  admin API exposes separate request/approve and immediate pause operations.
+- On-chain deposit recording now commits the transaction history row, float
+  compatibility snapshot, and integer ledger journal in one database
+  transaction; a partial wallet write cannot suppress a later reconciliation.
 
 These changes are safety improvements, not launch approval. They must be
 validated by the backend test suite and a deployed rehearsal environment.

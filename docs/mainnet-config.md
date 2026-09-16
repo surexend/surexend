@@ -1,10 +1,11 @@
 # Mainnet Configuration — Preparation & Review Reference
 
-> **Status: NOT ENABLED.** `MAINNET_ENABLED` is false everywhere, `CHAIN_ENV`
-> defaults to `testnet`, and every chain mapping in the code is testnet. This
-> document is the *preparation* for the separately-reviewed launch config. Do
-> not enable mainnet until this matrix is filled, reviewed, and the rollout
-> checklist in `rollout-status.md` is complete.
+> **Status: NOT ENABLED.** `MAINNET_ENABLED` is false by default and the
+> deployment matrix is not committed with real values. The application now
+> consumes `MAINNET_CHAIN_MATRIX_JSON` and refuses to boot unless every enabled
+> network has an explicit reviewed Circle name, BridgeKit chain, RPC, chain ID,
+> USDC contract/decimals, and explorer URL. This document is the preparation
+> reference for that private release packet.
 
 ## 1. Why this is a two-mapping system
 
@@ -12,16 +13,15 @@ Chain selection lives in two independent places and they MUST stay consistent:
 
 | Place | File | Selected by | Testnet values | Mainnet values |
 |---|---|---|---|---|
-| BridgeKit chains | `wallets/cctp.service.ts` `NETWORK_TO_CHAIN` | hardcoded map (const) | `Arc_Testnet`, `Ethereum_Sepolia`, `Polygon_Amoy_Testnet`, `Avalanche_Fuji`, `Arbitrum_Sepolia`, `Base_Sepolia`, `Optimism_Sepolia`, `Solana_Devnet`, `Monad_Testnet` | **not yet mapped** — must be added explicitly |
-| Circle blockchain strings | `wallets/wallets.service.ts` `getBlockchainName()` | `CIRCLE_API_KEY` prefix (`TEST_` → testnet) | `ARC-TESTNET`, `ETH-SEPOLIA`, … | `ARC`, `ETH`, `POLYGON`, `AVAX`, `ARB`, `BASE`, `OP`, `SOL`, `MONAD` |
+| BridgeKit chains | `wallets/cctp.service.ts` | reviewed matrix in `MAINNET_CHAIN_MATRIX_JSON` for mainnet; testnet constants otherwise | `Arc_Testnet`, `Ethereum_Sepolia`, `Polygon_Amoy_Testnet`, `Avalanche_Fuji`, `Arbitrum_Sepolia`, `Base_Sepolia`, `Optimism_Sepolia`, `Solana_Devnet`, `Monad_Testnet` | private provider-reviewed `cctpChain` values |
+| Circle blockchain strings | `wallets/wallets.service.ts` `getBlockchainName()` | reviewed matrix for mainnet; explicit testnet map otherwise | `ARC-TESTNET`, `ETH-SEPOLIA`, … | private provider-reviewed `circleBlockchain` values |
 
-⚠️ Landmine (now guarded at boot): a mainnet Circle key flips **only** the second
-mapping. `assertNetworkConfig()` in `main.ts` currently refuses to boot on
-**all** `MAINNET_ENABLED=true` / `CHAIN_ENV=mainnet` configurations because the
-current release still hard-codes `ARC-TESTNET` in wallet creation, native
-transfers, and BridgeKit reconciliation. It also refuses a non-test Circle key
-while `MAINNET_ENABLED` is false (mixed mapping). A separately reviewed release
-must add and test the mainnet BridgeKit mapping before this guard is relaxed.
+⚠️ Landmine (now guarded at boot): a mainnet Circle key must never be allowed
+to select only one side of the mapping. `assertNetworkConfig()` requires
+`CHAIN_ENV=mainnet`, `MAINNET_ENABLED=true`, `MAINNET_CONFIG_APPROVED=true`, a
+non-test Circle credential, and a complete matrix for every enabled network. It
+also refuses a non-test Circle key while `MAINNET_ENABLED` is false (mixed
+mapping). The matrix still needs provider and on-chain review before approval.
 
 ## 2. Values to source & review (NONE are committed / hardcoded)
 
@@ -30,23 +30,24 @@ must add and test the mainnet BridgeKit mapping before this guard is relaxed.
 | `CIRCLE_API_KEY` | `TEST_…` (Railway) | Circle dashboard | ops + security | Must be a **mainnet** key; changing it flips `getBlockchainName()` |
 | `CIRCLE_WALLET_SET_ID` | sandbox set | Circle | ops | Mainnet wallet set |
 | `CIRCLE_WEBHOOK_SECRET` | sandbox | Circle | ops | Re-verify signature on mainnet webhooks |
-| `ARC_RPC_URL` | `https://rpc.testnet.arc.network` | Arc docs | ops | Testnet URL hardcoded as default; mainnet must be explicit |
-| `ARC_CHAIN_ID` | `5042002` | Arc docs | ops | Verify the real mainnet chain id |
-| `ARC_USDC_CONTRACT_ADDRESS` | `0x3600…0000` (testnet precompile) | Arc docs / token contract | ops + security | **Never reuse the testnet default** |
-| `NETWORK_TO_CHAIN` entries | testnet BridgeChains | bridge-kit constants | dev + ops | Add mainnet constants + a per-network switch |
-| `getBlockchainName()` mainnet branch | exists | — | dev | Already implemented; only reachable with a mainnet key |
+| `MAINNET_CHAIN_MATRIX_JSON.rpcUrls` | `https://rpc.testnet.arc.network` (testnet default) | Arc/provider docs | ops | Mainnet URLs must be managed HTTPS endpoints |
+| `MAINNET_CHAIN_MATRIX_JSON.chainId` | `5042002` (testnet) | network docs | ops | Verify each enabled mainnet chain ID |
+| `MAINNET_CHAIN_MATRIX_JSON.usdcContract` | testnet contract/precompile | token contract | ops + security | **Never reuse a testnet address** |
+| `MAINNET_CHAIN_MATRIX_JSON.cctpChain` | testnet BridgeKit constants | provider docs | dev + ops | Record the exact provider-reviewed mainnet value |
+| `MAINNET_CHAIN_MATRIX_JSON.circleBlockchain` | testnet Circle names | Circle docs | dev + ops | Record the exact Circle mainnet value |
 | `FRONTEND_URL`, `WEBAUTHN_*`, SMTP/Firebase | prod values | — | ops | Unchanged by mainnet |
 | `ADMIN_EMAILS` | set/removed per boot | — | ops | Remove after use |
 
 ## 3. Proposed switchover sequence (review before executing)
 
 1. Fill the matrix above and record values in a private vault (never in git).
-2. Code change: make `NETWORK_TO_CHAIN` (and ARC defaults) select the mainnet
-   variant **only when `MAINNET_ENABLED=true`** — keep testnet as the default
-   path so the current deployment is untouched.
-3. Implement and independently review the mainnet BridgeKit/Circle mapping,
-   provider contracts, reconciliation, and explorer links; the current boot
-   guard must remain closed during this work.
+2. Populate the private `MAINNET_CHAIN_MATRIX_JSON` and
+   `MAINNET_ENABLED_NETWORKS`; do not put real secrets or unreviewed values in
+   git. The testnet constants remain the default path.
+3. Independently review the mainnet BridgeKit/Circle mapping, provider
+   contracts, reconciliation, token addresses, RPC ownership, and explorer
+   links; the database control plane and launch gate must remain closed during
+   this work.
 4. Only after a separate release is approved, flip `MAINNET_ENABLED=true` +
    `CHAIN_ENV=mainnet` + mainnet ARC vars on Railway **and** the matching
    frontend env at the same time.
