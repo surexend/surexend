@@ -5,7 +5,13 @@ money-moving provider. A successful HTTP response alone is not a settlement
 receipt. Provider-specific status, signature, idempotency, and reconciliation
 evidence must be captured in the release packet before enabling a path.
 
-## Read-only preflight
+## Provider selection and read-only preflight
+
+Provider requirements are selected through `ENABLED_PROVIDERS`, whose current
+safe default is `circle,paymentpoint,smartspeed`. `FLUTTERWAVE_ENABLED=true`
+explicitly adds the legacy Flutterwave path; leaving it false removes
+Flutterwave from runtime, webhook, and release-gate requirements. Credentials
+alone do not silently enable a provider.
 
 From `backend/`:
 
@@ -55,9 +61,13 @@ used for any separately executed money-flow test.
   require a UUIDv4 `idempotencyKey` and reusing it returns the original request:
   <https://developers.circle.com/api-reference/wallets/developer-controlled-wallets/create-developer-transaction-transfer>
 
-## Flutterwave
+## Flutterwave (optional legacy path)
 
-- Current webhook verification uses the exact raw request body and the
+Flutterwave is disabled unless `FLUTTERWAVE_ENABLED=true`. When disabled, it
+is not a launch-gate provider, its webhook route is closed, and local funding
+will not fall back to it. If it is explicitly enabled:
+
+- Webhook verification uses the exact raw request body and the
   `flutterwave-signature` HMAC-SHA256 value. The legacy `verif-hash` path is
   accepted only when the current signature header is absent and a configured
   legacy secret exists.
@@ -72,7 +82,12 @@ used for any separately executed money-flow test.
 
 ## Smartspeed bills
 
-The repository does not currently contain an authoritative Smartspeed status or
+The preflight now calls the same authenticated, read-only `/user/` catalog
+endpoint used for bill discovery when `--network` is supplied. This proves
+reachability and credential acceptance only; it is not a bill receipt and does
+not establish idempotency or terminal-status semantics.
+
+The repository still does not contain an authoritative Smartspeed status or
 idempotency contract. The bill flow therefore must not treat a generic 2xx,
 network timeout, or undocumented response field as proof of delivery. Unknown
 outcomes remain pending and are reconciled from provider evidence before an
@@ -90,13 +105,21 @@ sandbox contract and an authenticated test:
 
 ## PaymentPoint
 
+PaymentPoint is the selected local-funding path when its API key, secret, and
+business ID are configured. The launch gate includes it only when those
+credentials are present; it does not silently substitute Flutterwave.
+
 PaymentPoint’s callback signature and terminal-status contract has not been
 independently established for this repository. `PAYMENTPOINT_WEBHOOK_ENABLED`
 must remain `false`; credentials alone do not authorize money crediting.
+The preflight can test an explicitly configured, provider-documented safe GET
+endpoint through `PAYMENTPOINT_READ_ONLY_PREFLIGHT_URL`, but it will not guess
+an endpoint or call virtual-account creation just to obtain evidence.
 
 Before enabling the webhook, record the provider's signed callback algorithm,
 header, canonical bytes, replay protection, terminal statuses, and a sandbox
-replay test. Until then, the preflight reports `PENDING_UNVERIFIED`.
+replay test. Until then, the preflight reports `PENDING_UNVERIFIED` and
+mainnet remains closed for that inbound-credit path.
 
 ## Release decision
 

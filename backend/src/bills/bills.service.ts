@@ -73,7 +73,15 @@ export class BillsService {
     return this.configService.get<string>('app.smartspeed.baseUrl');
   }
 
+  private smartspeedEnabled(): boolean {
+    const enabled = this.configService.get<string[]>('app.providers.enabled') || [];
+    return enabled.includes('smartspeed');
+  }
+
   private smartspeedHeaders() {
+    if (!this.smartspeedEnabled()) {
+      throw new BadRequestException('Smartspeed is disabled for this deployment.');
+    }
     const apiKey = this.configService.get<string>('app.smartspeed.apiKey');
     if (!apiKey) {
       throw new BadRequestException('Smartspeed is not configured. Set SMARTSPEED_API_TOKEN.');

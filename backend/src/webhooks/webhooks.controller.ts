@@ -47,6 +47,9 @@ export class WebhooksController {
     @Headers('verif-hash') legacyHash: string,
     @Body() payload: any,
   ) {
+    if (this.configService.get<boolean>('app.flutterwave.enabled') !== true) {
+      throw new ServiceUnavailableException('Flutterwave webhook is disabled; PaymentPoint is the selected funding provider.');
+    }
     if (this.rawBodyEnabled) {
       const secretHash = this.configService.get<string>('app.flutterwave.webhookHash');
       // Current Flutterwave webhooks use HMAC-SHA256 over the raw body and the
@@ -117,7 +120,9 @@ export class WebhooksController {
     @Body() payload: any,
   ) {
     if (this.rawBodyEnabled) {
-      const enabled = this.configService.get<boolean>('app.paymentpoint.webhookEnabled') === true;
+      const providers = this.configService.get<string[]>('app.providers.enabled') || [];
+      const enabled = providers.includes('paymentpoint')
+        && this.configService.get<boolean>('app.paymentpoint.webhookEnabled') === true;
       const secret = this.configService.get<string>('app.paymentpoint.webhookSecret');
       if (!enabled || !secret) {
         // PaymentPoint's public material available to this audit did not

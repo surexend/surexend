@@ -98,9 +98,11 @@ provider, legal/compliance, independent-review, or recovery-evidence blockers.
   dedicated production-like backup/restore rehearsal; that script explicitly
   remains pending until `pg_dump`/`pg_restore` evidence is run against the
   dedicated database.
-- Provider preflight was executed with `--all --network`, but all four providers
-  remain `PENDING_UNVERIFIED` because no authenticated provider credentials are
-  configured in this environment. No provider contract evidence was fabricated.
+- Provider preflight was executed with `--all --network`; Flutterwave is now
+  explicitly `DISABLED` for the current PaymentPoint launch scope, while Circle,
+  Smartspeed, and PaymentPoint remain unverified here because no authenticated
+  deployment credentials were available. No provider contract evidence was
+  fabricated.
 - No production PostgreSQL migration/restore packet, end-to-end testnet receipt
   packet, external penetration test, custody approval, KYC/AML approval,
   sanctions approval, independent security review, or staged-canary observation

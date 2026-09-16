@@ -12,6 +12,18 @@ export default registerAs('app', () => {
     : [];
 
   const reviewedArc = reviewedMatrix.ARC;
+  // Provider selection is explicit. The current launch scope is Circle plus
+  // PaymentPoint and Smartspeed; Flutterwave is opt-in through its dedicated
+  // flag and is removed from this set unless explicitly enabled.
+  const enabledProviders = new Set(
+    (process.env.ENABLED_PROVIDERS || 'circle,paymentpoint,smartspeed')
+      .split(',')
+      .map((provider) => provider.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  enabledProviders.add('circle');
+  if (process.env.FLUTTERWAVE_ENABLED === 'true') enabledProviders.add('flutterwave');
+  else enabledProviders.delete('flutterwave');
 
   return {
   port: parseInt(process.env.PORT, 10) || 3001,
@@ -29,12 +41,18 @@ export default registerAs('app', () => {
     secret: process.env.JWT_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
   },
+  providers: {
+    enabled: [...enabledProviders],
+  },
   webauthn: {
     rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
     rpName: process.env.WEBAUTHN_RP_NAME || 'SureXend',
     origin: process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000',
   },
   flutterwave: {
+    // Flutterwave is an optional legacy funding path. It is disabled by
+    // default when PaymentPoint is the selected local-funding provider.
+    enabled: process.env.FLUTTERWAVE_ENABLED === 'true',
     publicKey: process.env.FLUTTERWAVE_PUBLIC_KEY,
     secretKey: process.env.FLUTTERWAVE_SECRET_KEY,
     webhookHash: process.env.FLUTTERWAVE_WEBHOOK_HASH,
@@ -132,6 +150,9 @@ export default registerAs('app', () => {
     apiKey: process.env.CIRCLE_API_KEY,
     entitySecret: process.env.CIRCLE_ENTITY_SECRET,
     walletSetId: process.env.CIRCLE_WALLET_SET_ID,
+    // Mainnet referral rewards must use an explicitly separate Circle wallet
+    // set; the app wallet set is never reused for campaign custody.
+    referralRewardWalletSetId: process.env.CIRCLE_REFERRAL_REWARD_WALLET_SET_ID,
     webhookSecret: process.env.CIRCLE_WEBHOOK_SECRET,
     // Referral rewards are paid as USDT from the Circle-created USDC treasury.
     // Configure a Circle-supported chain and its verified USDT contract address;

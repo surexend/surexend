@@ -291,9 +291,12 @@ export class FinancialSafetyService {
         process.env.CIRCLE_CCTP_CONTRACT_EVIDENCE_ID,
         process.env.TESTNET_E2E_EVIDENCE_ID,
         process.env.ALERT_RESTART_EVIDENCE_ID,
-        process.env.SMARTSPEED_CONTRACT_EVIDENCE_ID,
         process.env.PROVIDER_PREFLIGHT_EVIDENCE_FILE,
       ];
+      if ((process.env.ENABLED_PROVIDERS || 'circle,paymentpoint,smartspeed')
+        .split(',').map((provider) => provider.trim().toLowerCase()).includes('smartspeed')) {
+        requiredEvidence.push(process.env.SMARTSPEED_CONTRACT_EVIDENCE_ID);
+      }
       const canaryEvidenceValid = process.env.CHAIN_ENV === 'mainnet'
         ? (process.env.CANARY_MODE === 'true'
           ? Boolean(process.env.CANARY_USER_IDS?.split(',').map((value) => value.trim()).filter(Boolean).length)
@@ -304,7 +307,16 @@ export class FinancialSafetyService {
         const packet = JSON.parse(readFileSync(String(process.env.PROVIDER_PREFLIGHT_EVIDENCE_FILE || '').trim(), 'utf8'));
         const passed = new Set((Array.isArray(packet?.results) ? packet.results : [])
           .filter((row: any) => row?.status === 'PASS').map((row: any) => row.provider));
-        providerPreflightValid = passed.has('circle') && passed.has('flutterwave');
+        const requiredProviders = new Set(
+          (process.env.ENABLED_PROVIDERS || 'circle,paymentpoint,smartspeed')
+            .split(',')
+            .map((provider) => provider.trim().toLowerCase())
+            .filter(Boolean),
+        );
+        requiredProviders.add('circle');
+        if (process.env.FLUTTERWAVE_ENABLED === 'true') requiredProviders.add('flutterwave');
+        else requiredProviders.delete('flutterwave');
+        providerPreflightValid = [...requiredProviders].every((provider) => passed.has(provider));
       } catch {
         providerPreflightValid = false;
       }

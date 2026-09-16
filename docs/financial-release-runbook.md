@@ -138,9 +138,14 @@ PROVIDER_PREFLIGHT_EVIDENCE_FILE='./release-evidence/provider-preflight.json' \
 npm run provider:preflight -- --all --network
 ```
 
-Circle and Flutterwave may produce a `PASS` only after their authenticated
-read-only checks. Smartspeed and PaymentPoint remain `PENDING_UNVERIFIED` until
-their contracts are recorded; do not call guessed endpoints.
+The release gate requires Circle plus every provider actually enabled by
+credentials: explicitly enabled Flutterwave, configured Smartspeed, and
+configured PaymentPoint. Flutterwave is disabled by default for the current
+PaymentPoint launch. Smartspeed's `/user/` check is read-only reachability
+evidence, not idempotency/settlement evidence. PaymentPoint remains
+`PENDING_UNVERIFIED` unless an explicitly configured, provider-documented safe
+GET endpoint is supplied; never call virtual-account creation or a guessed
+endpoint merely to obtain evidence.
 
 Then execute the authenticated sandbox flows in
 `docs/testnet-e2e-runbook.md`. Record provider transaction IDs, tx hashes,

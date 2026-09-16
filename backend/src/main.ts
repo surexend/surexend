@@ -18,13 +18,26 @@ import { parseReviewedNetworkMatrix, validateEnabledMainnetNetworks } from './co
  * at boot prevents a manually-enabled database control row from bypassing the
  * release process.
  */
+function enabledProviderPreflights(): string[] {
+  const providers = new Set(
+    (process.env.ENABLED_PROVIDERS || 'circle,paymentpoint,smartspeed')
+      .split(',')
+      .map((provider) => provider.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  providers.add('circle');
+  if (process.env.FLUTTERWAVE_ENABLED === 'true') providers.add('flutterwave');
+  else providers.delete('flutterwave');
+  return [...providers];
+}
+
 function assertProviderPreflightEvidence() {
   const file = String(process.env.PROVIDER_PREFLIGHT_EVIDENCE_FILE || '').trim();
   try {
     const packet = JSON.parse(readFileSync(file, 'utf8'));
     const results = Array.isArray(packet?.results) ? packet.results : [];
     const passed = new Set(results.filter((row: any) => row?.status === 'PASS').map((row: any) => row.provider));
-    const missing = ['circle', 'flutterwave'].filter((provider) => !passed.has(provider));
+    const missing = enabledProviderPreflights().filter((provider) => !passed.has(provider));
     if (missing.length) throw new Error(`missing PASS result(s): ${missing.join(', ')}`);
   } catch (error: any) {
     throw new Error(`Refusing to start: provider preflight evidence is unreadable or incomplete (${error?.message || error}).`);
@@ -46,9 +59,11 @@ function assertRealMoneyEvidence(context: string) {
     ['CIRCLE_CCTP_CONTRACT_EVIDENCE_ID', process.env.CIRCLE_CCTP_CONTRACT_EVIDENCE_ID],
     ['TESTNET_E2E_EVIDENCE_ID', process.env.TESTNET_E2E_EVIDENCE_ID],
     ['ALERT_RESTART_EVIDENCE_ID', process.env.ALERT_RESTART_EVIDENCE_ID],
-    ['SMARTSPEED_CONTRACT_EVIDENCE_ID', process.env.SMARTSPEED_CONTRACT_EVIDENCE_ID],
     ['PROVIDER_PREFLIGHT_EVIDENCE_FILE', process.env.PROVIDER_PREFLIGHT_EVIDENCE_FILE],
   ];
+  if (enabledProviderPreflights().includes('smartspeed')) {
+    requiredEvidence.push(['SMARTSPEED_CONTRACT_EVIDENCE_ID', process.env.SMARTSPEED_CONTRACT_EVIDENCE_ID]);
+  }
   const missingEvidence = requiredEvidence.filter(([, value]) => !String(value || '').trim()).map(([name]) => name);
   if (missingEvidence.length) {
     throw new Error(`Refusing to start: ${context} money movement is missing release evidence: ${missingEvidence.join(', ')}.`);

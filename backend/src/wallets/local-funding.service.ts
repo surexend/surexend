@@ -5,10 +5,9 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import { FinancialSafetyService } from '../common/financial-safety.service';
 
-// Local-currency funding via Flutterwave VNUBAN virtual accounts. Each user
-// gets a permanent dedicated bank account number; when they transfer to it,
-// Flutterwave fires a charge.completed webhook and the webhooks service credits
-// their local-currency wallet automatically (see WebhooksService).
+// Local-currency funding via the configured virtual-account provider. PaymentPoint
+// is the primary path; the legacy Flutterwave path is used only when explicitly
+// enabled. Inbound credits are accepted only through a verified, signed webhook.
 @Injectable()
 export class LocalFundingService {
   private readonly logger = new Logger(LocalFundingService.name);
@@ -39,6 +38,11 @@ export class LocalFundingService {
     return this.configService.get<string>('app.flutterwave.secretKey') || '';
   }
 
+  private providerEnabled(provider: string): boolean {
+    const enabled = this.configService.get<string[]>('app.providers.enabled') || [];
+    return enabled.includes(provider.toLowerCase());
+  }
+
   // Returns the user's dedicated bank account, creating it via PaymentPoint (or Flutterwave fallback) on
   // first request. If neither is configured yet, returns "configured: false".
   async getOrCreateAccount(userId: string) {
@@ -54,8 +58,10 @@ export class LocalFundingService {
       throw new BadRequestException('Bank funding is disabled while this environment is in testnet or maintenance mode.');
     }
 
-    const hasPaymentPoint = !!(this.ppApiKey || this.ppSecretKey);
-    const hasFlutterwave = !!this.flwSecretKey;
+    const hasPaymentPoint = this.providerEnabled('paymentpoint') && !!(this.ppApiKey && this.ppSecretKey && this.ppBusinessId);
+    const hasFlutterwave = this.providerEnabled('flutterwave')
+      && this.configService.get<boolean>('app.flutterwave.enabled') === true
+      && !!this.flwSecretKey;
 
     if (!hasPaymentPoint && !hasFlutterwave) {
       return {

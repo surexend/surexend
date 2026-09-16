@@ -57,6 +57,10 @@ function env(name) {
   return String(process.env[name] || '').trim();
 }
 
+function anyEnv(...names) {
+  return names.map((name) => env(name)).find(Boolean) || '';
+}
+
 function isPlaceholderSecret(value) {
   return !value || /super-secret|change[-_ ]?me|example|password/i.test(value);
 }
@@ -74,6 +78,20 @@ function providerEvidence(provider) {
   const file = env('PROVIDER_PREFLIGHT_EVIDENCE_FILE');
   if (!file) return false;
   return fileContainsPass(file, provider);
+}
+
+function enabledProviderNames() {
+  const configured = (env('ENABLED_PROVIDERS') || 'circle,paymentpoint,smartspeed')
+    .split(',').map((provider) => provider.trim().toLowerCase()).filter(Boolean);
+  const providers = new Set(configured);
+  providers.add('circle');
+  if (env('FLUTTERWAVE_ENABLED') === 'true') providers.add('flutterwave');
+  else providers.delete('flutterwave');
+  return [...providers];
+}
+
+function enabledProviderPreflights() {
+  return enabledProviderNames().filter((provider) => ['circle', 'flutterwave', 'smartspeed', 'paymentpoint'].includes(provider));
 }
 
 function mainnetMatrixIsValid() {
@@ -109,11 +127,17 @@ function assertConfiguration() {
   const mainnet = env('MAINNET_ENABLED') === 'true';
   const movement = env('MONEY_MOVEMENT_ENABLED') === 'true';
   const ledgerReads = env('LEDGER_READS_ENABLED') === 'true';
+  const enabledProviders = enabledProviderNames();
+  const smartspeedEnabled = enabledProviders.includes('smartspeed');
+  const paymentpointEnabled = enabledProviders.includes('paymentpoint');
+  const flutterwaveEnabled = env('FLUTTERWAVE_ENABLED') === 'true' && enabledProviders.includes('flutterwave');
+  const flutterwaveConfigured = Boolean(env('FLUTTERWAVE_SECRET_KEY') && env('FLUTTERWAVE_WEBHOOK_HASH'));
 
   check('network-scope-is-explicit', scope === 'mainnet' ? chainEnv === 'mainnet' : chainEnv === 'testnet', `scope=${scope}; CHAIN_ENV=${chainEnv}.`);
   check('mainnet-scope-flag', scope === 'mainnet' ? mainnet : !mainnet, `scope=${scope}; MAINNET_ENABLED=${mainnet}.`);
   check('webhook-signatures-required', webhooksSigned, `WEBHOOK_REQUIRE_SIGNATURE=${webhooksSigned}.`);
   check('bill-funding-guard', fundingGuard, `BILLS_REQUIRE_FUNDING=${fundingGuard}.`);
+  check('enabled-providers-known', enabledProviderNames().every((provider) => ['circle', 'flutterwave', 'smartspeed', 'paymentpoint'].includes(provider)), `ENABLED_PROVIDERS=${enabledProviderNames().join(',')}.`);
   check('jwt-secrets-are-non-placeholder', !isPlaceholderSecret(env('JWT_SECRET')) && !isPlaceholderSecret(env('JWT_REFRESH_SECRET')), 'JWT secrets are present and are not example values.');
 
   if (scope === 'testnet-demo') {
@@ -149,13 +173,25 @@ function assertConfiguration() {
     check('postgres-rehearsal-evidence', Boolean(env('POSTGRES_REHEARSAL_EVIDENCE_ID')), 'POSTGRES_REHEARSAL_EVIDENCE_ID points to the real PostgreSQL migration/locking/restart rehearsal.');
     check('testnet-e2e-evidence', Boolean(env('TESTNET_E2E_EVIDENCE_ID')), 'TESTNET_E2E_EVIDENCE_ID points to the completed sandbox receipt table.');
     check('alert-restart-evidence', Boolean(env('ALERT_RESTART_EVIDENCE_ID')), 'ALERT_RESTART_EVIDENCE_ID points to the durable alert failure/restart drill.');
-    check('smartspeed-credential', Boolean(env('SMARTSPEED_API_TOKEN')), 'Smartspeed credential is present for the configured bill provider.');
-    check('flutterwave-credential-and-signing', Boolean(env('FLUTTERWAVE_SECRET_KEY') && env('FLUTTERWAVE_WEBHOOK_HASH')), 'Flutterwave secret and webhook hash are present for signed NGN deposits.');
+    check('smartspeed-credential', !smartspeedEnabled || Boolean(env('SMARTSPEED_API_TOKEN')), smartspeedEnabled
+      ? 'Smartspeed credential is present for the configured bill provider.'
+      : 'Smartspeed is not enabled for this deployment.');
+    const paymentpointConfigured = Boolean(anyEnv('PAYMENTPOINT_API_KEY', 'PAYMENT_POINT_API_KEY')
+      && anyEnv('PAYMENTPOINT_SECRET_KEY', 'PAYMENT_POINT_SECRET_KEY')
+      && anyEnv('PAYMENTPOINT_BUSINESS_ID', 'PAYMENT_POINT_BUSINESS_ID'));
+    const localFundingConfigured = (paymentpointEnabled && paymentpointConfigured) || (flutterwaveEnabled && flutterwaveConfigured);
+    check('local-funding-provider-configured', localFundingConfigured, 'An enabled local-funding provider has complete credentials.');
+    check('flutterwave-disabled-or-configured', !flutterwaveEnabled || flutterwaveConfigured, flutterwaveEnabled
+      ? 'Flutterwave is enabled and its secret and webhook hash are present.'
+      : 'Flutterwave is disabled; PaymentPoint is the selected local-funding provider.');
     check('paymentpoint-webhook-closed-until-contract', env('PAYMENTPOINT_WEBHOOK_ENABLED') !== 'true', 'PaymentPoint callback crediting remains disabled until its signature contract is evidenced.');
     const providerFile = env('PROVIDER_PREFLIGHT_EVIDENCE_FILE');
-    check('circle-preflight-evidence', providerEvidence('circle'), `Circle read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
-    check('flutterwave-preflight-evidence', providerEvidence('flutterwave'), `Flutterwave read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
-    check('smartspeed-contract-evidence', Boolean(env('SMARTSPEED_CONTRACT_EVIDENCE_ID')), 'SMARTSPEED_CONTRACT_EVIDENCE_ID points to the provider contract and sandbox receipt packet.');
+    for (const provider of enabledProviderPreflights()) {
+      check(`${provider}-preflight-evidence`, providerEvidence(provider), `${provider} read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
+    }
+    check('smartspeed-contract-evidence', !smartspeedEnabled || Boolean(env('SMARTSPEED_CONTRACT_EVIDENCE_ID')), smartspeedEnabled
+      ? 'SMARTSPEED_CONTRACT_EVIDENCE_ID points to the provider contract and sandbox receipt packet.'
+      : 'Smartspeed contract evidence is not required because the provider is disabled.');
     return;
   }
 
@@ -170,8 +206,17 @@ function assertConfiguration() {
   check('independent-security-review-evidence', Boolean(env('INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID')), 'INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID identifies external security review and remediation sign-off.');
   check('disaster-recovery-evidence', Boolean(env('DISASTER_RECOVERY_EVIDENCE_ID')), 'DISASTER_RECOVERY_EVIDENCE_ID identifies backup restore, failover, and rollback evidence.');
   check('circle-testnet-credentials', env('CIRCLE_API_KEY').startsWith('TEST_') && Boolean(env('CIRCLE_ENTITY_SECRET')), 'Circle testnet API key and entity secret are present; no live key may be mixed into this release.');
-  check('smartspeed-credential', Boolean(env('SMARTSPEED_API_TOKEN')), 'Smartspeed credential is present for the configured bill provider.');
-  check('flutterwave-credential-and-signing', Boolean(env('FLUTTERWAVE_SECRET_KEY') && env('FLUTTERWAVE_WEBHOOK_HASH')), 'Flutterwave secret and webhook hash are present for signed NGN deposits.');
+  check('smartspeed-credential', !smartspeedEnabled || Boolean(env('SMARTSPEED_API_TOKEN')), smartspeedEnabled
+    ? 'Smartspeed credential is present for the configured bill provider.'
+    : 'Smartspeed is not enabled for this deployment.');
+  const paymentpointConfigured = Boolean(anyEnv('PAYMENTPOINT_API_KEY', 'PAYMENT_POINT_API_KEY')
+    && anyEnv('PAYMENTPOINT_SECRET_KEY', 'PAYMENT_POINT_SECRET_KEY')
+    && anyEnv('PAYMENTPOINT_BUSINESS_ID', 'PAYMENT_POINT_BUSINESS_ID'));
+  const localFundingConfigured = (paymentpointEnabled && paymentpointConfigured) || (flutterwaveEnabled && flutterwaveConfigured);
+  check('local-funding-provider-configured', localFundingConfigured, 'An enabled local-funding provider has complete credentials.');
+  check('flutterwave-disabled-or-configured', !flutterwaveEnabled || flutterwaveConfigured, flutterwaveEnabled
+    ? 'Flutterwave is enabled and its secret and webhook hash are present.'
+    : 'Flutterwave is disabled; PaymentPoint is the selected local-funding provider.');
   check('paymentpoint-webhook-closed-until-contract', env('PAYMENTPOINT_WEBHOOK_ENABLED') !== 'true', 'PaymentPoint callback crediting remains disabled until its signature contract is evidenced.');
   check('ledger-alerts-enabled', env('LEDGER_DRIFT_ALERTS_ENABLED') !== 'false', 'Ledger drift alert watcher is enabled.');
   check('ledger-alert-destination', Boolean(env('LEDGER_DRIFT_WEBHOOK_URL') || (env('LEDGER_DRIFT_ALERT_EMAIL') && env('RESEND_API_KEY'))), 'A durable ledger-drift alert has a configured webhook or email destination.');
@@ -181,12 +226,15 @@ function assertConfiguration() {
   check('alert-restart-evidence', Boolean(env('ALERT_RESTART_EVIDENCE_ID')), 'ALERT_RESTART_EVIDENCE_ID points to the durable alert failure/restart drill.');
 
   const providerFile = env('PROVIDER_PREFLIGHT_EVIDENCE_FILE');
-  check('circle-preflight-evidence', providerEvidence('circle'), `Circle read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
-  check('flutterwave-preflight-evidence', providerEvidence('flutterwave'), `Flutterwave read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
-  // Smartspeed deliberately returns PENDING_UNVERIFIED until the provider
-  // supplies an authoritative status/idempotency contract. Keep this explicit
-  // rather than allowing a guessed endpoint to become a release gate bypass.
-  check('smartspeed-contract-evidence', Boolean(env('SMARTSPEED_CONTRACT_EVIDENCE_ID')), 'SMARTSPEED_CONTRACT_EVIDENCE_ID points to the provider contract and sandbox receipt packet.');
+  for (const provider of enabledProviderPreflights()) {
+    check(`${provider}-preflight-evidence`, providerEvidence(provider), `${provider} read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
+  }
+  // The read-only catalog probe proves reachability only. Keep the separate
+  // contract evidence gate until status, idempotency, and reconciliation
+  // semantics are captured from the provider.
+  check('smartspeed-contract-evidence', !smartspeedEnabled || Boolean(env('SMARTSPEED_CONTRACT_EVIDENCE_ID')), smartspeedEnabled
+    ? 'SMARTSPEED_CONTRACT_EVIDENCE_ID points to the provider contract and sandbox receipt packet.'
+    : 'Smartspeed contract evidence is not required because the provider is disabled.');
 }
 
 async function databaseChecks() {

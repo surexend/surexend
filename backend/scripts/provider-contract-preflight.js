@@ -77,6 +77,17 @@ async function readOnlyGet(provider, url, headers) {
     });
     const status = Number(response.status || 0);
     if (status >= 200 && status < 300) {
+      const body = response.data;
+      const bodySignalsFailure = body && typeof body === 'object'
+        && (body.error || body.detail || body.success === false || /^(error|failed|failure)$/i.test(String(body.status || '')));
+      if (bodySignalsFailure) {
+        add(provider, 'FAIL', 'Read-only endpoint returned an explicit provider error body.', {
+          httpStatus: status,
+          endpoint: redactedUrl(url),
+          providerError: String(body.message || body.error || body.detail || body.status).slice(0, 240),
+        });
+        return;
+      }
       add(provider, 'PASS', 'Authenticated read-only endpoint responded successfully.', {
         httpStatus: status,
         endpoint: redactedUrl(url),
@@ -118,6 +129,10 @@ async function checkCircle() {
 }
 
 async function checkFlutterwave() {
+  if (process.env.FLUTTERWAVE_ENABLED !== 'true') {
+    add('flutterwave', 'DISABLED', 'Flutterwave is explicitly disabled; PaymentPoint is the selected local-funding provider.');
+    return;
+  }
   const key = process.env.FLUTTERWAVE_SECRET_KEY;
   if (!has(key)) {
     add('flutterwave', 'PENDING_UNVERIFIED', 'FLUTTERWAVE_SECRET_KEY is not configured; authenticated Flutterwave contract was not tested.');
@@ -140,17 +155,28 @@ async function checkFlutterwave() {
 }
 
 async function checkSmartspeed() {
-  if (!has(process.env.SMARTSPEED_API_TOKEN)) {
+  const token = process.env.SMARTSPEED_API_TOKEN;
+  if (!has(token)) {
     add('smartspeed', 'PENDING_UNVERIFIED', 'SMARTSPEED_API_TOKEN is not configured; provider status/idempotency contract remains unverified.');
     return;
   }
-  add('smartspeed', 'PENDING_UNVERIFIED', 'No authoritative read-only status/idempotency contract is recorded. Do not probe a guessed endpoint or retry bill requests automatically.', {
-    baseUrl: redactedUrl(process.env.SMARTSPEED_BASE_URL || 'https://www.smartspeedtelecom.com/api'),
+  if (!wantsNetwork) {
+    add('smartspeed', 'PENDING_UNVERIFIED', 'Credentials have shape, but no network probe was requested. Re-run with --network.');
+    return;
+  }
+  // This is the same documented, read-only catalog endpoint used by the
+  // application for bill product discovery. It proves authentication and
+  // reachability without creating a bill or retrying a money operation.
+  await readOnlyGet('smartspeed', `${process.env.SMARTSPEED_BASE_URL || 'https://www.smartspeedtelecom.com/api'}/user/`, {
+    Authorization: `Token ${token}`,
+    accept: 'application/json',
   });
 }
 
 async function checkPaymentPoint() {
-  if (!has(process.env.PAYMENTPOINT_API_KEY) && !has(process.env.PAYMENTPOINT_SECRET_KEY)) {
+  const apiKey = process.env.PAYMENTPOINT_API_KEY || process.env.PAYMENT_POINT_API_KEY;
+  const secretKey = process.env.PAYMENTPOINT_SECRET_KEY || process.env.PAYMENT_POINT_SECRET_KEY;
+  if (!has(apiKey) && !has(secretKey)) {
     add('paymentpoint', 'PENDING_UNVERIFIED', 'PaymentPoint credentials are not configured; callback authentication/status contract remains unverified.');
     return;
   }
@@ -158,7 +184,16 @@ async function checkPaymentPoint() {
     add('paymentpoint', 'FAIL', 'PaymentPoint webhook is enabled even though the callback signature contract is not established. Keep PAYMENTPOINT_WEBHOOK_ENABLED=false.');
     return;
   }
-  add('paymentpoint', 'PENDING_UNVERIFIED', 'Credentials exist, but no authoritative callback signature/status contract is recorded. Money-crediting webhook remains disabled.', {
+  const readOnlyUrl = process.env.PAYMENTPOINT_READ_ONLY_PREFLIGHT_URL;
+  if (wantsNetwork && has(readOnlyUrl)) {
+    await readOnlyGet('paymentpoint', readOnlyUrl, {
+      Authorization: `Bearer ${secretKey}`,
+      'api-key': apiKey,
+      accept: 'application/json',
+    });
+    return;
+  }
+  add('paymentpoint', 'PENDING_UNVERIFIED', 'Credentials exist, but no authoritative callback signature/status contract or explicitly configured read-only endpoint is recorded. Money-crediting webhook remains disabled.', {
     baseUrl: redactedUrl(process.env.PAYMENTPOINT_BASE_URL || 'https://api.paymentpoint.co/api/v1'),
   });
 }

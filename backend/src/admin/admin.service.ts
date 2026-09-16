@@ -461,6 +461,14 @@ export class AdminService {
     return this.configService.get<string>('app.circle.walletSetId') || '';
   }
 
+  private get referralRewardWalletSetId() {
+    return this.configService.get<string>('app.circle.referralRewardWalletSetId') || '';
+  }
+
+  private isMainnet() {
+    return this.configService.get<string>('app.network.environment') === 'mainnet';
+  }
+
   private get referralRewardUsdtTokenAddress() {
     return this.configService.get<string>('app.circle.referralRewardUsdtTokenAddress') || '';
   }
@@ -618,8 +626,16 @@ export class AdminService {
     await this.financialSafety?.assertEnabled('admin');
     this.assertMoneyMovementEnabled();
     const existing = await this.prisma.platformWallet.findUnique({ where: { key: REFERRAL_REWARD_WALLET_KEY } });
-    if (existing?.circleWalletId) return this.getReferralRewardWallet();
+    if (existing?.circleWalletId) {
+      if (this.isMainnet() && (!this.referralRewardWalletSetId || existing.walletSetId !== this.referralRewardWalletSetId || existing.walletSetId === this.circleWalletSetId)) {
+        throw new ServiceUnavailableException('Mainnet referral rewards require a separately configured custody wallet set.');
+      }
+      return this.getReferralRewardWallet();
+    }
     this.assertCircleConfigured();
+    if (this.isMainnet() && (!this.referralRewardWalletSetId || this.referralRewardWalletSetId === this.circleWalletSetId)) {
+      throw new ServiceUnavailableException('Mainnet referral rewards require CIRCLE_REFERRAL_REWARD_WALLET_SET_ID distinct from CIRCLE_WALLET_SET_ID.');
+    }
 
     // Persist a deterministic platform record first. This makes a failed Circle
     // attempt visible to operations instead of silently creating a second wallet
@@ -628,9 +644,9 @@ export class AdminService {
       data: {
         key: REFERRAL_REWARD_WALLET_KEY,
         label: 'Referral rewards wallet',
-        // Existing Circle wallet sets remain supported, but a new project can
-        // leave this blank and let the secure flow create one automatically.
-        walletSetId: this.circleWalletSetId || null,
+        // Mainnet requires a pre-created, separately controlled reward set.
+        // Testnet may create a dedicated campaign set when no ID is supplied.
+        walletSetId: (this.isMainnet() ? this.referralRewardWalletSetId : this.circleWalletSetId) || null,
         blockchain: this.referralRewardBlockchain(),
         currency: 'USDC',
         status: 'CREATING',
@@ -648,7 +664,10 @@ export class AdminService {
       // Circle requires every developer-controlled wallet to belong to a wallet
       // set. A configured ID is reused, otherwise we create a dedicated one and
       // persist it—operators never need to create or paste a campaign wallet.
-      let walletSetId = record.walletSetId || this.circleWalletSetId;
+      let walletSetId = record.walletSetId || (this.isMainnet() ? this.referralRewardWalletSetId : this.circleWalletSetId);
+      if (!walletSetId && this.isMainnet()) {
+        throw new ServiceUnavailableException('Mainnet referral rewards cannot create a wallet set automatically.');
+      }
       if (!walletSetId) {
         const createSetResponse = await axios.post(
           `${this.circleBaseUrl}/v1/w3s/developer/walletSets`,
