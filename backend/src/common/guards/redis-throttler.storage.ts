@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
-import { ThrottlerStorage, ThrottlerStorageRecord, ThrottlerStorageService } from '@nestjs/throttler';
+import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
+import { ThrottlerStorageRecord } from '@nestjs/throttler/dist/throttler-storage-record.interface';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 

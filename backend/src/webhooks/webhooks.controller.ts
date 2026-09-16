@@ -3,7 +3,7 @@ import { Request } from 'express';
 import { SkipThrottle } from '@nestjs/throttler';
 import { WebhooksService } from './webhooks.service';
 import { ConfigService } from '@nestjs/config';
-import { CircleSignatureVerifier, safeCompare, verifyHmacSha256 } from '../common/webhooks/webhook-signature';
+import { CircleSignatureVerifier, safeCompare, verifyHmacSha256, verifyPaymentPointSignature } from '../common/webhooks/webhook-signature';
 
 // Skip throttling: these calls come from provider infrastructure, not users,
 // and a dropped webhook means an uncredited deposit.
@@ -114,6 +114,7 @@ export class WebhooksController {
   @Post('paymentpoint')
   @HttpCode(HttpStatus.OK)
   async paymentpointWebhook(
+    @Req() req: Request,
     @Headers('paymentpoint-signature') paymentPointSignature: string,
     @Headers('x-paymentpoint-signature') xPaymentPointSignature: string,
     @Headers('verif-hash') verifHash: string,
@@ -124,15 +125,27 @@ export class WebhooksController {
       const enabled = providers.includes('paymentpoint')
         && this.configService.get<boolean>('app.paymentpoint.webhookEnabled') === true;
       const secret = this.configService.get<string>('app.paymentpoint.webhookSecret');
-      if (!enabled || !secret) {
+      const mode = this.configService.get<string>('app.paymentpoint.webhookSignatureMode');
+      const header = this.configService.get<string>('app.paymentpoint.webhookSignatureHeader');
+      const allowedHeaders = new Set(['paymentpoint-signature', 'x-paymentpoint-signature', 'verif-hash']);
+      if (!enabled || !secret || !mode || mode === 'disabled' || !header || !allowedHeaders.has(header)) {
         // PaymentPoint's public material available to this audit did not
         // establish a signature algorithm/header contract. Do not let a
-        // guessed static comparison credit real funds by default.
-        this.logger.error('PaymentPoint webhook is not explicitly enabled and configured; refusing webhook');
+        // guessed comparison credit real funds by default.
+        this.logger.error('PaymentPoint webhook signature mode and header are not explicitly configured; refusing webhook');
         throw new ServiceUnavailableException('Webhook not configured');
       }
-      const provided = paymentPointSignature || xPaymentPointSignature || verifHash;
-      this.assertVerified('paymentpoint', safeCompare(provided, secret), 'signature mismatch or missing signature');
+      const provided = header === 'paymentpoint-signature'
+        ? paymentPointSignature
+        : header === 'x-paymentpoint-signature'
+          ? xPaymentPointSignature
+          : verifHash;
+      const rawBody = (req as any).rawBody as Buffer | undefined;
+      this.assertVerified(
+        'paymentpoint',
+        verifyPaymentPointSignature(rawBody, provided, secret, mode),
+        `signature mismatch for configured mode ${mode} and header ${header}`,
+      );
     }
 
     await this.webhooksService.processPaymentPoint(payload, paymentPointSignature || xPaymentPointSignature || verifHash);

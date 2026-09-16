@@ -66,8 +66,11 @@ export default registerAs('app', () => {
     // separately before this money-crediting endpoint is enabled.
     webhookSecret: process.env.PAYMENTPOINT_WEBHOOK_SECRET || process.env.PAYMENT_POINT_WEBHOOK_SECRET,
     // Disabled until PaymentPoint's documented callback authentication contract
-    // is verified with a captured production webhook.
+    // is verified with a captured production webhook. No mode is inferred from
+    // API credentials or from a header name.
     webhookEnabled: process.env.PAYMENTPOINT_WEBHOOK_ENABLED === 'true',
+    webhookSignatureMode: process.env.PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE || 'disabled',
+    webhookSignatureHeader: process.env.PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER || 'disabled',
     baseUrl: process.env.PAYMENTPOINT_BASE_URL || process.env.PAYMENT_POINT_BASE_URL || 'https://api.paymentpoint.co/api/v1',
   },
   vtpass: {

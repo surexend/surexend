@@ -108,8 +108,9 @@ async function readOnlyGet(provider, url, headers) {
 
 async function checkCircle() {
   const key = process.env.CIRCLE_API_KEY;
-  if (!has(key)) {
-    add('circle', 'PENDING_UNVERIFIED', 'CIRCLE_API_KEY is not configured; authenticated Circle contract was not tested.');
+  const entitySecret = process.env.CIRCLE_ENTITY_SECRET;
+  if (!has(key) || !has(entitySecret)) {
+    add('circle', 'PENDING_UNVERIFIED', 'CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET are both required; authenticated Circle contract was not tested.');
     return;
   }
   if ((process.env.CHAIN_ENV || 'testnet').toLowerCase() === 'testnet' && !key.startsWith('TEST_')) {
@@ -176,13 +177,21 @@ async function checkSmartspeed() {
 async function checkPaymentPoint() {
   const apiKey = process.env.PAYMENTPOINT_API_KEY || process.env.PAYMENT_POINT_API_KEY;
   const secretKey = process.env.PAYMENTPOINT_SECRET_KEY || process.env.PAYMENT_POINT_SECRET_KEY;
-  if (!has(apiKey) && !has(secretKey)) {
-    add('paymentpoint', 'PENDING_UNVERIFIED', 'PaymentPoint credentials are not configured; callback authentication/status contract remains unverified.');
+  const businessId = process.env.PAYMENTPOINT_BUSINESS_ID || process.env.PAYMENT_POINT_BUSINESS_ID;
+  if (!has(apiKey) || !has(secretKey) || !has(businessId)) {
+    add('paymentpoint', 'PENDING_UNVERIFIED', 'PAYMENTPOINT_API_KEY, PAYMENTPOINT_SECRET_KEY, and PAYMENTPOINT_BUSINESS_ID are all required; callback authentication/status contract remains unverified.');
     return;
   }
   if (process.env.PAYMENTPOINT_WEBHOOK_ENABLED === 'true') {
-    add('paymentpoint', 'FAIL', 'PaymentPoint webhook is enabled even though the callback signature contract is not established. Keep PAYMENTPOINT_WEBHOOK_ENABLED=false.');
-    return;
+    const modes = new Set(['static-secret-legacy', 'hmac-sha256-raw-base64', 'hmac-sha256-raw-hex']);
+    const headers = new Set(['paymentpoint-signature', 'x-paymentpoint-signature', 'verif-hash']);
+    if (!has(process.env.PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID)
+      || !has(process.env.PAYMENTPOINT_WEBHOOK_SECRET)
+      || !modes.has(String(process.env.PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE || ''))
+      || !headers.has(String(process.env.PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER || ''))) {
+      add('paymentpoint', 'FAIL', 'PaymentPoint webhook is enabled without an operator-recorded provider contract/captured-webhook evidence ID and explicit signature mode/header.');
+      return;
+    }
   }
   const readOnlyUrl = process.env.PAYMENTPOINT_READ_ONLY_PREFLIGHT_URL;
   if (wantsNetwork && has(readOnlyUrl)) {

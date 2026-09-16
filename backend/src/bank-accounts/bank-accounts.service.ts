@@ -40,7 +40,10 @@ export class BankAccountsService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new BadRequestException('User not found');
 
-    const businessId = this.configService.get('app.paymentpoint.businessId') || 'default-business-id';
+    const businessId = this.configService.get<string>('app.paymentpoint.businessId');
+    if (!businessId) {
+      throw new BadRequestException('PaymentPoint is not configured. Set PAYMENTPOINT_BUSINESS_ID.');
+    }
 
     return this.provisionVirtualAccount(userId, {
       customerEmail: user.email,

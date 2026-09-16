@@ -40,6 +40,45 @@ export function verifyHmacSha256(rawBody: Buffer | string | undefined, signature
 }
 
 /**
+ * PaymentPoint callback verification is intentionally mode-driven. Public
+ * material available to this project does not establish whether PaymentPoint
+ * sends a static secret, a raw-body HMAC, or which header/encoding it uses.
+ * Consequently `disabled` is the safe default and no mode is inferred from
+ * the API credentials. Enable exactly one mode only after the provider's
+ * contract or an authenticated captured webhook proves it.
+ */
+export type PaymentPointSignatureMode =
+  | 'disabled'
+  | 'static-secret-legacy'
+  | 'hmac-sha256-raw-base64'
+  | 'hmac-sha256-raw-hex';
+
+export function verifyPaymentPointSignature(
+  rawBody: Buffer | string | undefined,
+  signature: string | undefined,
+  secret: string | undefined,
+  mode: string | undefined,
+): boolean {
+  if (!rawBody || !signature || !secret) return false;
+  const body = typeof rawBody === 'string' ? Buffer.from(rawBody, 'utf8') : rawBody;
+  switch (mode as PaymentPointSignatureMode) {
+    case 'static-secret-legacy':
+      return safeCompare(signature, secret);
+    case 'hmac-sha256-raw-base64': {
+      const expected = crypto.createHmac('sha256', secret).update(body).digest('base64');
+      return safeCompare(signature, expected);
+    }
+    case 'hmac-sha256-raw-hex': {
+      const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
+      return safeCompare(signature, expected);
+    }
+    case 'disabled':
+    default:
+      return false;
+  }
+}
+
+/**
  * Circle signs every v2 notification with ECDSA-SHA256.
  *
  * - `X-Circle-Signature` — the base64 signature of the **raw** body.

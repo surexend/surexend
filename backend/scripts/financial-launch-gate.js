@@ -184,7 +184,13 @@ function assertConfiguration() {
     check('flutterwave-disabled-or-configured', !flutterwaveEnabled || flutterwaveConfigured, flutterwaveEnabled
       ? 'Flutterwave is enabled and its secret and webhook hash are present.'
       : 'Flutterwave is disabled; PaymentPoint is the selected local-funding provider.');
-    check('paymentpoint-webhook-closed-until-contract', env('PAYMENTPOINT_WEBHOOK_ENABLED') !== 'true', 'PaymentPoint callback crediting remains disabled until its signature contract is evidenced.');
+    const paymentpointWebhookEnabled = env('PAYMENTPOINT_WEBHOOK_ENABLED') === 'true';
+    const paymentpointWebhookContractConfigured = !paymentpointWebhookEnabled
+      || Boolean(env('PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID')
+        && env('PAYMENTPOINT_WEBHOOK_SECRET')
+        && env('PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE')
+        && env('PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER'));
+    check('paymentpoint-webhook-contract-evidence', paymentpointWebhookContractConfigured, 'PaymentPoint callback crediting requires provider contract/captured-webhook evidence plus explicit signature configuration.');
     const providerFile = env('PROVIDER_PREFLIGHT_EVIDENCE_FILE');
     for (const provider of enabledProviderPreflights()) {
       check(`${provider}-preflight-evidence`, providerEvidence(provider), `${provider} read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
@@ -217,7 +223,13 @@ function assertConfiguration() {
   check('flutterwave-disabled-or-configured', !flutterwaveEnabled || flutterwaveConfigured, flutterwaveEnabled
     ? 'Flutterwave is enabled and its secret and webhook hash are present.'
     : 'Flutterwave is disabled; PaymentPoint is the selected local-funding provider.');
-  check('paymentpoint-webhook-closed-until-contract', env('PAYMENTPOINT_WEBHOOK_ENABLED') !== 'true', 'PaymentPoint callback crediting remains disabled until its signature contract is evidenced.');
+  const paymentpointWebhookEnabled = env('PAYMENTPOINT_WEBHOOK_ENABLED') === 'true';
+  const paymentpointWebhookContractConfigured = !paymentpointWebhookEnabled
+    || Boolean(env('PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID')
+      && env('PAYMENTPOINT_WEBHOOK_SECRET')
+      && env('PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE')
+      && env('PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER'));
+  check('paymentpoint-webhook-contract-evidence', paymentpointWebhookContractConfigured, 'PaymentPoint callback crediting requires provider contract/captured-webhook evidence plus explicit signature configuration.');
   check('ledger-alerts-enabled', env('LEDGER_DRIFT_ALERTS_ENABLED') !== 'false', 'Ledger drift alert watcher is enabled.');
   check('ledger-alert-destination', Boolean(env('LEDGER_DRIFT_WEBHOOK_URL') || (env('LEDGER_DRIFT_ALERT_EMAIL') && env('RESEND_API_KEY'))), 'A durable ledger-drift alert has a configured webhook or email destination.');
   check('circle-cctp-contract-evidence', Boolean(env('CIRCLE_CCTP_CONTRACT_EVIDENCE_ID')), 'CIRCLE_CCTP_CONTRACT_EVIDENCE_ID points to the reviewed backend CCTP/BridgeKit contract and replay/status evidence.');

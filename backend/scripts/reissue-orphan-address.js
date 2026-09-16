@@ -10,9 +10,9 @@ const crypto = require('crypto');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('./prisma-client');
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 const BASE_URL = 'https://api.circle.com';
 
 const USER_ID = '9c298a56-5025-4332-9515-50f7a11a4304';

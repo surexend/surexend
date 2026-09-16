@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "SureXend Backend API",
   "scripts": {
-    "build": "prisma generate && nest build",
+    "prisma:generate": "node scripts/generate-prisma-client.js",
+    "build": "npm run prisma:generate && nest build",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
@@ -41,7 +42,9 @@
     "js-yaml": "4.3.2",
     "picomatch": "4.0.7",
     "tmp": "0.2.7",
-    "tar": "7.5.22"
+    "tar": "7.5.22",
+    "deepmerge-ts": "8.0.0",
+    "effect": "3.20.0"
   },
   "dependencies": {
     "@circle-fin/adapter-circle-wallets": "^1.6.0",
@@ -57,7 +60,9 @@
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/schedule": "^4.0.1",
     "@nestjs/throttler": "^5.1.1",
-    "@prisma/client": "^5.16.1",
+    "@noble/curves": "^1.9.7",
+    "@prisma/adapter-pg": "^6.15.0",
+    "@prisma/client": "^6.15.0",
     "@simplewebauthn/server": "^11.0.0",
     "@types/bcryptjs": "^2.4.6",
     "axios": "^1.7.2",
@@ -67,6 +72,7 @@
     "class-validator": "^0.14.1",
     "compression": "^1.7.4",
     "date-fns": "^3.6.0",
+    "elliptic": "file:../vendor/elliptic",
     "firebase-admin": "^12.3.0",
     "helmet": "^7.1.0",
     "ioredis": "^5.3.2",
@@ -76,7 +82,7 @@
     "passport-local": "^1.0.0",
     "pdfkit": "^0.15.0",
     "pg": "^8.23.0",
-    "prisma": "^5.16.1",
+    "prisma": "^6.15.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -85,9 +91,7 @@
     "rxjs": "^7.8.1",
     "sharp": "^0.35.4",
     "speakeasy": "^2.0.0",
-    "uuid": "^11.1.1",
-    "@noble/curves": "^1.9.7",
-    "elliptic": "file:../vendor/elliptic"
+    "uuid": "^11.1.1"
   },
   "jest": {
     "moduleFileExtensions": [

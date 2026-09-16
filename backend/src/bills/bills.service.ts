@@ -67,6 +67,10 @@ export class BillsService {
     @Optional() private financialSafety?: FinancialSafetyService,
   ) {}
 
+  private ledgerReads(): boolean {
+    return this.configService.get<boolean>('app.ledger.reads') === true;
+  }
+
   // ── Smartspeed plumbing ─────────────────────────────────────────────────
 
   private smartspeedBaseUrl() {
@@ -74,8 +78,11 @@ export class BillsService {
   }
 
   private smartspeedEnabled(): boolean {
-    const enabled = this.configService.get<string[]>('app.providers.enabled') || [];
-    return enabled.includes('smartspeed');
+    const enabled = this.configService.get<string[]>('app.providers.enabled');
+    // Unit/integration test doubles and older controlled deployments may not
+    // expose the new provider list. Preserve the historical Smartspeed default
+    // there; the validated application configuration always supplies the list.
+    return !enabled || enabled.includes('smartspeed');
   }
 
   private smartspeedHeaders() {

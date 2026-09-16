@@ -64,6 +64,9 @@ function assertRealMoneyEvidence(context: string) {
   if (enabledProviderPreflights().includes('smartspeed')) {
     requiredEvidence.push(['SMARTSPEED_CONTRACT_EVIDENCE_ID', process.env.SMARTSPEED_CONTRACT_EVIDENCE_ID]);
   }
+  if (process.env.PAYMENTPOINT_WEBHOOK_ENABLED === 'true') {
+    requiredEvidence.push(['PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID', process.env.PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID]);
+  }
   const missingEvidence = requiredEvidence.filter(([, value]) => !String(value || '').trim()).map(([name]) => name);
   if (missingEvidence.length) {
     throw new Error(`Refusing to start: ${context} money movement is missing release evidence: ${missingEvidence.join(', ')}.`);
@@ -111,6 +114,15 @@ function assertRequiredEnv() {
     }
     if (process.env.WEBHOOK_REQUIRE_SIGNATURE === 'false') {
       throw new Error('Refusing to start: WEBHOOK_REQUIRE_SIGNATURE=false is never allowed in production.');
+    }
+    const paymentPointSignatureModes = new Set(['static-secret-legacy', 'hmac-sha256-raw-base64', 'hmac-sha256-raw-hex']);
+    const paymentPointSignatureHeaders = new Set(['paymentpoint-signature', 'x-paymentpoint-signature', 'verif-hash']);
+    if (process.env.PAYMENTPOINT_WEBHOOK_ENABLED === 'true') {
+      if (!paymentPointSignatureModes.has(String(process.env.PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE || ''))
+        || !paymentPointSignatureHeaders.has(String(process.env.PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER || ''))
+        || !process.env.PAYMENTPOINT_WEBHOOK_SECRET) {
+        throw new Error('Refusing to start: enabled PaymentPoint webhooks require an evidenced signature mode, header, and separate webhook secret.');
+      }
     }
     if (process.env.BILLS_REQUIRE_FUNDING === 'false') {
       throw new Error('Refusing to start: BILLS_REQUIRE_FUNDING=false is never allowed in production.');

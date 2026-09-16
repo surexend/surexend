@@ -20,10 +20,14 @@ export class LedgerService {
     }
     for (const [currency, amount] of sums) if (amount !== 0n) throw new BadRequestException(`Unaccounted amount for ${currency}: ${amount}`);
     // A replay must be equivalent to the original transfer. A skipDuplicates-only implementation would silently accept a reused transferId with a different amount or account, hiding a corrupt journal or provider-reference collision. Partial transfers are repaired by inserting missing rows, but any existing mismatch is fatal.
-    const existing = await tx.ledgerEntry.findMany({
+    const existingRows = await tx.ledgerEntry.findMany({
       where: { transferId: entries[0].transferId },
-      select: { account: true, currency: true, amountMinor: true, reference: true, kind: true },
+      select: { transferId: true, account: true, currency: true, amountMinor: true, reference: true, kind: true },
     });
+    // A few lightweight test/dry-run stores return undefined or ignore the
+    // where clause. Treat that as no existing rows, but do not let unrelated
+    // rows be interpreted as a replay conflict.
+    const existing = (existingRows || []).filter((row: any) => !row.transferId || row.transferId === entries[0].transferId);
     for (const row of existing) {
       const expected = entries.find((entry) => entry.account === row.account && entry.currency === row.currency);
       if (!expected || guardMinor(expected.amountMinor) !== row.amountMinor || (expected.reference || null) !== (row.reference || null) || (expected.kind || 'TRANSFER') !== row.kind) {

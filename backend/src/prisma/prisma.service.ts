@@ -1,9 +1,16 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
+
+  constructor() {
+    const connectionString = process.env.DATABASE_URL?.trim();
+    if (!connectionString) throw new Error('DATABASE_URL is required before constructing PrismaClient.');
+    super({ adapter: new PrismaPg({ connectionString }) });
+  }
 
   async onModuleInit() {
     const maxAttempts = 5;

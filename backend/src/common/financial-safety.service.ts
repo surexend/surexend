@@ -12,7 +12,7 @@ import { randomUUID } from 'crypto';
 import { readFileSync } from 'node:fs';
 import { assertRecipientShape as validateRecipientShape } from './recipient-validation';
 
-interface FinancialControlRow {
+export interface FinancialControlRow {
   id: string;
   moneyMovementEnabled: boolean;
   cryptoEnabled: boolean;

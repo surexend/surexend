@@ -15,6 +15,11 @@ export class AuthController {
     return publicAuthResponse(tokens);
   }
 
+  private hasAccessToken(result: unknown): result is { accessToken: string } {
+    return !!result && typeof result === 'object' && 'accessToken' in result
+      && typeof (result as { accessToken?: unknown }).accessToken === 'string';
+  }
+
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
   async register(@Body() dto: RegisterDto) {
@@ -26,7 +31,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.login(dto, req);
-    return result?.accessToken ? this.issueSession(res, result) : result;
+    return this.hasAccessToken(result) ? this.issueSession(res, result) : result;
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -34,7 +39,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async verifyOtp(@Body() dto: VerifyOtpDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.verifyOtp(dto);
-    return result?.accessToken ? this.issueSession(res, result) : result;
+    return this.hasAccessToken(result) ? this.issueSession(res, result) : result;
   }
 
   @Throttle({ default: { limit: 3, ttl: 60000 } })
@@ -92,7 +97,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async verifyLoginOtp(@Body() dto: { email: string; code: string }, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.verifyLoginOtp(dto, req);
-    return result?.accessToken ? this.issueSession(res, result) : result;
+    return this.hasAccessToken(result) ? this.issueSession(res, result) : result;
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })

@@ -118,7 +118,12 @@ an endpoint or call virtual-account creation just to obtain evidence.
 
 Before enabling the webhook, record the provider's signed callback algorithm,
 header, canonical bytes, replay protection, terminal statuses, and a sandbox
-replay test. Until then, the preflight reports `PENDING_UNVERIFIED` and
+replay test. Then set `PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID`,
+`PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE`, and
+`PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER` from that evidence packet. The code
+supports only the explicitly selected raw-body HMAC base64/hex modes or an
+explicitly selected legacy static-secret mode; it never infers one from API
+credentials. Until then, the preflight reports `PENDING_UNVERIFIED` and
 mainnet remains closed for that inbound-credit path.
 
 ## Release decision

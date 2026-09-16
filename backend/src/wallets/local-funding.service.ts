@@ -105,8 +105,8 @@ export class LocalFundingService {
           payload,
           {
             headers: {
-              Authorization: `Bearer ${this.ppSecretKey || this.ppApiKey}`,
-              'api-key': this.ppApiKey || this.ppSecretKey,
+              Authorization: `Bearer ${this.ppSecretKey}`,
+              'api-key': this.ppApiKey,
               'Content-Type': 'application/json',
             },
             timeout: 20000,

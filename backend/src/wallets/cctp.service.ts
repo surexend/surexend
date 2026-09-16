@@ -80,7 +80,7 @@ export class CctpService {
 
     const estimate: any = await this.kit.estimate({
       from: {
-        adapter,
+        adapter: adapter as any,
         chain: sourceChain as any,
         address: sourceAddress,
       },
@@ -140,7 +140,7 @@ export class CctpService {
     try {
       const result = await this.kit.bridge({
         from: {
-          adapter,
+          adapter: adapter as any,
           chain: sourceChain as any,
           address: sourceAddress,
         },

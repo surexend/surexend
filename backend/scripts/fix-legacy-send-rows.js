@@ -13,14 +13,10 @@
  *
  * Run: `npx railway run node scripts/fix-legacy-send-rows.js`
  */
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('./prisma-client');
 const axios = require('axios');
 
-const prisma = new PrismaClient(
-  process.env.DIRECT_URL
-    ? { datasources: { db: { url: process.env.DIRECT_URL } } }
-    : undefined
-);
+const prisma = createPrismaClient();
 const apiKey = process.env.CIRCLE_API_KEY || process.env.API_KEY;
 const baseUrl = 'https://api.circle.com';
 

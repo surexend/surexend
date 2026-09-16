@@ -9,13 +9,9 @@
  *
  * Run: `npx railway run node scripts/dedupe-send-rows.js`
  */
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('./prisma-client');
 
-const prisma = new PrismaClient(
-  process.env.DIRECT_URL
-    ? { datasources: { db: { url: process.env.DIRECT_URL } } }
-    : undefined
-);
+const prisma = createPrismaClient();
 const WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 async function main() {
