@@ -25,9 +25,8 @@ jobs:
       # so `npm ci` gives a reproducible, pinned install.
       - run: npm ci --no-audit --no-fund
 
-      # Use the checked-in adapter/query-compiler generation wrapper rather than
-      # a raw CLI engine-resolution path.
-      - run: npm run prisma:generate
+      # Prisma client must exist before TypeScript can resolve @prisma/client.
+      - run: npx prisma generate
 
       - name: Typecheck
         run: npx tsc -p tsconfig.json --noEmit
