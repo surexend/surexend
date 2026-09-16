@@ -101,7 +101,13 @@ function LoginForm() {
     if (!code || code.length !== 6) return toast.error('Enter the 6-digit code')
     setCodeLoading(true)
     try {
-      await authAPI.verifyLoginOtp({ email: codeEmail, code })
+      const response = await authAPI.verifyLoginOtp({ email: codeEmail, code })
+      if (response.data?.requires2FA && response.data?.challengeToken) {
+        setTwoFactorChallenge(response.data.challengeToken)
+        setTwoFactorCode('')
+        toast.success('Enter your authenticator code to finish signing in')
+        return
+      }
       toast.success('Login successful!')
       router.replace(safeNextPath)
     } catch (error: any) {

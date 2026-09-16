@@ -19,7 +19,21 @@ export class LedgerService {
       sums.set(e.currency, (sums.get(e.currency) || 0n) + amount);
     }
     for (const [currency, amount] of sums) if (amount !== 0n) throw new BadRequestException(`Unaccounted amount for ${currency}: ${amount}`);
-    // Single atomic CREATE ... ON CONFLICT DO NOTHING. The old per-row
+    // A replay must be equivalent to the original transfer. A skipDuplicates-only implementation would silently accept a reused transferId with a different amount or account, hiding a corrupt journal or provider-reference collision. Partial transfers are repaired by inserting missing rows, but any existing mismatch is fatal.
+    const existing = await tx.ledgerEntry.findMany({
+      where: { transferId: entries[0].transferId },
+      select: { account: true, currency: true, amountMinor: true, reference: true, kind: true },
+    });
+    for (const row of existing) {
+      const expected = entries.find((entry) => entry.account === row.account && entry.currency === row.currency);
+      if (!expected || guardMinor(expected.amountMinor) !== row.amountMinor || (expected.reference || null) !== (row.reference || null) || (expected.kind || 'TRANSFER') !== row.kind) {
+        throw new BadRequestException(`Ledger transfer ${entries[0].transferId} conflicts with an existing journal row`);
+      }
+    }
+
+    // Single atomic CREATE ... ON CONFLICT DO NOTHING. skipDuplicates repairs
+    // only a genuinely partial transfer after the compatibility check above.
+
     // Promise.all could leave a PARTIAL transfer when one row conflicted (e.g.
     // a webhook replay), which permanently skews the balance — reconciliation
     // would then always report drift that nothing will ever fix. skipDuplicates

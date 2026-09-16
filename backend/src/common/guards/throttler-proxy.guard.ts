@@ -10,9 +10,9 @@ import { ThrottlerGuard } from '@nestjs/throttler';
  * every user would share one bucket and the app would start returning 429s
  * under normal traffic.
  *
- * Note: storage is in-memory, so the counter is per-instance. Tighten the
- * abusive endpoints further with @Throttle, and rely on the Redis-backed PIN
- * lockout (TransactionAuthService) for credential attacks.
+ * Storage is Redis-backed through RedisThrottlerStorage, so all API instances
+ * share the same buckets. Production rejects requests if that shared store is
+ * unavailable rather than silently falling back to per-instance limits.
  */
 @Injectable()
 export class ThrottlerProxyGuard extends ThrottlerGuard {

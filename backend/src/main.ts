@@ -24,6 +24,26 @@ function assertRequiredEnv() {
     );
   }
   if (process.env.NODE_ENV === 'production') {
+    const frontendUrl = String(process.env.FRONTEND_URL || '').trim();
+    const redisUrl = String(process.env.REDIS_URL || '').trim();
+    if (!frontendUrl.startsWith('https://')) {
+      throw new Error('Refusing to start: production FRONTEND_URL must use https://.');
+    }
+    if (!redisUrl || /localhost|127\.0\.0\.1|redis:\/\/redis(?::|\/|$)/i.test(redisUrl)) {
+      throw new Error('Refusing to start: production REDIS_URL must point to a managed, non-local Redis service.');
+    }
+    if (!process.env.WEBAUTHN_RP_ID || !process.env.WEBAUTHN_ORIGIN?.startsWith('https://')) {
+      throw new Error('Refusing to start: production WebAuthn RP_ID and HTTPS WEBAUTHN_ORIGIN are required.');
+    }
+    try {
+      const originHost = new URL(process.env.WEBAUTHN_ORIGIN).hostname.toLowerCase();
+      const rpId = process.env.WEBAUTHN_RP_ID.toLowerCase();
+      if (originHost !== rpId && !originHost.endsWith(`.${rpId}`)) {
+        throw new Error('WebAuthn RP_ID is not a valid registrable parent of WEBAUTHN_ORIGIN.');
+      }
+    } catch (error: any) {
+      throw new Error(`Refusing to start: invalid production WebAuthn configuration (${error?.message || error}).`);
+    }
     if (process.env.TESTING_ENABLED === 'true') {
       throw new Error('Refusing to start: TESTING_ENABLED must not be true in production.');
     }
@@ -35,6 +55,14 @@ function assertRequiredEnv() {
     }
     if (process.env.MONEY_MOVEMENT_ENABLED === 'true' && process.env.LEDGER_READS_ENABLED !== 'true') {
       throw new Error('Refusing to start: production money movement requires LEDGER_READS_ENABLED=true after the ledger baseline has been reconciled.');
+    }
+    if (
+      process.env.MONEY_MOVEMENT_ENABLED === 'true' &&
+      process.env.LEDGER_DRIFT_ALERTS_ENABLED !== 'false' &&
+      !process.env.LEDGER_DRIFT_WEBHOOK_URL &&
+      !(process.env.LEDGER_DRIFT_ALERT_EMAIL && process.env.RESEND_API_KEY)
+    ) {
+      throw new Error('Refusing to start: production money movement requires a durable ledger-drift alert destination.');
     }
   }
 }
@@ -72,6 +100,12 @@ function assertNetworkConfig() {
         'This mixed config was never validated (testnet BridgeChains + mainnet Circle blockchain names). ' +
         'Either use a TEST_ key or enable mainnet with the full reviewed config — see docs/mainnet-config.md.',
     );
+  } else {
+    const rpcUrl = process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network';
+    const chainId = Number(process.env.ARC_CHAIN_ID || 5042002);
+    if (!/testnet/i.test(rpcUrl) || chainId !== 5042002) {
+      throw new Error('Refusing to start: testnet mode requires the reviewed Arc testnet RPC and chain ID 5042002.');
+    }
   }
 }
 
@@ -117,6 +151,7 @@ async function bootstrap() {
   }
 
   app.use(helmet());
+  app.disable('x-powered-by');
   app.use(compression());
 
   // We sit behind the Next.js rewrite proxy (Vercel) and Railway's edge, so the

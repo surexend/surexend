@@ -327,11 +327,15 @@ model Notification {
 model OtpCode {
   id         String   @id @default(uuid())
   identifier String   // email or phone
-  code       String
+  // Raw OTPs are not stored. `code` remains nullable only for one-time
+  // migration compatibility with rows created before the hash rollout.
+  code       String?
+  codeHash   String?
   type       String   // REGISTER, LOGIN, PASSWORD_RESET
   expiresAt  DateTime
   used       Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  attempts   Int      @default(0)
+  createdAt  DateTime  @default(now())
 }
 
 model AuditLog {

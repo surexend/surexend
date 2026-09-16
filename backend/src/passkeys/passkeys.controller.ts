@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, HttpCode, Res } from '@nestjs/common';
 import { PasskeysService } from './passkeys.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Response } from 'express';
+import { publicAuthResponse, setAuthCookies } from '../auth/auth-cookies';
 
 @Controller('auth/passkey')
 export class PasskeysController {
@@ -19,8 +21,11 @@ export class PasskeysController {
   async loginComplete(
     @Body('challengeId') challengeId: string,
     @Body('response') response: any,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.passkeysService.loginComplete(challengeId, response);
+    const tokens = await this.passkeysService.loginComplete(challengeId, response);
+    setAuthCookies(res, tokens);
+    return publicAuthResponse(tokens);
   }
 
   // Authenticated: register a new device

@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
     if (newPassword.length < 8) return toast.error('Password must be at least 8 characters')
     setIsLoading(true)
     try {
-      await authAPI.resetPassword({ token: code.trim(), newPassword })
+      await authAPI.resetPassword({ token: code.trim(), newPassword, email })
       setResetDone(true)
       toast.success('Password reset successfully')
     } catch (error: any) {

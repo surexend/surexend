@@ -22,7 +22,7 @@ export class WebhooksService {
   ) {}
 
   async processPaymentPoint(payload: any, signature?: string) {
-    this.logger.log(`PaymentPoint webhook received: ${JSON.stringify(payload)}`);
+    this.logger.log('PaymentPoint webhook received');
     const data = payload?.data || payload;
 
     const transactionId =
@@ -35,7 +35,7 @@ export class WebhooksService {
       payload.reference;
 
     if (!transactionId) {
-      this.logger.warn(`PaymentPoint webhook missing transaction identifier: ${JSON.stringify(payload)}`);
+      this.logger.warn('PaymentPoint webhook missing transaction identifier');
       return;
     }
 
@@ -330,7 +330,7 @@ export class WebhooksService {
   }
 
   async processCircle(payload: any) {
-    this.logger.log(`Processing Circle Webhook: ${JSON.stringify(payload)}`);
+    this.logger.log(`Processing Circle webhook notification: ${String(payload?.notificationType || 'unknown')}`);
     
     const eventType = payload.notificationType;
     if (eventType === 'transactions.inbound' || eventType === 'transactions.outbound') {

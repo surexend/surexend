@@ -149,6 +149,7 @@ export class WalletsService implements OnModuleInit {
   // ARC wallet at a pre-existing address (unlike create, which only ever yields
   // freshly-derived addresses).
   async onModuleInit() {
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) return;
     try {
       await this.ensureAllAddressesHaveArcWallets();
     } catch (err: any) {
@@ -769,6 +770,9 @@ export class WalletsService implements OnModuleInit {
   }
 
   async getDepositAddress(userId: string, network: string, walletSetIdOverride?: string) {
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
+      throw new BadRequestException('Deposit address provisioning is disabled while this environment is in testnet or maintenance mode.');
+    }
     const validNetworks = ['POLYGON', 'AVALANCHE', 'ARBITRUM', 'ETHEREUM', 'BASE', 'OPTIMISM', 'SOLANA', 'BSC', 'BEP20', 'ARC', 'MONAD'];
     if (!validNetworks.includes(network.toUpperCase())) {
       throw new BadRequestException('Invalid network. Supported: POLYGON, AVALANCHE, ARBITRUM, ETHEREUM, BASE, OPTIMISM, SOLANA, BSC, BEP20, ARC, MONAD');

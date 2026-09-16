@@ -88,6 +88,9 @@ export class BankAccountsService {
       currency: string;
     },
   ) {
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
+      throw new BadRequestException('Bank funding is disabled while this environment is in testnet or maintenance mode.');
+    }
     try {
       const response = await this.paymentPointService.createVirtualAccount(
         input.customerEmail,
