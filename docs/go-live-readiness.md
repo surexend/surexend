@@ -77,9 +77,14 @@ provider, legal/compliance, independent-review, or recovery-evidence blockers.
   is still pending repository workflow permission.
 - An isolated embedded PostgreSQL server rehearsal has now passed the guarded
   concurrent-duplicate-claim and durable-alert-restart checks in
-  `scripts/postgres-rehearsal.js`. This is real PostgreSQL concurrency evidence,
-  but it is not a substitute for the dedicated production-like PostgreSQL
-  migration/backup/restore rehearsal.
+  `scripts/postgres-rehearsal.js`. A second isolated run applied all nine
+  checked-in migrations, verified the required financial schema and fail-closed
+  control seed, and passed transaction rollback via
+  `scripts/postgres-migration-rehearsal.js`. These are real PostgreSQL
+  concurrency/migration/rollback results, but they are not a substitute for the
+  dedicated production-like backup/restore rehearsal; that script explicitly
+  remains pending until `pg_dump`/`pg_restore` evidence is run against the
+  dedicated database.
 - Provider preflight was executed with `--all --network`, but all four providers
   remain `PENDING_UNVERIFIED` because no authenticated provider credentials are
   configured in this environment. No provider contract evidence was fabricated.

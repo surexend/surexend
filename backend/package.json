@@ -15,6 +15,7 @@
     "launch:gate": "node scripts/financial-launch-gate.js",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "db:rehearsal": "node scripts/postgres-rehearsal.js",
+    "db:migration-rehearsal": "node scripts/postgres-migration-rehearsal.js",
     "db:deploy": "node scripts/deploy-database.js",
     "test": "jest",
     "test:watch": "jest --watch",
