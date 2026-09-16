@@ -75,6 +75,17 @@ provider, legal/compliance, independent-review, or recovery-evidence blockers.
   stream-json paths with no safe non-breaking fix; they remain tracked but no
   longer trip the high-severity `security:audit` gate. The GitHub workflow update
   is still pending repository workflow permission.
+- Root/frontend `npm audit --audit-level=high` now passes with **0 critical and
+  0 high advisories** (the full audit reports 8 low and 10 moderate transitive
+  findings). `next` resolves to 15.5.25, which includes the requested 15.5.24
+  security floor; `jspdf` resolves to 4.2.1; the unused vulnerable `next-pwa`
+  dependency was removed; and reviewed overrides pin compatible `sharp`,
+  `postcss`, `fast-uri`, `js-yaml`, `nanoid`, `serialize-javascript`, and
+  `toml` versions. The Circle Bridge Kit was updated to 1.15.0. Build and
+  typecheck passed after these changes. The remaining frontend findings are
+  transitive Circle/Solana provider dependencies with no safe fix available;
+  they remain a release-review item even though they do not trip the high
+  severity gate.
 - An isolated embedded PostgreSQL server rehearsal has now passed the guarded
   concurrent-duplicate-claim and durable-alert-restart checks in
   `scripts/postgres-rehearsal.js`. A second isolated run applied all nine
@@ -173,6 +184,11 @@ provider, legal/compliance, independent-review, or recovery-evidence blockers.
 - On-chain deposit recording now commits the transaction history row, float
   compatibility snapshot, and integer ledger journal in one database
   transaction; a partial wallet write cannot suppress a later reconciliation.
+- The browser Bridge Kit integration contains its third-party adapter
+  compatibility cast at one boundary and now fails closed unless the provider
+  returns an explicit successful state and a real successful-step transaction
+  hash. It no longer invents a transaction hash or reports an ambiguous bridge
+  outcome as customer-visible success.
 
 These changes are safety improvements, not launch approval. They must be
 validated by the backend test suite and a deployed rehearsal environment.

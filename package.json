@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@circle-fin/adapter-viem-v2": "^1.15.0",
-    "@circle-fin/bridge-kit": "^1.13.0",
+    "@circle-fin/bridge-kit": "^1.15.0",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-avatar": "^1.1.0",
@@ -32,11 +32,10 @@
     "firebase": "^12.18.0",
     "framer-motion": "^11.3.8",
     "gsap": "^3.12.5",
-    "jspdf": "^2.5.1",
+    "jspdf": "^4.2.1",
     "jsqr": "^1.4.0",
     "lucide-react": "^0.408.0",
-    "next": "^15.2.3",
-    "next-pwa": "^5.6.0",
+    "next": "^15.5.24",
     "qrcode": "^1.5.4",
     "react": "^18",
     "react-confetti": "^6.1.0",
@@ -60,10 +59,19 @@
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
     "eslint": "^8",
-    "eslint-config-next": "^15.2.3",
+    "eslint-config-next": "^15.5.24",
     "pngjs": "^7.0.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
+  },
+  "overrides": {
+    "sharp": "0.35.4",
+    "postcss": "$postcss",
+    "fast-uri": "3.1.6",
+    "js-yaml": "4.3.2",
+    "nanoid": "3.3.18",
+    "serialize-javascript": "7.0.3",
+    "toml": "5.0.0"
   }
 }
