@@ -69,7 +69,8 @@ export class CctpService {
     amount: number;
   }): Promise<number> {
     const { sourceNetwork, sourceAddress, destNetwork, recipientAddress, amount } = params;
-    if (sourceNetwork.toUpperCase() === destNetwork.toUpperCase()) {
+    const destNet = destNetwork.toUpperCase();
+    if (sourceNetwork.toUpperCase() === destNet) {
       return 0;
     }
     const sourceChain = this.getChain(sourceNetwork.toUpperCase(), 'source');

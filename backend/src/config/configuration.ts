@@ -146,13 +146,11 @@ export default registerAs('app', () => {
     enabledMainnetNetworks,
   },
   ledger: {
-    // Gradual cutover switch for balance READS. OFF = legacy float columns
-    // (current behavior, additive & testnet-safe). ON = read the double-entry
-    // ledger (LedgerEntry) as the source of truth, falling back to the float
-    // for a currency that has no ledger rows yet, so enabling this is safe
-    // even before scripts/backfill-ledger-baseline.js has been run. Writes
-    // keep updating floats in BOTH modes until each path is verified and the
-    // columns are removed.
+    // Production money movement requires this switch. ON = read the
+    // double-entry ledger (LedgerEntry) as the source of truth; an absent
+    // ledger row is zero. The startup baseline gate must pass before this can
+    // safely be enabled. Legacy float columns remain compatibility mirrors
+    // until a later schema cleanup.
     reads: process.env.LEDGER_READS_ENABLED === 'true',
     alerts: {
       // LEDGER_DRIFT rows are persisted to AuditLog by the hourly

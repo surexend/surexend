@@ -124,11 +124,16 @@ function assertConfiguration() {
   }
 
   if (scope === 'mainnet') {
+    check('production-runtime', production, `NODE_ENV=${env('NODE_ENV') || '(missing)'}; mainnet money movement must run as production.`);
+    check('money-movement-explicitly-enabled', movement, 'MONEY_MOVEMENT_ENABLED=true is required for an approved mainnet release.');
+    check('ledger-reads-cut-over', ledgerReads, 'LEDGER_READS_ENABLED=true is required before mainnet money movement.');
+    check('testing-mode-disabled', !testing, 'TESTING_ENABLED must be false/unset in mainnet.');
+    check('kyc-enforcement-enabled', env('REQUIRE_KYC_FOR_MONEY_MOVEMENT') !== 'false', 'Mainnet KYC enforcement cannot be disabled.');
     check('mainnet-config-approved', env('MAINNET_CONFIG_APPROVED') === 'true', 'MAINNET_CONFIG_APPROVED=true identifies the separately reviewed matrix packet.');
     check('mainnet-circle-credential', Boolean(env('CIRCLE_API_KEY') && !env('CIRCLE_API_KEY').startsWith('TEST_') && env('CIRCLE_ENTITY_SECRET')), 'A non-test Circle credential pair is configured.');
     check('mainnet-custody-wallet-set', Boolean(env('CIRCLE_WALLET_SET_ID')), 'A pre-created, custody-reviewed CIRCLE_WALLET_SET_ID is configured; the app cannot create one on mainnet.');
     check('mainnet-reviewed-chain-matrix', mainnetMatrixIsValid(), 'MAINNET_CHAIN_MATRIX_JSON contains complete, HTTPS, non-local, syntactically valid entries for every enabled network.');
-    check('mainnet-release-approval', Boolean(env('FINANCIAL_RELEASE_APPROVED_BY') && env('FINANCIAL_RELEASE_TICKET') && env('FINANCIAL_RELEASE_EVIDENCE_ID')), 'Mainnet financial release approval, ticket, and immutable evidence packet are present.');
+    check('mainnet-release-approval', env('FINANCIAL_RELEASE_APPROVED') === 'true' && Boolean(env('FINANCIAL_RELEASE_APPROVED_BY') && env('FINANCIAL_RELEASE_TICKET') && env('FINANCIAL_RELEASE_EVIDENCE_ID')), 'FINANCIAL_RELEASE_APPROVED=true plus the approver, ticket, and immutable evidence packet are present.');
     check('kyc-aml-evidence', Boolean(env('KYC_AML_EVIDENCE_ID')), 'KYC_AML_EVIDENCE_ID identifies the approved KYC/AML program and operating evidence.');
     check('sanctions-evidence', Boolean(env('SANCTIONS_PROVIDER_EVIDENCE_ID')), 'SANCTIONS_PROVIDER_EVIDENCE_ID identifies the production screening provider and test evidence.');
     check('custody-dual-control-evidence', Boolean(env('CUSTODY_DUAL_CONTROL_EVIDENCE_ID')), 'CUSTODY_DUAL_CONTROL_EVIDENCE_ID identifies segregated custody, key management, allowlists, and recovery evidence.');
@@ -138,6 +143,19 @@ function assertConfiguration() {
     check('staged-canary-control', env('CANARY_MODE') === 'true' ? canaryUsers.length > 0 : Boolean(env('STAGED_CANARY_EVIDENCE_ID')), env('CANARY_MODE') === 'true'
       ? 'CANARY_MODE=true has a non-empty approved user allowlist.'
       : 'Unrestricted mode has a staged-canary evidence packet.');
+    check('ledger-alerts-enabled', env('LEDGER_DRIFT_ALERTS_ENABLED') !== 'false', 'Ledger drift alert watcher is enabled.');
+    check('ledger-alert-destination', Boolean(env('LEDGER_DRIFT_WEBHOOK_URL') || (env('LEDGER_DRIFT_ALERT_EMAIL') && env('RESEND_API_KEY'))), 'A durable ledger-drift alert has a configured webhook or email destination.');
+    check('circle-cctp-contract-evidence', Boolean(env('CIRCLE_CCTP_CONTRACT_EVIDENCE_ID')), 'CIRCLE_CCTP_CONTRACT_EVIDENCE_ID points to the reviewed backend CCTP/BridgeKit contract and replay/status evidence.');
+    check('postgres-rehearsal-evidence', Boolean(env('POSTGRES_REHEARSAL_EVIDENCE_ID')), 'POSTGRES_REHEARSAL_EVIDENCE_ID points to the real PostgreSQL migration/locking/restart rehearsal.');
+    check('testnet-e2e-evidence', Boolean(env('TESTNET_E2E_EVIDENCE_ID')), 'TESTNET_E2E_EVIDENCE_ID points to the completed sandbox receipt table.');
+    check('alert-restart-evidence', Boolean(env('ALERT_RESTART_EVIDENCE_ID')), 'ALERT_RESTART_EVIDENCE_ID points to the durable alert failure/restart drill.');
+    check('smartspeed-credential', Boolean(env('SMARTSPEED_API_TOKEN')), 'Smartspeed credential is present for the configured bill provider.');
+    check('flutterwave-credential-and-signing', Boolean(env('FLUTTERWAVE_SECRET_KEY') && env('FLUTTERWAVE_WEBHOOK_HASH')), 'Flutterwave secret and webhook hash are present for signed NGN deposits.');
+    check('paymentpoint-webhook-closed-until-contract', env('PAYMENTPOINT_WEBHOOK_ENABLED') !== 'true', 'PaymentPoint callback crediting remains disabled until its signature contract is evidenced.');
+    const providerFile = env('PROVIDER_PREFLIGHT_EVIDENCE_FILE');
+    check('circle-preflight-evidence', providerEvidence('circle'), `Circle read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
+    check('flutterwave-preflight-evidence', providerEvidence('flutterwave'), `Flutterwave read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
+    check('smartspeed-contract-evidence', Boolean(env('SMARTSPEED_CONTRACT_EVIDENCE_ID')), 'SMARTSPEED_CONTRACT_EVIDENCE_ID points to the provider contract and sandbox receipt packet.');
     return;
   }
 
@@ -145,7 +163,7 @@ function assertConfiguration() {
   check('money-movement-explicitly-enabled', movement, 'MONEY_MOVEMENT_ENABLED=true is an operator decision, not a default.');
   check('ledger-reads-cut-over', ledgerReads, 'LEDGER_READS_ENABLED=true is required before production money movement.');
   check('testing-mode-disabled', !testing, 'TESTING_ENABLED must be false/unset in production.');
-  check('operator-approved-release', Boolean(env('FINANCIAL_RELEASE_APPROVED_BY') && env('FINANCIAL_RELEASE_TICKET') && env('FINANCIAL_RELEASE_EVIDENCE_ID')), 'FINANCIAL_RELEASE_APPROVED_BY, FINANCIAL_RELEASE_TICKET, and FINANCIAL_RELEASE_EVIDENCE_ID identify a reviewed release packet.');
+  check('operator-approved-release', env('FINANCIAL_RELEASE_APPROVED') === 'true' && Boolean(env('FINANCIAL_RELEASE_APPROVED_BY') && env('FINANCIAL_RELEASE_TICKET') && env('FINANCIAL_RELEASE_EVIDENCE_ID')), 'FINANCIAL_RELEASE_APPROVED=true plus the approver, ticket, and immutable evidence packet identify a reviewed release packet.');
   check('kyc-aml-evidence', Boolean(env('KYC_AML_EVIDENCE_ID')), 'KYC_AML_EVIDENCE_ID identifies the operating KYC/AML program; code status alone is not compliance approval.');
   check('sanctions-evidence', Boolean(env('SANCTIONS_PROVIDER_EVIDENCE_ID')), 'SANCTIONS_PROVIDER_EVIDENCE_ID identifies sanctions screening and test evidence.');
   check('custody-dual-control-evidence', Boolean(env('CUSTODY_DUAL_CONTROL_EVIDENCE_ID')), 'CUSTODY_DUAL_CONTROL_EVIDENCE_ID identifies segregated custody and recovery evidence.');

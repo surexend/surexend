@@ -9,6 +9,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { toMinor } from './money';
 import { randomUUID } from 'crypto';
+import { readFileSync } from 'node:fs';
+import { assertRecipientShape as validateRecipientShape } from './recipient-validation';
 
 interface FinancialControlRow {
   id: string;
@@ -89,22 +91,47 @@ export class FinancialSafetyService {
   async assertLedgerBaselineReady() {
     if (!this.environmentMovementEnabled()) return;
     try {
-      const rows = await this.prisma.$queryRaw<{ count: bigint }[]>`
-        SELECT COUNT(*)::bigint AS count
+      const rows = await this.prisma.$queryRaw<Array<{
+        userId: string;
+        usdcBalance: number | null;
+        usdtBalance: number | null;
+        localBalance: number | null;
+        realLocalBalance: number | null;
+        localBalances: unknown;
+        currencies: string[];
+      }>>`
+        SELECT w."userId", w."usdcBalance", w."usdtBalance", w."localBalance",
+               w."realLocalBalance", w."localBalances",
+               COALESCE(ARRAY_AGG(DISTINCT l."currency") FILTER (WHERE l."currency" IS NOT NULL), ARRAY[]::text[]) AS "currencies"
         FROM "Wallet" w
+        LEFT JOIN "LedgerEntry" l ON l."account" LIKE 'user:' || w."userId" || ':%'
         WHERE (COALESCE(w."usdcBalance", 0) <> 0
             OR COALESCE(w."usdtBalance", 0) <> 0
             OR COALESCE(w."localBalance", 0) <> 0
             OR COALESCE(w."realLocalBalance", 0) <> 0
             OR COALESCE(w."localBalances", '{}'::jsonb) <> '{}'::jsonb)
-          AND NOT EXISTS (
-            SELECT 1 FROM "LedgerEntry" l
-            WHERE l."account" LIKE 'user:' || w."userId" || ':%'
-          )
+        GROUP BY w."userId", w."usdcBalance", w."usdtBalance", w."localBalance", w."realLocalBalance", w."localBalances"
       `;
-      const unbaselined = Number(rows[0]?.count || 0);
-      if (unbaselined > 0) {
-        throw new Error(`${unbaselined} wallet(s) have non-zero legacy balances without a ledger baseline`);
+      const missing: string[] = [];
+      for (const row of rows) {
+        const currencies = new Set((row.currencies || []).map((currency) => String(currency).toUpperCase()));
+        const required = new Set<string>();
+        if (Number(row.usdcBalance || 0) !== 0) required.add('USDC');
+        if (Number(row.usdtBalance || 0) !== 0) required.add('USDT');
+        if (Number(row.localBalance || 0) !== 0 || Number(row.realLocalBalance || 0) !== 0) required.add('NGN');
+        const parsed = typeof row.localBalances === 'string'
+          ? (() => { try { return JSON.parse(row.localBalances); } catch { return {}; } })()
+          : row.localBalances;
+        if (parsed && typeof parsed === 'object') {
+          for (const [currency, value] of Object.entries(parsed as Record<string, unknown>)) {
+            if (Number(value) !== 0) required.add(currency.toUpperCase());
+          }
+        }
+        const absent = [...required].filter((currency) => !currencies.has(currency));
+        if (absent.length) missing.push(`${row.userId}:${absent.join(',')}`);
+      }
+      if (missing.length) {
+        throw new Error(`${missing.length} wallet currency baseline(s) are missing (${missing.slice(0, 10).join('; ')})`);
       }
     } catch (error: any) {
       this.logger.error(`Ledger baseline is not ready: ${error?.message || error}`);
@@ -164,18 +191,7 @@ export class FinancialSafetyService {
   }
 
   assertRecipientShape(network: string, recipient: string) {
-    const normalizedNetwork = String(network || '').toUpperCase();
-    if (normalizedNetwork === 'SUREX_TAG') return;
-    const value = String(recipient || '').trim();
-    if (normalizedNetwork === 'SOLANA') {
-      if (!/^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(value)) {
-        throw new BadRequestException('Invalid Solana recipient address.');
-      }
-      return;
-    }
-    if (!/^0x[a-fA-F0-9]{40}$/.test(value)) {
-      throw new BadRequestException('Invalid EVM recipient address.');
-    }
+    validateRecipientShape(network, recipient);
   }
 
   /**
@@ -263,6 +279,7 @@ export class FinancialSafetyService {
       || this.configService.get<string>('app.network.environment') === 'mainnet'
     )) {
       const requiredEvidence = [
+        process.env.FINANCIAL_RELEASE_APPROVED_BY,
         process.env.FINANCIAL_RELEASE_TICKET,
         process.env.FINANCIAL_RELEASE_EVIDENCE_ID,
         process.env.KYC_AML_EVIDENCE_ID,
@@ -271,13 +288,27 @@ export class FinancialSafetyService {
         process.env.INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID,
         process.env.POSTGRES_REHEARSAL_EVIDENCE_ID,
         process.env.DISASTER_RECOVERY_EVIDENCE_ID,
+        process.env.CIRCLE_CCTP_CONTRACT_EVIDENCE_ID,
+        process.env.TESTNET_E2E_EVIDENCE_ID,
+        process.env.ALERT_RESTART_EVIDENCE_ID,
+        process.env.SMARTSPEED_CONTRACT_EVIDENCE_ID,
+        process.env.PROVIDER_PREFLIGHT_EVIDENCE_FILE,
       ];
       const canaryEvidenceValid = process.env.CHAIN_ENV === 'mainnet'
         ? (process.env.CANARY_MODE === 'true'
           ? Boolean(process.env.CANARY_USER_IDS?.split(',').map((value) => value.trim()).filter(Boolean).length)
           : Boolean(process.env.STAGED_CANARY_EVIDENCE_ID?.trim()))
         : true;
-      if (process.env.FINANCIAL_RELEASE_APPROVED !== 'true' || requiredEvidence.some((value) => !value?.trim()) || !canaryEvidenceValid) {
+      let providerPreflightValid = false;
+      try {
+        const packet = JSON.parse(readFileSync(String(process.env.PROVIDER_PREFLIGHT_EVIDENCE_FILE || '').trim(), 'utf8'));
+        const passed = new Set((Array.isArray(packet?.results) ? packet.results : [])
+          .filter((row: any) => row?.status === 'PASS').map((row: any) => row.provider));
+        providerPreflightValid = passed.has('circle') && passed.has('flutterwave');
+      } catch {
+        providerPreflightValid = false;
+      }
+      if (process.env.FINANCIAL_RELEASE_APPROVED !== 'true' || requiredEvidence.some((value) => !value?.trim()) || !canaryEvidenceValid || !providerPreflightValid) {
         throw new ServiceUnavailableException('Production movement cannot be enabled without signed release evidence and a staged canary allowlist/evidence packet.');
       }
     }

@@ -329,8 +329,11 @@ export class ConversionsService {
       let usdAvailable = usdtPool + usdcPool;
       if (this.ledgerReads()) {
         const lb: Record<string, bigint> = await this.ledger.balancesOfUser(userId, prisma);
-        if (lb.USDT !== undefined) usdtPool = fromMinor(lb.USDT, 'USDT');
-        if (lb.USDC !== undefined) usdcPool = fromMinor(lb.USDC, 'USDC');
+        usdtPool = fromMinor(lb.USDT || 0n, 'USDT');
+        usdcPool = fromMinor(lb.USDC || 0n, 'USDC');
+        // The ledger is authoritative after cutover; an absent currency row is
+        // zero and must not fall back to the legacy JSON snapshot.
+        localBalances = {};
         for (const [ccy, minor] of Object.entries(lb)) {
           // Skip stablecoin denominations; 'USD' is a legacy ledger
           // pseudo-currency from pre-cutover conversion rows.

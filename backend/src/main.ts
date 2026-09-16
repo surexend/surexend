@@ -8,8 +8,53 @@ import { FinancialSafetyService } from './common/financial-safety.service';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import * as bcrypt from 'bcryptjs';
+import { readFileSync } from 'node:fs';
 import { ConfigService } from '@nestjs/config';
 import { parseReviewedNetworkMatrix, validateEnabledMainnetNetworks } from './config/network-matrix';
+
+/**
+ * Evidence IDs are deployment claims, not proof by themselves; the launch gate
+ * separately validates the referenced packets. Requiring the same identifiers
+ * at boot prevents a manually-enabled database control row from bypassing the
+ * release process.
+ */
+function assertProviderPreflightEvidence() {
+  const file = String(process.env.PROVIDER_PREFLIGHT_EVIDENCE_FILE || '').trim();
+  try {
+    const packet = JSON.parse(readFileSync(file, 'utf8'));
+    const results = Array.isArray(packet?.results) ? packet.results : [];
+    const passed = new Set(results.filter((row: any) => row?.status === 'PASS').map((row: any) => row.provider));
+    const missing = ['circle', 'flutterwave'].filter((provider) => !passed.has(provider));
+    if (missing.length) throw new Error(`missing PASS result(s): ${missing.join(', ')}`);
+  } catch (error: any) {
+    throw new Error(`Refusing to start: provider preflight evidence is unreadable or incomplete (${error?.message || error}).`);
+  }
+}
+
+function assertRealMoneyEvidence(context: string) {
+  const requiredEvidence = [
+    ['FINANCIAL_RELEASE_APPROVED', process.env.FINANCIAL_RELEASE_APPROVED],
+    ['FINANCIAL_RELEASE_APPROVED_BY', process.env.FINANCIAL_RELEASE_APPROVED_BY],
+    ['FINANCIAL_RELEASE_TICKET', process.env.FINANCIAL_RELEASE_TICKET],
+    ['FINANCIAL_RELEASE_EVIDENCE_ID', process.env.FINANCIAL_RELEASE_EVIDENCE_ID],
+    ['KYC_AML_EVIDENCE_ID', process.env.KYC_AML_EVIDENCE_ID],
+    ['SANCTIONS_PROVIDER_EVIDENCE_ID', process.env.SANCTIONS_PROVIDER_EVIDENCE_ID],
+    ['CUSTODY_DUAL_CONTROL_EVIDENCE_ID', process.env.CUSTODY_DUAL_CONTROL_EVIDENCE_ID],
+    ['INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID', process.env.INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID],
+    ['POSTGRES_REHEARSAL_EVIDENCE_ID', process.env.POSTGRES_REHEARSAL_EVIDENCE_ID],
+    ['DISASTER_RECOVERY_EVIDENCE_ID', process.env.DISASTER_RECOVERY_EVIDENCE_ID],
+    ['CIRCLE_CCTP_CONTRACT_EVIDENCE_ID', process.env.CIRCLE_CCTP_CONTRACT_EVIDENCE_ID],
+    ['TESTNET_E2E_EVIDENCE_ID', process.env.TESTNET_E2E_EVIDENCE_ID],
+    ['ALERT_RESTART_EVIDENCE_ID', process.env.ALERT_RESTART_EVIDENCE_ID],
+    ['SMARTSPEED_CONTRACT_EVIDENCE_ID', process.env.SMARTSPEED_CONTRACT_EVIDENCE_ID],
+    ['PROVIDER_PREFLIGHT_EVIDENCE_FILE', process.env.PROVIDER_PREFLIGHT_EVIDENCE_FILE],
+  ];
+  const missingEvidence = requiredEvidence.filter(([, value]) => !String(value || '').trim()).map(([name]) => name);
+  if (missingEvidence.length) {
+    throw new Error(`Refusing to start: ${context} money movement is missing release evidence: ${missingEvidence.join(', ')}.`);
+  }
+  assertProviderPreflightEvidence();
+}
 
 /**
  * Refuse to boot without the secrets that protect customer accounts. A missing
@@ -73,6 +118,9 @@ function assertRequiredEnv() {
     ) {
       throw new Error('Refusing to start: production money movement requires a durable ledger-drift alert destination.');
     }
+    if (process.env.MONEY_MOVEMENT_ENABLED === 'true') {
+      assertRealMoneyEvidence('production');
+    }
   }
 }
 
@@ -97,6 +145,9 @@ function assertNetworkConfig() {
   }
 
   if (mainnetEnabled || chainEnv === 'mainnet') {
+    if (process.env.NODE_ENV !== 'production') {
+      throw new Error('Refusing to start: mainnet requires NODE_ENV=production; use CHAIN_ENV=testnet for development and rehearsals.');
+    }
     if (chainEnv !== 'mainnet' || !mainnetEnabled) {
       throw new Error('Refusing to start: mainnet requires both CHAIN_ENV=mainnet and MAINNET_ENABLED=true.');
     }
@@ -119,6 +170,9 @@ function assertNetworkConfig() {
     }
     if (process.env.MONEY_MOVEMENT_ENABLED === 'true' && process.env.FINANCIAL_RELEASE_APPROVED !== 'true') {
       throw new Error('Refusing to start: real-money movement requires a separately recorded financial release approval.');
+    }
+    if (process.env.MONEY_MOVEMENT_ENABLED === 'true') {
+      assertRealMoneyEvidence('mainnet');
     }
     if (process.env.MONEY_MOVEMENT_ENABLED === 'true') {
       const canaryUsers = (process.env.CANARY_USER_IDS || '').split(',').map((value) => value.trim()).filter(Boolean);

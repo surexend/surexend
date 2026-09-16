@@ -246,13 +246,16 @@ export class WalletsService implements OnModuleInit {
     if (this.ledgerReads()) {
       try {
         const balances = await this.ledger.balancesOfUser(userId);
-        if (balances.USDC !== undefined) usdc = fromMinor(balances.USDC, 'USDC');
-        if (balances.USDT !== undefined) usdt = fromMinor(balances.USDT, 'USDT');
+        usdc = fromMinor(balances.USDC || 0n, 'USDC');
+        usdt = fromMinor(balances.USDT || 0n, 'USDT');
         // Ledger balances already include committed SEND reservations, so do
         // not subtract the legacy lock a second time after cutover.
         return Math.max(0, usdc + usdt);
       } catch (err: any) {
         this.logger.error(`Ledger spendable read failed for ${userId}: ${err.message}`);
+        if (this.configService.get<boolean>('app.moneyMovement.enabled') === true) {
+          throw new ServiceUnavailableException('Ledger is unavailable; the transaction was not started.');
+        }
       }
     }
 
@@ -370,18 +373,19 @@ export class WalletsService implements OnModuleInit {
       this.logger.error(`Background Circle history sync failed for ${userId}: ${err.message}`);
     });
 
-    // LEDGER READS (gradual cutover): the double-entry ledger is the source of
-    // truth for USDC/USDT and all local currencies. A currency that has NO
-    // ledger rows yet (pre-rollout history not backfilled) falls back to the
-    // float, so enabling LEDGER_READS_ENABLED is safe before the baseline
-    // script runs — per-currency, not all-or-nothing.
+    // LEDGER READS: the double-entry ledger is the source of truth for
+    // USDC/USDT and all local currencies. The startup baseline gate must pass
+    // before money movement can be enabled; an absent ledger row is zero.
     if (this.ledgerReads()) {
       try {
         ledgerBalances = await this.ledger.balancesOfUser(userId);
-        if (ledgerBalances.USDC !== undefined) usdcBalance = fromMinor(ledgerBalances.USDC, 'USDC');
-        if (ledgerBalances.USDT !== undefined) usdtBalance = fromMinor(ledgerBalances.USDT, 'USDT');
+        usdcBalance = fromMinor(ledgerBalances.USDC || 0n, 'USDC');
+        usdtBalance = fromMinor(ledgerBalances.USDT || 0n, 'USDT');
       } catch (err: any) {
-        this.logger.error(`Ledger read failed for ${userId}; continuing with floats: ${err.message}`);
+        this.logger.error(`Ledger read failed for ${userId}: ${err.message}`);
+        if (this.configService.get<boolean>('app.moneyMovement.enabled') === true) {
+          throw new ServiceUnavailableException('Ledger is unavailable; balance display is temporarily paused.');
+        }
       }
     }
 
@@ -417,8 +421,10 @@ export class WalletsService implements OnModuleInit {
       localBalances['NGN'] = localVal;
     }
 
-    // Overlay ledger-backed local balances (per currency, legacy fallback for
-    // any currency the ledger has no rows for yet).
+    // Overlay ledger-backed local balances. Once ledger reads are enabled,
+    // do not retain JSON/float local balances for currencies with no journal
+    // rows: an absent ledger balance is zero after the required baseline.
+    if (ledgerBalances && this.ledgerReads()) localBalances = {};
     if (ledgerBalances) {
       for (const [ccy, minor] of Object.entries(ledgerBalances)) {
         // Skip stablecoin denominations; 'USD' is a legacy ledger pseudo-currency
@@ -1228,13 +1234,15 @@ export class WalletsService implements OnModuleInit {
     let previewAvailable = Number(previewBalances[currency] || 0);
     if (this.ledgerReads()) {
       const ledgerBalances = await this.ledger.balancesOfUser(senderUserId);
-      if (ledgerBalances[currency] !== undefined) previewAvailable = fromMinor(ledgerBalances[currency], currency);
+      previewAvailable = fromMinor(ledgerBalances[currency] || 0n, currency);
     }
     // NGN carries a real-funds subledger. Never let test/demo local balance
     // pay another user's real balance or a later bill; an internal NGN send is
     // spendable only up to the sender's realLocalBalance.
     if (currency === 'NGN') {
-      previewAvailable = Math.min(previewAvailable, Math.max(0, Number(senderWallet.realLocalBalance || 0)));
+      if (!this.ledgerReads()) {
+        previewAvailable = Math.min(previewAvailable, Math.max(0, Number(senderWallet.realLocalBalance || 0)));
+      }
     }
     if (previewAvailable < sendAmount) {
       throw new BadRequestException(`Insufficient ${currency} balance. You can send up to ${previewAvailable.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}.`);
@@ -1278,8 +1286,8 @@ export class WalletsService implements OnModuleInit {
           this.ledger.balancesOfUser(senderUserId, prisma),
           this.ledger.balancesOfUser(recipient.id, prisma),
         ]);
-        if (senderLedgerBalances[currency] !== undefined) available = fromMinor(senderLedgerBalances[currency], currency);
-        if (recipientLedgerBalances[currency] !== undefined) recipientAvailable = fromMinor(recipientLedgerBalances[currency], currency);
+        available = fromMinor(senderLedgerBalances[currency] || 0n, currency);
+        recipientAvailable = fromMinor(recipientLedgerBalances[currency] || 0n, currency);
         // Bring the snapshots to the ledger baseline before applying this
         // movement. Without this, an older snapshot could be decremented from
         // zero after a ledger-backed check and manufacture a display drift.
@@ -1287,7 +1295,7 @@ export class WalletsService implements OnModuleInit {
         destinationBalances[currency] = recipientAvailable;
       }
       const totalSourceBalance = Number(sourceBalances[currency] || 0);
-      if (currency === 'NGN') {
+      if (currency === 'NGN' && !this.ledgerReads()) {
         available = Math.min(available, Math.max(0, Number(lockedSender.realLocalBalance || 0)));
       }
       if (available < sendAmount) {
