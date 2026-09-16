@@ -86,12 +86,14 @@ function mainnetMatrixIsValid() {
       const entry = matrix[network];
       return entry && typeof entry.circleBlockchain === 'string' && entry.circleBlockchain.trim()
         && typeof entry.cctpChain === 'string' && entry.cctpChain.trim()
+        && !/(testnet|sepolia|amoy|fuji|devnet|sandbox)/i.test(`${entry.circleBlockchain} ${entry.cctpChain}`)
         && Array.isArray(entry.rpcUrls) && entry.rpcUrls.length > 0
-        && entry.rpcUrls.every((url) => /^https:\/\//i.test(url) && !/localhost|127\.0\.0\.1/i.test(url))
+        && entry.rpcUrls.every((url) => /^https:\/\//i.test(url) && !/localhost|127\.0\.0\.1/i.test(url) && !/(testnet|sepolia|amoy|fuji|devnet|sandbox)/i.test(url))
         && Number.isSafeInteger(Number(entry.chainId)) && Number(entry.chainId) > 0
         && (/^0x[a-fA-F0-9]{40}$/.test(String(entry.usdcContract)) || /^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(String(entry.usdcContract)))
         && Number.isInteger(Number(entry.usdcDecimals))
-        && /^https:\/\//i.test(String(entry.explorerUrl || ''));
+        && /^https:\/\//i.test(String(entry.explorerUrl || ''))
+        && !/(testnet|sepolia|amoy|fuji|devnet|sandbox)/i.test(String(entry.explorerUrl || ''));
     });
   } catch {
     return false;

@@ -153,9 +153,13 @@ export class WalletsService implements OnModuleInit {
   async onModuleInit() {
     if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) return;
     try {
-      await this.ensureAllAddressesHaveArcWallets();
+      const result = await this.ensureAllAddressesHaveArcWallets();
+      if (this.configService.get<string>('app.network.environment') === 'mainnet' && result.failed.length) {
+        throw new Error(`mainnet Circle address coverage failed for ${result.failed.length} address(es)`);
+      }
     } catch (err: any) {
       this.logger.error(`automatic ARC wallet registration failed: ${err.message}`);
+      if (this.configService.get<string>('app.network.environment') === 'mainnet') throw err;
     }
   }
 
@@ -188,7 +192,8 @@ export class WalletsService implements OnModuleInit {
   // 'registered' if it was missing and we derived it, 'skipped' if it already
   // existed. Throws if Circle rejects the derivation.
   private async ensureArcWalletAtAddress(address: string, userId?: string): Promise<'registered' | 'skipped'> {
-    const existing = await this.getCircleWalletByAddress(address, 'ARC-TESTNET');
+    const arcBlockchain = this.arcBlockchainName();
+    const existing = await this.getCircleWalletByAddress(address, arcBlockchain);
     if (existing) return 'skipped';
 
     // Find a source EVM chain where Circle already has a wallet at this address.
@@ -221,7 +226,7 @@ export class WalletsService implements OnModuleInit {
       }
     );
     const w = res.data.data.wallet;
-    this.logger.log(`Derived ARC-TESTNET wallet at ${w.address} (${w.id})`);
+    this.logger.log(`Derived ${arcBlockchain} wallet at ${w.address} (${w.id})`);
     return 'registered';
   }
 
@@ -289,6 +294,16 @@ export class WalletsService implements OnModuleInit {
       MONAD: 'MONAD-TESTNET',
     };
     return testnetMap[net] || net;
+  }
+
+  private arcBlockchainName(): string {
+    return this.getBlockchainName('ARC');
+  }
+
+  private arcUsdcTokenAddress(): string {
+    const address = this.configService.get<string>('app.arc.usdcContractAddress');
+    if (!address) throw new BadRequestException('Arc USDC contract is not configured for this environment.');
+    return address;
   }
 
   // Reverse of getBlockchainName(): map a Circle blockchain value from the tx
@@ -823,8 +838,8 @@ export class WalletsService implements OnModuleInit {
           const createResponse = await axios.post(
             `${this.baseUrl}/v1/w3s/developer/wallets`,
             {
-              idempotencyKey: this.walletCreationIdempotencyKey(userId, 'ARC', 'ARC-TESTNET'),
-              blockchains: ['ARC-TESTNET'],
+              idempotencyKey: this.walletCreationIdempotencyKey(userId, 'ARC', this.arcBlockchainName()),
+              blockchains: [this.arcBlockchainName()],
               entitySecretCiphertext: ciphertext,
               walletSetId,
               metadata: [
@@ -904,12 +919,17 @@ export class WalletsService implements OnModuleInit {
       }
     }
 
-    // Newly-created Circle address: make sure Circle also holds an ARC-TESTNET
-    // wallet at this exact address so Arc-side deposits stay visible on console.
-    // Fire-and-forget; a failure here must not block address generation.
-    this.ensureArcWalletAtAddress(walletAddress.address, userId).catch((err: any) => {
-      this.logger.warn(`ARC coverage for new address ${walletAddress.address} failed: ${err.message}`);
-    });
+    // Newly-created Circle address: ensure Circle also holds the configured Arc
+    // wallet at this exact address. Mainnet waits for this coverage so an
+    // address is never shown to a customer while its provider observability is
+    // uncertain; testnet keeps the historical asynchronous refresh behavior.
+    if (this.configService.get<string>('app.network.environment') === 'mainnet') {
+      await this.ensureArcWalletAtAddress(walletAddress.address, userId);
+    } else {
+      this.ensureArcWalletAtAddress(walletAddress.address, userId).catch((err: any) => {
+        this.logger.warn(`ARC coverage for new address ${walletAddress.address} failed: ${err.message}`);
+      });
+    }
 
     return { network: walletAddress.network, address: walletAddress.address };
   }
@@ -927,6 +947,7 @@ export class WalletsService implements OnModuleInit {
     }
 
     const net = network.toUpperCase();
+    this.financialSafety?.assertRecipientShape(destinationNetwork?.toUpperCase() || net, toAddress);
     // Tag transfers are internal ledger movements. They may carry USDC or a
     // supported local currency; on-chain sends remain USDC-only by design.
     if (net === 'SUREX_TAG') {
@@ -1938,8 +1959,8 @@ export class WalletsService implements OnModuleInit {
       idempotencyKey: providerIdempotencyKey,
       entitySecretCiphertext: ciphertext,
       walletAddress: sourceAddress,
-      blockchain: 'ARC-TESTNET',
-      tokenAddress: '0x3600000000000000000000000000000000000000',
+      blockchain: this.arcBlockchainName(),
+      tokenAddress: this.arcUsdcTokenAddress(),
       destinationAddress: destAddress,
       // Circle exposes refId in transaction/webhook payloads. Keep the local
       // send reference attached to the provider object in addition to the

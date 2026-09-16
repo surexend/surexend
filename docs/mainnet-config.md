@@ -35,6 +35,7 @@ mapping). The matrix still needs provider and on-chain review before approval.
 | `MAINNET_CHAIN_MATRIX_JSON.usdcContract` | testnet contract/precompile | token contract | ops + security | **Never reuse a testnet address** |
 | `MAINNET_CHAIN_MATRIX_JSON.cctpChain` | testnet BridgeKit constants | provider docs | dev + ops | Record the exact provider-reviewed mainnet value |
 | `MAINNET_CHAIN_MATRIX_JSON.circleBlockchain` | testnet Circle names | Circle docs | dev + ops | Record the exact Circle mainnet value |
+| `NEXT_PUBLIC_CHAIN_ENV` + `NEXT_PUBLIC_*_EXPLORER_BASE` | testnet defaults in `src/lib/explorers.ts` | deployment matrix explorers | ops + frontend | Mainnet has no testnet fallback; missing values hide the link |
 | `FRONTEND_URL`, `WEBAUTHN_*`, SMTP/Firebase | prod values | — | ops | Unchanged by mainnet |
 | `ADMIN_EMAILS` | set/removed per boot | — | ops | Remove after use |
 

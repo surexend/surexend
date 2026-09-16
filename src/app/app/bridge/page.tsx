@@ -11,6 +11,7 @@ import {
   AlertCircle, ShieldCheck, Info, ExternalLink, Zap
 } from 'lucide-react'
 import Link from 'next/link'
+import { explorerTransactionUrl } from '@/lib/explorers'
 
 // Define the supported chains for CCTP bridging
 const BRIDGE_CHAINS = [
@@ -394,14 +395,16 @@ export default function BridgePage() {
               <div className="p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 space-y-1.5 text-xs text-[#94A3B8] leading-relaxed">
                 <p className="font-bold text-white text-xs">Bridge Transfer Complete! 🎉</p>
                 <p className="text-[10px]">Your transaction has been processed. The relayer has finalized minting. Check status on explorer:</p>
-                <a 
-                  href={`https://testnet.arcscan.app/tx/${txHash}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-extrabold hover:underline pt-0.5"
-                >
-                  View on Explorer <ExternalLink className="w-3 h-3" />
-                </a>
+                {explorerTransactionUrl('ARC', txHash) && (
+                  <a
+                    href={explorerTransactionUrl('ARC', txHash) || undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-extrabold hover:underline pt-0.5"
+                  >
+                    View on Explorer <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
               </div>
             )}
 

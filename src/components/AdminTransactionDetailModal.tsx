@@ -4,19 +4,7 @@ import { useEffect, useState } from 'react'
 import { adminAPI } from '@/lib/api'
 import { currencySymbol, formatAmount, getSwapInfo } from '@/lib/utils'
 import { X, Copy, Check, FileText, Zap, ExternalLink } from 'lucide-react'
-
-const EXPLORER_BASE: Record<string, string> = {
-  ARC: 'https://testnet.arcscan.app/tx/',
-  ETHEREUM: 'https://sepolia.etherscan.io/tx/',
-  POLYGON: 'https://amoy.polygonscan.com/tx/',
-  AVALANCHE: 'https://testnet.snowtrace.io/tx/',
-  ARBITRUM: 'https://sepolia.arbiscan.io/tx/',
-  BASE: 'https://sepolia.basescan.org/tx/',
-  OPTIMISM: 'https://sepolia-optimistic.etherscan.io/tx/',
-  SOLANA: 'https://explorer.solana.com/tx/',
-  MONAD: 'https://testnet.monadscan.com/tx/',
-  BSC: 'https://testnet.bscscan.com/tx/',
-}
+import { explorerTransactionUrl } from '@/lib/explorers'
 
 export function AdminTransactionDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
   const [tx, setTx] = useState<any>(null)
@@ -57,9 +45,7 @@ export function AdminTransactionDetailModal({ id, onClose }: { id: string; onClo
         : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
 
   const explorerNetwork = (meta.destinationNetwork || meta.network || tx.network || 'ARC').toUpperCase()
-  const explorerUrl = meta.txHash
-    ? `${EXPLORER_BASE[explorerNetwork] || EXPLORER_BASE.ARC}${meta.txHash}`
-    : `https://testnet.arcscan.app/tx/${tx.reference}`
+  const explorerUrl = explorerTransactionUrl(explorerNetwork, meta.txHash)
 
   const rows: { label: string; value: string; mono?: boolean; accent?: boolean }[] = [
     { label: 'Reference / Invoice', value: tx.reference || '—', mono: true, accent: true },
@@ -153,18 +139,21 @@ export function AdminTransactionDetailModal({ id, onClose }: { id: string; onClo
             ))}
           </div>
 
-          {/* Admin-only Explorer Link */}
-          <div className="pt-3">
-            <a
-              href={explorerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-xs font-extrabold border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-all shadow-lg active:scale-[0.98]"
-            >
-              <ExternalLink className="w-4 h-4 text-amber-400" />
-              View on Arc Explorer ↗
-            </a>
-          </div>
+          {/* Admin-only Explorer Link; mainnet deployments must provide a
+              reviewed explorer base and never fall back to testnet. */}
+          {explorerUrl && (
+            <div className="pt-3">
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-xs font-extrabold border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-all shadow-lg active:scale-[0.98]"
+              >
+                <ExternalLink className="w-4 h-4 text-amber-400" />
+                View on Explorer ↗
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </div>

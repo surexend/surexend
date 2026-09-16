@@ -9,6 +9,7 @@ export interface ChainConfig {
   rpcUrls?: string[];
   usdcContract: string;
   usdcDecimals: number;
+  chainId?: number;
 }
 
 // EVM testnets the app monitors. Keyed by the value getBlockchainName() maps a
@@ -50,6 +51,7 @@ export function getConfiguredEvmChains(configService: ConfigService): ChainConfi
         rpcUrls,
         usdcContract: entry.usdcContract,
         usdcDecimals: entry.usdcDecimals,
+        chainId: entry.chainId,
       };
     });
 }
@@ -111,6 +113,12 @@ export class OnchainService {
   }
 
   async getLatestBlock(chain: ChainConfig): Promise<number> {
+    if (chain.chainId) {
+      const actual = parseInt(await this.rpc(chain, 'eth_chainId', []), 16);
+      if (actual !== chain.chainId) {
+        throw new Error(`${chain.key} RPC chain ID mismatch: expected ${chain.chainId}, received ${actual}`);
+      }
+    }
     const hex = await this.rpc(chain, 'eth_blockNumber', []);
     return parseInt(hex, 16);
   }

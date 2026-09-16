@@ -71,7 +71,11 @@ export function parseReviewedNetworkMatrix(raw: string | undefined): ReviewedNet
     if (!circleBlockchain || !cctpChain) {
       throw new Error(`Mainnet matrix entry ${network} must include circleBlockchain and cctpChain.`);
     }
-    if (!rpcUrls.length || rpcUrls.some((url) => !/^https:\/\//i.test(url) || /localhost|127\.0\.0\.1/i.test(url))) {
+    const testnetMarker = /(testnet|sepolia|amoy|fuji|devnet|sandbox)/i;
+    if (testnetMarker.test(circleBlockchain) || testnetMarker.test(cctpChain)) {
+      throw new Error(`Mainnet matrix entry ${network} contains a testnet/sandbox provider mapping.`);
+    }
+    if (!rpcUrls.length || rpcUrls.some((url) => !/^https:\/\//i.test(url) || /localhost|127\.0\.0\.1/i.test(url) || testnetMarker.test(url))) {
       throw new Error(`Mainnet matrix entry ${network} must contain HTTPS, non-local rpcUrls.`);
     }
     if (!Number.isSafeInteger(chainId) || chainId <= 0) {
@@ -84,8 +88,8 @@ export function parseReviewedNetworkMatrix(raw: string | undefined): ReviewedNet
     if (!Number.isInteger(usdcDecimals) || usdcDecimals <= 0 || usdcDecimals > 18) {
       throw new Error(`Mainnet matrix entry ${network} must contain valid usdcDecimals.`);
     }
-    if (!/^https:\/\//i.test(explorerUrl) || /localhost|127\.0\.0\.1/i.test(explorerUrl)) {
-      throw new Error(`Mainnet matrix entry ${network} must contain an HTTPS explorerUrl.`);
+    if (!/^https:\/\//i.test(explorerUrl) || /localhost|127\.0\.0\.1/i.test(explorerUrl) || testnetMarker.test(explorerUrl)) {
+      throw new Error(`Mainnet matrix entry ${network} must contain an HTTPS mainnet explorerUrl.`);
     }
 
     matrix[network] = { circleBlockchain, cctpChain, rpcUrls, chainId, usdcContract, usdcDecimals, explorerUrl };

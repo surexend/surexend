@@ -72,6 +72,9 @@ provider, legal/compliance, independent-review, or recovery-evidence blockers.
 - No production PostgreSQL migration/restore rehearsal, provider contract
   preflight, end-to-end testnet receipt packet, alert restart drill, or external
   penetration test was available in this environment.
+- `npm run security:audit` is a high-severity blocking gate. The GitHub workflow
+  update is pending repository workflow permission; until that permission is
+  available, operators must run the script explicitly and retain its report.
 
 ## Blockers before mainnet
 

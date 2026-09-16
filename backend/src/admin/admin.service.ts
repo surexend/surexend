@@ -517,8 +517,17 @@ export class AdminService {
 
   private referralRewardBlockchain(): string {
     // Must be a Circle-supported chain where the configured USDT contract is
-    // deployed. ARC remains the existing default for USDC treasury operations.
-    return this.referralRewardBlockchainOverride || (this.circleApiKey.startsWith('TEST_') ? 'ARC-TESTNET' : 'ARC');
+    // deployed. Mainnet names come from the reviewed matrix; the testnet map is
+    // explicit and never inferred from a credential prefix.
+    if (this.referralRewardBlockchainOverride) return this.referralRewardBlockchainOverride;
+    const environment = this.configService.get<string>('app.network.environment');
+    if (environment === 'mainnet') {
+      const matrix = this.configService.get<Record<string, { circleBlockchain: string }>>('app.network.matrix') || {};
+      const value = matrix.ARC?.circleBlockchain;
+      if (!value) throw new BadRequestException('No reviewed Arc mainnet blockchain is configured for referral rewards.');
+      return value;
+    }
+    return 'ARC-TESTNET';
   }
 
   private referralRewardNetwork(): string {
@@ -817,6 +826,7 @@ export class AdminService {
         recipientAddress = { address: created.address };
       }
       this.financialSafety?.assertRecipientAllowed(recipientAddress.address);
+      this.financialSafety?.assertRecipientShape(this.referralRewardNetwork(), recipientAddress.address);
 
       const publicKeyResponse = await axios.get(`${this.circleBaseUrl}/v1/w3s/config/entity/publicKey`, {
         headers: { Authorization: `Bearer ${this.circleApiKey}`, accept: 'application/json' },
