@@ -22,6 +22,12 @@
     "prestart": "npm run db:deploy",
     "prestart:prod": "npm run db:deploy"
   },
+  "overrides": {
+    "body-parser": "1.20.8",
+    "multer": "$multer",
+    "qs": "6.16.0",
+    "glob": "10.5.0"
+  },
   "dependencies": {
     "@circle-fin/adapter-circle-wallets": "^1.6.0",
     "@circle-fin/bridge-kit": "^1.13.0",
