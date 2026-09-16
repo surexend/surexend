@@ -45,6 +45,9 @@ MONEY_MOVEMENT_ENABLED=false
   per-user/day/currency bucket and a stable operation reference; failed or
   unknown provider outcomes consume the reservation rather than allowing retry
   abuse.
+- Mainnet canary mode is an independent allowlist gate. When enabled, only
+  explicitly listed user IDs can start customer movement; disabling it requires
+  a staged-canary evidence packet.
 - Mainnet consumers (CCTP, Circle wallet blockchain names, and EVM deposit
   monitoring) read the reviewed matrix instead of silently converting a testnet
   key into mainnet behavior. Mainnet remains disabled by default.
@@ -62,19 +65,17 @@ provider, legal/compliance, independent-review, or recovery-evidence blockers.
   Prisma client generation was blocked by the unavailable Prisma engine download,
   so the generated client was incomplete and Jest reported generated-client
   type errors. This is **pending evidence**, not a pass.
-- `npm audit --omit=dev` reported **45 advisories: 0 critical, 11 high,
-  25 moderate, 9 low** in the installed backend dependency graph after
-  removing the unused native `bcrypt` dependency and upgrading direct Multer.
-  A real release requires triage, upgrades, or documented compensating controls;
-  this repository must not treat the audit as clean. CI now blocks production
-  dependency advisories at high severity and uploads the audit report; the
-  current known high findings therefore remain an active release blocker.
+- `npm audit --omit=dev` now reports **44 advisories: 0 critical, 10 high,
+  25 moderate, 9 low** after upgrading direct `sharp` to `^0.35.4` in addition
+  to removing unused native `bcrypt` and upgrading direct Multer. Circle
+  adapters/BridgeKit and Nest/platform-express still require targeted triage;
+  a real release requires upgrades or documented compensating controls and must
+  not treat the audit as clean. The `security:audit` script is a high-severity
+  blocking gate; the GitHub workflow update is pending repository workflow
+  permission, so operators must run it explicitly and retain its report.
 - No production PostgreSQL migration/restore rehearsal, provider contract
   preflight, end-to-end testnet receipt packet, alert restart drill, or external
   penetration test was available in this environment.
-- `npm run security:audit` is a high-severity blocking gate. The GitHub workflow
-  update is pending repository workflow permission; until that permission is
-  available, operators must run the script explicitly and retain its report.
 
 ## Blockers before mainnet
 

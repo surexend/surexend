@@ -126,6 +126,7 @@ function assertConfiguration() {
   if (scope === 'mainnet') {
     check('mainnet-config-approved', env('MAINNET_CONFIG_APPROVED') === 'true', 'MAINNET_CONFIG_APPROVED=true identifies the separately reviewed matrix packet.');
     check('mainnet-circle-credential', Boolean(env('CIRCLE_API_KEY') && !env('CIRCLE_API_KEY').startsWith('TEST_') && env('CIRCLE_ENTITY_SECRET')), 'A non-test Circle credential pair is configured.');
+    check('mainnet-custody-wallet-set', Boolean(env('CIRCLE_WALLET_SET_ID')), 'A pre-created, custody-reviewed CIRCLE_WALLET_SET_ID is configured; the app cannot create one on mainnet.');
     check('mainnet-reviewed-chain-matrix', mainnetMatrixIsValid(), 'MAINNET_CHAIN_MATRIX_JSON contains complete, HTTPS, non-local, syntactically valid entries for every enabled network.');
     check('mainnet-release-approval', Boolean(env('FINANCIAL_RELEASE_APPROVED_BY') && env('FINANCIAL_RELEASE_TICKET') && env('FINANCIAL_RELEASE_EVIDENCE_ID')), 'Mainnet financial release approval, ticket, and immutable evidence packet are present.');
     check('kyc-aml-evidence', Boolean(env('KYC_AML_EVIDENCE_ID')), 'KYC_AML_EVIDENCE_ID identifies the approved KYC/AML program and operating evidence.');
@@ -133,6 +134,10 @@ function assertConfiguration() {
     check('custody-dual-control-evidence', Boolean(env('CUSTODY_DUAL_CONTROL_EVIDENCE_ID')), 'CUSTODY_DUAL_CONTROL_EVIDENCE_ID identifies segregated custody, key management, allowlists, and recovery evidence.');
     check('independent-security-review-evidence', Boolean(env('INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID')), 'INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID identifies the external security review and remediation sign-off.');
     check('disaster-recovery-evidence', Boolean(env('DISASTER_RECOVERY_EVIDENCE_ID')), 'DISASTER_RECOVERY_EVIDENCE_ID identifies backup restore, failover, and rollback evidence.');
+    const canaryUsers = env('CANARY_USER_IDS').split(',').map((value) => value.trim()).filter(Boolean);
+    check('staged-canary-control', env('CANARY_MODE') === 'true' ? canaryUsers.length > 0 : Boolean(env('STAGED_CANARY_EVIDENCE_ID')), env('CANARY_MODE') === 'true'
+      ? 'CANARY_MODE=true has a non-empty approved user allowlist.'
+      : 'Unrestricted mode has a staged-canary evidence packet.');
     return;
   }
 

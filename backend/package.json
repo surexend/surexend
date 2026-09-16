@@ -62,7 +62,7 @@
     "reflect-metadata": "^0.2.0",
     "resend": "^3.4.0",
     "rxjs": "^7.8.1",
-    "sharp": "^0.33.4",
+    "sharp": "^0.35.4",
     "speakeasy": "^2.0.0",
     "uuid": "^10.0.0"
   },

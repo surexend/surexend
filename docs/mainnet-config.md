@@ -49,11 +49,13 @@ mapping). The matrix still needs provider and on-chain review before approval.
    contracts, reconciliation, token addresses, RPC ownership, and explorer
    links; the database control plane and launch gate must remain closed during
    this work.
-4. Only after a separate release is approved, flip `MAINNET_ENABLED=true` +
-   `CHAIN_ENV=mainnet` + mainnet ARC vars on Railway **and** the matching
-   frontend env at the same time.
-5. Verify with a **tiny** real deposit to a controlled address, then
-   `npm run ledger:report` must be clean.
+4. Only after a separate release is approved, set the private matrix,
+   `MAINNET_ENABLED=true`, `CHAIN_ENV=mainnet`, and the matching frontend
+   environment at the same time. Start with `CANARY_MODE=true` and a tiny
+   approved-user allowlist; the backend rejects all other customer movement.
+5. Verify with a **tiny** real deposit and send for each canary user, then
+   `npm run ledger:report` must be clean and the observation window must be
+   signed before expanding limits or disabling canary mode.
 6. Keep `TESTING_ENABLED` off in production (already enforced at boot).
 
 ## 4. Explicit "never" list

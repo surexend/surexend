@@ -84,6 +84,9 @@ export class WalletsService implements OnModuleInit {
       if (!this.apiKey || !this.entitySecret) {
         throw new BadRequestException('Circle is not configured. Add CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET before creating a wallet.');
       }
+      if (this.configService.get<string>('app.network.environment') === 'mainnet') {
+        throw new BadRequestException('Mainnet requires a pre-created, custody-reviewed CIRCLE_WALLET_SET_ID; automatic wallet-set creation is disabled.');
+      }
 
       const existing = await this.prisma.platformWallet.findUnique({ where: { key: 'APPLICATION_WALLET_SET' } });
       if (existing?.walletSetId) {

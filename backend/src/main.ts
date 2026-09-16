@@ -114,8 +114,20 @@ function assertNetworkConfig() {
     if (!process.env.CIRCLE_API_KEY || !process.env.CIRCLE_ENTITY_SECRET) {
       throw new Error('Refusing to start: mainnet Circle API credentials are required.');
     }
+    if (process.env.MONEY_MOVEMENT_ENABLED === 'true' && !process.env.CIRCLE_WALLET_SET_ID) {
+      throw new Error('Refusing to start: mainnet requires a pre-created, custody-reviewed CIRCLE_WALLET_SET_ID.');
+    }
     if (process.env.MONEY_MOVEMENT_ENABLED === 'true' && process.env.FINANCIAL_RELEASE_APPROVED !== 'true') {
       throw new Error('Refusing to start: real-money movement requires a separately recorded financial release approval.');
+    }
+    if (process.env.MONEY_MOVEMENT_ENABLED === 'true') {
+      const canaryUsers = (process.env.CANARY_USER_IDS || '').split(',').map((value) => value.trim()).filter(Boolean);
+      if (process.env.CANARY_MODE === 'true' && !canaryUsers.length) {
+        throw new Error('Refusing to start: CANARY_MODE=true requires a non-empty CANARY_USER_IDS allowlist.');
+      }
+      if (process.env.CANARY_MODE !== 'true' && !process.env.STAGED_CANARY_EVIDENCE_ID) {
+        throw new Error('Refusing to start unrestricted mainnet movement without STAGED_CANARY_EVIDENCE_ID.');
+      }
     }
   } else if (circleIsMainnet) {
     throw new Error(

@@ -131,6 +131,13 @@ export class FinancialSafetyService {
       throw new ServiceUnavailableException('Inbound credits are paused by operations.');
     }
 
+    if (userId && this.configService.get<string>('app.network.environment') === 'mainnet' && this.configService.get<boolean>('app.canary.enabled') === true) {
+      const allowedUsers = this.configService.get<string[]>('app.canary.userIds') || [];
+      if (!allowedUsers.includes(userId)) {
+        throw new ServiceUnavailableException('Mainnet canary mode is active; this account is not on the approved canary allowlist.');
+      }
+    }
+
     if (userId && this.configService.get<boolean>('app.compliance.requireKyc') === true) {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -265,8 +272,13 @@ export class FinancialSafetyService {
         process.env.POSTGRES_REHEARSAL_EVIDENCE_ID,
         process.env.DISASTER_RECOVERY_EVIDENCE_ID,
       ];
-      if (process.env.FINANCIAL_RELEASE_APPROVED !== 'true' || requiredEvidence.some((value) => !value?.trim())) {
-        throw new ServiceUnavailableException('Production movement cannot be enabled without the signed financial, compliance, sanctions, and custody release evidence.');
+      const canaryEvidenceValid = process.env.CHAIN_ENV === 'mainnet'
+        ? (process.env.CANARY_MODE === 'true'
+          ? Boolean(process.env.CANARY_USER_IDS?.split(',').map((value) => value.trim()).filter(Boolean).length)
+          : Boolean(process.env.STAGED_CANARY_EVIDENCE_ID?.trim()))
+        : true;
+      if (process.env.FINANCIAL_RELEASE_APPROVED !== 'true' || requiredEvidence.some((value) => !value?.trim()) || !canaryEvidenceValid) {
+        throw new ServiceUnavailableException('Production movement cannot be enabled without signed release evidence and a staged canary allowlist/evidence packet.');
       }
     }
     const id = randomUUID();

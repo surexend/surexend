@@ -93,6 +93,10 @@ export default registerAs('app', () => {
     conversionUsdDaily: Number(process.env.MAX_DAILY_CONVERSION_USD || '1000'),
     billsNgnDaily: Number(process.env.MAX_DAILY_BILL_NGN || '500000'),
   },
+  canary: {
+    enabled: process.env.CANARY_MODE === 'true',
+    userIds: (process.env.CANARY_USER_IDS || '').split(',').map((value) => value.trim()).filter(Boolean),
+  },
   yellowCard: {
     apiKey: process.env.YELLOW_CARD_API_KEY,
     secret: process.env.YELLOW_CARD_SECRET,
