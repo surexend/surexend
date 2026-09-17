@@ -79,15 +79,88 @@ export class FinancialSafetyService {
         SELECT table_name::text AS table_name
         FROM information_schema.tables
         WHERE table_schema = 'public'
-          AND table_name IN ('FinancialControl', 'FinancialControlChange', 'FinancialLimitBucket', 'FinancialLimitReservation')
+          AND table_name IN ('FinancialControl', 'FinancialControlChange', 'FinancialLimitBucket', 'FinancialLimitReservation', 'DeploymentEnvironment')
       `;
       const found = new Set(rows.map((row) => row.table_name));
-      const required = ['FinancialControl', 'FinancialControlChange', 'FinancialLimitBucket', 'FinancialLimitReservation'];
+      const required = ['FinancialControl', 'FinancialControlChange', 'FinancialLimitBucket', 'FinancialLimitReservation', 'DeploymentEnvironment'];
       const missing = required.filter((table) => !found.has(table));
       if (missing.length) throw new Error(`missing tables: ${missing.join(', ')}`);
     } catch (error: any) {
       this.logger.error(`Financial control storage is incomplete: ${error?.message || error}`);
       throw new ServiceUnavailableException('Financial control storage is incomplete; refusing to start.');
+    }
+  }
+
+  /**
+   * Pin this database to one chain environment.
+   *
+   * Wallet, LedgerEntry, and WalletAddress rows carry no network scope, so a
+   * database that ever held testnet balances must never be booted as mainnet:
+   * the internal testnet balances would be read as spendable mainnet money.
+   * The first boot stamps the database; every later boot must match. A mainnet
+   * stamp is additionally refused on a database that already contains user
+   * wallets/balances/addresses from a previous (unstamped) testnet life.
+   */
+  async assertDeploymentEnvironment(params: { chainEnvironment: 'testnet' | 'mainnet'; circleKeyPrefix: string }) {
+    const { chainEnvironment, circleKeyPrefix } = params;
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ chainEnvironment: string; circleKeyPrefix: string; stampedAt: Date }>>`
+        SELECT "chainEnvironment", "circleKeyPrefix", "stampedAt"
+        FROM "DeploymentEnvironment"
+        WHERE "id" = 'global'
+        LIMIT 1
+      `;
+      const stamp = rows[0];
+      if (stamp) {
+        if (stamp.chainEnvironment !== chainEnvironment) {
+          throw new Error(
+            `this database is stamped ${stamp.chainEnvironment} (since ${stamp.stampedAt?.toISOString?.() || stamp.stampedAt}) but CHAIN_ENV=${chainEnvironment}. ` +
+              'A testnet database must never be reused for mainnet; point Production at its own clean database.',
+          );
+        }
+        if (stamp.circleKeyPrefix !== circleKeyPrefix) {
+          throw new Error(`this database is stamped for Circle ${stamp.circleKeyPrefix} keys but the configured key is ${circleKeyPrefix}.`);
+        }
+        return { stamped: false, chainEnvironment };
+      }
+
+      if (chainEnvironment === 'mainnet') {
+        const [usage] = await this.prisma.$queryRaw<Array<{ wallets: number; addresses: number; ledger: number; funded: number }>>`
+          SELECT
+            (SELECT COUNT(*)::int FROM "Wallet") AS "wallets",
+            (SELECT COUNT(*)::int FROM "WalletAddress") AS "addresses",
+            (SELECT COUNT(*)::int FROM "LedgerEntry") AS "ledger",
+            (SELECT COUNT(*)::int FROM "Wallet"
+              WHERE COALESCE("usdcBalance", 0) <> 0 OR COALESCE("usdtBalance", 0) <> 0
+                 OR COALESCE("localBalance", 0) <> 0 OR COALESCE("realLocalBalance", 0) <> 0
+                 OR COALESCE("pendingBalance", 0) <> 0
+                 OR COALESCE("localBalances", '{}'::jsonb) <> '{}'::jsonb) AS "funded"
+        `;
+        if (usage.addresses > 0 || usage.ledger > 0 || usage.funded > 0) {
+          throw new Error(
+            `refusing to stamp a used database as mainnet (${usage.wallets} wallets, ${usage.funded} with balances, ` +
+              `${usage.addresses} deposit addresses, ${usage.ledger} ledger entries). Existing rows would be treated as mainnet money.`,
+          );
+        }
+      }
+
+      await this.prisma.$executeRaw`
+        INSERT INTO "DeploymentEnvironment" ("id", "chainEnvironment", "circleKeyPrefix", "stampedAt", "stampedBy")
+        VALUES ('global', ${chainEnvironment}, ${circleKeyPrefix}, CURRENT_TIMESTAMP, 'boot')
+        ON CONFLICT ("id") DO NOTHING
+      `;
+      // Re-read: a concurrent replica may have stamped first.
+      const [after] = await this.prisma.$queryRaw<Array<{ chainEnvironment: string; circleKeyPrefix: string }>>`
+        SELECT "chainEnvironment", "circleKeyPrefix" FROM "DeploymentEnvironment" WHERE "id" = 'global' LIMIT 1
+      `;
+      if (!after || after.chainEnvironment !== chainEnvironment || after.circleKeyPrefix !== circleKeyPrefix) {
+        throw new Error('environment stamp changed underneath this boot; refusing to continue.');
+      }
+      this.logger.warn(`Stamped database as ${chainEnvironment} (Circle ${circleKeyPrefix}). This stamp is permanent.`);
+      return { stamped: true, chainEnvironment };
+    } catch (error: any) {
+      this.logger.error(`Deployment environment check failed: ${error?.message || error}`);
+      throw new ServiceUnavailableException(`Refusing to start: ${error?.message || error}`);
     }
   }
 

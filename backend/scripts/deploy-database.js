@@ -1,26 +1,27 @@
 #!/usr/bin/env node
 
 /*
- * deploy-database.js
+ * deploy-database.js — runs on container start (`prestart:prod`).
  *
- * Runs on container startup to synchronise the database schema.
- * This project uses `prisma db push` (schema-driven) rather than
- * `prisma migrate deploy` (migration-history-driven) because no
- * complete migration history has been authored.
+ * Production / mainnet (NODE_ENV=production):
+ *   `prisma migrate deploy` replays ONLY the checked-in migrations under
+ *   prisma/migrations and records them in `_prisma_migrations`. It never
+ *   drops or rewrites columns on its own, so it is safe on a financial
+ *   database. Any failure exits non-zero: a schema that could not be verified
+ *   must not serve customer traffic. (docs/financial-release-runbook.md §2:
+ *   "no production deployment uses `prisma db push` or `--accept-data-loss`".)
  *
- * Why NOT migrate deploy?
- *   - P1013 "scheme not recognised" fires when DATABASE_URL is not
- *     a valid postgresql:// / postgres:// URL (e.g. Railway injects
- *     a postgres:// URL that older Prisma migrate commands reject).
- *   - This repo has always used db push; there are no migration files
- *     to replay, so migrate deploy would be a no-op at best or corrupt
- *     the _prisma_migrations shadow table at worst.
+ * Local development (any other NODE_ENV):
+ *   `prisma db push` keeps a throwaway database in sync with schema.prisma
+ *   without authoring migrations. Never used in production.
  *
- * Resilience: any failure exits 0 so the container does not crash-loop.
- * The NestJS app will surface a proper DB connection error on first use.
+ * After the schema step, the reviewed idempotent data patches in
+ * apply-data-migrations.js run (tracked in `_SureXendDataMigrations`).
  */
 
 const { execFileSync } = require('node:child_process');
+
+const production = process.env.NODE_ENV === 'production';
 
 function npx(...args) {
   const bin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
@@ -28,31 +29,34 @@ function npx(...args) {
   execFileSync(bin, args, { stdio: 'inherit', env: process.env });
 }
 
-// Validate DATABASE_URL before doing anything — gives a clear error
-// instead of the cryptic P1013 from Prisma.
-const dbUrl = process.env.DATABASE_URL || '';
-if (!dbUrl) {
-  console.error('[db] ERROR: DATABASE_URL environment variable is not set.');
-  console.error('[db] Skipping schema sync — set DATABASE_URL in Railway Variables.');
+function fail(message) {
+  console.error(`[db] ERROR: ${message}`);
+  if (production) {
+    console.error('[db] Refusing to start in production without a verified schema.');
+    process.exit(1);
+  }
+  console.error('[db] Skipping schema sync (non-production).');
   process.exit(0);
 }
+
+const dbUrl = process.env.DATABASE_URL || '';
+if (!dbUrl) fail('DATABASE_URL environment variable is not set.');
 if (!dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://')) {
-  console.error(`[db] ERROR: DATABASE_URL has an unrecognised scheme: "${dbUrl.split(':')[0]}://"`);
-  console.error('[db] Expected: postgresql://... or postgres://...');
-  console.error('[db] Check Railway Variables → DATABASE_URL for typos or extra whitespace.');
-  process.exit(0);
+  fail(`DATABASE_URL has an unrecognised scheme: "${dbUrl.split(':')[0]}://" (expected postgresql:// or postgres://).`);
+}
+if (!process.env.DIRECT_URL) {
+  // schema.prisma declares directUrl; migrations must bypass any pooler.
+  process.env.DIRECT_URL = dbUrl;
 }
 
 try {
-  // db push keeps the live schema in sync with schema.prisma without
-  // requiring a migration history. Safe for both fresh and existing DBs.
-  npx('prisma', 'db', 'push', '--skip-generate', '--accept-data-loss');
-
-  // Apply small idempotent data patches (tracked in _SureXendDataMigrations)
-  require(process.execPath);  // warm require cache
-  require('./apply-data-migrations.js');
+  if (production) {
+    npx('prisma', 'migrate', 'deploy');
+  } else {
+    npx('prisma', 'db', 'push', '--skip-generate');
+  }
+  // Run as a child so its exit status is authoritative (it is async).
+  execFileSync(process.execPath, [require('node:path').join(__dirname, 'apply-data-migrations.js')], { stdio: 'inherit', env: process.env });
 } catch (err) {
-  console.error('[db] Database preparation error:', err.message);
-  console.error('[db] Server will start; first DB call may fail.');
-  process.exit(0);
+  fail(`Database preparation failed: ${err.message}`);
 }

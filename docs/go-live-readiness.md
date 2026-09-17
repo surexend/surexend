@@ -4,6 +4,18 @@
 **Branch reviewed:** `arena/01a0aa53-surexend`  
 **Decision:** **NO-GO for mainnet and NO-GO for unrestricted real-money launch**
 
+## Update 2026-09-17 — mainnet preflight path prepared
+
+The read-only Production mainnet preflight is now fully specified and enforced
+in code (`docs/mainnet-config.md`): strict `LIVE_API_KEY` classification, a
+permanent database chain-environment stamp that refuses to boot a testnet
+database as mainnet, `MAINNET_DB_ISOLATION_CONFIRMED`, `prisma migrate deploy`
+on production start, a `mainnet-preflight` launch-gate scope, and a one-time
+wallet-set creation script. The decision below for **money movement** is
+unchanged: Stage 1 (mainnet, money paused) may proceed once the operator
+supplies the Circle mainnet credentials to Production; Stage 2 (canary) still
+requires the signed release packet.
+
 ## Executive decision
 
 SureXend is not ready to move from testnet to mainnet. Mainnet now has an

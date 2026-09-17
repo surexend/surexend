@@ -498,6 +498,17 @@ model FinancialLimitReservation {
   @@index([userId, limitDate])
 }
 
+// One row per database. Written on first boot, then immutable: it pins which
+// chain environment this database's balances belong to (see migration
+// 20260917020000_deployment_environment_stamp).
+model DeploymentEnvironment {
+  id               String   @id @default("global")
+  chainEnvironment String
+  circleKeyPrefix  String
+  stampedAt        DateTime @default(now())
+  stampedBy        String?
+}
+
 // The application-level data migration runner owns this metadata table. Keep
 // it in the Prisma schema so local schema synchronization does not interpret a
 // previously-applied data migration as an unmanaged table to drop.

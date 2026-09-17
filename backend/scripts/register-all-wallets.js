@@ -50,8 +50,12 @@ function encryptEntitySecret(publicKeyPem, secretHex) {
   return encrypted.toString('base64');
 }
 
+const { classifyCircleApiKey } = require('./lib/circle-credential');
+
 function blockchainFor(network) {
-  const keyIsTest = (process.env.CIRCLE_API_KEY || '').startsWith('TEST_');
+  // Strict prefix classification; an unrecognised key is treated as testnet so
+  // this script can never derive mainnet chain codes from a malformed key.
+  const keyIsTest = classifyCircleApiKey(process.env.CIRCLE_API_KEY) !== 'mainnet';
   const net = String(network || '').toUpperCase();
   const map = keyIsTest
     ? { POLYGON: 'MATIC-AMOY', AVALANCHE: 'AVAX-FUJI', ARBITRUM: 'ARB-SEPOLIA', ETHEREUM: 'ETH-SEPOLIA', BASE: 'BASE-SEPOLIA', OPTIMISM: 'OP-SEPOLIA', SOLANA: 'SOL-DEVNET', BSC: 'EVM-TESTNET', BEP20: 'EVM-TESTNET', ARC: 'ARC-TESTNET' }
