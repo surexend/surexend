@@ -5,31 +5,35 @@ order; each is safe to repeat. Never put secrets in this file or in chat.
 
 ## Status (update as you go)
 
+- [x] 0. PR #20 merged (`f73369c` on `main`) — `migrate deploy`, fail-closed boot
 - [ ] A. Confirm Production Supabase DB ≠ Staging DB (compare `DATABASE_URL` hosts/project refs)
 - [ ] B. Wipe Production DB (Supabase SQL editor):
       `DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres, anon, authenticated, service_role;`
 - [ ] C. Railway Production → add `DIRECT_URL` = Supabase **Direct connection** string (db.<ref>.supabase.co:5432); keep `DATABASE_URL` = pooler
-- [ ] D. Merge PR #20 (https://github.com/surexend/surexend/pull/20)
-- [ ] E. Redeploy Production; log must show `prisma migrate deploy` applying 10 migrations, then the app starting or a clear `Refusing to start:` line
-- [ ] F. Circle Console (mainnet): create `LIVE_API_KEY`; confirm entity secret registered (save recovery file); create mainnet webhook → `https://surexend-production.up.railway.app/api/v1/webhooks/circle`, copy secret
-- [ ] G. From a laptop, in `backend/`: `CIRCLE_API_KEY='LIVE_API_KEY:…' CIRCLE_ENTITY_SECRET='…' npm run mainnet:wallet-sets` → two UUIDs
-- [ ] H. Railway Production variables (see table below)
-- [ ] I. Redeploy; log shows `Stamped database as mainnet`
-- [ ] J. Run in Production shell:
+- [ ] D. Redeploy Production; log must show `prisma migrate deploy` applying 10 migrations, then the app starting or a clear `Refusing to start:` line
+- [ ] E. Circle Console (mainnet): create `LIVE_API_KEY`; confirm entity secret registered (save recovery file); create mainnet webhook → `https://surexend-production.up.railway.app/api/v1/webhooks/circle`, copy secret
+- [ ] F. From a laptop, in `backend/`: `CIRCLE_API_KEY='LIVE_API_KEY:…' CIRCLE_ENTITY_SECRET='…' npm run mainnet:wallet-sets` → two UUIDs
+- [ ] G. Railway Production variables (see table below)
+- [ ] H. Redeploy; log shows `Stamped database as mainnet`
+- [ ] I. Run in Production shell:
       `CHAIN_ENV=mainnet PROVIDER_PREFLIGHT_EVIDENCE_FILE=./release-evidence/provider-preflight-mainnet.json npm run provider:preflight -- --all --network`
       `npm run launch:gate -- --scope=mainnet-preflight`
       Both must PASS → Stage 1 complete (mainnet live, money paused)
+- [ ] J. Provision the two Stage-2 admins: register both accounts in Production, then in Production shell
+      `npm run admin:provision -- operator1@example.com`
+      `npm run admin:provision -- operator2@example.com`
+      `npm run admin:provision -- --list` must show both (Stage 2 needs two distinct admins for the two-person flow)
 - [ ] K. Stage 2 canary — see `docs/mainnet-config.md` §6
 
-## Step H — Production variables
+## Step G — Production variables
 
 Secrets (operator-supplied):
 ```
 CIRCLE_API_KEY=LIVE_API_KEY:…
 CIRCLE_ENTITY_SECRET=<64 hex>
-CIRCLE_WALLET_SET_ID=<uuid from G>
-CIRCLE_REFERRAL_REWARD_WALLET_SET_ID=<second uuid from G>
-CIRCLE_WEBHOOK_SECRET=<from F>
+CIRCLE_WALLET_SET_ID=<uuid from F>
+CIRCLE_REFERRAL_REWARD_WALLET_SET_ID=<second uuid from F>
+CIRCLE_WEBHOOK_SECRET=<from E>
 DATABASE_URL=<pooler>   DIRECT_URL=<direct>
 ```
 Fixed values (copy verbatim):
