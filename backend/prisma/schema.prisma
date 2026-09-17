@@ -497,3 +497,13 @@ model FinancialLimitReservation {
 
   @@index([userId, limitDate])
 }
+
+// The application-level data migration runner owns this metadata table. Keep
+// it in the Prisma schema so local schema synchronization does not interpret a
+// previously-applied data migration as an unmanaged table to drop.
+model SureXendDataMigration {
+  name      String   @id
+  appliedAt DateTime @default(now())
+
+  @@map("_SureXendDataMigrations")
+}

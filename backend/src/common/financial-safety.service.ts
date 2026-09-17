@@ -72,8 +72,11 @@ export class FinancialSafetyService {
 
   async assertStorageReady() {
     try {
+      // information_schema.table_name is PostgreSQL's `name` type. Cast it to
+      // text because Prisma's driver adapter cannot deserialize that system
+      // type reliably in a raw query.
       const rows = await this.prisma.$queryRaw<{ table_name: string }[]>`
-        SELECT table_name
+        SELECT table_name::text AS table_name
         FROM information_schema.tables
         WHERE table_schema = 'public'
           AND table_name IN ('FinancialControl', 'FinancialControlChange', 'FinancialLimitBucket', 'FinancialLimitReservation')

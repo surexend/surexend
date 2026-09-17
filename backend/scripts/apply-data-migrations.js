@@ -1,6 +1,6 @@
 /*
  * Runs only reviewed, idempotent DATA migrations after the schema deployment
- * (Prisma migrate deploy in production, db push in local development).
+ * (Prisma migrate deploy in deployed environments, db push in local development).
  * Schema changes belong in Prisma migrations; this runner must never mutate
  * administrator accounts, rewrite transaction history, or hide a failed
  * migration behind a successful application start.
