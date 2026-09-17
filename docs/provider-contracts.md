@@ -88,21 +88,24 @@ reachability and credential acceptance only; it is not a bill receipt and does
 not establish idempotency or terminal-status semantics.
 
 The official SmartSpeed Postman collection documents Token authentication and
-these read-only transaction surfaces in addition to the catalog endpoint:
+these transaction surfaces:
 
 - `GET /api/user/` for account details;
-- `GET /api/data/` for data transactions;
-- query endpoints for data, airtime, and bill-payment transactions.
+- `GET /api/data/` for all data transactions;
+- `GET /api/data/{id}` for querying one data transaction;
+- purchase and query sections for airtime, electricity, cable, IUC, and meter
+  validation.
 
 Source: <https://documenter.getpostman.com/view/14036001/U16gQTNa?version=latest>
 
-The collection is enough to document reachability and the existence of
-provider query surfaces, but the reviewed packet still needs the exact query
-parameters, response schema, terminal status values, idempotency/replay
-behavior, and any callback-signing contract. The bill flow therefore must not
-treat a generic 2xx, network timeout, or undocumented response field as proof
-of delivery. Unknown outcomes remain pending and are reconciled from provider
-evidence before an operator resolves or refunds them.
+The collection's published request examples do not include response bodies or
+status schemas. Therefore its documented query routes are safe reachability
+surfaces, not proof that a bill was delivered. The bill flow must still reject
+an undocumented response, network timeout, or non-terminal outcome. Unknown
+outcomes remain pending and are reconciled from provider evidence before an
+operator resolves or refunds them. No additional provider request is needed
+for the routes explicitly documented above; the missing response semantics
+remain a deliberate fail-closed boundary.
 
 Before enabling real bills, record all of the following from the provider's
 sandbox contract and an authenticated test:
@@ -135,25 +138,27 @@ its contract:
 Sources:
 
 - <https://paymentpoint.gitbook.io/paymentpoint.co/welcome-to-paymentpoint/authentication>
+- <https://paymentpoint.gitbook.io/paymentpoint.co/welcome-to-paymentpoint/errors>
 - <https://paymentpoint.gitbook.io/paymentpoint.co/services/virtual-account/create-virtual-account>
 - <https://paymentpoint.gitbook.io/paymentpoint.co/services/webhook-documentation>
 
+The PaymentPoint errors page also documents HTTP `409 Conflict` when the same
+idempotent key is reused and recommends exponential backoff for `429 Too Many
+Requests`. This records provider-level idempotency/error guidance, but it does
+not name the idempotency header/key or define duplicate webhook delivery,
+replay protection, webhook retry semantics, a read-only transaction-status
+endpoint, or the full reconciliation contract.
+
 This matches the backend's explicit `hmac-sha256-raw-hex` mode and
-`paymentpoint-signature` header. It does **not** establish a read-only
-transaction-status endpoint, idempotency/duplicate-event behavior, replay
-protection, or the full reconciliation contract. The official webhook page
-also contains wording about removing the signature from the payload while its
-examples correctly hash the raw request body; preserve the raw-body behavior
-and obtain provider clarification before enabling credits.
+`paymentpoint-signature` header. The official webhook page contains one
+contradictory sentence about removing the signature from the payload; its
+runnable PHP, Python, and Node examples hash the raw request body, so the
+backend follows those examples. No undocumented behavior is inferred.
 
 `PAYMENTPOINT_WEBHOOK_ENABLED` must remain `false`; credentials and documented
 signature syntax alone do not authorize money crediting. The preflight will
 not guess a status endpoint or call virtual-account creation just to obtain
-evidence. Before enabling the webhook, record the missing status,
-idempotency, replay/reconciliation, and sandbox replay evidence, then set
-`PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID`,
-`PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE`, and
-`PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER` from that packet. Until then,
+evidence. Until the remaining documented-and-evidenced controls exist,
 mainnet remains closed for this inbound-credit path.
 
 ## Release decision
