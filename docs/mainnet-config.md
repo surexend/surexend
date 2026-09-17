@@ -1,11 +1,12 @@
 # Mainnet Configuration — Preparation & Review Reference
 
-> **Status: NOT ENABLED.** `MAINNET_ENABLED` is false by default and the
-> deployment matrix is not committed with real values. The application now
-> consumes `MAINNET_CHAIN_MATRIX_JSON` and refuses to boot unless every enabled
-> network has an explicit reviewed Circle name, BridgeKit chain, RPC, chain ID,
-> USDC contract/decimals, and explorer URL. This document is the preparation
-> reference for that private release packet.
+> **Status: NOT ENABLED.** `MAINNET_ENABLED` is false by default. The official
+> ARC-only reference values are recorded below, but no Production secret,
+> approval flag, wallet set, or money-movement switch is enabled here. The
+> application consumes `MAINNET_CHAIN_MATRIX_JSON` and refuses to boot unless
+> every enabled network has an explicit reviewed Circle name, BridgeKit chain,
+> RPC, chain ID, USDC contract/decimals, and explorer URL. This document remains
+> the preparation reference for the private release packet.
 
 ## 1. Why this is a two-mapping system
 
@@ -39,7 +40,36 @@ mapping). The matrix still needs provider and on-chain review before approval.
 | `FRONTEND_URL`, `WEBAUTHN_*`, SMTP/Firebase | prod values | — | ops | Unchanged by mainnet |
 | `ADMIN_EMAILS` | set/removed per boot | — | ops | Remove after use |
 
-## 3. Proposed switchover sequence (review before executing)
+## 3. Verified Arc mainnet reference
+
+The official Arc network reference and the current Circle Wallets/Bridge Kit
+SDK identify the following Arc mainnet values. These are deployment data for
+an `ARC`-only launch; they do not authorize the launch or replace custody and
+release approval:
+
+```json
+{
+  "ARC": {
+    "circleBlockchain": "ARC",
+    "cctpChain": "Arc",
+    "rpcUrls": ["https://rpc.mainnet.arc.io"],
+    "chainId": 5042,
+    "usdcContract": "0x3600000000000000000000000000000000000000",
+    "usdcDecimals": 6,
+    "explorerUrl": "https://explorer.arc.io"
+  }
+}
+```
+
+References:
+
+- <https://docs.arc.io/arc/references/connect-to-arc>
+- <https://docs.arc.io/arc/references/contract-addresses>
+- <https://developers.circle.com/cctp/concepts/supported-chains-and-domains>
+- Circle `@circle-fin/bridge-kit` `1.15.x` chain definitions (`Arc`, chain ID
+  `5042`, CCTP domain `26`, and the RPC/explorer/USDC values above).
+
+## 4. Proposed switchover sequence (review before executing)
 
 1. Fill the matrix above and record values in a private vault (never in git).
 2. Populate the private `MAINNET_CHAIN_MATRIX_JSON` and
@@ -58,7 +88,7 @@ mapping). The matrix still needs provider and on-chain review before approval.
    signed before expanding limits or disabling canary mode.
 6. Keep `TESTING_ENABLED` off in production (already enforced at boot).
 
-## 4. Explicit "never" list
+## 5. Explicit "never" list
 
 - Never set `MAINNET_ENABLED=true` (or `CHAIN_ENV=mainnet`) in the same
   deployment as a `TEST_` Circle key, the testnet ARC RPC URL, or the testnet
