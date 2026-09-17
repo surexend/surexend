@@ -30,6 +30,18 @@ const migrations = [
         );
     `,
   },
+  {
+    name: '20260917000000_ensure_financial_control_global_row',
+    sql: `
+      -- The financial-control migration seeds this row, but the first Staging
+      -- deployment used db push and then was safely baselined with migrate
+      -- resolve, so its migration SQL was never executed. Restore only the
+      -- fail-closed row; never change an existing operator-controlled row.
+      INSERT INTO "FinancialControl" ("id", "reason")
+      VALUES ('global', 'Initial fail-closed state; requires controlled release approval.')
+      ON CONFLICT ("id") DO NOTHING;
+    `,
+  },
 ];
 
 function connectionOptions(connectionString) {
