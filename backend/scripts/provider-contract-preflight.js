@@ -26,6 +26,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const axios = require('axios');
+const { classifyCircleApiKey, isValidCircleEntitySecret, isValidCircleWalletSetId } = require('./lib/circle-credential');
 
 const argv = process.argv.slice(2);
 const wantsNetwork = argv.includes('--network');
@@ -106,27 +107,116 @@ async function readOnlyGet(provider, url, headers) {
   }
 }
 
+async function circleGet(url, key) {
+  const response = await axios.get(url, {
+    headers: { Authorization: `Bearer ${key}`, accept: 'application/json' },
+    timeout: 15_000,
+    validateStatus: () => true,
+  });
+  return { status: Number(response.status || 0), body: response.data };
+}
+
 async function checkCircle() {
   const key = process.env.CIRCLE_API_KEY;
   const entitySecret = process.env.CIRCLE_ENTITY_SECRET;
+  const chainEnv = (process.env.CHAIN_ENV || 'testnet').toLowerCase();
+  const keyEnv = classifyCircleApiKey(key);
   if (!has(key) || !has(entitySecret)) {
     add('circle', 'PENDING_UNVERIFIED', 'CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET are both required; authenticated Circle contract was not tested.');
     return;
   }
-  if ((process.env.CHAIN_ENV || 'testnet').toLowerCase() === 'testnet' && !key.startsWith('TEST_')) {
-    add('circle', 'FAIL', 'Testnet configuration requires a Circle TEST_ API key; refusing a mixed network configuration.');
+  // https://developers.circle.com/api-reference/keys — PREFIX:ID:SECRET,
+  // TEST_API_KEY for testnet, LIVE_API_KEY for mainnet, one key per environment.
+  if (keyEnv === 'invalid') {
+    add('circle', 'FAIL', 'CIRCLE_API_KEY is not a valid Circle key (expected TEST_API_KEY:<id>:<secret> or LIVE_API_KEY:<id>:<secret>).');
+    return;
+  }
+  if (chainEnv === 'testnet' && keyEnv !== 'testnet') {
+    add('circle', 'FAIL', 'Testnet configuration requires a Circle TEST_API_KEY; refusing a mixed network configuration.');
+    return;
+  }
+  if (chainEnv === 'mainnet' && keyEnv !== 'mainnet') {
+    add('circle', 'FAIL', 'Mainnet configuration requires a Circle LIVE_API_KEY; refusing a mixed network configuration.');
+    return;
+  }
+  if (!isValidCircleEntitySecret(entitySecret)) {
+    add('circle', 'FAIL', 'CIRCLE_ENTITY_SECRET must be the registered 32-byte hex entity secret (64 hex characters).');
     return;
   }
   if (!wantsNetwork) {
-    add('circle', 'PENDING_UNVERIFIED', 'Credentials have shape, but no network probe was requested. Re-run with --network.');
+    add('circle', 'PENDING_UNVERIFIED', 'Credentials have shape, but no network probe was requested. Re-run with --network.', { keyEnvironment: keyEnv });
     return;
   }
-  // Listing wallets is read-only. It proves authentication and API reachability
-  // without submitting a transfer or creating a wallet.
-  await readOnlyGet('circle', 'https://api.circle.com/v1/w3s/wallets?pageSize=1', {
-    Authorization: `Bearer ${key}`,
-    accept: 'application/json',
-  });
+
+  // Everything below is GET-only: it proves authentication, that the entity
+  // secret is registered, and that the configured wallet sets exist for this
+  // key's environment. Nothing is created, signed, or transferred.
+  try {
+    const wallets = await circleGet('https://api.circle.com/v1/w3s/wallets?pageSize=1', key);
+    if (wallets.status < 200 || wallets.status >= 300) {
+      add('circle', 'FAIL', `Read-only wallet list returned HTTP ${wallets.status}.`, {
+        httpStatus: wallets.status,
+        endpoint: 'https://api.circle.com/v1/w3s/wallets',
+        providerError: String(wallets.body?.message || '').slice(0, 240) || undefined,
+        keyEnvironment: keyEnv,
+      });
+      return;
+    }
+
+    // The entity public key is only served once an entity secret has been
+    // registered for the account; a 404/4xx here means signing can't work.
+    const entityKey = await circleGet('https://api.circle.com/v1/w3s/config/entity/publicKey', key);
+    if (entityKey.status < 200 || entityKey.status >= 300 || !entityKey.body?.data?.publicKey) {
+      add('circle', 'FAIL', `Entity public key is unavailable (HTTP ${entityKey.status}); register the entity secret in the Circle Console for this environment.`, {
+        httpStatus: entityKey.status,
+        endpoint: 'https://api.circle.com/v1/w3s/config/entity/publicKey',
+        keyEnvironment: keyEnv,
+      });
+      return;
+    }
+
+    const details = { httpStatus: wallets.status, endpoint: 'https://api.circle.com/v1/w3s/wallets', keyEnvironment: keyEnv, entitySecretRegistered: true };
+
+    const walletSetId = String(process.env.CIRCLE_WALLET_SET_ID || '').trim();
+    const rewardSetId = String(process.env.CIRCLE_REFERRAL_REWARD_WALLET_SET_ID || '').trim();
+    if (chainEnv === 'mainnet') {
+      if (!walletSetId) {
+        add('circle', 'FAIL', 'Mainnet requires a pre-created CIRCLE_WALLET_SET_ID; the application will not create one.', details);
+        return;
+      }
+      if (rewardSetId && rewardSetId === walletSetId) {
+        add('circle', 'FAIL', 'CIRCLE_REFERRAL_REWARD_WALLET_SET_ID must differ from CIRCLE_WALLET_SET_ID on mainnet.', details);
+        return;
+      }
+    }
+    for (const [label, id] of [['CIRCLE_WALLET_SET_ID', walletSetId], ['CIRCLE_REFERRAL_REWARD_WALLET_SET_ID', rewardSetId]]) {
+      if (!id) continue;
+      if (!isValidCircleWalletSetId(id)) {
+        add('circle', 'FAIL', `${label} is not a wallet-set UUID.`, details);
+        return;
+      }
+      const set = await circleGet(`https://api.circle.com/v1/w3s/walletSets/${encodeURIComponent(id)}`, key);
+      if (set.status !== 200 || !set.body?.data?.walletSet?.id) {
+        add('circle', 'FAIL', `${label} was not found under this ${keyEnv} API key (HTTP ${set.status}). Wallet sets are environment-specific; use a set created with the ${keyEnv} key.`, {
+          ...details,
+          endpoint: 'https://api.circle.com/v1/w3s/walletSets/{id}',
+          httpStatus: set.status,
+        });
+        return;
+      }
+      if (String(set.body.data.walletSet.custodyType || '').toUpperCase() !== 'DEVELOPER') {
+        add('circle', 'FAIL', `${label} is not a developer-controlled wallet set (custodyType=${set.body.data.walletSet.custodyType}).`, details);
+        return;
+      }
+      details[`${label === 'CIRCLE_WALLET_SET_ID' ? 'applicationWalletSet' : 'referralRewardWalletSet'}Verified`] = true;
+    }
+
+    add('circle', 'PASS', chainEnv === 'mainnet'
+      ? 'Authenticated LIVE_API_KEY: read-only wallet list, entity public key, and configured wallet set(s) verified. No money operation was attempted.'
+      : 'Authenticated read-only endpoint responded successfully.', details);
+  } catch (error) {
+    add('circle', 'PENDING_UNVERIFIED', `Read-only request outcome is ambiguous: ${error.message || error}. No money operation was attempted.`, { keyEnvironment: keyEnv });
+  }
 }
 
 async function checkFlutterwave() {

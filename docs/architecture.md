@@ -9,8 +9,9 @@ Last updated: 2026-08-15
   Vercel. `NEXT_PUBLIC_BRAND_VARIANT` = 'gold' | 'lemon'.
 - **Backend**: NestJS 10 + Prisma (Postgres) + Redis (ioredis) + bcryptjs.
   Global prefix `api/v1`. JWT auth. Deployed as Docker (`node:22-slim`) on
-  Railway (service `surexend`). `prestart:prod` swallows `prisma db push`
-  failures → backend MUST use defensive selects.
+  Railway (service `surexend`). `prestart:prod` runs `prisma migrate deploy`
+  in production and fails the start on any schema error (local dev uses
+  `db push`).
 - **Circle**: W3S wallets (`@circle-fin/adapter-circle-wallets`), BridgeKit
   (`@circle-fin/bridge-kit`) for CCTP. Testnet key (starts `TEST_`).
 

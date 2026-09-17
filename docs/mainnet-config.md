@@ -1,51 +1,84 @@
-# Mainnet Configuration — Preparation & Review Reference
+# Mainnet Configuration — Production Cutover Procedure
 
-> **Status: NOT ENABLED.** `MAINNET_ENABLED` is false by default. The official
-> ARC-only reference values are recorded below, but no Production secret,
-> approval flag, wallet set, or money-movement switch is enabled here. The
-> application consumes `MAINNET_CHAIN_MATRIX_JSON` and refuses to boot unless
-> every enabled network has an explicit reviewed Circle name, BridgeKit chain,
-> RPC, chain ID, USDC contract/decimals, and explorer URL. This document remains
-> the preparation reference for the private release packet.
+> **Status: PREPARED, NOT ENABLED.** Staging stays on testnet and is not touched
+> by this document. Production goes to Circle **mainnet** on Arc (`ARC`) only,
+> in two stages: (1) a read-only mainnet preflight with money movement paused,
+> then (2) a canary release. Everything the code needs is listed here; the only
+> inputs that must come from an operator are the four Circle values in §3 and
+> the Production database URL. **Never paste secrets into chat, tickets, or
+> git.** Put them straight into the Production service's variables.
 
-## 1. Why this is a two-mapping system
+Reference documentation (all values below were taken from these pages on
+2026-09-17):
 
-Chain selection lives in two independent places and they MUST stay consistent:
+- Circle API keys — <https://developers.circle.com/api-reference/keys>
+- Circle developer docs root — <https://developers.circle.com/>
+- Entity secret — <https://developers.circle.com/wallets/dev-controlled/entity-secret-management>
+  and <https://developers.circle.com/wallets/dev-controlled/register-entity-secret>
+- Circle Wallets supported blockchains (chain codes) — <https://developers.circle.com/wallets/supported-blockchains>
+- Arc network reference — <https://docs.arc.io/arc/references/connect-to-arc>
+- Arc contract addresses — <https://docs.arc.io/arc/references/contract-addresses>
 
-| Place | File | Selected by | Testnet values | Mainnet values |
-|---|---|---|---|---|
-| BridgeKit chains | `wallets/cctp.service.ts` | reviewed matrix in `MAINNET_CHAIN_MATRIX_JSON` for mainnet; testnet constants otherwise | `Arc_Testnet`, `Ethereum_Sepolia`, `Polygon_Amoy_Testnet`, `Avalanche_Fuji`, `Arbitrum_Sepolia`, `Base_Sepolia`, `Optimism_Sepolia`, `Solana_Devnet`, `Monad_Testnet` | private provider-reviewed `cctpChain` values |
-| Circle blockchain strings | `wallets/wallets.service.ts` `getBlockchainName()` | reviewed matrix for mainnet; explicit testnet map otherwise | `ARC-TESTNET`, `ETH-SEPOLIA`, … | private provider-reviewed `circleBlockchain` values |
+## 1. Why Production needs its own database (hard blocker)
 
-⚠️ Landmine (now guarded at boot): a mainnet Circle key must never be allowed
-to select only one side of the mapping. `assertNetworkConfig()` requires
-`CHAIN_ENV=mainnet`, `MAINNET_ENABLED=true`, `MAINNET_CONFIG_APPROVED=true`, a
-non-test Circle credential, and a complete matrix for every enabled network. It
-also refuses a non-test Circle key while `MAINNET_ENABLED` is false (mixed
-mapping). The matrix still needs provider and on-chain review before approval.
+`Wallet` balances, `LedgerEntry` accounts, and `WalletAddress` rows carry **no
+environment/network scope**; `ARC` is used as the network key in both modes.
+Testnet tokens cannot become mainnet tokens on-chain, but if the Staging
+database were reused, its internal testnet balances would be read as spendable
+mainnet balances and its Circle testnet deposit addresses would be shown as
+mainnet deposit addresses.
 
-## 2. Values to source & review (NONE are committed / hardcoded)
+The code now enforces this in three independent places:
 
-| Variable | Testnet (current) | Mainnet value owner | Reviewed by | Notes |
-|---|---|---|---|---|
-| `CIRCLE_API_KEY` | `TEST_…` (Railway) | Circle dashboard | ops + security | Must be a **mainnet** key; changing it flips `getBlockchainName()` |
-| `CIRCLE_WALLET_SET_ID` | sandbox set | Circle | ops | Mainnet wallet set |
-| `CIRCLE_WEBHOOK_SECRET` | sandbox | Circle | ops | Re-verify signature on mainnet webhooks |
-| `MAINNET_CHAIN_MATRIX_JSON.rpcUrls` | `https://rpc.testnet.arc.network` (testnet default) | Arc/provider docs | ops | Mainnet URLs must be managed HTTPS endpoints |
-| `MAINNET_CHAIN_MATRIX_JSON.chainId` | `5042002` (testnet) | network docs | ops | Verify each enabled mainnet chain ID |
-| `MAINNET_CHAIN_MATRIX_JSON.usdcContract` | testnet contract/precompile | token contract | ops + security | **Never reuse a testnet address** |
-| `MAINNET_CHAIN_MATRIX_JSON.cctpChain` | testnet BridgeKit constants | provider docs | dev + ops | Record the exact provider-reviewed mainnet value |
-| `MAINNET_CHAIN_MATRIX_JSON.circleBlockchain` | testnet Circle names | Circle docs | dev + ops | Record the exact Circle mainnet value |
-| `NEXT_PUBLIC_CHAIN_ENV` + `NEXT_PUBLIC_*_EXPLORER_BASE` | testnet defaults in `src/lib/explorers.ts` | deployment matrix explorers | ops + frontend | Mainnet has no testnet fallback; missing values hide the link |
-| `FRONTEND_URL`, `WEBAUTHN_*`, SMTP/Firebase | prod values | — | ops | Unchanged by mainnet |
-| `ADMIN_EMAILS` | set/removed per boot | — | ops | Remove after use |
+| Guard | Where | Behaviour |
+|---|---|---|
+| `MAINNET_DB_ISOLATION_CONFIRMED=true` | boot (`main.ts`) | Mainnet refuses to boot without the operator's explicit isolation declaration. |
+| `DeploymentEnvironment` stamp | boot (`FinancialSafetyService.assertDeploymentEnvironment`) + migration `20260917020000` | First boot stamps the database `testnet` or `mainnet` and records the Circle key prefix. Every later boot must match; a `testnet` database can never boot as `mainnet` (or vice versa). A **used** unstamped database (any deposit address, ledger entry, or non-zero balance) is refused for a mainnet stamp. |
+| Launch gate | `npm run launch:gate -- --scope=mainnet-preflight` | Reports the stamp, checks the database is clean before its first mainnet boot, and (if `STAGING_DATABASE_URL` / `POSTGRES_TEST_DATABASE_URL` are present) proves `DATABASE_URL` is a different database. |
 
-## 3. Verified Arc mainnet reference
+`prestart:prod` (`scripts/deploy-database.js`) now runs `prisma migrate deploy`
+in production and **exits non-zero on failure**. `prisma db push
+--accept-data-loss` is used only when `NODE_ENV` is not `production`.
 
-The official Arc network reference and the current Circle Wallets/Bridge Kit
-SDK identify the following Arc mainnet values. These are deployment data for
-an `ARC`-only launch; they do not authorize the launch or replace custody and
-release approval:
+## 2. Circle credential rules (from developers.circle.com/api-reference/keys)
+
+- Keys are formatted `PREFIX:ID:SECRET`; all three parts are required.
+- **Testnet** keys are `TEST_API_KEY:<id>:<secret>`; **mainnet** keys are
+  `LIVE_API_KEY:<id>:<secret>`.
+- "API keys are specific to one environment. Create one API key for testnet
+  and another for mainnet." Wallet sets created with a testnet key do not exist
+  under the mainnet key.
+- Authentication header: `authorization: Bearer <API_KEY>`. Read-only test:
+  `GET https://api.circle.com/v1/w3s/wallets`.
+- The **entity secret** is a 32-byte (64 hex characters) key generated by you and
+  registered in the Circle Console; Circle never stores it. One entity secret
+  backs every wallet set in the account. Save the recovery file separately;
+  without it a lost secret means permanent loss of wallet access.
+- Wallet sets are organisational, not a security boundary; the application set
+  and the referral-rewards set must still be **different** sets so campaign
+  custody is never mixed with customer wallets.
+
+The backend classifies the key prefix strictly (`src/config/circle-credential.ts`).
+Anything other than exactly `TEST_API_KEY` or `LIVE_API_KEY` with three
+non-empty parts is **invalid** and refuses to boot — a truncated paste can no
+longer be mistaken for a mainnet key.
+
+## 3. Values the operator supplies (Production service variables only)
+
+| Variable | Value | Source |
+|---|---|---|
+| `CIRCLE_API_KEY` | `LIVE_API_KEY:<id>:<secret>` | Circle Console → API keys (mainnet) |
+| `CIRCLE_ENTITY_SECRET` | 64 hex characters | Circle Console → Wallets → Configurator → Entity secret (registered for the mainnet account) |
+| `CIRCLE_WALLET_SET_ID` | UUID | Output of `npm run mainnet:wallet-sets` (§5.3) |
+| `CIRCLE_REFERRAL_REWARD_WALLET_SET_ID` | UUID (different from the above) | Same script |
+| `CIRCLE_WEBHOOK_SECRET` | from Circle Console → Webhooks, for the **mainnet** subscription pointing at `https://<production-api>/webhooks/circle` | Circle Console |
+| `DATABASE_URL` / `DIRECT_URL` | the **new, empty** Production PostgreSQL | Railway Production Postgres (not Staging's, not the rehearsal DB) |
+
+Nothing else about Circle needs to be provided or explained.
+
+## 4. Fixed deployment data (no operator input required)
+
+### 4.1 Arc mainnet matrix
 
 ```json
 {
@@ -61,40 +94,146 @@ release approval:
 }
 ```
 
-References:
+- `circleBlockchain: "ARC"` — Circle Wallets chain code for Arc mainnet
+  (`ARC` / `ARC-TESTNET` per the supported-blockchains table).
+- `cctpChain: "Arc"` — Bridge Kit chain name; CCTP domain 26.
+- RPC `https://rpc.mainnet.arc.io`, chain ID `5042`, explorer
+  `https://explorer.arc.io` — Arc "Connect to Arc" reference (mainnet tab).
+- USDC ERC-20 interface `0x3600000000000000000000000000000000000000`, 6
+  decimals — Arc contract addresses (mainnet tab). The same address exists on
+  testnet; the chain ID/RPC decide which network is in use, which is why the
+  database stamp and key-prefix guards exist.
 
-- <https://docs.arc.io/arc/references/connect-to-arc>
-- <https://docs.arc.io/arc/references/contract-addresses>
-- <https://developers.circle.com/cctp/concepts/supported-chains-and-domains>
-- Circle `@circle-fin/bridge-kit` `1.15.x` chain definitions (`Arc`, chain ID
-  `5042`, CCTP domain `26`, and the RPC/explorer/USDC values above).
+Production variables that carry this data:
 
-## 4. Proposed switchover sequence (review before executing)
+```
+CHAIN_ENV=mainnet
+MAINNET_ENABLED=true
+MAINNET_CONFIG_APPROVED=true
+MAINNET_DB_ISOLATION_CONFIRMED=true
+MAINNET_ENABLED_NETWORKS=ARC
+MAINNET_CHAIN_MATRIX_JSON={"ARC":{"circleBlockchain":"ARC","cctpChain":"Arc","rpcUrls":["https://rpc.mainnet.arc.io"],"chainId":5042,"usdcContract":"0x3600000000000000000000000000000000000000","usdcDecimals":6,"explorerUrl":"https://explorer.arc.io"}}
+```
 
-1. Fill the matrix above and record values in a private vault (never in git).
-2. Populate the private `MAINNET_CHAIN_MATRIX_JSON` and
-   `MAINNET_ENABLED_NETWORKS`; do not put real secrets or unreviewed values in
-   git. The testnet constants remain the default path.
-3. Independently review the mainnet BridgeKit/Circle mapping, provider
-   contracts, reconciliation, token addresses, RPC ownership, and explorer
-   links; the database control plane and launch gate must remain closed during
-   this work.
-4. Only after a separate release is approved, set the private matrix,
-   `MAINNET_ENABLED=true`, `CHAIN_ENV=mainnet`, and the matching frontend
-   environment at the same time. Start with `CANARY_MODE=true` and a tiny
-   approved-user allowlist; the backend rejects all other customer movement.
-5. Verify with a **tiny** real deposit and send for each canary user, then
-   `npm run ledger:report` must be clean and the observation window must be
-   signed before expanding limits or disabling canary mode.
-6. Keep `TESTING_ENABLED` off in production (already enforced at boot).
+### 4.2 Production frontend variables
 
-## 5. Explicit "never" list
+```
+NEXT_PUBLIC_CHAIN_ENV=mainnet
+NEXT_PUBLIC_ARC_EXPLORER_BASE=https://explorer.arc.io/tx/
+```
 
-- Never set `MAINNET_ENABLED=true` (or `CHAIN_ENV=mainnet`) in the same
-  deployment as a `TEST_` Circle key, the testnet ARC RPC URL, or the testnet
-  ARC USDC address — the boot guard exists to stop this.
-- Never enable mainnet while balances are still read from legacy floats and
-  any money path is unverified — that is the migration gap tracked in
-  `rollout-status.md`.
-- Never hardcode mainnet addresses/keys in this repo (same policy as the 2026-08-29
-  secret audit).
+A mainnet frontend never falls back to a testnet explorer; without the base the
+link is simply hidden.
+
+### 4.3 Unchanged providers
+
+SmartSpeed and PaymentPoint are already live for the app's services and are
+not affected by the chain environment. Their existing Production credentials
+carry over unchanged (`ENABLED_PROVIDERS=circle,paymentpoint,smartspeed`,
+`FLUTTERWAVE_ENABLED=false`). No provider contact is needed.
+
+## 5. Stage 1 — read-only mainnet preflight (money paused)
+
+Do these in order. Every step is read-only or idempotent.
+
+### 5.1 Create the Production database
+
+Create a **new** PostgreSQL service for Production. Confirm it is not the
+Staging database and not the rehearsal database (different host/database
+name). Do not restore any snapshot into it.
+
+### 5.2 Set Production variables
+
+Set everything in §3 and §4 plus the ordinary production values
+(`NODE_ENV=production`, `FRONTEND_URL`, `WEBAUTHN_*`, `REDIS_URL`, JWT secrets,
+SMTP, SmartSpeed, PaymentPoint). Keep:
+
+```
+MONEY_MOVEMENT_ENABLED=false
+LEDGER_READS_ENABLED=false
+CANARY_MODE=true
+TESTING_ENABLED=   (unset)
+FINANCIAL_RELEASE_APPROVED=   (unset)
+```
+
+`CIRCLE_WALLET_SET_ID` and `CIRCLE_REFERRAL_REWARD_WALLET_SET_ID` are filled in
+at 5.3.
+
+### 5.3 Create the two mainnet wallet sets (one time)
+
+From `backend/`, with only the two Circle values exported in the shell:
+
+```bash
+CIRCLE_API_KEY='LIVE_API_KEY:…' CIRCLE_ENTITY_SECRET='…' npm run mainnet:wallet-sets
+```
+
+The script refuses non-`LIVE_API_KEY` keys, proves authentication and entity
+secret registration read-only, then creates
+"SureXend Application Wallets (mainnet)" and
+"SureXend Referral Rewards (mainnet)" with stable idempotency keys (re-running
+returns the same IDs). Put the two printed UUIDs into
+`CIRCLE_WALLET_SET_ID` and `CIRCLE_REFERRAL_REWARD_WALLET_SET_ID`. Record them
+in the release packet.
+
+### 5.4 Read-only Circle mainnet check
+
+```bash
+CHAIN_ENV=mainnet PROVIDER_PREFLIGHT_EVIDENCE_FILE=./release-evidence/provider-preflight-mainnet.json \
+  npm run provider:preflight -- --all --network
+```
+
+For Circle this performs only `GET /v1/w3s/wallets`, `GET
+/v1/w3s/config/entity/publicKey`, and `GET /v1/w3s/walletSets/{id}` for each
+configured set, and passes only when the key is `LIVE_API_KEY`, the entity
+secret is registered, and both wallet sets exist under that key with
+`custodyType=DEVELOPER`. The evidence file contains no secrets.
+
+### 5.5 Deploy Production and check the gate
+
+Deploy. `prestart:prod` applies the 10 checked-in migrations to the empty
+database; the first boot stamps it `mainnet` / `LIVE_API_KEY` (logged as
+`Stamped database as mainnet`). Then:
+
+```bash
+npm run launch:gate -- --scope=mainnet-preflight
+```
+
+Expected: **PASS**, including `database-environment-stamp`,
+`all-checked-in-migrations-applied`, `database-financial-control-scope`
+(paused), `ledger-report-clean`, and `circle-preflight-evidence`.
+
+The API is now live on mainnet with every money path closed by both the
+`MONEY_MOVEMENT_ENABLED` flag and the database `FinancialControl` row. Users
+can register, complete KYC, and see the app; no deposit address is issued and
+no funds move.
+
+## 6. Stage 2 — canary release
+
+Only after Stage 1 passes and the release packet is approved:
+
+1. Run the ledger baseline (`npm run ledger:baseline`) — trivially clean on an
+   empty database — and set `LEDGER_READS_ENABLED=true`.
+2. Set `MONEY_MOVEMENT_ENABLED=true`, `CANARY_MODE=true`, `CANARY_USER_IDS`
+   (a tiny list of controlled, KYC-verified accounts), and the release evidence
+   variables (`FINANCIAL_RELEASE_APPROVED=true`, `…_APPROVED_BY`, `…_TICKET`,
+   `…_EVIDENCE_ID`, plus the `*_EVIDENCE_ID` set listed by the gate).
+3. `npm run launch:gate -- --scope=mainnet` must PASS.
+4. Enable the database control plane through the two-person admin flow.
+5. Do one tiny real Arc USDC deposit and one tiny send per canary user; confirm
+   on `https://explorer.arc.io`; `npm run ledger:report` must be clean.
+6. Only after the signed observation window: expand limits, then disable
+   canary mode with `STAGED_CANARY_EVIDENCE_ID`.
+
+## 7. Explicit "never" list
+
+- Never point Production at the Staging or rehearsal database. The stamp guard
+  will refuse, and the launch gate reports it — do not "fix" that by deleting
+  the `DeploymentEnvironment` row.
+- Never set `CHAIN_ENV=mainnet` / `MAINNET_ENABLED=true` with a `TEST_API_KEY`,
+  or run Staging with a `LIVE_API_KEY`. Both are refused at boot.
+- Never reuse the Staging entity secret registration assumptions: the mainnet
+  key must belong to an account whose entity secret is registered, or the
+  entity public key endpoint fails and the preflight fails closed.
+- Never share a wallet set between application custody and referral rewards.
+- Never put `CIRCLE_API_KEY`, `CIRCLE_ENTITY_SECRET`, or wallet-set IDs in
+  git, chat, or the evidence files.

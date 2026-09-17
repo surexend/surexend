@@ -11,6 +11,7 @@ import * as bcrypt from 'bcryptjs';
 import { readFileSync } from 'node:fs';
 import { ConfigService } from '@nestjs/config';
 import { parseReviewedNetworkMatrix, validateEnabledMainnetNetworks } from './config/network-matrix';
+import { classifyCircleApiKey, isValidCircleEntitySecret, isValidCircleWalletSetId } from './config/circle-credential';
 
 /**
  * Evidence IDs are deployment claims, not proof by themselves; the launch gate
@@ -163,7 +164,10 @@ function assertRequiredEnv() {
  */
 function assertNetworkConfig() {
   const circleKey = process.env.CIRCLE_API_KEY || '';
-  const circleIsMainnet = circleKey.startsWith('TEST_') === false && circleKey !== '';
+  // https://developers.circle.com/api-reference/keys — keys are PREFIX:ID:SECRET,
+  // TEST_API_KEY for testnet and LIVE_API_KEY for mainnet, one key per environment.
+  const circleKeyEnv = classifyCircleApiKey(circleKey);
+  const circleIsMainnet = circleKeyEnv === 'mainnet';
   const chainEnv = (process.env.CHAIN_ENV || 'testnet').toLowerCase();
   const mainnetEnabled = process.env.MAINNET_ENABLED === 'true';
 
@@ -179,7 +183,26 @@ function assertNetworkConfig() {
       throw new Error('Refusing to start: mainnet requires both CHAIN_ENV=mainnet and MAINNET_ENABLED=true.');
     }
     if (!circleIsMainnet) {
-      throw new Error('Refusing to start: mainnet requires a non-TEST_ Circle credential.');
+      throw new Error(
+        `Refusing to start: mainnet requires a Circle LIVE_API_KEY:<id>:<secret> credential (got ${circleKeyEnv}). ` +
+          'See https://developers.circle.com/api-reference/keys.',
+      );
+    }
+    if (!isValidCircleEntitySecret(process.env.CIRCLE_ENTITY_SECRET)) {
+      throw new Error('Refusing to start: CIRCLE_ENTITY_SECRET must be the 32-byte hex entity secret (64 hex characters) registered in the Circle Console.');
+    }
+    if (process.env.CIRCLE_WALLET_SET_ID && !isValidCircleWalletSetId(process.env.CIRCLE_WALLET_SET_ID)) {
+      throw new Error('Refusing to start: CIRCLE_WALLET_SET_ID must be the wallet-set UUID returned by Circle.');
+    }
+    if (process.env.CIRCLE_REFERRAL_REWARD_WALLET_SET_ID && process.env.CIRCLE_REFERRAL_REWARD_WALLET_SET_ID === process.env.CIRCLE_WALLET_SET_ID) {
+      throw new Error('Refusing to start: the referral reward wallet set must be different from the application wallet set on mainnet.');
+    }
+    if (process.env.MAINNET_DB_ISOLATION_CONFIRMED !== 'true') {
+      throw new Error(
+        'Refusing to start: MAINNET_DB_ISOLATION_CONFIRMED=true is required. Production must use its own clean database — ' +
+          'never the Staging/testnet or rehearsal database — because Wallet/LedgerEntry/WalletAddress rows are not environment-scoped ' +
+          'and testnet balances would be read as mainnet balances. See docs/mainnet-config.md.',
+      );
     }
     if (process.env.MAINNET_CONFIG_APPROVED !== 'true') {
       throw new Error('Refusing to start: MAINNET_CONFIG_APPROVED=true is required only after the reviewed chain/provider matrix is signed off.');
@@ -212,9 +235,14 @@ function assertNetworkConfig() {
     }
   } else if (circleIsMainnet) {
     throw new Error(
-      'Refusing to start: CIRCLE_API_KEY does not have the TEST_ prefix but MAINNET_ENABLED is not true. ' +
+      'Refusing to start: CIRCLE_API_KEY is a LIVE_API_KEY but MAINNET_ENABLED is not true. ' +
         'This mixed config was never validated (testnet BridgeChains + mainnet Circle blockchain names). ' +
-        'Either use a TEST_ key or enable mainnet with the full reviewed config — see docs/mainnet-config.md.',
+        'Either use a TEST_API_KEY or enable mainnet with the full reviewed config — see docs/mainnet-config.md.',
+    );
+  } else if (circleKeyEnv === 'invalid') {
+    throw new Error(
+      'Refusing to start: CIRCLE_API_KEY is not a valid Circle key. Expected TEST_API_KEY:<id>:<secret> (testnet) ' +
+        'or LIVE_API_KEY:<id>:<secret> (mainnet) — see https://developers.circle.com/api-reference/keys.',
     );
   } else {
     const rpcUrl = process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network';
@@ -243,6 +271,10 @@ async function bootstrap() {
   // only after a customer request reaches a financial path.
   const financialSafety = app.get(FinancialSafetyService);
   await financialSafety.assertStorageReady();
+  await financialSafety.assertDeploymentEnvironment({
+    chainEnvironment: (process.env.CHAIN_ENV || 'testnet').toLowerCase() as 'testnet' | 'mainnet',
+    circleKeyPrefix: String(process.env.CIRCLE_API_KEY || '').split(':')[0] || 'UNSET',
+  });
   await financialSafety.assertLedgerBaselineReady();
   await financialSafety.getControl();
   const envAdminEmails = [process.env.ADMIN_EMAIL, ...(process.env.ADMIN_EMAILS || '').split(',')]
