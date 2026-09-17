@@ -202,7 +202,7 @@ async function checkPaymentPoint() {
     });
     return;
   }
-  add('paymentpoint', 'PENDING_UNVERIFIED', 'Credentials exist, but no authoritative callback signature/status contract or explicitly configured read-only endpoint is recorded. Money-crediting webhook remains disabled.', {
+  add('paymentpoint', 'PENDING_UNVERIFIED', 'Credentials exist and the documented webhook syntax is not enough by itself: no explicitly configured read-only status endpoint and complete idempotency/reconciliation contract are recorded. Money-crediting webhook remains disabled.', {
     baseUrl: redactedUrl(process.env.PAYMENTPOINT_BASE_URL || 'https://api.paymentpoint.co/api/v1'),
   });
 }

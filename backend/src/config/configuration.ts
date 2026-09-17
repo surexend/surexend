@@ -61,13 +61,13 @@ export default registerAs('app', () => {
     apiKey: process.env.PAYMENTPOINT_API_KEY || process.env.PAYMENT_POINT_API_KEY,
     secretKey: process.env.PAYMENTPOINT_SECRET_KEY || process.env.PAYMENT_POINT_SECRET_KEY,
     businessId: process.env.PAYMENTPOINT_BUSINESS_ID || process.env.PAYMENT_POINT_BUSINESS_ID,
-    // Do not reuse the API secret as a guessed webhook credential. PaymentPoint's
-    // callback signature scheme must be confirmed with the provider and supplied
-    // separately before this money-crediting endpoint is enabled.
+    // Do not reuse the API secret as a guessed webhook credential. The official
+    // docs describe a separate security key for the raw-body HMAC; keep this
+    // value explicit and separate before enabling money crediting.
     webhookSecret: process.env.PAYMENTPOINT_WEBHOOK_SECRET || process.env.PAYMENT_POINT_WEBHOOK_SECRET,
-    // Disabled until PaymentPoint's documented callback authentication contract
-    // is verified with a captured production webhook. No mode is inferred from
-    // API credentials or from a header name.
+    // Disabled until the documented signature is supplemented by status,
+    // idempotency, replay, reconciliation, and sandbox replay evidence. No
+    // mode is inferred from API credentials or from a header name.
     webhookEnabled: process.env.PAYMENTPOINT_WEBHOOK_ENABLED === 'true',
     webhookSignatureMode: process.env.PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE || 'disabled',
     webhookSignatureHeader: process.env.PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER || 'disabled',

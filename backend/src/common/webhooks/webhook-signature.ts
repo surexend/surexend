@@ -40,12 +40,12 @@ export function verifyHmacSha256(rawBody: Buffer | string | undefined, signature
 }
 
 /**
- * PaymentPoint callback verification is intentionally mode-driven. Public
- * material available to this project does not establish whether PaymentPoint
- * sends a static secret, a raw-body HMAC, or which header/encoding it uses.
- * Consequently `disabled` is the safe default and no mode is inferred from
- * the API credentials. Enable exactly one mode only after the provider's
- * contract or an authenticated captured webhook proves it.
+ * PaymentPoint's official webhook documentation describes an HMAC-SHA256
+ * signature over the raw JSON body in the `Paymentpoint-Signature` header;
+ * its examples encode the digest as hexadecimal. Keep verification
+ * mode-driven and disabled by default until the remaining status,
+ * idempotency, replay, and reconciliation evidence is captured. Never infer a
+ * mode from API credentials alone.
  */
 export type PaymentPointSignatureMode =
   | 'disabled'

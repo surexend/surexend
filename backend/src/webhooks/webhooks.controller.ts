@@ -129,9 +129,9 @@ export class WebhooksController {
       const header = this.configService.get<string>('app.paymentpoint.webhookSignatureHeader');
       const allowedHeaders = new Set(['paymentpoint-signature', 'x-paymentpoint-signature', 'verif-hash']);
       if (!enabled || !secret || !mode || mode === 'disabled' || !header || !allowedHeaders.has(header)) {
-        // PaymentPoint's public material available to this audit did not
-        // establish a signature algorithm/header contract. Do not let a
-        // guessed comparison credit real funds by default.
+        // PaymentPoint's documented signature syntax is not sufficient by
+        // itself to authorize credits; status, replay, idempotency, and
+        // reconciliation evidence must also be recorded explicitly.
         this.logger.error('PaymentPoint webhook signature mode and header are not explicitly configured; refusing webhook');
         throw new ServiceUnavailableException('Webhook not configured');
       }

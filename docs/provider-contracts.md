@@ -87,11 +87,22 @@ endpoint used for bill discovery when `--network` is supplied. This proves
 reachability and credential acceptance only; it is not a bill receipt and does
 not establish idempotency or terminal-status semantics.
 
-The repository still does not contain an authoritative Smartspeed status or
-idempotency contract. The bill flow therefore must not treat a generic 2xx,
-network timeout, or undocumented response field as proof of delivery. Unknown
-outcomes remain pending and are reconciled from provider evidence before an
-operator resolves or refunds them.
+The official SmartSpeed Postman collection documents Token authentication and
+these read-only transaction surfaces in addition to the catalog endpoint:
+
+- `GET /api/user/` for account details;
+- `GET /api/data/` for data transactions;
+- query endpoints for data, airtime, and bill-payment transactions.
+
+Source: <https://documenter.getpostman.com/view/14036001/U16gQTNa?version=latest>
+
+The collection is enough to document reachability and the existence of
+provider query surfaces, but the reviewed packet still needs the exact query
+parameters, response schema, terminal status values, idempotency/replay
+behavior, and any callback-signing contract. The bill flow therefore must not
+treat a generic 2xx, network timeout, or undocumented response field as proof
+of delivery. Unknown outcomes remain pending and are reconciled from provider
+evidence before an operator resolves or refunds them.
 
 Before enabling real bills, record all of the following from the provider's
 sandbox contract and an authenticated test:
@@ -109,22 +120,41 @@ PaymentPoint is the selected local-funding path when its API key, secret, and
 business ID are configured. The launch gate includes it only when those
 credentials are present; it does not silently substitute Flutterwave.
 
-PaymentPoint’s callback signature and terminal-status contract has not been
-independently established for this repository. `PAYMENTPOINT_WEBHOOK_ENABLED`
-must remain `false`; credentials alone do not authorize money crediting.
-The preflight can test an explicitly configured, provider-documented safe GET
-endpoint through `PAYMENTPOINT_READ_ONLY_PREFLIGHT_URL`, but it will not guess
-an endpoint or call virtual-account creation just to obtain evidence.
+PaymentPoint's official documentation now establishes the following parts of
+its contract:
 
-Before enabling the webhook, record the provider's signed callback algorithm,
-header, canonical bytes, replay protection, terminal statuses, and a sandbox
-replay test. Then set `PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID`,
+- Base URL: `https://api.paymentpoint.co`;
+- Bearer authentication plus an `api-key` header;
+- virtual-account creation at `/api/v1/createVirtualAccount`;
+- webhook JSON fields including `transaction_id`, `amount_paid`,
+  `settlement_amount`, `transaction_status`, and `timestamp`;
+- `Paymentpoint-Signature` as an HMAC-SHA256 signature over the raw JSON body,
+  represented as a hexadecimal digest in the provider's PHP, Python, and
+  Node examples.
+
+Sources:
+
+- <https://paymentpoint.gitbook.io/paymentpoint.co/welcome-to-paymentpoint/authentication>
+- <https://paymentpoint.gitbook.io/paymentpoint.co/services/virtual-account/create-virtual-account>
+- <https://paymentpoint.gitbook.io/paymentpoint.co/services/webhook-documentation>
+
+This matches the backend's explicit `hmac-sha256-raw-hex` mode and
+`paymentpoint-signature` header. It does **not** establish a read-only
+transaction-status endpoint, idempotency/duplicate-event behavior, replay
+protection, or the full reconciliation contract. The official webhook page
+also contains wording about removing the signature from the payload while its
+examples correctly hash the raw request body; preserve the raw-body behavior
+and obtain provider clarification before enabling credits.
+
+`PAYMENTPOINT_WEBHOOK_ENABLED` must remain `false`; credentials and documented
+signature syntax alone do not authorize money crediting. The preflight will
+not guess a status endpoint or call virtual-account creation just to obtain
+evidence. Before enabling the webhook, record the missing status,
+idempotency, replay/reconciliation, and sandbox replay evidence, then set
+`PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID`,
 `PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE`, and
-`PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER` from that evidence packet. The code
-supports only the explicitly selected raw-body HMAC base64/hex modes or an
-explicitly selected legacy static-secret mode; it never infers one from API
-credentials. Until then, the preflight reports `PENDING_UNVERIFIED` and
-mainnet remains closed for that inbound-credit path.
+`PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER` from that packet. Until then,
+mainnet remains closed for this inbound-credit path.
 
 ## Release decision
 
