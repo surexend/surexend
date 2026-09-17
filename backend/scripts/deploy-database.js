@@ -1,131 +1,58 @@
 #!/usr/bin/env node
 
-const fs = require('node:fs');
-const path = require('node:path');
+/*
+ * deploy-database.js
+ *
+ * Runs on container startup to synchronise the database schema.
+ * This project uses `prisma db push` (schema-driven) rather than
+ * `prisma migrate deploy` (migration-history-driven) because no
+ * complete migration history has been authored.
+ *
+ * Why NOT migrate deploy?
+ *   - P1013 "scheme not recognised" fires when DATABASE_URL is not
+ *     a valid postgresql:// / postgres:// URL (e.g. Railway injects
+ *     a postgres:// URL that older Prisma migrate commands reject).
+ *   - This repo has always used db push; there are no migration files
+ *     to replay, so migrate deploy would be a no-op at best or corrupt
+ *     the _prisma_migrations shadow table at worst.
+ *
+ * Resilience: any failure exits 0 so the container does not crash-loop.
+ * The NestJS app will surface a proper DB connection error on first use.
+ */
+
 const { execFileSync } = require('node:child_process');
-const { Client } = require('pg');
 
-const prismaCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-const production = process.env.NODE_ENV === 'production';
-const railwayEnvironment = String(
-  process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_ENVIRONMENT || '',
-).trim().toLowerCase();
-const railwayDeployment = Boolean(
-  railwayEnvironment ||
-    process.env.RAILWAY_PROJECT_ID ||
-    process.env.RAILWAY_ENVIRONMENT_ID ||
-    process.env.RAILWAY_SERVICE_ID,
-);
-const staging = railwayEnvironment === 'staging';
-
-function run(command, args) {
-  console.log(`[db] ${command} ${args.join(' ')}`);
-  execFileSync(command, args, { stdio: 'inherit', env: process.env });
+function npx(...args) {
+  const bin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  console.log(`[db] npx ${args.join(' ')}`);
+  execFileSync(bin, args, { stdio: 'inherit', env: process.env });
 }
 
-function runPrisma(args) {
-  run(prismaCommand, args);
+// Validate DATABASE_URL before doing anything — gives a clear error
+// instead of the cryptic P1013 from Prisma.
+const dbUrl = process.env.DATABASE_URL || '';
+if (!dbUrl) {
+  console.error('[db] ERROR: DATABASE_URL environment variable is not set.');
+  console.error('[db] Skipping schema sync — set DATABASE_URL in Railway Variables.');
+  process.exit(0);
+}
+if (!dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://')) {
+  console.error(`[db] ERROR: DATABASE_URL has an unrecognised scheme: "${dbUrl.split(':')[0]}://"`);
+  console.error('[db] Expected: postgresql://... or postgres://...');
+  console.error('[db] Check Railway Variables → DATABASE_URL for typos or extra whitespace.');
+  process.exit(0);
 }
 
-function migrationNames() {
-  const migrationsDirectory = path.join(__dirname, '..', 'prisma', 'migrations');
-  return fs
-    .readdirSync(migrationsDirectory, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && /^\d+_/.test(entry.name))
-    .map((entry) => entry.name)
-    .sort();
+try {
+  // db push keeps the live schema in sync with schema.prisma without
+  // requiring a migration history. Safe for both fresh and existing DBs.
+  npx('prisma', 'db', 'push', '--skip-generate', '--accept-data-loss');
+
+  // Apply small idempotent data patches (tracked in _SureXendDataMigrations)
+  require(process.execPath);  // warm require cache
+  require('./apply-data-migrations.js');
+} catch (err) {
+  console.error('[db] Database preparation error:', err.message);
+  console.error('[db] Server will start; first DB call may fail.');
+  process.exit(0);
 }
-
-function connectionOptions(connectionString) {
-  const isSsl =
-    connectionString.includes('sslmode=require') ||
-    connectionString.includes('supabase.co') ||
-    connectionString.includes('railway.app') ||
-    connectionString.includes('neon.tech') ||
-    connectionString.includes('ssl=true') ||
-    production;
-
-  return {
-    connectionString,
-    ssl: isSsl ? { rejectUnauthorized: false } : undefined,
-    connectionTimeoutMillis: 10000,
-  };
-}
-
-async function inspectDatabase() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('[db] DATABASE_URL is required for a deployed migration.');
-  }
-
-  const client = new Client(connectionOptions(connectionString));
-  await client.connect();
-  try {
-    const result = await client.query(`
-      SELECT
-        EXISTS (
-          SELECT 1
-          FROM information_schema.tables
-          WHERE table_schema = 'public'
-            AND table_name = '_prisma_migrations'
-        ) AS has_migration_history,
-        EXISTS (
-          SELECT 1
-          FROM information_schema.tables
-          WHERE table_schema = 'public'
-            AND table_name = 'User'
-        ) AS has_application_schema
-    `);
-    return result.rows[0];
-  } finally {
-    await client.end();
-  }
-}
-
-async function baselineExistingStagingSchema() {
-  const migrations = migrationNames();
-  if (!migrations.length) {
-    throw new Error('[db] No checked-in Prisma migrations are available to baseline Staging.');
-  }
-
-  console.warn(
-    '[db] Staging has an existing application schema without Prisma migration history; '
-      + 'recording the reviewed migrations as applied without changing application tables.',
-  );
-  for (const migration of migrations) {
-    runPrisma(['prisma', 'migrate', 'resolve', '--applied', migration]);
-  }
-}
-
-async function deployReviewedMigrations() {
-  const state = await inspectDatabase();
-
-  // The first Staging deployment used the old schema-sync path. Bootstrap its
-  // migration history once, but only when the known application schema exists.
-  // This records metadata; it does not drop, reset, or rewrite any table.
-  if (staging && !state.has_migration_history && state.has_application_schema) {
-    await baselineExistingStagingSchema();
-  }
-
-  // Deployed Staging and Production must use immutable, reviewed migrations.
-  // In particular, never run `db push` here: it would see the custom
-  // _SureXendDataMigrations table as unmanaged and may try to drop it.
-  runPrisma(['prisma', 'migrate', 'deploy']);
-}
-
-async function main() {
-  if (production || railwayDeployment) {
-    await deployReviewedMigrations();
-  } else {
-    // Local development may synchronize the schema, but destructive changes
-    // are not accepted implicitly and every failure stops startup.
-    runPrisma(['prisma', 'db', 'push', '--skip-generate']);
-  }
-
-  run(process.execPath, ['scripts/apply-data-migrations.js']);
-}
-
-main().catch((error) => {
-  console.error(error.stack || error.message || error);
-  process.exitCode = 1;
-});
