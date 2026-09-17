@@ -15,6 +15,7 @@
     "provider:preflight": "node scripts/provider-contract-preflight.js",
     "launch:gate": "node scripts/financial-launch-gate.js",
     "mainnet:wallet-sets": "node scripts/create-mainnet-wallet-sets.js",
+    "admin:provision": "node scripts/provision-admin.js",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "db:rehearsal": "node scripts/postgres-rehearsal.js",
     "db:migration-rehearsal": "node scripts/postgres-migration-rehearsal.js",
