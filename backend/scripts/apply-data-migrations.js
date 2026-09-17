@@ -37,8 +37,26 @@ const migrations = [
       -- deployment used db push and then was safely baselined with migrate
       -- resolve, so its migration SQL was never executed. Restore only the
       -- fail-closed row; never change an existing operator-controlled row.
-      INSERT INTO "FinancialControl" ("id", "reason")
-      VALUES ('global', 'Initial fail-closed state; requires controlled release approval.')
+      INSERT INTO "FinancialControl" (
+        "id",
+        "moneyMovementEnabled",
+        "cryptoEnabled",
+        "billPaymentsEnabled",
+        "inboundCreditsEnabled",
+        "version",
+        "reason",
+        "updatedAt"
+      )
+      VALUES (
+        'global',
+        false,
+        false,
+        false,
+        false,
+        1,
+        'Initial fail-closed state; requires controlled release approval.',
+        NOW()
+      )
       ON CONFLICT ("id") DO NOTHING;
     `,
   },
