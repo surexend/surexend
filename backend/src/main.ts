@@ -7,11 +7,11 @@ import { FinancialSafetyService } from './common/financial-safety.service';
 
 import helmet from 'helmet';
 import * as compression from 'compression';
-import * as bcrypt from 'bcryptjs';
 import { readFileSync } from 'node:fs';
 import { ConfigService } from '@nestjs/config';
 import { parseReviewedNetworkMatrix, validateEnabledMainnetNetworks } from './config/network-matrix';
 import { classifyCircleApiKey, isValidCircleEntitySecret, isValidCircleWalletSetId } from './config/circle-credential';
+import { assertProductionAdminGate, bootstrapFirstAdminIfEmpty, provisionConfiguredAdmins } from './common/admin-bootstrap';
 
 /**
  * Evidence IDs are deployment claims, not proof by themselves; the launch gate
@@ -277,6 +277,14 @@ async function bootstrap() {
   });
   await financialSafety.assertLedgerBaselineReady();
   await financialSafety.getControl();
+  // Admins must be provisioned explicitly by an operator or a controlled
+  // one-time procedure. Never create demo accounts, reactivate banned users,
+  // or fall back to a password embedded in application code at server startup.
+  // The single controlled exception lives in admin-bootstrap.ts: an EMPTY
+  // database (fresh cutover) cannot register an operator because the gate
+  // below refuses to serve, so ADMIN_EMAIL + ADMIN_PASSWORD plus the explicit
+  // ADMIN_BOOTSTRAP_INITIAL=true confirmation may create the FIRST admin — and
+  // only while the User table has zero rows.
   const envAdminEmails = [process.env.ADMIN_EMAIL, ...(process.env.ADMIN_EMAILS || '').split(',')]
     .map((s) => (s || '').trim().toLowerCase())
     .filter(Boolean);
@@ -284,25 +292,32 @@ async function bootstrap() {
   if (envAdminEmails.length && !adminPassword) {
     throw new Error('Refusing to start: ADMIN_EMAIL/ADMIN_EMAILS were supplied without ADMIN_PASSWORD. Provision admins through a controlled one-time procedure.');
   }
+  // Bootstrap before promoting: on an empty database the promotion loop would
+  // otherwise throw "does not exist" for the very account bootstrap must create.
+  await bootstrapFirstAdminIfEmpty(prisma, {
+    enabled: process.env.ADMIN_BOOTSTRAP_INITIAL === 'true',
+    emails: envAdminEmails,
+    password: adminPassword,
+  });
   if (envAdminEmails.length && adminPassword) {
-    const adminHash = await bcrypt.hash(adminPassword, 12);
-    for (const email of Array.from(new Set(envAdminEmails))) {
-      const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-      if (!existing) {
-        throw new Error(`Refusing to start: configured admin ${email} does not exist. Create it through the controlled admin provisioning procedure; the app will not bootstrap accounts.`);
-      }
-      if (process.env.ADMIN_RESET_PASSWORD === 'true') {
-        await prisma.user.update({ where: { id: existing.id }, data: { role: 'ADMIN', passwordHash: adminHash } });
-      } else {
-        await prisma.user.update({ where: { id: existing.id }, data: { role: 'ADMIN' } });
-      }
+    const { promoted, blocked } = await provisionConfiguredAdmins(prisma, {
+      emails: envAdminEmails,
+      password: adminPassword,
+      resetPassword: process.env.ADMIN_RESET_PASSWORD === 'true',
+    });
+    for (const entry of promoted) {
+      console.log(`[admin-bootstrap] Configured admin promoted/confirmed: ${entry}`);
+    }
+    for (const entry of blocked) {
+      console.warn(
+        `[admin-bootstrap] WARNING: configured admin ${entry.email} is ` +
+          `${entry.isActive ? '' : 'INACTIVE '}${entry.isBanned ? 'BANNED' : ''}`.trim() +
+          ' — it will NOT satisfy the production admin gate. The app never reactivates accounts; restore it deliberately in the database or provision another admin.',
+      );
     }
   }
   if (process.env.NODE_ENV === 'production') {
-    const adminCount = await prisma.user.count({ where: { role: 'ADMIN', isActive: true, isBanned: false } });
-    if (adminCount < 1) {
-      throw new Error('Refusing to start: no active, unbanned administrator is provisioned.');
-    }
+    await assertProductionAdminGate(prisma);
   }
 
   app.use(helmet());

@@ -700,3 +700,46 @@ could redirect the login route back to the wallet.
 - Backend build remains dependent on its Prisma/native dependency setup and live
   environment; the controller-only change was not separately build-validated in
   this sandbox.
+
+## 2026-09-17 (9) — PROD crash-loop fix: first-admin bootstrap for a wiped database
+
+Incident: immediately after the controlled-admin PR (#21) deployed, Railway
+production crash-looped with `Refusing to start: no active, unbanned
+administrator is provisioned.` Root cause is an ordering deadlock, not a flake:
+the cutover wipes the Production DB (checklist item B) and the new production
+gate refuses to boot until an ADMIN exists, but every provisioning path
+(ADMIN_EMAIL promotion, `scripts/provision-admin.js`) requires an account that
+already exists — and the checklist's "register both accounts in Production"
+needs the app to be serving. An empty DB could therefore never produce its
+first admin. (Old memory note below about `ADMIN_EMAILS` without a password is
+obsolete: that combination now hard-fails by design.)
+
+Fix (backend/src/common/admin-bootstrap.ts + main.ts):
+- `bootstrapFirstAdminIfEmpty`: the ONE controlled exception — when the User
+  table has ZERO rows, `ADMIN_EMAIL` + `ADMIN_PASSWORD` +
+  `ADMIN_BOOTSTRAP_INITIAL=true` creates the first active, unbanned ADMIN
+  (placeholder `admin-<n>` phone like the Google flow, wallet created, bcrypt
+  12). Refuses to fire if any user exists, so it cannot inject an admin into a
+  seeded deployment. Order in bootstrap(): first-admin bootstrap BEFORE the
+  promotion loop, otherwise an empty DB throws "configured admin does not
+  exist" before bootstrap can run.
+- `provisionConfiguredAdmins`: promotion path unchanged (existing accounts
+  only, ADMIN_RESET_PASSWORD optional) but now returns banned/inactive targets
+  as `blocked`, logged loudly — previously a banned admin promoted fine and the
+  generic gate error left no clue.
+- `assertProductionAdminGate`: same rule, but the crash message now diagnoses
+  the exact DB state (ADMIN rows / active / total users) and names the way out
+  for each case (admin:provision shell command; env promotion; empty-DB triple).
+- Checklist item J split into J1 (first admin via the one-deploy bootstrap
+  triple, then remove the vars) and J2 (second admin registers in-app +
+  `admin:provision`); step D notes the expected gate crash right after the wipe.
+- `backend/.env.example` documents the full ADMIN_* matrix.
+
+Validation: `npx tsc --noEmit` clean; `npm run build` clean; jest 14 suites /
+140 tests pass incl. new `test/admin-bootstrap.spec.ts` (promotion, blocked
+admins, empty-DB creation, never-fires-on-seeded-DB, gate diagnostics).
+Operator unblock without any code change: if the Production DB already has a
+registered user, set ADMIN_EMAIL=<that user> + ADMIN_PASSWORD
+(+ ADMIN_RESET_PASSWORD=true) and redeploy, or run
+`npm run admin:provision -- <email>` in the Railway shell (scripts/ ships in
+the image since PR #21).
