@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -6,6 +6,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { LedgerService } from '../common/ledger.service';
 import { toMinor } from '../common/money';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -19,10 +20,12 @@ export class WebhooksService {
     private referralsService: ReferralsService,
     private ledger: LedgerService,
     private configService: ConfigService,
+    @Optional() private financialSafety?: FinancialSafetyService,
   ) {}
 
   async processPaymentPoint(payload: any, signature?: string) {
-    this.logger.log(`PaymentPoint webhook received: ${JSON.stringify(payload)}`);
+    await this.financialSafety?.assertEnabled('inbound');
+    this.logger.log('PaymentPoint webhook received');
     const data = payload?.data || payload;
 
     const transactionId =
@@ -35,7 +38,7 @@ export class WebhooksService {
       payload.reference;
 
     if (!transactionId) {
-      this.logger.warn(`PaymentPoint webhook missing transaction identifier: ${JSON.stringify(payload)}`);
+      this.logger.warn('PaymentPoint webhook missing transaction identifier');
       return;
     }
 
@@ -245,6 +248,7 @@ export class WebhooksService {
   // Flutterwave virtual account. Deduplicated by the Flutterwave payment id so
   // a retried webhook can never double-credit.
   async processBankTransferDeposit(data: any) {
+    await this.financialSafety?.assertEnabled('inbound');
     const flwId = data.id || data.flw_ref || data.tx_ref;
     if (!flwId) return;
 
@@ -330,7 +334,7 @@ export class WebhooksService {
   }
 
   async processCircle(payload: any) {
-    this.logger.log(`Processing Circle Webhook: ${JSON.stringify(payload)}`);
+    this.logger.log(`Processing Circle webhook notification: ${String(payload?.notificationType || 'unknown')}`);
     
     const eventType = payload.notificationType;
     if (eventType === 'transactions.inbound' || eventType === 'transactions.outbound') {
@@ -392,6 +396,7 @@ export class WebhooksService {
             return;
           }
           const symbol = rawSymbol;
+          await this.financialSafety?.assertEnabled('inbound');
 
           await this.prisma.$transaction(async (prisma) => {
             await prisma.wallet.update({

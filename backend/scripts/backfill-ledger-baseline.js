@@ -20,13 +20,9 @@
  *   node scripts/backfill-ledger-baseline.js             # apply
  *   npm run ledger:report                                # must be clean after
  */
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('./prisma-client');
 
-const prisma = new PrismaClient(
-  process.env.DIRECT_URL
-    ? { datasources: { db: { url: process.env.DIRECT_URL } } }
-    : undefined
-);
+const prisma = createPrismaClient();
 
 const SIX_DECIMAL = new Set(['USDC', 'USDT']);
 const ZERO_DECIMAL = new Set(['XAF', 'XOF', 'GNF', 'KMF', 'RWF', 'UGX', 'TZS', 'SLL', 'SOS']);

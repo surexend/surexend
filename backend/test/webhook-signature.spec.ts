@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { safeCompare, verifyHmacSha256 } from '../src/common/webhooks/webhook-signature';
+import { safeCompare, verifyHmacSha256, verifyPaymentPointSignature } from '../src/common/webhooks/webhook-signature';
 
 describe('safeCompare', () => {
   it('accepts an exact match', () => {
@@ -38,5 +38,27 @@ describe('verifyHmacSha256', () => {
     expect(verifyHmacSha256(undefined, 'sig', 'secret')).toBe(false);
     expect(verifyHmacSha256(Buffer.from('body'), undefined, 'secret')).toBe(false);
     expect(verifyHmacSha256(Buffer.from('body'), 'sig', undefined)).toBe(false);
+  });
+});
+
+describe('verifyPaymentPointSignature', () => {
+  const body = Buffer.from('{"status":"successful","transaction_id":"pp-1"}');
+  const secret = 'paymentpoint-webhook-secret';
+
+  it('stays closed when no provider contract mode is selected', () => {
+    expect(verifyPaymentPointSignature(body, secret, secret, undefined)).toBe(false);
+    expect(verifyPaymentPointSignature(body, secret, secret, 'disabled')).toBe(false);
+  });
+
+  it('supports only the explicitly selected raw-body HMAC encoding', () => {
+    const base64 = crypto.createHmac('sha256', secret).update(body).digest('base64');
+    const hex = crypto.createHmac('sha256', secret).update(body).digest('hex');
+    expect(verifyPaymentPointSignature(body, base64, secret, 'hmac-sha256-raw-base64')).toBe(true);
+    expect(verifyPaymentPointSignature(body, hex, secret, 'hmac-sha256-raw-hex')).toBe(true);
+    expect(verifyPaymentPointSignature(body, base64, secret, 'hmac-sha256-raw-hex')).toBe(false);
+  });
+
+  it('supports the legacy static mode only when explicitly selected', () => {
+    expect(verifyPaymentPointSignature(body, secret, secret, 'static-secret-legacy')).toBe(true);
   });
 });

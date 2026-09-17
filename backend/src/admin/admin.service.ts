@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -8,6 +8,7 @@ import { WalletsService } from '../wallets/wallets.service';
 import { getLocalRate } from '../common/currency.constants';
 import { LedgerService } from '../common/ledger.service';
 import { toMinor } from '../common/money';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
@@ -77,7 +78,34 @@ export class AdminService {
     private readonly ledger: LedgerService,
     private readonly configService: ConfigService,
     private readonly walletsService: WalletsService,
+    @Optional() private readonly financialSafety?: FinancialSafetyService,
   ) {}
+
+  async getFinancialControl() {
+    if (!this.financialSafety) throw new ServiceUnavailableException('Financial control service is unavailable.');
+    return this.financialSafety.getControl();
+  }
+
+  async requestFinancialControlChange(adminId: string, body: {
+    moneyMovementEnabled: boolean;
+    cryptoEnabled: boolean;
+    billPaymentsEnabled: boolean;
+    inboundCreditsEnabled: boolean;
+    reason: string;
+  }) {
+    if (!this.financialSafety) throw new ServiceUnavailableException('Financial control service is unavailable.');
+    return this.financialSafety.requestChange({ ...body, requestedById: adminId });
+  }
+
+  async approveFinancialControlChange(changeId: string, adminId: string) {
+    if (!this.financialSafety) throw new ServiceUnavailableException('Financial control service is unavailable.');
+    return this.financialSafety.approveChange(changeId, adminId);
+  }
+
+  async pauseFinancialControl(adminId: string, reason: string) {
+    if (!this.financialSafety) throw new ServiceUnavailableException('Financial control service is unavailable.');
+    return this.financialSafety.pause(reason, adminId);
+  }
 
   async getOverview() {
     const [totalUsers, activeUsers, kycPending, totalTransactions, completedTransactions, moneyIn, convertTxs, moneyOut, conversionFeeAgg, recentUsers, recentTransactions] = await Promise.all([
@@ -311,17 +339,29 @@ export class AdminService {
   // off-platform transfer. USDT/USDC credit the stablecoin (testnet) wallet;
   // NGN credits REAL naira (realLocalBalance) that can pay bills/withdrawals.
   async creditBalance(userId: string, adminId: string, body: { amount: number; currency?: string; note?: string }) {
+    await this.financialSafety?.assertEnabled('admin');
     const amount = Number(body.amount);
     if (!amount || amount <= 0) throw new Error('Amount must be greater than zero');
+    await this.financialSafety?.assertEnabled('admin', userId);
     // USDC-only product: manual credits must never recreate the invisible USDT
     // bucket. NGN credits real naira; USDC credits the stablecoin wallet.
     const currency = (body.currency || 'USDC').toUpperCase();
     if (!['USDC', 'NGN'].includes(currency)) throw new Error('Currency must be USDC or NGN');
+    await this.financialSafety?.assertEnabled(currency === 'NGN' ? 'bills' : 'crypto', userId);
 
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
     if (!wallet) throw new Error('Wallet not found');
 
-    const reference = `DEP-${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const reference = `DEP-${crypto.randomUUID()}`;
+    await this.financialSafety?.reserveDailyLimit({
+      userId,
+      reference,
+      amount,
+      currency,
+      limit: currency === 'NGN'
+        ? (this.configService.get<number>('app.transactionLimits.billsNgnDaily') || 500000)
+        : (this.configService.get<number>('app.transactionLimits.cryptoUsdDaily') || 1000),
+    });
 
     const result = await this.prisma.$transaction(async (prisma) => {
       if (currency === 'NGN') {
@@ -421,6 +461,14 @@ export class AdminService {
     return this.configService.get<string>('app.circle.walletSetId') || '';
   }
 
+  private get referralRewardWalletSetId() {
+    return this.configService.get<string>('app.circle.referralRewardWalletSetId') || '';
+  }
+
+  private isMainnet() {
+    return this.configService.get<string>('app.network.environment') === 'mainnet';
+  }
+
   private get referralRewardUsdtTokenAddress() {
     return this.configService.get<string>('app.circle.referralRewardUsdtTokenAddress') || '';
   }
@@ -477,8 +525,17 @@ export class AdminService {
 
   private referralRewardBlockchain(): string {
     // Must be a Circle-supported chain where the configured USDT contract is
-    // deployed. ARC remains the existing default for USDC treasury operations.
-    return this.referralRewardBlockchainOverride || (this.circleApiKey.startsWith('TEST_') ? 'ARC-TESTNET' : 'ARC');
+    // deployed. Mainnet names come from the reviewed matrix; the testnet map is
+    // explicit and never inferred from a credential prefix.
+    if (this.referralRewardBlockchainOverride) return this.referralRewardBlockchainOverride;
+    const environment = this.configService.get<string>('app.network.environment');
+    if (environment === 'mainnet') {
+      const matrix = this.configService.get<Record<string, { circleBlockchain: string }>>('app.network.matrix') || {};
+      const value = matrix.ARC?.circleBlockchain;
+      if (!value) throw new BadRequestException('No reviewed Arc mainnet blockchain is configured for referral rewards.');
+      return value;
+    }
+    return 'ARC-TESTNET';
   }
 
   private referralRewardNetwork(): string {
@@ -566,10 +623,19 @@ export class AdminService {
   }
 
   async createReferralRewardWallet(adminId: string) {
+    await this.financialSafety?.assertEnabled('admin');
     this.assertMoneyMovementEnabled();
     const existing = await this.prisma.platformWallet.findUnique({ where: { key: REFERRAL_REWARD_WALLET_KEY } });
-    if (existing?.circleWalletId) return this.getReferralRewardWallet();
+    if (existing?.circleWalletId) {
+      if (this.isMainnet() && (!this.referralRewardWalletSetId || existing.walletSetId !== this.referralRewardWalletSetId || existing.walletSetId === this.circleWalletSetId)) {
+        throw new ServiceUnavailableException('Mainnet referral rewards require a separately configured custody wallet set.');
+      }
+      return this.getReferralRewardWallet();
+    }
     this.assertCircleConfigured();
+    if (this.isMainnet() && (!this.referralRewardWalletSetId || this.referralRewardWalletSetId === this.circleWalletSetId)) {
+      throw new ServiceUnavailableException('Mainnet referral rewards require CIRCLE_REFERRAL_REWARD_WALLET_SET_ID distinct from CIRCLE_WALLET_SET_ID.');
+    }
 
     // Persist a deterministic platform record first. This makes a failed Circle
     // attempt visible to operations instead of silently creating a second wallet
@@ -578,9 +644,9 @@ export class AdminService {
       data: {
         key: REFERRAL_REWARD_WALLET_KEY,
         label: 'Referral rewards wallet',
-        // Existing Circle wallet sets remain supported, but a new project can
-        // leave this blank and let the secure flow create one automatically.
-        walletSetId: this.circleWalletSetId || null,
+        // Mainnet requires a pre-created, separately controlled reward set.
+        // Testnet may create a dedicated campaign set when no ID is supplied.
+        walletSetId: (this.isMainnet() ? this.referralRewardWalletSetId : this.circleWalletSetId) || null,
         blockchain: this.referralRewardBlockchain(),
         currency: 'USDC',
         status: 'CREATING',
@@ -598,7 +664,10 @@ export class AdminService {
       // Circle requires every developer-controlled wallet to belong to a wallet
       // set. A configured ID is reused, otherwise we create a dedicated one and
       // persist it—operators never need to create or paste a campaign wallet.
-      let walletSetId = record.walletSetId || this.circleWalletSetId;
+      let walletSetId = record.walletSetId || (this.isMainnet() ? this.referralRewardWalletSetId : this.circleWalletSetId);
+      if (!walletSetId && this.isMainnet()) {
+        throw new ServiceUnavailableException('Mainnet referral rewards cannot create a wallet set automatically.');
+      }
       if (!walletSetId) {
         const createSetResponse = await axios.post(
           `${this.circleBaseUrl}/v1/w3s/developer/walletSets`,
@@ -717,13 +786,22 @@ export class AdminService {
   }
 
   async payReferralReward(rewardId: string, adminId: string) {
+    await this.financialSafety?.assertEnabled('admin');
     this.assertMoneyMovementEnabled();
     // Claim first so a double click or two operators can never submit two Circle
     // transfers for one reward. A failed, provider-confirmed rejection becomes
     // FAILED and may be explicitly retried; a timeout/5xx remains PROCESSING
     // until reconciliation proves the outcome.
-    const rewardBeforeClaim = await this.prisma.referralReward.findUnique({ where: { id: rewardId }, select: { reference: true } });
+    const rewardBeforeClaim = await this.prisma.referralReward.findUnique({ where: { id: rewardId }, select: { reference: true, userId: true, amount: true, currency: true } });
     if (!rewardBeforeClaim) throw new NotFoundException('Referral reward not found.');
+    await this.financialSafety?.assertEnabled('crypto', rewardBeforeClaim.userId);
+    await this.financialSafety?.reserveDailyLimit({
+      userId: rewardBeforeClaim.userId,
+      reference: rewardBeforeClaim.reference,
+      amount: rewardBeforeClaim.amount,
+      currency: rewardBeforeClaim.currency,
+      limit: this.configService.get<number>('app.transactionLimits.cryptoUsdDaily') || 1000,
+    });
     const providerIdempotencyKey = this.providerIdempotencyKey(`referral:payout:${rewardBeforeClaim.reference}`);
     const claimed = await this.prisma.referralReward.updateMany({
       where: { id: rewardId, status: { in: ['ELIGIBLE', 'FAILED'] } },
@@ -766,6 +844,8 @@ export class AdminService {
         );
         recipientAddress = { address: created.address };
       }
+      this.financialSafety?.assertRecipientAllowed(recipientAddress.address);
+      this.financialSafety?.assertRecipientShape(this.referralRewardNetwork(), recipientAddress.address);
 
       const publicKeyResponse = await axios.get(`${this.circleBaseUrl}/v1/w3s/config/entity/publicKey`, {
         headers: { Authorization: `Bearer ${this.circleApiKey}`, accept: 'application/json' },

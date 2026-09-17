@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { authAPI } from '@/lib/api'
 
 function OAuthCallback() {
   const router = useRouter()
@@ -13,33 +12,13 @@ function OAuthCallback() {
     if (handled.current) return
     handled.current = true
 
-    const hashParams = typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.hash.replace(/^#/, ''))
-      : new URLSearchParams()
-
-    const accessToken = hashParams.get('accessToken') || searchParams.get('accessToken')
-    const refreshToken = hashParams.get('refreshToken') || searchParams.get('refreshToken')
-    const error = hashParams.get('error') || searchParams.get('error')
-
-    const stripSensitiveUrl = () => {
-      if (typeof window !== 'undefined') {
-        window.history.replaceState(null, '', '/auth/oauth-callback')
-      }
-    }
-
+    // OAuth credentials are set by the backend as HttpOnly cookies before it
+    // redirects here. They must never arrive in a fragment/query string.
+    const error = searchParams.get('error')
     if (error) {
-      stripSensitiveUrl()
-      router.replace(`/auth/login?error=${encodeURIComponent(error)}`)
-      return
-    }
-    if (!accessToken) {
-      stripSensitiveUrl()
       router.replace('/auth/login?error=Google%20sign-in%20failed')
       return
     }
-
-    authAPI.storeOAuthTokens(accessToken, refreshToken || undefined)
-    stripSensitiveUrl()
     router.replace('/app/dashboard')
   }, [searchParams, router])
 

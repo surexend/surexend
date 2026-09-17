@@ -1,6 +1,31 @@
 import { registerAs } from '@nestjs/config';
+import { parseReviewedNetworkMatrix, validateEnabledMainnetNetworks } from './network-matrix';
 
-export default registerAs('app', () => ({
+export default registerAs('app', () => {
+  const chainEnvironment = (process.env.CHAIN_ENV || 'testnet').toLowerCase();
+  const mainnetEnabled = process.env.MAINNET_ENABLED === 'true';
+  const reviewedMatrix = chainEnvironment === 'mainnet' || mainnetEnabled
+    ? parseReviewedNetworkMatrix(process.env.MAINNET_CHAIN_MATRIX_JSON)
+    : {};
+  const enabledMainnetNetworks = chainEnvironment === 'mainnet' || mainnetEnabled
+    ? validateEnabledMainnetNetworks(reviewedMatrix, process.env.MAINNET_ENABLED_NETWORKS)
+    : [];
+
+  const reviewedArc = reviewedMatrix.ARC;
+  // Provider selection is explicit. The current launch scope is Circle plus
+  // PaymentPoint and Smartspeed; Flutterwave is opt-in through its dedicated
+  // flag and is removed from this set unless explicitly enabled.
+  const enabledProviders = new Set(
+    (process.env.ENABLED_PROVIDERS || 'circle,paymentpoint,smartspeed')
+      .split(',')
+      .map((provider) => provider.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  enabledProviders.add('circle');
+  if (process.env.FLUTTERWAVE_ENABLED === 'true') enabledProviders.add('flutterwave');
+  else enabledProviders.delete('flutterwave');
+
+  return {
   port: parseInt(process.env.PORT, 10) || 3001,
   nodeEnv: process.env.NODE_ENV || 'development',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -16,12 +41,18 @@ export default registerAs('app', () => ({
     secret: process.env.JWT_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
   },
+  providers: {
+    enabled: [...enabledProviders],
+  },
   webauthn: {
     rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
     rpName: process.env.WEBAUTHN_RP_NAME || 'SureXend',
     origin: process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000',
   },
   flutterwave: {
+    // Flutterwave is an optional legacy funding path. It is disabled by
+    // default when PaymentPoint is the selected local-funding provider.
+    enabled: process.env.FLUTTERWAVE_ENABLED === 'true',
     publicKey: process.env.FLUTTERWAVE_PUBLIC_KEY,
     secretKey: process.env.FLUTTERWAVE_SECRET_KEY,
     webhookHash: process.env.FLUTTERWAVE_WEBHOOK_HASH,
@@ -30,13 +61,16 @@ export default registerAs('app', () => ({
     apiKey: process.env.PAYMENTPOINT_API_KEY || process.env.PAYMENT_POINT_API_KEY,
     secretKey: process.env.PAYMENTPOINT_SECRET_KEY || process.env.PAYMENT_POINT_SECRET_KEY,
     businessId: process.env.PAYMENTPOINT_BUSINESS_ID || process.env.PAYMENT_POINT_BUSINESS_ID,
-    // Do not reuse the API secret as a guessed webhook credential. PaymentPoint's
-    // callback signature scheme must be confirmed with the provider and supplied
-    // separately before this money-crediting endpoint is enabled.
+    // Do not reuse the API secret as a guessed webhook credential. The official
+    // docs describe a separate security key for the raw-body HMAC; keep this
+    // value explicit and separate before enabling money crediting.
     webhookSecret: process.env.PAYMENTPOINT_WEBHOOK_SECRET || process.env.PAYMENT_POINT_WEBHOOK_SECRET,
-    // Disabled until PaymentPoint's documented callback authentication contract
-    // is verified with a captured production webhook.
+    // Disabled until the documented signature is supplemented by status,
+    // idempotency, replay, reconciliation, and sandbox replay evidence. No
+    // mode is inferred from API credentials or from a header name.
     webhookEnabled: process.env.PAYMENTPOINT_WEBHOOK_ENABLED === 'true',
+    webhookSignatureMode: process.env.PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE || 'disabled',
+    webhookSignatureHeader: process.env.PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER || 'disabled',
     baseUrl: process.env.PAYMENTPOINT_BASE_URL || process.env.PAYMENT_POINT_BASE_URL || 'https://api.paymentpoint.co/api/v1',
   },
   vtpass: {
@@ -68,6 +102,21 @@ export default registerAs('app', () => ({
     // A demo/testnet process must never reach a live provider just because
     // NODE_ENV is not production.
     enabled: process.env.MONEY_MOVEMENT_ENABLED === 'true',
+  },
+  compliance: {
+    // Production and mainnet require verified KYC before customer movement.
+    // Testnet demos can opt in only for controlled rehearsals.
+    requireKyc: process.env.REQUIRE_KYC_FOR_MONEY_MOVEMENT === 'true' || process.env.NODE_ENV === 'production' || chainEnvironment === 'mainnet',
+    blockedAddresses: process.env.SANCTIONS_BLOCKED_ADDRESSES || '',
+  },
+  transactionLimits: {
+    cryptoUsdDaily: Number(process.env.MAX_DAILY_CRYPTO_SEND_USD || '1000'),
+    conversionUsdDaily: Number(process.env.MAX_DAILY_CONVERSION_USD || '1000'),
+    billsNgnDaily: Number(process.env.MAX_DAILY_BILL_NGN || '500000'),
+  },
+  canary: {
+    enabled: process.env.CANARY_MODE === 'true',
+    userIds: (process.env.CANARY_USER_IDS || '').split(',').map((value) => value.trim()).filter(Boolean),
   },
   yellowCard: {
     apiKey: process.env.YELLOW_CARD_API_KEY,
@@ -104,6 +153,9 @@ export default registerAs('app', () => ({
     apiKey: process.env.CIRCLE_API_KEY,
     entitySecret: process.env.CIRCLE_ENTITY_SECRET,
     walletSetId: process.env.CIRCLE_WALLET_SET_ID,
+    // Mainnet referral rewards must use an explicitly separate Circle wallet
+    // set; the app wallet set is never reused for campaign custody.
+    referralRewardWalletSetId: process.env.CIRCLE_REFERRAL_REWARD_WALLET_SET_ID,
     webhookSecret: process.env.CIRCLE_WEBHOOK_SECRET,
     // Referral rewards are paid as USDT from the Circle-created USDC treasury.
     // Configure a Circle-supported chain and its verified USDT contract address;
@@ -112,17 +164,17 @@ export default registerAs('app', () => ({
     referralRewardUsdtTokenAddress: process.env.CIRCLE_REFERRAL_REWARD_USDT_TOKEN_ADDRESS,
   },
   network: {
-    environment: process.env.CHAIN_ENV || 'testnet',
-    mainnetEnabled: process.env.MAINNET_ENABLED === 'true',
+    environment: chainEnvironment,
+    mainnetEnabled,
+    matrix: reviewedMatrix,
+    enabledMainnetNetworks,
   },
   ledger: {
-    // Gradual cutover switch for balance READS. OFF = legacy float columns
-    // (current behavior, additive & testnet-safe). ON = read the double-entry
-    // ledger (LedgerEntry) as the source of truth, falling back to the float
-    // for a currency that has no ledger rows yet, so enabling this is safe
-    // even before scripts/backfill-ledger-baseline.js has been run. Writes
-    // keep updating floats in BOTH modes until each path is verified and the
-    // columns are removed.
+    // Production money movement requires this switch. ON = read the
+    // double-entry ledger (LedgerEntry) as the source of truth; an absent
+    // ledger row is zero. The startup baseline gate must pass before this can
+    // safely be enabled. Legacy float columns remain compatibility mirrors
+    // until a later schema cleanup.
     reads: process.env.LEDGER_READS_ENABLED === 'true',
     alerts: {
       // LEDGER_DRIFT rows are persisted to AuditLog by the hourly
@@ -136,8 +188,9 @@ export default registerAs('app', () => ({
     },
   },
   arc: {
-    rpcUrl: process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network',
-    chainId: parseInt(process.env.ARC_CHAIN_ID || '5042002', 10),
-    usdcContractAddress: process.env.ARC_USDC_CONTRACT_ADDRESS || '0x3600000000000000000000000000000000000000'
+    rpcUrl: reviewedArc?.rpcUrls?.[0] || process.env.ARC_RPC_URL || 'https://rpc.testnet.arc.network',
+    chainId: reviewedArc?.chainId || parseInt(process.env.ARC_CHAIN_ID || '5042002', 10),
+    usdcContractAddress: reviewedArc?.usdcContract || process.env.ARC_USDC_CONTRACT_ADDRESS || '0x3600000000000000000000000000000000000000',
   }
-}));
+  };
+});

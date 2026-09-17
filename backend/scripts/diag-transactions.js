@@ -3,14 +3,10 @@
  * relevant wallets, to understand the pending-4USDC + duplicate + explorer issues.
  * Run: `npx railway run node scripts/diag-transactions.js`
  */
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('./prisma-client');
 const axios = require('axios');
 
-const prisma = new PrismaClient(
-  process.env.DIRECT_URL
-    ? { datasources: { db: { url: process.env.DIRECT_URL } } }
-    : undefined
-);
+const prisma = createPrismaClient();
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 

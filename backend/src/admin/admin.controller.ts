@@ -17,6 +17,37 @@ export class AdminController {
     return this.adminService.getOverview();
   }
 
+  @Get('financial-control')
+  getFinancialControl() {
+    return this.adminService.getFinancialControl();
+  }
+
+  // Enabling movement always creates a pending change. A distinct, step-up
+  // authenticated admin must approve it. This route cannot be used to bypass
+  // deployment flags, KYC, provider, ledger, or launch-gate checks.
+  @UseGuards(AdminStepUpGuard)
+  @Post('financial-control/changes')
+  requestFinancialControlChange(
+    @CurrentUser() admin: any,
+    @Body() body: { moneyMovementEnabled: boolean; cryptoEnabled: boolean; billPaymentsEnabled: boolean; inboundCreditsEnabled: boolean; reason: string },
+  ) {
+    return this.adminService.requestFinancialControlChange(admin.id, body);
+  }
+
+  @UseGuards(AdminStepUpGuard)
+  @Post('financial-control/changes/:id/approve')
+  approveFinancialControlChange(@Param('id') id: string, @CurrentUser() admin: any) {
+    return this.adminService.approveFinancialControlChange(id, admin.id);
+  }
+
+  // Emergency stop is immediate and intentionally requires only one stepped-up
+  // admin; restoring movement still requires the two-person flow above.
+  @UseGuards(AdminStepUpGuard)
+  @Post('financial-control/pause')
+  pauseFinancialControl(@CurrentUser() admin: any, @Body() body: { reason: string }) {
+    return this.adminService.pauseFinancialControl(admin.id, body.reason);
+  }
+
   @Get('users')
   listUsers(
     @Query('search') search?: string,

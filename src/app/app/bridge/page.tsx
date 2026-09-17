@@ -11,6 +11,7 @@ import {
   AlertCircle, ShieldCheck, Info, ExternalLink, Zap
 } from 'lucide-react'
 import Link from 'next/link'
+import { explorerTransactionUrl } from '@/lib/explorers'
 
 // Define the supported chains for CCTP bridging
 const BRIDGE_CHAINS = [
@@ -127,6 +128,13 @@ export default function BridgePage() {
         }
       })
 
+      // Circle's current Bridge Kit declarations require the newer readAction /
+      // getTokenAllowance adapter surface, while the published viem adapter
+      // intentionally remains runtime-compatible through prepareAction(). Keep
+      // this compatibility cast at the integration boundary; do not bypass the
+      // adapter itself or fabricate a transaction result.
+      const bridgeAdapter = adapter as unknown as import('@circle-fin/bridge-kit').AdapterContext['adapter']
+
       // 2. Initialize BridgeKit
       const kit = new BridgeKit()
 
@@ -134,9 +142,9 @@ export default function BridgePage() {
 
       // 3. Trigger Bridge transfer with CCTP Relayer / Forwarder (Orbit)
       const result = await kit.bridge({
-        from: { 
-          adapter, 
-          chain: sourceChain as any 
+        from: {
+          adapter: bridgeAdapter,
+          chain: sourceChain as any
         },
         to: { 
           chain: destChain as any,
@@ -161,12 +169,25 @@ export default function BridgePage() {
         toast.loading('Relayer submitting mint transaction to destination...', { id: 'bridge-toast' })
       }, 10000)
 
-      // BridgeKit returns a promise that resolves when the bridge operation starts or completes
-      if (result) {
-        setTxHash((result as any).txHash || '0x' + Array(64).fill(0).map(() => Math.floor(Math.random()*16).toString(16)).join(''))
-        setBridgeStatus('completed')
-        toast.success('USDC successfully bridged to your SureXend account!', { id: 'bridge-toast' })
+      // A resolved promise is not enough to claim settlement. Only accept an
+      // explicit successful result and a transaction reference returned by the
+      // provider; never invent a hash or turn a pending/ambiguous outcome into
+      // customer-visible success.
+      if (result.state !== 'success') {
+        throw new Error(`Bridge did not complete successfully (state: ${result.state}). Reconcile the transfer before retrying.`)
       }
+
+      const transactionHash = [...result.steps]
+        .reverse()
+        .find((step) => step.state === 'success' && step.txHash)?.txHash
+
+      if (!transactionHash) {
+        throw new Error('Bridge provider reported success without a verifiable transaction reference. Do not retry until the transfer is reconciled.')
+      }
+
+      setTxHash(transactionHash)
+      setBridgeStatus('completed')
+      toast.success('USDC successfully bridged to your SureXend account!', { id: 'bridge-toast' })
     } catch (err: any) {
       console.error('Bridge failed:', err)
       setBridgeStatus('failed')
@@ -394,14 +415,16 @@ export default function BridgePage() {
               <div className="p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 space-y-1.5 text-xs text-[#94A3B8] leading-relaxed">
                 <p className="font-bold text-white text-xs">Bridge Transfer Complete! 🎉</p>
                 <p className="text-[10px]">Your transaction has been processed. The relayer has finalized minting. Check status on explorer:</p>
-                <a 
-                  href={`https://testnet.arcscan.app/tx/${txHash}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-extrabold hover:underline pt-0.5"
-                >
-                  View on Explorer <ExternalLink className="w-3 h-3" />
-                </a>
+                {explorerTransactionUrl('ARC', txHash) && (
+                  <a
+                    href={explorerTransactionUrl('ARC', txHash) || undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-extrabold hover:underline pt-0.5"
+                  >
+                    View on Explorer <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
               </div>
             )}
 

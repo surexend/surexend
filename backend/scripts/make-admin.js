@@ -1,5 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
-const p = new PrismaClient();
+const { createPrismaClient } = require('./prisma-client');
+const p = createPrismaClient();
 
 const EMAIL = process.argv[2] || process.env.ADMIN_EMAIL;
 

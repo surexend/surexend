@@ -17,6 +17,7 @@ import toast from 'react-hot-toast'
 import { useBackLayer } from '@/context/BackNavigationContext'
 import { renderReceiptCanvas as renderReceiptCanvasUtil, downloadReceiptFile } from '@/lib/receipt'
 import { generateStatementPDF } from '@/lib/statement'
+import { explorerTransactionUrl } from '@/lib/explorers'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type TxType = 'ALL' | 'SEND' | 'RECEIVE' | 'CONVERT' | 'BILL_PAYMENT' | 'REFERRAL_EARNING'
@@ -457,20 +458,8 @@ function TransactionDetailModal({
   // Each chain has its own explorer. CCTP sends burn on Arc first, so a send's
   // txHash is an Arc hash even when the recipient is on another chain — always
   // deep-link to the chain the transaction hash actually landed on.
-  const EXPLORER_BASE: Record<string, string> = {
-    ARC: 'https://testnet.arcscan.app/tx/',
-    ETHEREUM: 'https://sepolia.etherscan.io/tx/',
-    POLYGON: 'https://amoy.polygonscan.com/tx/',
-    AVALANCHE: 'https://testnet.snowtrace.io/tx/',
-    ARBITRUM: 'https://sepolia.arbiscan.io/tx/',
-    BASE: 'https://sepolia.basescan.org/tx/',
-    OPTIMISM: 'https://sepolia-optimistic.etherscan.io/tx/',
-    SOLANA: 'https://explorer.solana.com/tx/',
-    MONAD: 'https://testnet.monadscan.com/tx/',
-    BSC: 'https://testnet.bscscan.com/tx/',
-  }
   const explorerNetwork = isSend ? 'ARC' : displayNetwork
-  const explorerUrl = meta.txHash ? `${EXPLORER_BASE[explorerNetwork] || EXPLORER_BASE.ARC}${meta.txHash}` : null
+  const explorerUrl = explorerTransactionUrl(explorerNetwork, meta.txHash)
   const swap = getSwapInfo(details)
 
   const statusColor = (s: string) => {

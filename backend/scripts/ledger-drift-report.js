@@ -13,13 +13,9 @@
  * Run: node scripts/ledger-drift-report.js        (or npm run ledger:report)
  * Exit code 0 = clean, 1 = drift found.
  */
-const { PrismaClient } = require('@prisma/client');
+const { createPrismaClient } = require('./prisma-client');
 
-const prisma = new PrismaClient(
-  process.env.DIRECT_URL
-    ? { datasources: { db: { url: process.env.DIRECT_URL } } }
-    : undefined
-);
+const prisma = createPrismaClient();
 
 const SIX_DECIMAL = new Set(['USDC', 'USDT']);
 const ZERO_DECIMAL = new Set(['XAF', 'XOF', 'GNF', 'KMF', 'RWF', 'UGX', 'TZS', 'SLL', 'SOS']);

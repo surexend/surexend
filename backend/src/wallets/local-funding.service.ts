@@ -1,13 +1,13 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 
-// Local-currency funding via Flutterwave VNUBAN virtual accounts. Each user
-// gets a permanent dedicated bank account number; when they transfer to it,
-// Flutterwave fires a charge.completed webhook and the webhooks service credits
-// their local-currency wallet automatically (see WebhooksService).
+// Local-currency funding via the configured virtual-account provider. PaymentPoint
+// is the primary path; the legacy Flutterwave path is used only when explicitly
+// enabled. Inbound credits are accepted only through a verified, signed webhook.
 @Injectable()
 export class LocalFundingService {
   private readonly logger = new Logger(LocalFundingService.name);
@@ -15,6 +15,7 @@ export class LocalFundingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    @Optional() private readonly financialSafety?: FinancialSafetyService,
   ) {}
 
   private get ppApiKey(): string {
@@ -37,9 +38,15 @@ export class LocalFundingService {
     return this.configService.get<string>('app.flutterwave.secretKey') || '';
   }
 
+  private providerEnabled(provider: string): boolean {
+    const enabled = this.configService.get<string[]>('app.providers.enabled') || [];
+    return enabled.includes(provider.toLowerCase());
+  }
+
   // Returns the user's dedicated bank account, creating it via PaymentPoint (or Flutterwave fallback) on
   // first request. If neither is configured yet, returns "configured: false".
   async getOrCreateAccount(userId: string) {
+    await this.financialSafety?.assertEnabled('inbound', userId);
     const existing = await this.prisma.virtualAccount.findFirst({
       where: { userId, isActive: true },
     });
@@ -47,8 +54,14 @@ export class LocalFundingService {
       return { configured: true, account: this.toDto(existing) };
     }
 
-    const hasPaymentPoint = !!(this.ppApiKey || this.ppSecretKey);
-    const hasFlutterwave = !!this.flwSecretKey;
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
+      throw new BadRequestException('Bank funding is disabled while this environment is in testnet or maintenance mode.');
+    }
+
+    const hasPaymentPoint = this.providerEnabled('paymentpoint') && !!(this.ppApiKey && this.ppSecretKey && this.ppBusinessId);
+    const hasFlutterwave = this.providerEnabled('flutterwave')
+      && this.configService.get<boolean>('app.flutterwave.enabled') === true
+      && !!this.flwSecretKey;
 
     if (!hasPaymentPoint && !hasFlutterwave) {
       return {
@@ -85,23 +98,22 @@ export class LocalFundingService {
           businessId: this.ppBusinessId,
         };
 
-        this.logger.log(`PaymentPoint VNUBAN create request: ${JSON.stringify(payload)}`);
+        this.logger.log(`PaymentPoint VNUBAN create request for user ${userId}`);
 
         const response = await axios.post(
           `${this.ppBaseUrl}/createVirtualAccount`,
           payload,
           {
             headers: {
-              Authorization: `Bearer ${this.ppSecretKey || this.ppApiKey}`,
-              'api-key': this.ppApiKey || this.ppSecretKey,
+              Authorization: `Bearer ${this.ppSecretKey}`,
+              'api-key': this.ppApiKey,
               'Content-Type': 'application/json',
             },
             timeout: 20000,
           },
         );
 
-        // Log the FULL response so we can debug field name mismatches
-        this.logger.log(`PaymentPoint VNUBAN create response: ${JSON.stringify(response.data)}`);
+        this.logger.log('PaymentPoint VNUBAN create response received');
 
         const resData = response.data;
         // PaymentPoint returns: { bankAccounts: [{accountNumber, accountName, bankName, bankCode}] }
@@ -146,18 +158,14 @@ export class LocalFundingService {
         }
 
         // Account number missing — log the full raw response to help diagnose
-        const raw = JSON.stringify(resData);
-        this.logger.error(`PaymentPoint returned success but no account number found. Full response: ${raw}`);
-        throw new BadRequestException(
-          `PaymentPoint returned an unexpected response format. Please contact support. (raw: ${raw.substring(0, 200)})`,
-        );
+        this.logger.error('PaymentPoint returned success but no account number was present');
+        throw new BadRequestException('PaymentPoint returned an unexpected response format. Please contact support.');
       } catch (ppErr: any) {
         // Don't re-wrap BadRequestException we threw ourselves
         if (ppErr?.status === 400 || ppErr?.name === 'BadRequestException') throw ppErr;
 
         const errMsg = ppErr.response?.data?.message || ppErr.response?.data?.error || ppErr.message;
-        const rawErrBody = ppErr.response?.data ? JSON.stringify(ppErr.response.data) : 'no body';
-        this.logger.error(`PaymentPoint VNUBAN create error [${ppErr.response?.status}]: ${errMsg} | body: ${rawErrBody}`);
+        this.logger.error(`PaymentPoint VNUBAN create error [${ppErr.response?.status}]: ${String(errMsg || 'unknown provider error').slice(0, 240)}`);
         if (!hasFlutterwave) {
           throw new BadRequestException(
             errMsg || 'Could not generate virtual bank account. Please check your details or try again later.',

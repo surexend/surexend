@@ -1,0 +1,11 @@
+{
+  "name": "elliptic",
+  "version": "6.6.2",
+  "private": true,
+  "description": "SureXend's narrow elliptic compatibility surface backed by @noble/curves",
+  "main": "index.js",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@noble/curves": "^1.9.7"
+  }
+}

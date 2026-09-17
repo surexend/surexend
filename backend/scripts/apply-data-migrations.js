@@ -1,6 +1,6 @@
 /*
  * Runs only reviewed, idempotent DATA migrations after the schema deployment
- * (Prisma migrate deploy in production, db push in local development).
+ * (Prisma migrate deploy in deployed environments, db push in local development).
  * Schema changes belong in Prisma migrations; this runner must never mutate
  * administrator accounts, rewrite transaction history, or hide a failed
  * migration behind a successful application start.
@@ -28,6 +28,36 @@ const migrations = [
           WHERE current."userId" = legacy."userId"
             AND current."campaign" = 'FIVE_REFERRALS_USDT'
         );
+    `,
+  },
+  {
+    name: '20260917000000_ensure_financial_control_global_row',
+    sql: `
+      -- The financial-control migration seeds this row, but the first Staging
+      -- deployment used db push and then was safely baselined with migrate
+      -- resolve, so its migration SQL was never executed. Restore only the
+      -- fail-closed row; never change an existing operator-controlled row.
+      INSERT INTO "FinancialControl" (
+        "id",
+        "moneyMovementEnabled",
+        "cryptoEnabled",
+        "billPaymentsEnabled",
+        "inboundCreditsEnabled",
+        "version",
+        "reason",
+        "updatedAt"
+      )
+      VALUES (
+        'global',
+        false,
+        false,
+        false,
+        false,
+        1,
+        'Initial fail-closed state; requires controlled release approval.',
+        NOW()
+      )
+      ON CONFLICT ("id") DO NOTHING;
     `,
   },
 ];

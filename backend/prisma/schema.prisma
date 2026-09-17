@@ -1,6 +1,7 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+  previewFeatures = ["driverAdapters", "queryCompiler"]
+  engineType      = "client"
 }
 
 datasource db {
@@ -327,11 +328,15 @@ model Notification {
 model OtpCode {
   id         String   @id @default(uuid())
   identifier String   // email or phone
-  code       String
+  // Raw OTPs are not stored. `code` remains nullable only for one-time
+  // migration compatibility with rows created before the hash rollout.
+  code       String?
+  codeHash   String?
   type       String   // REGISTER, LOGIN, PASSWORD_RESET
   expiresAt  DateTime
   used       Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  attempts   Int      @default(0)
+  createdAt  DateTime  @default(now())
 }
 
 model AuditLog {
@@ -432,4 +437,73 @@ model ServicePricing {
   disabled  Boolean  @default(false) // admin turned this plan off
   updatedAt DateTime @default(now())
   @@unique([category, provider, planCode])
+}
+
+// Database-backed circuit breaker. The initial row is disabled by migration and
+// can only be enabled by a separate request/approval workflow in AdminService.
+// Environment flags remain a second, independent kill switch.
+model FinancialControl {
+  id                    String   @id @default("global")
+  moneyMovementEnabled  Boolean  @default(false)
+  cryptoEnabled         Boolean  @default(false)
+  billPaymentsEnabled   Boolean  @default(false)
+  inboundCreditsEnabled Boolean  @default(false)
+  version               Int      @default(1)
+  reason                String?
+  updatedById           String?
+  updatedAt             DateTime @updatedAt
+  changes               FinancialControlChange[]
+}
+
+model FinancialControlChange {
+  id                    String   @id @default(uuid())
+  controlId             String
+  moneyMovementEnabled  Boolean
+  cryptoEnabled         Boolean
+  billPaymentsEnabled   Boolean
+  inboundCreditsEnabled Boolean
+  reason                String
+  requestedById         String
+  approvedById          String?
+  status                String   @default("PENDING")
+  createdAt             DateTime @default(now())
+  approvedAt            DateTime?
+  control               FinancialControl @relation(fields: [controlId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([controlId])
+}
+
+model FinancialLimitBucket {
+  id           String   @id @default(uuid())
+  userId       String
+  limitDate    DateTime @db.Date
+  currency     String
+  reservedMinor BigInt  @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, limitDate, currency])
+}
+
+model FinancialLimitReservation {
+  id                 String   @id @default(uuid())
+  userId             String
+  operationReference String   @unique
+  currency           String
+  amountMinor        BigInt
+  limitDate          DateTime @db.Date
+  createdAt          DateTime @default(now())
+
+  @@index([userId, limitDate])
+}
+
+// The application-level data migration runner owns this metadata table. Keep
+// it in the Prisma schema so local schema synchronization does not interpret a
+// previously-applied data migration as an unmanaged table to drop.
+model SureXendDataMigration {
+  name      String   @id
+  appliedAt DateTime @default(now())
+
+  @@map("_SureXendDataMigrations")
 }

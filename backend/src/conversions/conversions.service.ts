@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -6,6 +6,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { TransactionAuthService } from '../common/transaction-auth/transaction-auth.service';
 import { LedgerService } from '../common/ledger.service';
 import { fromMinor, toMinor, roundMinor } from '../common/money';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 import * as crypto from 'crypto';
 import axios from 'axios';
 import Redis from 'ioredis';
@@ -29,6 +30,7 @@ export class ConversionsService {
     private notificationsService: NotificationsService,
     private transactionAuth: TransactionAuthService,
     private ledger: LedgerService,
+    @Optional() private financialSafety?: FinancialSafetyService,
   ) {
     this.redis = new Redis(this.configService.get<string>('app.redisUrl') || 'redis://localhost:6379');
   }
@@ -257,6 +259,7 @@ export class ConversionsService {
   }
 
   async execute(userId: string, from: string, to: string, amount: number, pin?: string, passkeyToken?: string) {
+    await this.financialSafety?.assertEnabled('conversion', userId);
     if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
       throw new BadRequestException('Money movement is disabled while this environment is in testnet or maintenance mode.');
     }
@@ -277,6 +280,16 @@ export class ConversionsService {
       from: fromCode,
       to: toCode,
       amount: Number(amount),
+    });
+
+    const conversionId = crypto.randomUUID();
+    const usdLimitAmount = fromCode === 'USD' ? Number(amount) : Number(amount) / Math.max(getLocalRate(fromCode), 1);
+    await this.financialSafety?.reserveDailyLimit({
+      userId,
+      reference: `CONV-${conversionId}`,
+      amount: usdLimitAmount,
+      currency: 'USDC',
+      limit: this.configService.get<number>('app.transactionLimits.conversionUsdDaily') || 1000,
     });
 
     // SECURITY: balance check + debit MUST be atomic. The previous version read
@@ -316,8 +329,11 @@ export class ConversionsService {
       let usdAvailable = usdtPool + usdcPool;
       if (this.ledgerReads()) {
         const lb: Record<string, bigint> = await this.ledger.balancesOfUser(userId, prisma);
-        if (lb.USDT !== undefined) usdtPool = fromMinor(lb.USDT, 'USDT');
-        if (lb.USDC !== undefined) usdcPool = fromMinor(lb.USDC, 'USDC');
+        usdtPool = fromMinor(lb.USDT || 0n, 'USDT');
+        usdcPool = fromMinor(lb.USDC || 0n, 'USDC');
+        // The ledger is authoritative after cutover; an absent currency row is
+        // zero and must not fall back to the legacy JSON snapshot.
+        localBalances = {};
         for (const [ccy, minor] of Object.entries(lb)) {
           // Skip stablecoin denominations; 'USD' is a legacy ledger
           // pseudo-currency from pre-cutover conversion rows.
@@ -402,6 +418,7 @@ export class ConversionsService {
 
       const conversion = await prisma.conversion.create({
         data: {
+          id: conversionId,
           userId,
           usdtAmount: result.usdValue,
           fiatAmount: result.receiveAmount,
@@ -411,8 +428,7 @@ export class ConversionsService {
           status: 'COMPLETED',
         },
       });
-      const conversionId = conversion.id;
-      const ledgerReference = `CONV-${conversionId}`;
+      const ledgerReference = `CONV-${conversion.id}`;
       const sourceCurrencies = fromCode === 'USD' ? ['USDT', 'USDC'] : [fromCode];
       const sourceAmounts = fromCode === 'USD' ? [deductUsdt, deductUsdc] : [debitTotal];
       const entries = sourceCurrencies.flatMap((ccy, i) => {

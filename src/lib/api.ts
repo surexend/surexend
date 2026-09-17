@@ -56,9 +56,8 @@ export const AFRICAN_CURRENCIES = [
   { code: 'XOF', name: 'West African CFA Franc', symbol: 'CFA', country: 'Senegal', countryCode: 'SN', flag: '🇸🇳', rate: 605, countries: ['Benin', 'Burkina Faso', 'Côte d’Ivoire', 'Guinea-Bissau', 'Mali', 'Niger', 'Senegal', 'Togo'] },
 ]
 
-// Access tokens stay in sessionStorage + a short browser cookie for route gating.
-// Refresh tokens remain client-readable for now until the app migrates fully to
-// server-owned httpOnly sessions.
+// The backend now issues HttpOnly access/refresh cookies. Keep this adapter for
+// legacy callers, but never persist credentials in JavaScript-readable storage.
 function storeTokens(accessToken: string, refreshToken?: string) {
   storeAuthTokens(accessToken, refreshToken)
 }
@@ -82,17 +81,20 @@ let refreshPromise: Promise<string | null> | null = null
 
 async function refreshAccessToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null
+  // Refresh credentials are HttpOnly cookies. The legacy body token is sent
+  // only when an older session still has one, so the migration remains
+  // backwards compatible without creating any new JS-readable credentials.
   const refreshToken = getStoredRefreshToken()
-  if (!refreshToken) return null
 
   try {
-    const response = await apiClient.post('/auth/refresh', { refreshToken })
+    const response = await apiClient.post('/auth/refresh', refreshToken ? { refreshToken } : {})
     const newAccess = response.data?.accessToken
     const newRefresh = response.data?.refreshToken
-    if (!newAccess) return null
-    storeTokens(newAccess, newRefresh)
-    return newAccess
+    if (newAccess) storeTokens(newAccess, newRefresh)
+    // A successful cookie refresh intentionally has no token in JSON.
+    return newAccess || 'cookie-session'
   } catch {
+    try { await apiClient.post('/auth/logout') } catch { /* best effort cookie revocation */ }
     clearTokens()
     return null
   }
@@ -104,6 +106,7 @@ async function refreshAccessToken(): Promise<string | null> {
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '/api/v1',
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
   timeout: 15000, // 15 second timeout for real backend calls
 })
 
@@ -146,7 +149,11 @@ apiClient.interceptors.response.use(
       }
       const newToken = await refreshPromise
       if (newToken) {
-        config.headers.Authorization = `Bearer ${newToken}`
+        // Cookie sessions do not expose the refreshed access token to JS. The
+        // browser will attach the new HttpOnly cookie on the retry.
+        if (newToken !== 'cookie-session') {
+          config.headers.Authorization = `Bearer ${newToken}`
+        }
         return apiClient(config)
       }
       // Refresh failed or no refresh token available — session is over
@@ -225,7 +232,7 @@ export const authAPI = {
   forgotPassword: (email: string) =>
     apiClient.post('/auth/forgot-password', { email }),
 
-  resetPassword: (payload: { token: string; newPassword: string }) =>
+  resetPassword: (payload: { token: string; newPassword: string; email?: string }) =>
     apiClient.post('/auth/reset-password', payload),
 
   googleConfig: () =>

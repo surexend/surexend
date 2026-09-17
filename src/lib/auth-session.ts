@@ -57,14 +57,6 @@ export function getCookieValue(cookieSource: string, name: string): string | nul
   return null
 }
 
-function accessCookieAttributes(maxAge: number): string {
-  const attrs = ['path=/', `max-age=${maxAge}`, 'SameSite=Lax']
-  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-    attrs.push('Secure')
-  }
-  return attrs.join('; ')
-}
-
 function getBrowserStorage(kind: 'session' | 'local'): Storage | null {
   if (typeof window === 'undefined') return null
   try {
@@ -93,16 +85,6 @@ function removeStorage(storage: Storage | null, key: string) {
   }
 }
 
-function writeStorage(storage: Storage | null, key: string, value: string) {
-  if (!storage) return
-  try {
-    storage.setItem(key, value)
-  } catch {
-    // The API call and cookie remain the source of truth when storage is full
-    // or unavailable.
-  }
-}
-
 export function getStoredAccessToken(): string | null {
   if (typeof window === 'undefined') return null
   let cookieSource = ''
@@ -123,25 +105,14 @@ export function getStoredRefreshToken(): string | null {
   return readStorage(getBrowserStorage('local'), REFRESH_TOKEN_STORAGE_KEY)
 }
 
-export function storeAuthTokens(accessToken: string, refreshToken?: string) {
+export function storeAuthTokens(_accessToken: string, _refreshToken?: string) {
+  // Credentials are now set by the backend as HttpOnly cookies. Deliberately
+  // do not copy them into sessionStorage/localStorage or a JS-readable cookie.
+  // Clear credentials left by an older client build during the migration.
   if (typeof window === 'undefined') return
-  writeStorage(getBrowserStorage('session'), ACCESS_TOKEN_STORAGE_KEY, accessToken)
-  // Remove the legacy persistent access token if an older build left one
-  // behind. Access tokens should not survive a tab closing.
+  removeStorage(getBrowserStorage('session'), ACCESS_TOKEN_STORAGE_KEY)
   removeStorage(getBrowserStorage('local'), ACCESS_TOKEN_STORAGE_KEY)
-  try {
-    document.cookie = `${ACCESS_TOKEN_STORAGE_KEY}=${encodeURIComponent(accessToken)}; ${accessCookieAttributes(604800)}`
-  } catch {
-    // Continue; the sessionStorage token still authenticates API requests.
-  }
-
-  // Never retain a refresh token from a previous account if a token response
-  // is incomplete. All current token-issuing endpoints return both tokens.
-  if (refreshToken) {
-    writeStorage(getBrowserStorage('local'), REFRESH_TOKEN_STORAGE_KEY, refreshToken)
-  } else {
-    removeStorage(getBrowserStorage('local'), REFRESH_TOKEN_STORAGE_KEY)
-  }
+  removeStorage(getBrowserStorage('local'), REFRESH_TOKEN_STORAGE_KEY)
 }
 
 function clearAccessCookie() {
@@ -198,7 +169,12 @@ export function clearStoredAuthSession() {
 
   // Capture this before removal so a second cleanup in an API finally block
   // does not emit duplicate cross-tab navigation signals.
-  const hadSession = Boolean(getStoredAccessToken() || getStoredRefreshToken())
+  const hadSession = Boolean(
+    getStoredAccessToken() ||
+    getStoredRefreshToken() ||
+    window.location.pathname.startsWith('/app') ||
+    window.location.pathname.startsWith('/admin'),
+  )
 
   removeStorage(getBrowserStorage('session'), ACCESS_TOKEN_STORAGE_KEY)
   const localStore = getBrowserStorage('local')
@@ -218,5 +194,10 @@ export function hasClientAuthSession(): boolean {
   if (typeof window === 'undefined') return false
   const accessToken = getStoredAccessToken()
   const refreshToken = getStoredRefreshToken()
-  return Boolean((accessToken && !isJwtExpired(accessToken)) || refreshToken)
+  if ((accessToken && !isJwtExpired(accessToken)) || refreshToken) return true
+
+  // HttpOnly cookies cannot be inspected by JavaScript. Protected routes have
+  // already been checked by Next middleware, so allow their layout to make the
+  // authenticated API request; a 401 is handled by the interceptor.
+  return window.location.pathname.startsWith('/app') || window.location.pathname.startsWith('/admin')
 }

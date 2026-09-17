@@ -138,9 +138,14 @@ PROVIDER_PREFLIGHT_EVIDENCE_FILE='./release-evidence/provider-preflight.json' \
 npm run provider:preflight -- --all --network
 ```
 
-Circle and Flutterwave may produce a `PASS` only after their authenticated
-read-only checks. Smartspeed and PaymentPoint remain `PENDING_UNVERIFIED` until
-their contracts are recorded; do not call guessed endpoints.
+The release gate requires Circle plus every provider actually enabled by
+credentials: explicitly enabled Flutterwave, configured Smartspeed, and
+configured PaymentPoint. Flutterwave is disabled by default for the current
+PaymentPoint launch. Smartspeed's `/user/` check is read-only reachability
+evidence, not idempotency/settlement evidence. PaymentPoint remains
+`PENDING_UNVERIFIED` unless an explicitly configured, provider-documented safe
+GET endpoint is supplied; never call virtual-account creation or a guessed
+endpoint merely to obtain evidence.
 
 Then execute the authenticated sandbox flows in
 `docs/testnet-e2e-runbook.md`. Record provider transaction IDs, tx hashes,
@@ -149,9 +154,23 @@ Replay each duplicate webhook and prove that both the float and ledger change
 only once. A timeout, 408, 409, 429, 5xx, connection reset, process crash, or
 non-terminal status remains pending; do not refund or retry automatically.
 
-## 5. Alerting and restart drill
+## 5. Health, monitoring, and alerting
+
+The backend exposes orchestrator-safe probes under its global API prefix:
+
+```bash
+curl --fail https://api.example.com/api/v1/health/live
+curl --fail https://api.example.com/api/v1/health/ready
+```
+
+`live` only proves the process is responding. `ready` proves PostgreSQL,
+the financial-control tables and global circuit-breaker row are readable, and,
+when movement is enabled, the ledger baseline is complete. Configure the load
+balancer to remove an instance on readiness failure; never use a superficial
+HTTP 200 probe as proof that money movement is safe.
 
 Before any money movement:
+
 
 1. configure `LEDGER_DRIFT_ALERTS_ENABLED=true`;
 2. configure `LEDGER_DRIFT_WEBHOOK_URL`, or

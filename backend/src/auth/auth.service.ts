@@ -30,6 +30,65 @@ export class AuthService {
     return String(phone || '').trim();
   }
 
+  private assertStrongPassword(password: string) {
+    if (
+      typeof password !== 'string' ||
+      password.length < 8 ||
+      password.length > 128 ||
+      !/[a-z]/.test(password) ||
+      !/[A-Z]/.test(password) ||
+      !/[0-9]/.test(password)
+    ) {
+      throw new BadRequestException('Password must be 8–128 characters and include uppercase, lowercase, and a number');
+    }
+  }
+
+  private otpDigest(identifier: string, type: string, code: string): string {
+    const secret = this.configService.get<string>('app.jwt.secret');
+    if (!secret) throw new Error('JWT_SECRET is not configured');
+    return crypto
+      .createHmac('sha256', secret)
+      .update(`${type}:${this.normalizeIdentifier(identifier)}:${String(code).trim()}`)
+      .digest('hex');
+  }
+
+  private otpMatches(record: { codeHash?: string | null; code?: string | null }, identifier: string, type: string, code: string): boolean {
+    const expected = this.otpDigest(identifier, type, code);
+    if (record.codeHash) {
+      const actual = Buffer.from(record.codeHash, 'hex');
+      const wanted = Buffer.from(expected, 'hex');
+      return actual.length === wanted.length && crypto.timingSafeEqual(actual, wanted);
+    }
+    // One-time compatibility path for rows created before the hash migration.
+    // New OTPs never persist the raw code.
+    if (!record.code) return false;
+    const actual = Buffer.from(String(record.code));
+    const wanted = Buffer.from(String(code).trim());
+    return actual.length === wanted.length && crypto.timingSafeEqual(actual, wanted);
+  }
+
+  private async findMatchingOtp(identifier: string, type: string, code: string) {
+    const candidates = await this.prisma.otpCode.findMany({
+      where: {
+        identifier: this.normalizeIdentifier(identifier),
+        type,
+        used: false,
+        attempts: { lt: 5 },
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
+    const match = candidates.find((candidate) => this.otpMatches(candidate, identifier, type, code)) || null;
+    if (!match) {
+      await this.prisma.otpCode.updateMany({
+        where: { identifier: this.normalizeIdentifier(identifier), type, used: false, expiresAt: { gt: new Date() } },
+        data: { attempts: { increment: 1 } },
+      });
+    }
+    return match;
+  }
+
   private buildLoginChallengeToken(userId: string) {
     return this.jwtService.sign(
       { sub: userId, purpose: '2fa-login' },
@@ -49,7 +108,7 @@ export class AuthService {
       throw new BadRequestException('User with email or phone already exists');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(dto.password, 12);
     const referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
 
     // SureX tag is user-chosen at registration. Normalize to lowercase, strip a
@@ -287,7 +346,8 @@ export class AuthService {
       throw new BadRequestException('Too many codes requested. Please wait a few minutes before trying again.');
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = crypto.randomInt(100000, 1000000).toString();
+    const codeHash = this.otpDigest(normalizedIdentifier, type, code);
     const expiresAt = new Date(Date.now() + 10 * 60000);
 
     await this.prisma.otpCode.updateMany({
@@ -302,7 +362,8 @@ export class AuthService {
     await this.prisma.otpCode.create({
       data: {
         identifier: normalizedIdentifier,
-        code,
+        code: null,
+        codeHash,
         type,
         expiresAt
       }
@@ -315,31 +376,24 @@ export class AuthService {
   async requestLoginOtp(email: string) {
     const normalizedEmail = this.normalizeIdentifier(email);
     const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (!user || !user.isActive) {
-      throw new BadRequestException('No active account found with this email');
-    }
-    await this.generateAndSendOtp(user.email, 'LOGIN');
-    return { message: 'One-time code sent to your email' };
+    // Keep passwordless login enumeration-resistant. The same response is
+    // returned whether or not an active account exists.
+    if (user?.isActive) await this.generateAndSendOtp(user.email, 'LOGIN');
+    return { message: 'If the email belongs to an active account, a one-time code has been sent' };
   }
 
   async verifyLoginOtp(dto: { email: string; code: string }, req?: any) {
     const identifier = this.normalizeIdentifier(dto.email);
-    const otpRecord = await this.prisma.otpCode.findFirst({
-      where: {
-        identifier,
-        code: dto.code,
-        type: 'LOGIN',
-        used: false,
-        expiresAt: { gt: new Date() }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
+    const otpRecord = await this.findMatchingOtp(identifier, 'LOGIN', dto.code);
     if (!otpRecord) {
       throw new BadRequestException('Invalid or expired code');
     }
 
-    await this.prisma.otpCode.update({ where: { id: otpRecord.id }, data: { used: true } });
+    const consumed = await this.prisma.otpCode.updateMany({
+      where: { id: otpRecord.id, used: false },
+      data: { used: true },
+    });
+    if (consumed.count !== 1) throw new BadRequestException('Invalid or expired code');
 
     const user = await this.prisma.user.findUnique({ where: { email: identifier } });
     if (!user || !user.isActive) {
@@ -348,6 +402,13 @@ export class AuthService {
 
     await this.recordLoginNotification(user.id, req);
     user.role = await this.ensureAdminIfListed(user);
+    if (user.twoFactorEnabled) {
+      return {
+        message: '2FA required',
+        requires2FA: true,
+        challengeToken: this.buildLoginChallengeToken(user.id),
+      };
+    }
     return this.generateTokens(user);
   }
 
@@ -360,7 +421,14 @@ export class AuthService {
     return this.configService.get<string>('app.frontendUrl') || 'http://localhost:3000';
   }
 
-  googleAuthUrl(): string {
+  createGoogleOAuthState(): string {
+    return this.jwtService.sign(
+      { purpose: 'google-oauth', nonce: crypto.randomBytes(16).toString('hex') },
+      { expiresIn: '10m' },
+    );
+  }
+
+  googleAuthUrl(state: string): string {
     const clientId = this.configService.get<string>('app.google.clientId');
     if (!clientId) throw new BadRequestException('Google OAuth is not configured');
     const redirectUri = `${this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001'}/api/v1/auth/google/callback`;
@@ -370,11 +438,18 @@ export class AuthService {
       response_type: 'code',
       scope: 'openid email profile',
       prompt: 'select_account',
+      state,
     });
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
-  async googleCallback(code: string): Promise<{ accessToken: string; refreshToken: string; user: any }> {
+  async googleCallback(code: string, state: string): Promise<{ accessToken: string; refreshToken: string; user: any }> {
+    try {
+      const statePayload = this.jwtService.verify(state, { secret: this.configService.get('app.jwt.secret') });
+      if (statePayload?.purpose !== 'google-oauth') throw new Error('Invalid OAuth state');
+    } catch {
+      throw new BadRequestException('Google sign-in session expired. Please try again.');
+    }
     const clientId = this.configService.get<string>('app.google.clientId');
     const clientSecret = this.configService.get<string>('app.google.clientSecret');
     if (!clientId || !clientSecret) throw new BadRequestException('Google OAuth is not configured');
@@ -425,8 +500,8 @@ export class AuthService {
       user = await this.prisma.user.create({
         data: {
           email,
-          phone: `google-${Math.floor(Math.random() * 100000000)}`, // placeholder; editable in admin console
-          passwordHash: await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10), // unusable password
+          phone: `google-${crypto.randomInt(10000000, 100000000)}`, // placeholder; editable in admin console
+          passwordHash: await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 12), // unusable password
           firstName,
           lastName,
           surexTag,
@@ -447,7 +522,11 @@ export class AuthService {
     if (!identifier) {
       throw new BadRequestException('Identifier is required');
     }
-    const otpDelivered = await this.generateAndSendOtp(identifier, type || 'REGISTER');
+    const normalizedType = String(type || 'REGISTER').toUpperCase();
+    if (!['REGISTER', 'LOGIN', 'PASSWORD_RESET'].includes(normalizedType)) {
+      throw new BadRequestException('Unsupported OTP type');
+    }
+    const otpDelivered = await this.generateAndSendOtp(identifier, normalizedType);
     return { message: 'OTP resent successfully', otpDelivered };
   }
 
@@ -515,25 +594,33 @@ export class AuthService {
     return { message: 'If the email exists, a reset OTP has been sent' };
   }
 
-  async resetPassword(token: string, newPassword: string) {
+  async resetPassword(token: string, newPassword: string, email?: string) {
     if (!token || !newPassword) {
       throw new BadRequestException('Token and new password are required');
     }
+    this.assertStrongPassword(newPassword);
 
-    // The token here is an OTP code used to authorize the password reset
-    const otpRecord = await this.prisma.otpCode.findFirst({
-      where: {
-        code: token,
-        type: 'PASSWORD_RESET',
-        used: false,
-        expiresAt: { gt: new Date() }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
+    // The token here is an OTP code used to authorize the password reset.
+    // The identifier is stored on the OTP row, so compare against the hashed
+    // code without ever persisting the submitted value.
+    const otpRecord = email
+      ? await this.findMatchingOtp(email, 'PASSWORD_RESET', token)
+      : (await this.prisma.otpCode.findMany({
+          where: { type: 'PASSWORD_RESET', used: false, attempts: { lt: 5 }, expiresAt: { gt: new Date() } },
+          orderBy: { createdAt: 'desc' },
+          take: 25,
+        })).find((candidate) => this.otpMatches(candidate, candidate.identifier, 'PASSWORD_RESET', token)) || null;
     if (!otpRecord) {
       throw new BadRequestException('Invalid or expired reset token');
     }
+
+    // Claim the OTP before changing credentials. Two concurrent reset requests
+    // must not both pass the pre-read and then race to rewrite the password.
+    const consumed = await this.prisma.otpCode.updateMany({
+      where: { id: otpRecord.id, used: false, attempts: { lt: 5 } },
+      data: { used: true },
+    });
+    if (consumed.count !== 1) throw new BadRequestException('Invalid or expired reset token');
 
     const identifier = this.normalizeIdentifier(otpRecord.identifier);
     const user = await this.prisma.user.findFirst({
@@ -544,41 +631,31 @@ export class AuthService {
       throw new BadRequestException('User not found');
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(newPassword, 12);
     await this.prisma.user.update({
       where: { id: user.id },
       data: { passwordHash }
     });
     await this.refreshSessionService.revokeAllForUser(user.id);
 
-    await this.prisma.otpCode.update({
-      where: { id: otpRecord.id },
-      data: { used: true }
-    });
-
     return { message: 'Password reset successfully' };
   }
 
   async verifyOtp(dto: VerifyOtpDto) {
     const identifier = this.normalizeIdentifier(dto.identifier);
-    const otpRecord = await this.prisma.otpCode.findFirst({
-      where: {
-        identifier,
-        code: dto.code,
-        used: false,
-        expiresAt: { gt: new Date() }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
+    // Registration verification must not accept a LOGIN or PASSWORD_RESET
+    // code. The previous query omitted type, allowing a valid recovery OTP to
+    // become a full login token.
+    const otpRecord = await this.findMatchingOtp(identifier, 'REGISTER', dto.code);
     if (!otpRecord) {
       throw new BadRequestException('Invalid or expired OTP');
     }
 
-    await this.prisma.otpCode.update({
-      where: { id: otpRecord.id },
-      data: { used: true }
+    const consumed = await this.prisma.otpCode.updateMany({
+      where: { id: otpRecord.id, used: false },
+      data: { used: true },
     });
+    if (consumed.count !== 1) throw new BadRequestException('Invalid or expired OTP');
 
     // Sign the user in after successful verification
     const user = await this.prisma.user.findFirst({

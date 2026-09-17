@@ -1,8 +1,9 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 import { PaymentPointService } from '../paymentpoint/paymentpoint.service';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 
 @Injectable()
 export class BankAccountsService {
@@ -12,6 +13,7 @@ export class BankAccountsService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private paymentPointService: PaymentPointService,
+    @Optional() private financialSafety?: FinancialSafetyService,
   ) {}
 
   async listBanks(country: string) {
@@ -38,7 +40,10 @@ export class BankAccountsService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new BadRequestException('User not found');
 
-    const businessId = this.configService.get('app.paymentpoint.businessId') || 'default-business-id';
+    const businessId = this.configService.get<string>('app.paymentpoint.businessId');
+    if (!businessId) {
+      throw new BadRequestException('PaymentPoint is not configured. Set PAYMENTPOINT_BUSINESS_ID.');
+    }
 
     return this.provisionVirtualAccount(userId, {
       customerEmail: user.email,
@@ -88,6 +93,10 @@ export class BankAccountsService {
       currency: string;
     },
   ) {
+    await this.financialSafety?.assertEnabled('inbound', userId);
+    if (this.configService.get<boolean>('app.moneyMovement.enabled') !== true) {
+      throw new BadRequestException('Bank funding is disabled while this environment is in testnet or maintenance mode.');
+    }
     try {
       const response = await this.paymentPointService.createVirtualAccount(
         input.customerEmail,

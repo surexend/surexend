@@ -1,10 +1,11 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { OnchainService, OnChainTransfer, EVM_CHAINS } from './onchain.service';
+import { OnchainService, OnChainTransfer } from './onchain.service';
 import { LedgerService } from '../common/ledger.service';
 import { toMinor } from '../common/money';
+import { FinancialSafetyService } from '../common/financial-safety.service';
 
 // Rolling log-scan window (in blocks) used to detect deposits. Scans run every
 // 60s, so any deposit necessarily falls inside a window covering the recent
@@ -40,13 +41,18 @@ export class DepositMonitorService implements OnModuleInit {
     private onchain: OnchainService,
     private notifications: NotificationsService,
     private ledger: LedgerService,
+    @Optional() private financialSafety?: FinancialSafetyService,
   ) {}
+
+  private configuredChains() {
+    return this.onchain.getConfiguredChains();
+  }
 
   async onModuleInit() {
     // Warm the last-seen block per chain so the first scheduled scan only looks
     // at the recent window instead of an enormous range.
     await Promise.all(
-      EVM_CHAINS.map(async (chain) => {
+      this.configuredChains().map(async (chain) => {
         try {
           const latest = await this.onchain.getLatestBlock(chain);
           this.lastSeenBlockByChain.set(chain.key, latest);
@@ -107,7 +113,7 @@ export class DepositMonitorService implements OnModuleInit {
 
       // Deposit-log scanning is throttled per wallet; balances are always fresh.
       const scanLogs = this.shouldScanLogs(walletId);
-      const chains = [...EVM_CHAINS];
+      const chains = this.configuredChains();
       const results = await Promise.all(
         addresses.flatMap((addr) =>
           chains.map(async (chain): Promise<{ addr: string; chainKey: string; balance: number; transfers: OnChainTransfer[] }> => {
@@ -154,7 +160,11 @@ export class DepositMonitorService implements OnModuleInit {
                 data: {
                   userId,
                   type: 'RECEIVE',
-                  status: 'COMPLETED',
+                  // A positive balance without a transfer event is not enough
+                  // evidence to credit the ledger. Keep an explicitly pending
+                  // reconciliation marker instead of fabricating a completed
+                  // deposit history row.
+                  status: 'PENDING',
                   amount: r.balance,
                   fee: 0,
                   currency: 'USDC',
@@ -164,7 +174,9 @@ export class DepositMonitorService implements OnModuleInit {
                     chainKey: r.chainKey,
                     destinationAddress: r.addr,
                     detectedBy: 'onchain-balance-reconciler',
-                    settledAt: new Date().toISOString(),
+                    reconciliationRequired: true,
+                    providerState: 'BALANCE_WITHOUT_TRANSFER_EVIDENCE',
+                    observedAt: new Date().toISOString(),
                   }
                 }
               });
@@ -225,6 +237,7 @@ export class DepositMonitorService implements OnModuleInit {
   }
 
   private async recordDeposit(userId: string, tx: OnChainTransfer): Promise<boolean> {
+    await this.financialSafety?.assertEnabled('inbound');
     const reference = `RECV-ONCHAIN-${tx.chainKey}-${tx.txHash}`;
     let existing = await this.prisma.transaction.findUnique({
       where: { reference },
@@ -238,34 +251,62 @@ export class DepositMonitorService implements OnModuleInit {
         where: { userId, metadata: { path: ['txHash'], equals: tx.txHash } },
       });
     }
-    if (existing) return false;
+    if (existing?.status === 'COMPLETED') return false;
+    const reconciliationRow = existing?.status === 'PENDING'
+      ? existing
+      : await this.prisma.transaction.findFirst({
+          where: {
+            userId,
+            type: 'RECEIVE',
+            status: 'PENDING',
+            reference: { startsWith: `RECV-ONCHAIN-${tx.chainKey}-${tx.to.slice(0, 10)}` },
+          },
+        });
+    const journalReference = reconciliationRow?.reference || reference;
 
-    await this.prisma.transaction.create({
-      data: {
-        userId,
-        type: 'RECEIVE',
-        status: 'COMPLETED',
-        amount: tx.amount,
-        fee: 0,
-        currency: 'USDC',
-        reference,
-        metadata: {
-          network: tx.network,
-          chainKey: tx.chainKey,
-          txHash: tx.txHash,
-          sourceAddress: tx.from,
-          destinationAddress: tx.to,
-          blockNumber: tx.blockNumber,
-          detectedBy: 'onchain-monitor',
-        },
-        createdAt: new Date(tx.timestamp * 1000),
-      },
-    });
     await this.prisma.$transaction(async (prisma) => {
+      // The transaction row, wallet snapshot, and integer ledger journal must
+      // commit together. Creating the history row before this transaction would
+      // make a wallet-update failure suppress the retry and lose a credit.
+      const depositMetadata = {
+        network: tx.network,
+        chainKey: tx.chainKey,
+        txHash: tx.txHash,
+        sourceAddress: tx.from,
+        destinationAddress: tx.to,
+        blockNumber: tx.blockNumber,
+        detectedBy: 'onchain-monitor',
+        reconciliationRequired: false,
+        settledAt: new Date(tx.timestamp * 1000).toISOString(),
+      };
+      if (reconciliationRow) {
+        await prisma.transaction.update({
+          where: { id: reconciliationRow.id },
+          data: {
+            status: 'COMPLETED',
+            amount: tx.amount,
+            metadata: { ...((reconciliationRow.metadata as Record<string, unknown>) || {}), ...depositMetadata },
+          },
+        });
+      } else {
+        await prisma.transaction.create({
+          data: {
+            userId,
+            type: 'RECEIVE',
+            status: 'COMPLETED',
+            amount: tx.amount,
+            fee: 0,
+            currency: 'USDC',
+            reference,
+            metadata: depositMetadata,
+            createdAt: new Date(tx.timestamp * 1000),
+          },
+        });
+      }
       await prisma.wallet.update({ where: { userId }, data: { usdcBalance: { increment: tx.amount } } });
       await this.ledger.record([
-        { transferId: reference, account: this.ledger.externalAccount(tx.chainKey, 'USDC'), currency: 'USDC', amountMinor: -toMinor(tx.amount, 'USDC'), reference, kind: 'DEPOSIT_SOURCE' },
-        { transferId: reference, account: this.ledger.userAccount(userId, 'USDC'), currency: 'USDC', amountMinor: toMinor(tx.amount, 'USDC'), reference, kind: 'DEPOSIT' },
+        { transferId: journalReference, account: this.ledger.externalAccount(tx.chainKey, 'USDC'), currency: 'USDC', amountMinor: -toMinor(tx.amount, 'USDC'), reference: journalReference, kind: 'DEPOSIT_SOURCE' },
+        { transferId: journalReference, account: this.ledger.userAccount(userId, 'USDC'), currency: 'USDC', amountMinor: toMinor(tx.amount, 'USDC'), reference: journalReference, kind: 'DEPOSIT' },
       ], prisma);
     });
     this.logger.log(`Detected deposit: ${tx.amount} USDC on ${tx.network} (${tx.txHash})`);

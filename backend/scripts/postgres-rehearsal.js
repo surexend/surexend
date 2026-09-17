@@ -39,7 +39,7 @@ const qualified = (table) => `${qSchema}.${quoteIdent(table)}`;
 function dbClient() {
   return new Client({
     connectionString: url,
-    ssl: { rejectUnauthorized: false },
+    ...(process.env.POSTGRES_REHEARSAL_SSL === 'false' ? {} : { ssl: { rejectUnauthorized: false } }),
     connectionTimeoutMillis: 20_000,
     query_timeout: 60_000,
   });

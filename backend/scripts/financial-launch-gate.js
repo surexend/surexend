@@ -14,12 +14,12 @@
  *
  * `--scope=testnet-demo` verifies that a public demo is read-only and testnet
  * bound. `limited-real-money` verifies the stronger production gates for
- * testnet-backed money movement and bills. `mainnet` is deliberately blocked:
- * the current code has no reviewed mainnet chain/provider matrix.
+ * testnet-backed money movement and bills. `mainnet` validates the explicit
+ * reviewed matrix and then requires the stronger external release evidence.
  *
  * Set LAUNCH_GATE_EVIDENCE_FILE to write a redacted JSON release artifact.
- * KYC/AML is intentionally not part of this script, per the requested scope;
- * omitting it is not an approval to launch financial services.
+ * KYC/AML, custody, licensing, provider contracts, and independent review are
+ * release evidence requirements; this script never fabricates them.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -57,6 +57,10 @@ function env(name) {
   return String(process.env[name] || '').trim();
 }
 
+function anyEnv(...names) {
+  return names.map((name) => env(name)).find(Boolean) || '';
+}
+
 function isPlaceholderSecret(value) {
   return !value || /super-secret|change[-_ ]?me|example|password/i.test(value);
 }
@@ -76,6 +80,44 @@ function providerEvidence(provider) {
   return fileContainsPass(file, provider);
 }
 
+function enabledProviderNames() {
+  const configured = (env('ENABLED_PROVIDERS') || 'circle,paymentpoint,smartspeed')
+    .split(',').map((provider) => provider.trim().toLowerCase()).filter(Boolean);
+  const providers = new Set(configured);
+  providers.add('circle');
+  if (env('FLUTTERWAVE_ENABLED') === 'true') providers.add('flutterwave');
+  else providers.delete('flutterwave');
+  return [...providers];
+}
+
+function enabledProviderPreflights() {
+  return enabledProviderNames().filter((provider) => ['circle', 'flutterwave', 'smartspeed', 'paymentpoint'].includes(provider));
+}
+
+function mainnetMatrixIsValid() {
+  try {
+    const matrix = JSON.parse(env('MAINNET_CHAIN_MATRIX_JSON'));
+    const enabled = (env('MAINNET_ENABLED_NETWORKS') || 'ARC').split(',').map((value) => value.trim().toUpperCase()).filter(Boolean);
+    const allowed = new Set(['ARC', 'ETHEREUM', 'POLYGON', 'AVALANCHE', 'ARBITRUM', 'BASE', 'OPTIMISM', 'SOLANA', 'MONAD']);
+    if (!matrix || typeof matrix !== 'object' || !enabled.length || Object.keys(matrix).some((network) => !allowed.has(network))) return false;
+    return enabled.every((network) => {
+      const entry = matrix[network];
+      return entry && typeof entry.circleBlockchain === 'string' && entry.circleBlockchain.trim()
+        && typeof entry.cctpChain === 'string' && entry.cctpChain.trim()
+        && !/(testnet|sepolia|amoy|fuji|devnet|sandbox)/i.test(`${entry.circleBlockchain} ${entry.cctpChain}`)
+        && Array.isArray(entry.rpcUrls) && entry.rpcUrls.length > 0
+        && entry.rpcUrls.every((url) => /^https:\/\//i.test(url) && !/localhost|127\.0\.0\.1/i.test(url) && !/(testnet|sepolia|amoy|fuji|devnet|sandbox)/i.test(url))
+        && Number.isSafeInteger(Number(entry.chainId)) && Number(entry.chainId) > 0
+        && (/^0x[a-fA-F0-9]{40}$/.test(String(entry.usdcContract)) || /^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(String(entry.usdcContract)))
+        && Number.isInteger(Number(entry.usdcDecimals))
+        && /^https:\/\//i.test(String(entry.explorerUrl || ''))
+        && !/(testnet|sepolia|amoy|fuji|devnet|sandbox)/i.test(String(entry.explorerUrl || ''));
+    });
+  } catch {
+    return false;
+  }
+}
+
 function assertConfiguration() {
   const production = env('NODE_ENV') === 'production';
   const testing = env('TESTING_ENABLED') === 'true';
@@ -85,11 +127,17 @@ function assertConfiguration() {
   const mainnet = env('MAINNET_ENABLED') === 'true';
   const movement = env('MONEY_MOVEMENT_ENABLED') === 'true';
   const ledgerReads = env('LEDGER_READS_ENABLED') === 'true';
+  const enabledProviders = enabledProviderNames();
+  const smartspeedEnabled = enabledProviders.includes('smartspeed');
+  const paymentpointEnabled = enabledProviders.includes('paymentpoint');
+  const flutterwaveEnabled = env('FLUTTERWAVE_ENABLED') === 'true' && enabledProviders.includes('flutterwave');
+  const flutterwaveConfigured = Boolean(env('FLUTTERWAVE_SECRET_KEY') && env('FLUTTERWAVE_WEBHOOK_HASH'));
 
-  check('network-is-testnet', chainEnv === 'testnet', `CHAIN_ENV=${chainEnv}; this release only supports testnet.`);
-  check('mainnet-is-disabled', !mainnet, `MAINNET_ENABLED=${mainnet}; mainnet is not implemented or approved.`);
+  check('network-scope-is-explicit', scope === 'mainnet' ? chainEnv === 'mainnet' : chainEnv === 'testnet', `scope=${scope}; CHAIN_ENV=${chainEnv}.`);
+  check('mainnet-scope-flag', scope === 'mainnet' ? mainnet : !mainnet, `scope=${scope}; MAINNET_ENABLED=${mainnet}.`);
   check('webhook-signatures-required', webhooksSigned, `WEBHOOK_REQUIRE_SIGNATURE=${webhooksSigned}.`);
   check('bill-funding-guard', fundingGuard, `BILLS_REQUIRE_FUNDING=${fundingGuard}.`);
+  check('enabled-providers-known', enabledProviderNames().every((provider) => ['circle', 'flutterwave', 'smartspeed', 'paymentpoint'].includes(provider)), `ENABLED_PROVIDERS=${enabledProviderNames().join(',')}.`);
   check('jwt-secrets-are-non-placeholder', !isPlaceholderSecret(env('JWT_SECRET')) && !isPlaceholderSecret(env('JWT_REFRESH_SECRET')), 'JWT secrets are present and are not example values.');
 
   if (scope === 'testnet-demo') {
@@ -100,7 +148,56 @@ function assertConfiguration() {
   }
 
   if (scope === 'mainnet') {
-    check('mainnet-release-implementation', false, 'Mainnet financial movement is intentionally fail-closed in backend/src/main.ts; a reviewed chain/provider matrix is still required.');
+    check('production-runtime', production, `NODE_ENV=${env('NODE_ENV') || '(missing)'}; mainnet money movement must run as production.`);
+    check('money-movement-explicitly-enabled', movement, 'MONEY_MOVEMENT_ENABLED=true is required for an approved mainnet release.');
+    check('ledger-reads-cut-over', ledgerReads, 'LEDGER_READS_ENABLED=true is required before mainnet money movement.');
+    check('testing-mode-disabled', !testing, 'TESTING_ENABLED must be false/unset in mainnet.');
+    check('kyc-enforcement-enabled', env('REQUIRE_KYC_FOR_MONEY_MOVEMENT') !== 'false', 'Mainnet KYC enforcement cannot be disabled.');
+    check('mainnet-config-approved', env('MAINNET_CONFIG_APPROVED') === 'true', 'MAINNET_CONFIG_APPROVED=true identifies the separately reviewed matrix packet.');
+    check('mainnet-circle-credential', Boolean(env('CIRCLE_API_KEY') && !env('CIRCLE_API_KEY').startsWith('TEST_') && env('CIRCLE_ENTITY_SECRET')), 'A non-test Circle credential pair is configured.');
+    check('mainnet-custody-wallet-set', Boolean(env('CIRCLE_WALLET_SET_ID')), 'A pre-created, custody-reviewed CIRCLE_WALLET_SET_ID is configured; the app cannot create one on mainnet.');
+    check('mainnet-reviewed-chain-matrix', mainnetMatrixIsValid(), 'MAINNET_CHAIN_MATRIX_JSON contains complete, HTTPS, non-local, syntactically valid entries for every enabled network.');
+    check('mainnet-release-approval', env('FINANCIAL_RELEASE_APPROVED') === 'true' && Boolean(env('FINANCIAL_RELEASE_APPROVED_BY') && env('FINANCIAL_RELEASE_TICKET') && env('FINANCIAL_RELEASE_EVIDENCE_ID')), 'FINANCIAL_RELEASE_APPROVED=true plus the approver, ticket, and immutable evidence packet are present.');
+    check('kyc-aml-evidence', Boolean(env('KYC_AML_EVIDENCE_ID')), 'KYC_AML_EVIDENCE_ID identifies the approved KYC/AML program and operating evidence.');
+    check('sanctions-evidence', Boolean(env('SANCTIONS_PROVIDER_EVIDENCE_ID')), 'SANCTIONS_PROVIDER_EVIDENCE_ID identifies the production screening provider and test evidence.');
+    check('custody-dual-control-evidence', Boolean(env('CUSTODY_DUAL_CONTROL_EVIDENCE_ID')), 'CUSTODY_DUAL_CONTROL_EVIDENCE_ID identifies segregated custody, key management, allowlists, and recovery evidence.');
+    check('independent-security-review-evidence', Boolean(env('INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID')), 'INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID identifies the external security review and remediation sign-off.');
+    check('disaster-recovery-evidence', Boolean(env('DISASTER_RECOVERY_EVIDENCE_ID')), 'DISASTER_RECOVERY_EVIDENCE_ID identifies backup restore, failover, and rollback evidence.');
+    const canaryUsers = env('CANARY_USER_IDS').split(',').map((value) => value.trim()).filter(Boolean);
+    check('staged-canary-control', env('CANARY_MODE') === 'true' ? canaryUsers.length > 0 : Boolean(env('STAGED_CANARY_EVIDENCE_ID')), env('CANARY_MODE') === 'true'
+      ? 'CANARY_MODE=true has a non-empty approved user allowlist.'
+      : 'Unrestricted mode has a staged-canary evidence packet.');
+    check('ledger-alerts-enabled', env('LEDGER_DRIFT_ALERTS_ENABLED') !== 'false', 'Ledger drift alert watcher is enabled.');
+    check('ledger-alert-destination', Boolean(env('LEDGER_DRIFT_WEBHOOK_URL') || (env('LEDGER_DRIFT_ALERT_EMAIL') && env('RESEND_API_KEY'))), 'A durable ledger-drift alert has a configured webhook or email destination.');
+    check('circle-cctp-contract-evidence', Boolean(env('CIRCLE_CCTP_CONTRACT_EVIDENCE_ID')), 'CIRCLE_CCTP_CONTRACT_EVIDENCE_ID points to the reviewed backend CCTP/BridgeKit contract and replay/status evidence.');
+    check('postgres-rehearsal-evidence', Boolean(env('POSTGRES_REHEARSAL_EVIDENCE_ID')), 'POSTGRES_REHEARSAL_EVIDENCE_ID points to the real PostgreSQL migration/locking/restart rehearsal.');
+    check('testnet-e2e-evidence', Boolean(env('TESTNET_E2E_EVIDENCE_ID')), 'TESTNET_E2E_EVIDENCE_ID points to the completed sandbox receipt table.');
+    check('alert-restart-evidence', Boolean(env('ALERT_RESTART_EVIDENCE_ID')), 'ALERT_RESTART_EVIDENCE_ID points to the durable alert failure/restart drill.');
+    check('smartspeed-credential', !smartspeedEnabled || Boolean(env('SMARTSPEED_API_TOKEN')), smartspeedEnabled
+      ? 'Smartspeed credential is present for the configured bill provider.'
+      : 'Smartspeed is not enabled for this deployment.');
+    const paymentpointConfigured = Boolean(anyEnv('PAYMENTPOINT_API_KEY', 'PAYMENT_POINT_API_KEY')
+      && anyEnv('PAYMENTPOINT_SECRET_KEY', 'PAYMENT_POINT_SECRET_KEY')
+      && anyEnv('PAYMENTPOINT_BUSINESS_ID', 'PAYMENT_POINT_BUSINESS_ID'));
+    const localFundingConfigured = (paymentpointEnabled && paymentpointConfigured) || (flutterwaveEnabled && flutterwaveConfigured);
+    check('local-funding-provider-configured', localFundingConfigured, 'An enabled local-funding provider has complete credentials.');
+    check('flutterwave-disabled-or-configured', !flutterwaveEnabled || flutterwaveConfigured, flutterwaveEnabled
+      ? 'Flutterwave is enabled and its secret and webhook hash are present.'
+      : 'Flutterwave is disabled; PaymentPoint is the selected local-funding provider.');
+    const paymentpointWebhookEnabled = env('PAYMENTPOINT_WEBHOOK_ENABLED') === 'true';
+    const paymentpointWebhookContractConfigured = !paymentpointWebhookEnabled
+      || Boolean(env('PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID')
+        && env('PAYMENTPOINT_WEBHOOK_SECRET')
+        && env('PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE')
+        && env('PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER'));
+    check('paymentpoint-webhook-contract-evidence', paymentpointWebhookContractConfigured, 'PaymentPoint callback crediting requires provider contract/captured-webhook evidence plus explicit signature configuration.');
+    const providerFile = env('PROVIDER_PREFLIGHT_EVIDENCE_FILE');
+    for (const provider of enabledProviderPreflights()) {
+      check(`${provider}-preflight-evidence`, providerEvidence(provider), `${provider} read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
+    }
+    check('smartspeed-contract-evidence', !smartspeedEnabled || Boolean(env('SMARTSPEED_CONTRACT_EVIDENCE_ID')), smartspeedEnabled
+      ? 'SMARTSPEED_CONTRACT_EVIDENCE_ID points to the provider contract and sandbox receipt packet.'
+      : 'Smartspeed contract evidence is not required because the provider is disabled.');
     return;
   }
 
@@ -108,11 +205,31 @@ function assertConfiguration() {
   check('money-movement-explicitly-enabled', movement, 'MONEY_MOVEMENT_ENABLED=true is an operator decision, not a default.');
   check('ledger-reads-cut-over', ledgerReads, 'LEDGER_READS_ENABLED=true is required before production money movement.');
   check('testing-mode-disabled', !testing, 'TESTING_ENABLED must be false/unset in production.');
-  check('operator-approved-release', Boolean(env('FINANCIAL_RELEASE_APPROVED_BY') && env('FINANCIAL_RELEASE_TICKET') && env('FINANCIAL_RELEASE_EVIDENCE_ID')), 'FINANCIAL_RELEASE_APPROVED_BY, FINANCIAL_RELEASE_TICKET, and FINANCIAL_RELEASE_EVIDENCE_ID identify a reviewed release packet.');
+  check('operator-approved-release', env('FINANCIAL_RELEASE_APPROVED') === 'true' && Boolean(env('FINANCIAL_RELEASE_APPROVED_BY') && env('FINANCIAL_RELEASE_TICKET') && env('FINANCIAL_RELEASE_EVIDENCE_ID')), 'FINANCIAL_RELEASE_APPROVED=true plus the approver, ticket, and immutable evidence packet identify a reviewed release packet.');
+  check('kyc-aml-evidence', Boolean(env('KYC_AML_EVIDENCE_ID')), 'KYC_AML_EVIDENCE_ID identifies the operating KYC/AML program; code status alone is not compliance approval.');
+  check('sanctions-evidence', Boolean(env('SANCTIONS_PROVIDER_EVIDENCE_ID')), 'SANCTIONS_PROVIDER_EVIDENCE_ID identifies sanctions screening and test evidence.');
+  check('custody-dual-control-evidence', Boolean(env('CUSTODY_DUAL_CONTROL_EVIDENCE_ID')), 'CUSTODY_DUAL_CONTROL_EVIDENCE_ID identifies segregated custody and recovery evidence.');
+  check('independent-security-review-evidence', Boolean(env('INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID')), 'INDEPENDENT_SECURITY_REVIEW_EVIDENCE_ID identifies external security review and remediation sign-off.');
+  check('disaster-recovery-evidence', Boolean(env('DISASTER_RECOVERY_EVIDENCE_ID')), 'DISASTER_RECOVERY_EVIDENCE_ID identifies backup restore, failover, and rollback evidence.');
   check('circle-testnet-credentials', env('CIRCLE_API_KEY').startsWith('TEST_') && Boolean(env('CIRCLE_ENTITY_SECRET')), 'Circle testnet API key and entity secret are present; no live key may be mixed into this release.');
-  check('smartspeed-credential', Boolean(env('SMARTSPEED_API_TOKEN')), 'Smartspeed credential is present for the configured bill provider.');
-  check('flutterwave-credential-and-signing', Boolean(env('FLUTTERWAVE_SECRET_KEY') && env('FLUTTERWAVE_WEBHOOK_HASH')), 'Flutterwave secret and webhook hash are present for signed NGN deposits.');
-  check('paymentpoint-webhook-closed-until-contract', env('PAYMENTPOINT_WEBHOOK_ENABLED') !== 'true', 'PaymentPoint callback crediting remains disabled until its signature contract is evidenced.');
+  check('smartspeed-credential', !smartspeedEnabled || Boolean(env('SMARTSPEED_API_TOKEN')), smartspeedEnabled
+    ? 'Smartspeed credential is present for the configured bill provider.'
+    : 'Smartspeed is not enabled for this deployment.');
+  const paymentpointConfigured = Boolean(anyEnv('PAYMENTPOINT_API_KEY', 'PAYMENT_POINT_API_KEY')
+    && anyEnv('PAYMENTPOINT_SECRET_KEY', 'PAYMENT_POINT_SECRET_KEY')
+    && anyEnv('PAYMENTPOINT_BUSINESS_ID', 'PAYMENT_POINT_BUSINESS_ID'));
+  const localFundingConfigured = (paymentpointEnabled && paymentpointConfigured) || (flutterwaveEnabled && flutterwaveConfigured);
+  check('local-funding-provider-configured', localFundingConfigured, 'An enabled local-funding provider has complete credentials.');
+  check('flutterwave-disabled-or-configured', !flutterwaveEnabled || flutterwaveConfigured, flutterwaveEnabled
+    ? 'Flutterwave is enabled and its secret and webhook hash are present.'
+    : 'Flutterwave is disabled; PaymentPoint is the selected local-funding provider.');
+  const paymentpointWebhookEnabled = env('PAYMENTPOINT_WEBHOOK_ENABLED') === 'true';
+  const paymentpointWebhookContractConfigured = !paymentpointWebhookEnabled
+    || Boolean(env('PAYMENTPOINT_WEBHOOK_CONTRACT_EVIDENCE_ID')
+      && env('PAYMENTPOINT_WEBHOOK_SECRET')
+      && env('PAYMENTPOINT_WEBHOOK_SIGNATURE_MODE')
+      && env('PAYMENTPOINT_WEBHOOK_SIGNATURE_HEADER'));
+  check('paymentpoint-webhook-contract-evidence', paymentpointWebhookContractConfigured, 'PaymentPoint callback crediting requires provider contract/captured-webhook evidence plus explicit signature configuration.');
   check('ledger-alerts-enabled', env('LEDGER_DRIFT_ALERTS_ENABLED') !== 'false', 'Ledger drift alert watcher is enabled.');
   check('ledger-alert-destination', Boolean(env('LEDGER_DRIFT_WEBHOOK_URL') || (env('LEDGER_DRIFT_ALERT_EMAIL') && env('RESEND_API_KEY'))), 'A durable ledger-drift alert has a configured webhook or email destination.');
   check('circle-cctp-contract-evidence', Boolean(env('CIRCLE_CCTP_CONTRACT_EVIDENCE_ID')), 'CIRCLE_CCTP_CONTRACT_EVIDENCE_ID points to the reviewed backend CCTP/BridgeKit contract and replay/status evidence.');
@@ -121,12 +238,15 @@ function assertConfiguration() {
   check('alert-restart-evidence', Boolean(env('ALERT_RESTART_EVIDENCE_ID')), 'ALERT_RESTART_EVIDENCE_ID points to the durable alert failure/restart drill.');
 
   const providerFile = env('PROVIDER_PREFLIGHT_EVIDENCE_FILE');
-  check('circle-preflight-evidence', providerEvidence('circle'), `Circle read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
-  check('flutterwave-preflight-evidence', providerEvidence('flutterwave'), `Flutterwave read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
-  // Smartspeed deliberately returns PENDING_UNVERIFIED until the provider
-  // supplies an authoritative status/idempotency contract. Keep this explicit
-  // rather than allowing a guessed endpoint to become a release gate bypass.
-  check('smartspeed-contract-evidence', Boolean(env('SMARTSPEED_CONTRACT_EVIDENCE_ID')), 'SMARTSPEED_CONTRACT_EVIDENCE_ID points to the provider contract and sandbox receipt packet.');
+  for (const provider of enabledProviderPreflights()) {
+    check(`${provider}-preflight-evidence`, providerEvidence(provider), `${provider} read-only preflight PASS is recorded in ${providerFile || '(PROVIDER_PREFLIGHT_EVIDENCE_FILE missing)'}.`);
+  }
+  // The read-only catalog probe proves reachability only. Keep the separate
+  // contract evidence gate until status, idempotency, and reconciliation
+  // semantics are captured from the provider.
+  check('smartspeed-contract-evidence', !smartspeedEnabled || Boolean(env('SMARTSPEED_CONTRACT_EVIDENCE_ID')), smartspeedEnabled
+    ? 'SMARTSPEED_CONTRACT_EVIDENCE_ID points to the provider contract and sandbox receipt packet.'
+    : 'Smartspeed contract evidence is not required because the provider is disabled.');
 }
 
 async function databaseChecks() {
@@ -151,10 +271,24 @@ async function databaseChecks() {
       FROM information_schema.tables
       WHERE table_schema='public'
         AND table_name = ANY($1::text[])
-    `, [['User', 'Wallet', 'Transaction', 'BillPayment', 'LedgerEntry', 'AuditLog', 'LedgerAlertDelivery', 'IdempotencyRecord']]);
+    `, [['User', 'Wallet', 'Transaction', 'BillPayment', 'LedgerEntry', 'AuditLog', 'LedgerAlertDelivery', 'IdempotencyRecord', 'FinancialControl', 'FinancialControlChange', 'FinancialLimitBucket', 'FinancialLimitReservation']]);
     const found = new Set(tableRows.rows.map((row) => row.table_name));
-    const required = ['User', 'Wallet', 'Transaction', 'BillPayment', 'LedgerEntry', 'AuditLog', 'LedgerAlertDelivery', 'IdempotencyRecord'];
+    const required = ['User', 'Wallet', 'Transaction', 'BillPayment', 'LedgerEntry', 'AuditLog', 'LedgerAlertDelivery', 'IdempotencyRecord', 'FinancialControl', 'FinancialControlChange', 'FinancialLimitBucket', 'FinancialLimitReservation'];
     check('financial-schema-present', required.every((table) => found.has(table)), `Required tables present: ${required.filter((table) => found.has(table)).join(', ')}.`);
+    if (found.has('FinancialControl')) {
+      const controls = await client.query(`SELECT "moneyMovementEnabled", "cryptoEnabled", "billPaymentsEnabled", "inboundCreditsEnabled" FROM "FinancialControl" WHERE "id"='global'`);
+      const control = controls.rows[0];
+      const enabled = Boolean(control && control.moneyMovementEnabled);
+      check('database-financial-control-present', Boolean(control), 'The global database circuit-breaker row exists.');
+      check('database-financial-control-scope', scope === 'testnet-demo' ? !enabled : enabled, scope === 'testnet-demo'
+        ? 'Read-only demo database control remains paused.'
+        : 'Real-money scope has explicitly enabled the database control plane after two-person approval.');
+      if (scope !== 'testnet-demo' && control) {
+        check('database-crypto-control', Boolean(control.cryptoEnabled), 'Crypto control is enabled for the requested real-money scope.');
+        check('database-bill-control', Boolean(control.billPaymentsEnabled), 'Bill-payment control is enabled for the requested real-money scope.');
+        check('database-inbound-control', Boolean(control.inboundCreditsEnabled), 'Inbound-credit control is enabled for the requested real-money scope.');
+      }
+    }
 
     const migrationDirs = fs.readdirSync(path.join(__dirname, '..', 'prisma', 'migrations'), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -172,6 +306,14 @@ async function databaseChecks() {
         AND ("createdAt" < NOW() - INTERVAL '5 minutes' OR COALESCE(metadata->>'reconciliationRequired', 'false') = 'true')
     `);
     check('no-stale-provider-pending-rows', Number(pendingRows.rows[0].count) === 0, `${pendingRows.rows[0].count} send/bill row(s) require provider reconciliation.`);
+
+    const inboundRows = await client.query(`
+      SELECT COUNT(*)::int AS count
+      FROM "Transaction"
+      WHERE status = 'PENDING' AND type = 'RECEIVE'
+        AND COALESCE(metadata->>'reconciliationRequired', 'false') = 'true'
+    `);
+    check('no-unresolved-inbound-credits', Number(inboundRows.rows[0].count) === 0, `${inboundRows.rows[0].count} inbound credit(s) require chain/provider evidence.`);
 
     const billRows = await client.query(`
       SELECT COUNT(*)::int AS count
