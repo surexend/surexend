@@ -522,11 +522,32 @@ export class AuthService {
     if (!identifier) {
       throw new BadRequestException('Identifier is required');
     }
-    const normalizedType = String(type || 'REGISTER').toUpperCase();
-    if (!['REGISTER', 'LOGIN', 'PASSWORD_RESET'].includes(normalizedType)) {
-      throw new BadRequestException('Unsupported OTP type');
+    const normalizedIdentifier = this.normalizeIdentifier(identifier);
+
+    // Map frontend delivery channel types ('email', 'phone') to internal OTP
+    // purpose types. If the caller sends a recognized internal type already,
+    // keep it as-is. Otherwise fall back to the most recently created
+    // pending OTP for this identifier so we resend for the same purpose,
+    // defaulting to 'REGISTER' when no record exists yet.
+    const INTERNAL_TYPES = ['REGISTER', 'LOGIN', 'PASSWORD_RESET'];
+    let resolvedType = INTERNAL_TYPES.includes((type || '').toUpperCase())
+      ? (type || '').toUpperCase()
+      : null;
+
+    if (!resolvedType) {
+      const pending = await this.prisma.otpCode.findFirst({
+        where: {
+          identifier: normalizedIdentifier,
+          used: false,
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      resolvedType = pending?.type || 'REGISTER';
     }
-    const otpDelivered = await this.generateAndSendOtp(identifier, normalizedType);
+
+    const otpDelivered = await this.generateAndSendOtp(normalizedIdentifier, resolvedType);
+
     return { message: 'OTP resent successfully', otpDelivered };
   }
 

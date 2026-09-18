@@ -55,14 +55,15 @@ export class NotificationsService {
   async sendOTPEmail(email: string, code: string): Promise<boolean> {
     const fromEmail = this.configService.get('app.resend.fromEmail') || 'noreply@surexend.com';
     if (!this.resend) {
-      // Never silently drop the code. In dev we print it so flows stay testable;
-      // in production we log loudly so a misconfigured server is impossible to miss.
       if (process.env.NODE_ENV !== 'production') {
         this.logger.warn(`[DEV] Resend not configured — OTP for ${email}: ${code}`);
+        return false;
       } else {
-        this.logger.error(`Cannot send OTP to ${email}: RESEND_API_KEY is not configured on this server.`);
+        // In production, a missing API key must be loud so operators notice immediately.
+        const msg = 'Email delivery is not configured: RESEND_API_KEY is missing. Please add it to your environment variables.';
+        this.logger.error(msg);
+        throw new Error(msg);
       }
-      return false;
     }
     try {
       await this.resend.emails.send({
@@ -77,7 +78,7 @@ export class NotificationsService {
       if (process.env.NODE_ENV !== 'production') {
         this.logger.warn(`[DEV] Resend send failed — OTP for ${email}: ${code}`);
       }
-      return false;
+      throw error;
     }
   }
 
