@@ -11,6 +11,10 @@ order; each is safe to repeat. Never put secrets in this file or in chat.
       `DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres, anon, authenticated, service_role;`
 - [ ] C. Railway Production → add `DIRECT_URL` = Supabase **Direct connection** string (db.<ref>.supabase.co:5432); keep `DATABASE_URL` = pooler
 - [ ] D. Redeploy Production; log must show `prisma migrate deploy` applying 10 migrations, then the app starting or a clear `Refusing to start:` line
+      NOTE: right after the DB wipe in B the production admin gate refuses to boot
+      ("no active, unbanned administrator is provisioned") — expected. Provision the
+      first admin via J1 before continuing; registrations are impossible until the
+      app boots.
 - [ ] E. Circle Console (mainnet): create `LIVE_API_KEY`; confirm entity secret registered (save recovery file); create mainnet webhook → `https://surexend-production.up.railway.app/api/v1/webhooks/circle`, copy secret
 - [ ] F. From a laptop, in `backend/`: `CIRCLE_API_KEY='LIVE_API_KEY:…' CIRCLE_ENTITY_SECRET='…' npm run mainnet:wallet-sets` → two UUIDs
 - [ ] G. Railway Production variables (see table below)
@@ -19,9 +23,17 @@ order; each is safe to repeat. Never put secrets in this file or in chat.
       `CHAIN_ENV=mainnet PROVIDER_PREFLIGHT_EVIDENCE_FILE=./release-evidence/provider-preflight-mainnet.json npm run provider:preflight -- --all --network`
       `npm run launch:gate -- --scope=mainnet-preflight`
       Both must PASS → Stage 1 complete (mainnet live, money paused)
-- [ ] J. Provision the two Stage-2 admins: register both accounts in Production, then in Production shell
-      `npm run admin:provision -- operator1@example.com`
-      `npm run admin:provision -- operator2@example.com`
+- [ ] J. Provision the two Stage-2 admins.
+      J1 — FIRST admin (the DB was wiped in B, so nobody can register yet):
+           in Railway Production set ADMIN_EMAIL=<operator1 email>,
+           ADMIN_PASSWORD=<strong password>, ADMIN_BOOTSTRAP_INITIAL=true and
+           redeploy. The log must show
+           `[admin-bootstrap] Created the first administrator account (...)`.
+           Log in at /admin to confirm, then REMOVE all three variables
+           (deleting them redeploys automatically).
+      J2 — SECOND admin (the app is now serving): register operator2 in
+           Production like any user, then in the Production shell
+           `npm run admin:provision -- operator2@example.com`
       `npm run admin:provision -- --list` must show both (Stage 2 needs two distinct admins for the two-person flow)
 - [ ] K. Stage 2 canary — see `docs/mainnet-config.md` §6
 
