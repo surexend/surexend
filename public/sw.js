@@ -1,4 +1,4 @@
-const CACHE_NAME = 'surexend-v55'
+const CACHE_NAME = 'surexend-v56'
 const OFFLINE_URL = '/offline.html'
 const NON_CACHEABLE_PREFIXES = ['/app', '/admin', '/auth', '/api']
 
@@ -68,6 +68,11 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
+  // Only handle HTTP/HTTPS requests from our own origin.
+  // Prevents unsupported scheme errors (chrome-extension://, etc.)
+  if (!url.protocol.startsWith('http')) return
+  if (url.origin !== self.location.origin) return
+
   // Skip non-GET requests and API calls
   if (request.method !== 'GET') return
   if (url.pathname.startsWith('/api/')) return
@@ -89,9 +94,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then(response => {
-          if (response.ok) {
+          if (response.ok && (response.type === 'basic' || response.type === 'cors')) {
             const responseClone = response.clone()
-            caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone))
+            caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone)).catch(() => {})
           }
           return response
         })
@@ -104,11 +109,15 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Static assets — Stale-While-Revalidate
+  // Clone synchronously inside the promise before the response body is streamed to the client!
   if (url.pathname.match(/\.(js|css)$/)) {
     event.respondWith(
       fetch(request)
         .then(response => {
-          caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()))
+          if (response.ok && (response.type === 'basic' || response.type === 'cors')) {
+            const responseClone = response.clone()
+            caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone)).catch(() => {})
+          }
           return response
         })
         .catch(() => caches.match(request))
@@ -123,9 +132,12 @@ self.addEventListener('fetch', (event) => {
       caches.open(CACHE_NAME).then(cache => {
         return cache.match(request).then(cached => {
           const networkFetch = fetch(request).then(response => {
-            cache.put(request, response.clone())
+            if (response.ok && (response.type === 'basic' || response.type === 'cors')) {
+              const responseClone = response.clone()
+              cache.put(request, responseClone).catch(() => {})
+            }
             return response
-          })
+          }).catch(() => null)
           return cached || networkFetch
         })
       })

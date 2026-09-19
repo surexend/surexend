@@ -13,7 +13,7 @@ import {
   ChevronRight, Camera, Edit3, Copy, CheckCircle,
   Fingerprint, Eye, EyeOff, Smartphone, Lock, ScanFace,
   Globe, Moon, Star, Award, Crown, ExternalLink,
-  AlertTriangle, Tag, Check, X, LoaderCircle
+  AlertTriangle, Tag, Check, X, LoaderCircle, ShieldCheck
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import VerifiedCheckmark from '@/components/VerifiedCheckmark'
@@ -380,6 +380,20 @@ export default function ProfilePage() {
             accentHex={accentHex} accentRgb={accentRgb}
             onClick={() => setShowCurrencyPicker(true)} />
         </MenuSection>
+
+        {(profile?.role === 'ADMIN' || (profile?.email && profile.email.toLowerCase() === 'surexendofficial@gmail.com')) && (
+          <MenuSection title="Administration">
+            <MenuItem
+              icon={ShieldCheck}
+              label="Admin Console"
+              value="Manage users, transactions & platform"
+              badge="ADMIN"
+              accentHex="#F59E0B"
+              accentRgb="245, 158, 11"
+              onClick={() => router.push('/admin')}
+            />
+          </MenuSection>
+        )}
 
         <MenuSection title="About SureXend">
           <MenuItem icon={HelpCircle} label="Help & Support"

@@ -6,6 +6,7 @@ import {
   getStoredRefreshToken,
   storeAuthTokens,
   clearStoredAuthSession,
+  isJwtExpired,
 } from './auth-session'
 
 // African local currencies (mirrors backend SUPPORTED_LOCAL_CURRENCIES).
@@ -115,7 +116,14 @@ apiClient.interceptors.request.use((config) => {
   const token = typeof window !== 'undefined'
     ? getStoredAccessToken()
     : null
-  if (token) config.headers.Authorization = `Bearer ${token}`
+  // Only attach Bearer header if token exists AND is NOT expired!
+  // An expired token in localStorage causes the backend's JwtStrategy
+  // to reject with 401 instead of falling back to the valid HttpOnly cookie.
+  if (token && !isJwtExpired(token)) {
+    config.headers.Authorization = `Bearer ${token}`
+  } else if (token && isJwtExpired(token)) {
+    clearStoredAuthSession()
+  }
   return config
 })
 
@@ -195,16 +203,16 @@ export const authAPI = {
 
   login: async (payload: { email: string; password: string }) => {
     const response = await apiClient.post('/auth/login', payload)
-    if (typeof window !== 'undefined' && response.data?.accessToken) {
-      storeTokens(response.data.accessToken, response.data.refreshToken)
+    if (typeof window !== 'undefined') {
+      storeTokens(response.data?.accessToken || '', response.data?.refreshToken)
     }
     return response
   },
 
   verifyOTP: async (payload: { identifier: string; code: string }) => {
     const response = await apiClient.post('/auth/verify-otp', payload)
-    if (typeof window !== 'undefined' && response.data?.accessToken) {
-      storeTokens(response.data.accessToken, response.data.refreshToken)
+    if (typeof window !== 'undefined') {
+      storeTokens(response.data?.accessToken || '', response.data?.refreshToken)
     }
     return response
   },
@@ -248,16 +256,16 @@ export const authAPI = {
 
   verifyLoginOtp: async (payload: { email: string; code: string }) => {
     const response = await apiClient.post('/auth/otp/verify-login', payload)
-    if (typeof window !== 'undefined' && response.data?.accessToken) {
-      storeTokens(response.data.accessToken, response.data.refreshToken)
+    if (typeof window !== 'undefined') {
+      storeTokens(response.data?.accessToken || '', response.data?.refreshToken)
     }
     return response
   },
 
   verify2FALogin: async (payload: { challengeToken: string; code: string }) => {
     const response = await apiClient.post('/auth/2fa/verify-login', payload)
-    if (typeof window !== 'undefined' && response.data?.accessToken) {
-      storeTokens(response.data.accessToken, response.data.refreshToken)
+    if (typeof window !== 'undefined') {
+      storeTokens(response.data?.accessToken || '', response.data?.refreshToken)
     }
     return response
   },

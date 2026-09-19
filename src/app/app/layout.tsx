@@ -80,6 +80,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const fullName = `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'SureXend User'
   const surexTag = profile?.surexTag || profile?.firstName?.toLowerCase() || 'surex'
+  const isAdmin = profile?.role === 'ADMIN' || (profile?.email && profile.email.toLowerCase() === 'surexendofficial@gmail.com')
   const pageLabelMap: Record<string, { title: string; subtitle?: string }> = {
     '/app/dashboard': { title: 'Overview', subtitle: 'Wallets, activity, and quick actions' },
     '/app/send': { title: 'Send money', subtitle: 'Transfer to a wallet or SureX Tag' },
@@ -244,7 +245,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="p-3 mt-auto">
-            {profile?.role === 'ADMIN' && (
+            {isAdmin && (
               <Link
                 href="/admin"
                 className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl mb-2 text-[#64748B] hover:text-white hover:bg-[rgba(255,255,255,0.03)] transition-all text-sm"
@@ -313,7 +314,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {/* Appearance follows the phone by default; tap for a manual choice. */}
               <ThemeToggle compact />
 
-              {profile?.role === 'ADMIN' && (
+              {isAdmin && (
                 <Link
                   href="/admin"
                   className="w-9 h-9 rounded-xl border border-white/10 hover:bg-white/5 text-amber-400 hover:text-amber-300 transition-colors active:scale-95 flex-shrink-0 flex items-center justify-center"

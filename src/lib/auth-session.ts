@@ -194,10 +194,18 @@ export function hasClientAuthSession(): boolean {
   if (typeof window === 'undefined') return false
   const accessToken = getStoredAccessToken()
   const refreshToken = getStoredRefreshToken()
-  if ((accessToken && !isJwtExpired(accessToken)) || refreshToken) return true
+  if (accessToken && !isJwtExpired(accessToken)) return true
+  if (refreshToken) return true
+
+  // If there is an expired access token in localStorage, clean it immediately
+  if (accessToken && isJwtExpired(accessToken)) {
+    removeStorage(getBrowserStorage('session'), ACCESS_TOKEN_STORAGE_KEY)
+    removeStorage(getBrowserStorage('local'), ACCESS_TOKEN_STORAGE_KEY)
+  }
 
   // HttpOnly cookies cannot be inspected by JavaScript. Protected routes have
   // already been checked by Next middleware, so allow their layout to make the
   // authenticated API request; a 401 is handled by the interceptor.
   return window.location.pathname.startsWith('/app') || window.location.pathname.startsWith('/admin')
 }
+
