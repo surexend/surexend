@@ -119,24 +119,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (typeof window.PublicKeyCredential !== 'undefined' && !localStorage.getItem('surexend_bio_prompt_dismissed')) {
       setShowBioPrompt(true)
     }
+  }, [])
 
-    if (!hasClientAuthSession()) {
-      router.replace('/auth/login')
-    }
-  }, [router])
-
-  // Service worker registration + forced update check so stale bundles don't stick
+  // Cleanly unregister any corrupted service workers and clear caches
   useEffect(() => {
-    if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
-      const register = () =>
-        navigator.serviceWorker.register('/sw.js').then((reg) => {
-          reg.update().catch(() => {})
-        }).catch((err) => {
-          // Retry once after a short delay (transient network failures)
-          console.warn('[SureXend] SW register failed, retrying:', err)
-          setTimeout(() => navigator.serviceWorker.register('/sw.js').catch(() => {}), 5000)
-        })
-      register()
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const reg of registrations) {
+          reg.unregister().catch(() => {})
+        }
+      }).catch(() => {})
+      if ('caches' in window) {
+        caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).catch(() => {})
+      }
     }
   }, [])
 

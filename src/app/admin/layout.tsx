@@ -27,10 +27,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     setMounted(true)
-    if (!hasClientAuthSession()) {
-      router.replace('/auth/login')
-      return
-    }
     userAPI.getProfile()
       .then((p: any) => {
         const isAdmin = p?.role === 'ADMIN' || (p?.email && p.email.toLowerCase() === 'surexendofficial@gmail.com')

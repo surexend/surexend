@@ -53,18 +53,16 @@ export default function MobileResilienceScript() {
       }
     }, 8000)
 
-    // ── 3. Service Worker update detection ─────────────────────────────
+    // ── 3. Unregister legacy service workers to prevent cache/chunk corruption ──
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(registration => {
-        registration.update().catch(() => {})
-      }).catch(() => {})
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        // New SW activated — reload for fresh assets (only once)
-        if (!sessionStorage.getItem('sw_reloaded')) {
-          sessionStorage.setItem('sw_reloaded', '1')
-          window.location.reload()
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (const reg of registrations) {
+          reg.unregister().catch(() => {})
         }
-      })
+      }).catch(() => {})
+      if ('caches' in window) {
+        caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).catch(() => {})
+      }
     }
 
     // ── 4. Online/Offline status ────────────────────────────────────────

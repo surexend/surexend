@@ -105,14 +105,24 @@ export function getStoredRefreshToken(): string | null {
   return readStorage(getBrowserStorage('local'), REFRESH_TOKEN_STORAGE_KEY)
 }
 
-export function storeAuthTokens(_accessToken: string, _refreshToken?: string) {
-  // Credentials are now set by the backend as HttpOnly cookies. Deliberately
-  // do not copy them into sessionStorage/localStorage or a JS-readable cookie.
-  // Clear credentials left by an older client build during the migration.
+export function storeAuthTokens(accessToken?: string, refreshToken?: string) {
   if (typeof window === 'undefined') return
-  removeStorage(getBrowserStorage('session'), ACCESS_TOKEN_STORAGE_KEY)
-  removeStorage(getBrowserStorage('local'), ACCESS_TOKEN_STORAGE_KEY)
-  removeStorage(getBrowserStorage('local'), REFRESH_TOKEN_STORAGE_KEY)
+  if (accessToken) {
+    try {
+      window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, accessToken)
+      window.sessionStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, accessToken)
+    } catch {}
+  } else {
+    removeStorage(getBrowserStorage('session'), ACCESS_TOKEN_STORAGE_KEY)
+    removeStorage(getBrowserStorage('local'), ACCESS_TOKEN_STORAGE_KEY)
+  }
+  if (refreshToken) {
+    try {
+      window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken)
+    } catch {}
+  } else if (!accessToken) {
+    removeStorage(getBrowserStorage('local'), REFRESH_TOKEN_STORAGE_KEY)
+  }
 }
 
 function clearAccessCookie() {

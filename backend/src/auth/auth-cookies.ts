@@ -68,10 +68,9 @@ export function clearAuthCookies(response: Response) {
   response.clearCookie(OAUTH_STATE_COOKIE, { httpOnly: true, secure, sameSite: 'lax', path: '/api/v1/auth' });
 }
 
-/** Return only non-credential fields to JSON clients. */
-export function publicAuthResponse<T extends { accessToken?: string; refreshToken?: string }>(value: T) {
-  const { accessToken: _accessToken, refreshToken: _refreshToken, ...safe } = value;
-  return safe;
+/** Return auth response including tokens for Authorization header support */
+export function publicAuthResponse<T extends { accessToken?: string; refreshToken?: string }>(value: T): T {
+  return value;
 }
 
 /**
