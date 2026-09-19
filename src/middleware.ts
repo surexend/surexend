@@ -11,17 +11,13 @@ export function middleware(request: NextRequest) {
   const hasAccessToken = Boolean(token)
   const hasFreshAccessToken = hasAccessToken && !isJwtExpired(token)
 
-  const isAppRoute = pathname.startsWith('/app')
-  const isAdminRoute = pathname.startsWith('/admin')
-  const isAuthPage = AUTH_PAGES.has(pathname)
   const isAlwaysPublicAuthPage = ALWAYS_PUBLIC_AUTH_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  const isAuthPage = AUTH_PAGES.has(pathname)
 
-  if ((isAppRoute || isAdminRoute) && !hasAccessToken) {
-    const loginUrl = new URL('/auth/login', request.url)
-    loginUrl.searchParams.set('next', pathname)
-    return NextResponse.redirect(loginUrl)
-  }
-
+  // If the user has a fresh token and tries to visit a login/register page,
+  // send them to the app. All other auth is handled client-side via
+  // hasClientAuthSession() and the API 401 interceptor — this avoids a race
+  // where the HttpOnly cookie lands after the middleware check fires.
   if (isAuthPage && hasFreshAccessToken) {
     return NextResponse.redirect(new URL('/app/dashboard', request.url))
   }
