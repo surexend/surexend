@@ -74,7 +74,7 @@ function LoginForm() {
         return
       }
       toast.success('Login successful!')
-      router.replace(safeNextPath)
+      window.location.href = safeNextPath
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Login failed. Please check your credentials.')
     } finally {
@@ -109,7 +109,7 @@ function LoginForm() {
         return
       }
       toast.success('Login successful!')
-      router.replace(safeNextPath)
+      window.location.href = safeNextPath
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Invalid code')
     } finally {
@@ -124,7 +124,7 @@ function LoginForm() {
     try {
       await authAPI.verify2FALogin({ challengeToken: twoFactorChallenge, code: twoFactorCode })
       toast.success('2FA verified. Welcome back!')
-      router.replace(safeNextPath)
+      window.location.href = safeNextPath
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Could not verify that code')
     } finally {
@@ -184,7 +184,7 @@ function LoginForm() {
       // Signed in — we're leaving the page; skip any further ceremonies.
       autofillCancelledRef.current = true
       toast.success('Login successful!')
-      routerRef.current.replace(safeNextPath)
+      window.location.href = safeNextPath
     } catch {
       // Autofill sign-in not offered / not used — email, password, OTP and the
       // manual biometric button remain the fallbacks. Silent by design.
@@ -209,7 +209,7 @@ function LoginForm() {
       // Signed in — we're leaving the page; skip any further ceremonies.
       autofillCancelledRef.current = true
       toast.success('Login successful!')
-      router.replace(safeNextPath)
+      window.location.href = safeNextPath
     } catch (error: any) {
       const detail = error?.cause?.message || error?.message || ''
       const cancelled = error?.name === 'NotAllowedError' && /cancel/i.test(detail)
